@@ -95,6 +95,26 @@ next mainline investigation should focus on the earliest kernel path:
 - differences between the downstream 4.14 Image that boots and this mainline
   Image before initramfs handoff
 
+Recommended next tests
+----------------------
+1. Revalidate a low-risk downstream 4.14 boot with the same stock DTB pack and
+   entry12 instrumentation. This confirms that the instrumentation itself is not
+   the regression source.
+2. If stable recovery is confirmed, build a smaller mainline 6.17 candidate:
+   same kernel, same boot geometry, same stock DTB pack, watchdog + pstore only,
+   no direct debug shell and no framebuffer paint test.
+3. If that still times out before USB/watchdog recovery, reduce the entry12 DTB
+   instrumentation one step rather than jumping back to a single DTB.
+4. Only after those controls should the investigation move to very early kernel
+   areas such as `arch/arm64/kernel/head.S`, FDT handoff, or `drivers/of`.
+
+Do not retest
+-------------
+- The exact `192100` image documented above.
+- Mainline variants that already returned immediately to fastboot.
+- DTB unique replacements, append-DTB external variants, DTBO no-op variants,
+  or simple slot-DTB replacement variants without a new hypothesis.
+
 Current recovery setup
 ----------------------
 A detached rescue watcher was rearmed after the timeout:

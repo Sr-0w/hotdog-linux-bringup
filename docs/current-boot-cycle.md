@@ -110,9 +110,14 @@ path cannot run.
 2. After stable SSH returns, collect any available pstore/ramoops state.
 3. Keep the downstream 4.14 DRM/Plymouth image as the baseline for fast
    recovery and for phone-side inspection.
-4. For mainline, stop treating USB gadget alone as the first milestone. The
+4. Revalidate one low-risk downstream 4.14 boot with the same DTB
+   instrumentation before changing the mainline path again.
+5. For mainline, stop treating USB gadget alone as the first milestone. The
    current blocker is earlier: kernel entry, DTB compatibility, early console,
    initramfs reachability, or a very early panic/hang.
+6. Do not retest the exact `192100` mainline 6.17 image. If mainline is retried,
+   keep the 6.17 kernel but reduce the ramdisk candidate to watchdog/pstore
+   only before changing kernel entry code.
 
 ## Reports
 
