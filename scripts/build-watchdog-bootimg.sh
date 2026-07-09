@@ -1099,7 +1099,7 @@ hotdog_drm_console_start() {
 					--font /tmp/hotdog-ter-v32n.psf \
 					--fifo /tmp/hotdog-drm-console.in \
 					--transcript /tmp/hotdog-drm-console.transcript \
-					--command "export TERM=dumb; PS1='initramfs# '; export PS1; printf '\n--- hotdog initramfs DRM command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -80; printf '\n--- ready: commands are read from /tmp/hotdog-drm-console.in ---\n'" \
+					--command "export TERM=dumb; PS1='initramfs# '; export PS1; printf '\n--- hotdog initramfs DRM command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -80; printf '\n--- starting background dmesg follower every 5s ---\n'; (i=0; while :; do sleep 5; printf '\n--- dmesg follow %s ---\n' \"\$i\"; dmesg | tail -60; i=\$((i + 1)); done) & printf 'follower pid: %s\n' \"\$!\"; printf '\n--- ready: commands are read from /tmp/hotdog-drm-console.in ---\n'" \
 					>/tmp/hotdog-drm-console.log 2>&1 &
 				echo $! > /tmp/hotdog_drm_console.pid
 				exit 0

@@ -30,4 +30,4 @@
 73-mainline617-stockdtbpack-timeout-20260710.txt - mainline 6.17 pstore-built with unmodified stock full DTB pack still timed out
 74-drm-console-userspace-candidate-20260710.txt - downstream 4.14 image prepared to auto-install userspace DRM console plus detached rescue watcher robustness fix
 75-simplefb-ranges-candidate-20260710.txt - missing /chosen ranges; explains simplefb No memory resource; prepared 010900 image to test fixed DTB pack
-76-drm-command-shell-candidate-20260710.txt - prepared 013100 image: fixed DTB pack plus initramfs DRM command shell prompt; local pmaports package promoted to pkgrel 2; helper rebuilt from source
+76-drm-command-shell-candidate-20260710.txt - prepared 014400 image: fixed DTB pack plus initramfs DRM command shell prompt and background dmesg follower; local pmaports package promoted to pkgrel 2; helper rebuilt from source
