@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-09 20:58 CEST
+Date: 2026-07-09 21:12 CEST
 
 ## Current Status
 
@@ -12,7 +12,7 @@ pmOS SSH: user@172.16.42.1 reachable
 boot_id: f43b6b3a-ee33-418b-865b-880b024cd770
 kernel: Linux hotdog 4.14.357-openela-perf #2-postmarketOS
 DSI-1: enabled
-plymouthd: running
+visible test: modetest SMPTE pattern on DSI-1
 USB network: usb0 on the phone, 172.16.42.1/16
 ```
 
@@ -50,17 +50,33 @@ The downstream 4.14.357 boot continues to provide the working display path:
 /dev/dri/card0 and /dev/dri/renderD128 exist
 DRM driver: MSM Snapdragon DRM / msm_drm
 DSI-1: connected and enabled
-Plymouth local.d hook keeps the panel lit after userspace boot
+connector id: 28
+CRTC id: 136
+preferred mode: #0, 1440x3120x60x187200
+visible proof: modetest -s 28@136:#0 -F smpte
 ```
 
-Phone-side runtime hook:
+The phone was reported black even though pmOS SSH was reachable. Installing
+`libdrm-tests` and running a held `modetest` pattern proved that the panel,
+KMS scanout, and backlight work on the downstream boot. The black screen was
+therefore a userspace output problem, not evidence that the stable pmOS boot or
+the panel path had failed.
+
+Helper for reproducing the known-good visual pattern:
 
 ```text
-/etc/local.d/hotdog-plymouth.start
+/home/srobin/dev/hotdog/scripts/show-stable-drm-pattern.sh start
 ```
 
-The hook waits for `/dev/dri/card0` and connected `DSI-1`, then starts
-`plymouthd --no-daemon --mode=boot --tty=/dev/tty0 --graphical-boot`.
+Evidence capture:
+
+```text
+/home/srobin/dev/hotdog/logs/live-drm-visible-20260709-211128/state.txt
+```
+
+`kmscube -D /dev/dri/card0` also completed through KMS/GBM/EGL, but Mesa used
+`llvmpipe`, so that test validates scanout plus software EGL rather than Adreno
+acceleration.
 
 ## Pstore
 
@@ -133,12 +149,16 @@ enough that the rescue path cannot run.
 
 1. Keep the downstream 4.14 DRM/Plymouth image as the baseline for fast recovery
    and for phone-side inspection.
-2. Revalidate one low-risk downstream 4.14 boot with the same DTB
+2. Add a true DRM visual diagnostic to the boot-image builder. The current
+   `--fb-test` paints `/dev/fb0`, but the working proof uses KMS on
+   `/dev/dri/card0`; a future `--drm-test` should use either a small custom DRM
+   dumb-buffer helper or a controlled `modetest` payload.
+3. Revalidate one low-risk downstream 4.14 boot with the same DTB
    instrumentation before changing the mainline path again.
-3. For mainline, stop treating USB gadget alone as the first milestone. The
+4. For mainline, stop treating USB gadget alone as the first milestone. The
    current blocker is earlier: kernel entry, DTB compatibility, early console,
    initramfs reachability, or a very early panic/hang.
-4. Do not retest the exact `192100` mainline 6.17 image. If mainline is retried,
+5. Do not retest the exact `192100` mainline 6.17 image. If mainline is retried,
    keep the 6.17 kernel but reduce the ramdisk candidate to watchdog/pstore
    only before changing kernel entry code.
 
@@ -165,4 +185,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/66-devtmpfs-drm-plymouth-display-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt
 ```
