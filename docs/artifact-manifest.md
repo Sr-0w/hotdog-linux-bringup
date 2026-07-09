@@ -23,6 +23,7 @@ only the artifacts you actually need.
 |---|---|
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020` | Validated downstream DRM-console boot. pmOS SSH returned with boot id `7854ea12-7415-41bc-8f2e-59d8865fd041`; initramfs console marker appears at 2.029100s. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-220520` | Mainline 6.17 minimal/pstore plus DRM-console test. Timed out after 720s with no USB recovery path; manual fastboot recovery later restored the downstream image. |
+| `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052` | Mainline 6.17 rebuilt with built-in PSTORE/RAMOOPS plus DRM-console test. Timed out after 720s with no USB recovery path; pstore was still empty after recovery. |
 | `/home/srobin/dev/hotdog/logs/flash-boot-b-from-pmos-ssh-2026-07-09-223252` | Post-recovery writeback of the validated `215005` DRM-console image to `boot_b` without reboot. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-201112` | Latest confirmed stable pmOS boot with automatic DRM/Plymouth hook. |
 | `/home/srobin/dev/hotdog/logs/live-pmos-2014-auto-plymouth/state.txt` | Captured stable pmOS state with DSI-1 enabled and plymouthd alive. |
@@ -52,6 +53,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt` | Visible downstream KMS pattern result and next `--drm-test` recommendation. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt` | Downstream initramfs DRM console and userspace visible command-shell milestone. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt` | Mainline 6.17 with DRM-console instrumentation timed out before any visible or USB recovery signal. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/72-mainline617-pstorebuilt-timeout-20260710.txt` | Mainline 6.17 with built-in pstore/ramoops still timed out without visible, USB, or pstore signal. |
 
 ## Resume order
 

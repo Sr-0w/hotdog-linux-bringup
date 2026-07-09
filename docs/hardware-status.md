@@ -76,6 +76,7 @@ Le DTB experimental `sm8150-oneplus-hotdog-hwplus-usbc.dtb` reste base sur ce DT
 
 | Candidate | Resultat | Note |
 |---|---|---|
+| mainline617 pstorebuilt DRM console 224052 | timeout, pas USB, pstore vide | Kernel mainline reconstruit avec `CONFIG_PSTORE=y`, `CONFIG_PSTORE_RAM=y`, `CONFIG_PSTORE_CONSOLE=y`; image SHA256 `50b09d45c650ac6ba7234a53dbcdd064d425d7df8c524133652b36696148fb40`; aucun texte/USB/fastboot/recovery pendant 720s; fastboot manuel a `2026-07-10 00:17:58`, restore image `215005`, SSH revenu boot id `5a6cd93e-28c5-47dc-84fe-119534c8b2e1`; pstore monte mais reste vide. |
 | mainline617 minramdisk DRM console 220520 | timeout, pas USB | Image SHA256 `aaf7ee6e4b9315369ba577d6a86d4e2a6111bdeaaf744902be0d3d24dad27af4`; ajoute helper DRM console au candidat minimal/pstore, mais aucun texte/USB/fastboot/recovery pendant 720s; fastboot manuel a 22:28:58, restore image `195300`, SSH revenu boot id `ce4726f0-952b-4571-bd9f-ab8eb4302648`, pstore vide, puis `boot_b` remis sur image `215005` sans reboot. |
 | lineage414 DRM console initramfs 215020 | SSH OK + texte visible | Image downstream 4.14.357 avec helper DRM/KMS injecte dans l'initramfs; marqueur console a 2.029100s, `root-mounted` a 5.570778s, `switch-root` a 5.651583s; userspace visible via FIFO `/tmp/hotdog-drm-console.in`, preuve `POST_BOOT_DRM_CONSOLE_OK`, boot id `7854ea12-7415-41bc-8f2e-59d8865fd041`; SHA256 `1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019`. |
 | stock kernel+DTB + ramdisk pmOS superloop grow/ptmx 002100 | SSH OK | Ancien jalon stable; rootfs ~13.1G; `/dev/ptmx` OK; `sudo -n`/`doas -n` OK; SHA256 `0f9df5f1b5347374958cfbafb82be5ab1dccce8e6674029db4979157c83e4408`. |
@@ -155,7 +156,7 @@ Le chemin externe canonique header v0 append-DTB ne boote pas sur ce boot stack:
 Le bootloader accepte en revanche une enveloppe stock kernel+DTB avec ramdisk pmOS: Linux/initramfs atteint USB NCM.
 Le stock-kernel pmOS atteint maintenant le rootfs et SSH USB stable.
 Le stock-kernel pmOS avec helper DRM console atteint aussi un affichage texte visible depuis l'initramfs, puis un shell userspace commande par FIFO apres `switch_root`.
-Le mainline 6.17 instrumente avec le meme helper DRM console ne donne toujours aucun signal visible/USB et ne laisse pas de pstore; le blocage reste probablement avant initramfs utile ou avant creation de `/dev/dri/card0`.
+Le mainline 6.17 instrumente avec le meme helper DRM console ne donne toujours aucun signal visible/USB et ne laisse pas de pstore, meme avec `PSTORE_RAM` compile en dur; le blocage reste probablement avant initramfs utile, avant pstore exploitable, ou avant creation de `/dev/dri/card0`.
 Priorite immediate: conserver le workflow de flash boot_b depuis pmOS SSH et ne revenir a fastboot/recovery qu'en secours.
 Les tests du 2026-07-09 08:14-08:20 eliminent trois hypotheses :
 1) le format external-style header v0 append-DTB ne suffit pas ;

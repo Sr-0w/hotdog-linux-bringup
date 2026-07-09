@@ -1,0 +1,79 @@
+# Mainline 6.17 pstore-built DRM-console timeout
+
+Date: 2026-07-10 00:22 CEST
+
+## Result
+
+Rebuilding the mainline 6.17 kernel with built-in pstore/ramoops support did
+not produce a visible screen signal, USB recovery path, watchdog reboot, or
+pstore record.
+
+Tested image:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-224100-mainline617-pstorebuilt-drmconsole-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: 50b09d45c650ac6ba7234a53dbcdd064d425d7df8c524133652b36696148fb40
+test log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052
+```
+
+Kernel artifact:
+
+```text
+/home/srobin/dev/hotdog/build/experiments/2026-07-09-224000-mainline617-pstore-ramoops-kernel/Image
+sha256: 48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83
+config sha256: af45c52e0176343e6696dbed5f6a65fd51af639441598ac9d010318b813ee185
+```
+
+Relevant config:
+
+```text
+CONFIG_PSTORE=y
+CONFIG_PSTORE_COMPRESS=y
+CONFIG_PSTORE_CONSOLE=y
+CONFIG_PSTORE_PMSG=y
+CONFIG_PSTORE_RAM=y
+CONFIG_RANDOMIZE_BASE is not set
+CONFIG_EFI is not set
+```
+
+## Timeline
+
+```text
+2026-07-09 22:40:52 CEST  flash boot_b from pmOS SSH started
+2026-07-09 22:40:56 CEST  boot_b verify OK
+2026-07-09 22:41:07 CEST  USB ping dropped after reboot command
+2026-07-09 22:53:09 CEST  timeout after 720s
+2026-07-10 00:17:58 CEST  fastboot appeared after manual recovery
+2026-07-10 00:17:58 CEST  rescue watcher restored the 215005 downstream image
+2026-07-10 00:21:14 CEST  pmOS SSH returned, boot_id 5a6cd93e-28c5-47dc-84fe-119534c8b2e1
+```
+
+Post-recovery state:
+
+```text
+boot_b prefix sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019
+pstore mounted: yes
+/sys/fs/pstore: empty
+userspace DRM console: running
+```
+
+## Interpretation
+
+This rules out a simple explanation where pstore was only missing because the
+previous mainline kernel had `CONFIG_PSTORE` disabled. The pstore-enabled
+kernel also fails without a record.
+
+The current mainline failure is still best treated as happening before any
+useful initramfs-side code can run, before pstore can record, or before the
+mainline display path can create `/dev/dri/card0`.
+
+## Follow-up
+
+- Do not retest this exact `224100` image without a new kernel or DTB
+  hypothesis.
+- Keep `215005` as the boot_b baseline and rescue target.
+- Prioritize kernel-entry, early exception, or DTB/boot ABI evidence over
+  adding more ramdisk userspace instrumentation.
+- The test harness now starts companion rescue watchers with
+  `start-stop-daemon` when available, matching the detached watcher path that
+  recovered the phone.
