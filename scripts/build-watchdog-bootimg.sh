@@ -33,6 +33,12 @@ Options:
   --fb-test
                      Paint /dev/fb0 from initramfs when it appears. This is
                      an opt-in visual diagnostic for simplefb/fbcon bring-up.
+  --drm-console
+                     Start a DRM text console from initramfs as soon as
+                     /dev/dri/card0 appears, then stop it before switch_root.
+  --drm-console-helper FILE
+                     AArch64 hotdog-drm-console binary to inject. Default:
+                     $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
   --os-version V     Set Android boot image OS version, e.g. 15.0.0.
   --os-patch-level D Set Android boot image patch level, e.g. 2025-08.
   --base HEX         Android boot image base address. Default: 0x00000000
@@ -82,6 +88,8 @@ extra_cmdline=""
 with_ramoops_cmdline=0
 direct_debug_shell=0
 fb_test=0
+drm_console=0
+drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 os_version=""
 os_patch_level=""
 outdir=""
@@ -133,6 +141,14 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--fb-test)
 			fb_test=1
+			;;
+		--drm-console)
+			drm_console=1
+			;;
+		--drm-console-helper)
+			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
+			drm_console_helper="$2"
+			shift
 			;;
 		--os-version)
 			[ "$#" -ge 2 ] || die "--os-version requires a value"
@@ -216,6 +232,9 @@ done
 require_file "$source_boot"
 [ -z "$kernel_override" ] || require_file "$kernel_override"
 [ -z "$dtb_override" ] || require_file "$dtb_override"
+if [ "$drm_console" -eq 1 ]; then
+	require_file "$drm_console_helper"
+fi
 require_file "$HOTDOG_BIN_ROOT/pmbootstrap"
 require_file "$HOTDOG_PMBOOTSTRAP_CONFIG"
 require_dir() {
@@ -907,10 +926,103 @@ HOTDOG_FB_TEST_SH
 	chmod 0755 "$helper"
 }
 
+write_hotdog_drm_console_helper() {
+	local helper="$initramfs_tree/hotdog_drm_console_start.sh"
+
+	install -m 0755 "$drm_console_helper" "$initramfs_tree/usr/bin/hotdog-drm-console"
+
+	cat > "$helper" <<'HOTDOG_DRM_CONSOLE_SH'
+#!/bin/busybox ash
+
+hotdog_drm_console_log() {
+	local msg="$*"
+	[ -e /dev/kmsg ] && printf '%s\n' "[hotdog-drm-console] $msg" > /dev/kmsg 2>/dev/null || true
+	printf '%s\n' "[hotdog-drm-console] $msg" 2>/dev/null || true
+}
+
+hotdog_drm_console_make_node() {
+	local dev major minor node
+
+	[ -e /dev/dri/card0 ] && return 0
+	mkdir -p /dev/dri 2>/dev/null || true
+	mdev -s >/tmp/hotdog-drm-console-mdev.log 2>&1 || true
+	[ -e /dev/dri/card0 ] && return 0
+
+	for node in /sys/class/drm/card0/dev /sys/class/drm/card0/device/drm/card0/dev; do
+		[ -r "$node" ] || continue
+		dev="$(cat "$node" 2>/dev/null || true)"
+		major="${dev%:*}"
+		minor="${dev#*:}"
+		case "$major:$minor" in
+			*[!0-9:]*|:|*:)
+				continue
+				;;
+		esac
+		mknod /dev/dri/card0 c "$major" "$minor" 2>/dev/null || true
+		[ -e /dev/dri/card0 ] && return 0
+	done
+
+	return 1
+}
+
+hotdog_drm_console_stop() {
+	local pid
+
+	if [ -r /tmp/hotdog_drm_console.pid ]; then
+		pid="$(cat /tmp/hotdog_drm_console.pid 2>/dev/null || true)"
+		[ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+		rm -f /tmp/hotdog_drm_console.pid
+	fi
+	pidof hotdog-drm-console 2>/dev/null | tr ' ' '\n' | while read -r pid; do
+		[ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+	done
+}
+
+hotdog_drm_console_start() {
+	local stage="$1"
+
+	[ -x /usr/bin/hotdog-drm-console ] || {
+		hotdog_drm_console_log "missing /usr/bin/hotdog-drm-console"
+		return 0
+	}
+	[ -e /tmp/hotdog_drm_console.waiting ] && return 0
+	: > /tmp/hotdog_drm_console.waiting 2>/dev/null || true
+
+	(
+		waited=0
+		while [ "$waited" -lt 90 ]; do
+			if hotdog_drm_console_make_node; then
+				gzip -dc /usr/share/consolefonts/ter-v32n.psf.gz > /tmp/hotdog-ter-v32n.psf 2>/dev/null || true
+				[ -r /tmp/hotdog-ter-v32n.psf ] || {
+					hotdog_drm_console_log "missing PSF font"
+					exit 0
+				}
+				hotdog_drm_console_log "starting DRM dmesg console at $stage after ${waited}s"
+				/usr/bin/hotdog-drm-console \
+					--font /tmp/hotdog-ter-v32n.psf \
+					--fifo /tmp/hotdog-drm-console.in \
+					--transcript /tmp/hotdog-drm-console.transcript \
+					--command "export TERM=dumb; PS1='initramfs# '; export PS1; printf '\n--- hotdog initramfs DRM dmesg console ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; i=0; while :; do printf '\n--- dmesg snapshot %s ---\n' \"\$i\"; dmesg | tail -80; i=\$((i + 1)); sleep 2; done" \
+					>/tmp/hotdog-drm-console.log 2>&1 &
+				echo $! > /tmp/hotdog_drm_console.pid
+				exit 0
+			fi
+			sleep 1
+			waited=$((waited + 1))
+		done
+		hotdog_drm_console_log "no /dev/dri/card0 by $stage"
+	) &
+}
+HOTDOG_DRM_CONSOLE_SH
+	chmod 0755 "$helper"
+}
+
 patch_init_scripts() {
 	local init_file="$initramfs_tree/init"
 	local init2_file
 	local fb_snippet
+	local drm_snippet
+	local drm_stop_snippet
 	local stage1_snippet
 	local stage2_snippet
 	local usb_snippet
@@ -959,6 +1071,10 @@ if [ -r /hotdog_rescue_watchdog.sh ]; then
 	. /hotdog_rescue_watchdog.sh
 	hotdog_rescue_watchdog_mark switch-root
 fi
+if [ -r /hotdog_drm_console_start.sh ]; then
+	. /hotdog_drm_console_start.sh
+	hotdog_drm_console_stop
+fi
 # hotdog rescue watchdog switch-root marker end'
 
 	fb_snippet='
@@ -969,7 +1085,26 @@ if [ -r /hotdog_fb_test.sh ]; then
 fi
 # hotdog framebuffer paint test end'
 
+	drm_snippet='
+# hotdog DRM console begin
+if [ -r /hotdog_drm_console_start.sh ]; then
+	. /hotdog_drm_console_start.sh
+	hotdog_drm_console_start initramfs
+fi
+# hotdog DRM console end'
+
+	drm_stop_snippet='
+# hotdog DRM console switch-root stop begin
+if [ -r /hotdog_drm_console_start.sh ]; then
+	. /hotdog_drm_console_start.sh
+	hotdog_drm_console_stop
+fi
+# hotdog DRM console switch-root stop end'
+
 	insert_after_once "$init_file" "mount_proc_sys_dev" "hotdog rescue watchdog stage1 begin" "$stage1_snippet"
+	if [ "$drm_console" -eq 1 ]; then
+		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog DRM console begin" "$drm_snippet"
+	fi
 	insert_after_once "$init_file" "start_unudhcpd" "hotdog rescue watchdog usb marker begin" "$usb_snippet"
 	if [ "$fb_test" -eq 1 ]; then
 		insert_before_once "$init_file" "mount_subpartitions" "hotdog framebuffer paint test begin" "$fb_snippet"
@@ -978,12 +1113,18 @@ fi
 	for init2_file in "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
 		[ -f "$init2_file" ] || continue
 		insert_after_once "$init2_file" "trap 'reboot -f' TERM" "hotdog rescue watchdog stage2 begin" "$stage2_snippet"
+		if [ "$drm_console" -eq 1 ]; then
+			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog DRM console begin" "$drm_snippet"
+		fi
 		insert_after_once "$init2_file" "start_unudhcpd" "hotdog rescue watchdog usb marker begin" "$usb_snippet"
 		if [ "$fb_test" -eq 1 ]; then
 			insert_before_once "$init2_file" "setup_dynamic_partitions" "hotdog framebuffer paint test begin" "$fb_snippet"
 		fi
 		insert_after_once "$init2_file" "mount_root_partition" "hotdog rescue watchdog root marker begin" "$root_snippet"
 		insert_before_once "$init2_file" "exec switch_root /sysroot" "hotdog rescue watchdog switch-root marker begin" "$switch_snippet"
+		if [ "$drm_console" -eq 1 ]; then
+			insert_before_once "$init2_file" "exec switch_root /sysroot" "hotdog DRM console switch-root stop begin" "$drm_stop_snippet"
+		fi
 	done
 }
 
@@ -1084,6 +1225,10 @@ write_manifest() {
 			fi
 			printf -- '- Direct debug shell: `%s`\n' "$direct_debug_shell"
 			printf -- '- Framebuffer paint test: `%s`\n' "$fb_test"
+			printf -- '- DRM initramfs console: `%s`\n' "$drm_console"
+			if [ "$drm_console" -eq 1 ]; then
+				printf -- '- DRM console helper: `%s`\n' "$drm_console_helper"
+			fi
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
 			printf -- '- Boot base: `%s`\n' "$boot_base"
@@ -1122,6 +1267,9 @@ write_manifest() {
 			fi
 			if [ "$fb_test" -eq 1 ]; then
 				printf ' --fb-test'
+			fi
+			if [ "$drm_console" -eq 1 ]; then
+				printf ' --drm-console --drm-console-helper %q' "$drm_console_helper"
 			fi
 			if [ -n "$extra_cmdline" ]; then
 				printf ' --extra-cmdline %q' "$extra_cmdline"
@@ -1212,6 +1360,9 @@ write_hotdog_super_loop_hook
 write_hotdog_rootfs_postmount_helper
 if [ "$fb_test" -eq 1 ]; then
 	write_hotdog_fb_test_helper
+fi
+if [ "$drm_console" -eq 1 ]; then
+	write_hotdog_drm_console_helper
 fi
 patch_init_scripts
 

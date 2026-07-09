@@ -25,10 +25,10 @@ Ce fichier est le suivi court et operationnel. La checklist complete reste dans 
 | Fastboot reference | partial | `android-dumps/stock-before-flash/2026-07-07-225936-fastboot`. |
 | Slot A/B | known | Slot `b` actif pendant le boot pmOS SSH du 2026-07-09. Toujours verifier avant flash. |
 | Bootloader unlocked | known | `unlocked: yes`, `secure: yes` via fastboot dump. |
-| Panel | OK downstream DRM | Samsung SOFEF03F M FHD DSC cmd; `modetest -s 28@136:#0 -F smpte` affiche une mire visible sur le boot 4.14.357 stable; non active mainline. |
+| Panel | OK downstream DRM | Samsung SOFEF03F M FHD DSC cmd; `modetest -s 28@136:#0 -F smpte` affiche une mire visible sur le boot 4.14.357 stable; le helper DRM console affiche du texte sur l'image downstream courante; non active mainline. |
 | Touch | identified Android-side | `sec-s6sy761`, IRQ GPIO 122, reset GPIO 54; non active mainline. |
 | USB gadget | SSH stable with stock kernel | Stock kernel+DTB + ramdisk pmOS expose NCM `172.16.42.1` et SSH; mainline candidates restent a valider. |
-| KMS display | OK downstream | `/dev/dri/card0`, driver `msm_drm`, connecteur DSI-1 id 28, CRTC 136, mode prefere `1440x3120`; helper `scripts/show-stable-drm-pattern.sh`. |
+| KMS display | OK downstream | `/dev/dri/card0`, driver `msm_drm`, connecteur DSI-1 id 28, CRTC 136, mode prefere `1440x3120`; helpers `scripts/show-stable-drm-pattern.sh` et `scripts/install-hotdog-drm-console.sh`. |
 | Rootfs pmOS | OK stock-kernel | Root loop etendu a ~13.1G depuis `super`; ~11.8G libres apres premier boot. |
 | PTY/devpts | OK stock-kernel | `/dev/ptmx -> pts/ptmx`, `devpts` monte avec `ptmxmode=666`; SSH TTY OK. |
 | Privileges pmOS | OK | `sudo -n` et `doas -n` donnent root; `sudo` est le shim `doas-sudo-shim`. |
@@ -54,7 +54,7 @@ Ce fichier est le suivi court et operationnel. La checklist complete reste dans 
 | Image pmOS | OK | `images/pmos/2026-07-08-070531-console-uncompressed-ramoops`. |
 | EDL tooling | OK | bkerler/edl local + loader OnePlus OP7T + udev `05c6:9008`. |
 | Automation | OK pour boot_b SSH | Scripts de test/rescue/collecte prets; `flash-boot-b-from-pmos-ssh.sh` est le chemin prioritaire tant que SSH pmOS repond. |
-| Visual diagnostics | next | `--fb-test` cible `/dev/fb0`; ajouter un vrai diagnostic DRM/KMS pour initramfs ou early userspace. |
+| Visual diagnostics | OK downstream | `--drm-console` injecte un helper DRM/KMS dans l'initramfs; preuve visuelle + commandes userspace via FIFO sur le boot 4.14.357. A porter ensuite vers les candidats mainline. |
 
 DTB SM8150 construits actuellement :
 
@@ -76,7 +76,8 @@ Le DTB experimental `sm8150-oneplus-hotdog-hwplus-usbc.dtb` reste base sur ce DT
 
 | Candidate | Resultat | Note |
 |---|---|---|
-| stock kernel+DTB + ramdisk pmOS superloop grow/ptmx 002100 | SSH OK | `boot_b` courant; rootfs ~13.1G; `/dev/ptmx` OK; `sudo -n`/`doas -n` OK; SHA256 `0f9df5f1b5347374958cfbafb82be5ab1dccce8e6674029db4979157c83e4408`. |
+| lineage414 DRM console initramfs 215020 | SSH OK + texte visible | Image downstream 4.14.357 avec helper DRM/KMS injecte dans l'initramfs; marqueur console a 2.029100s, `root-mounted` a 5.570778s, `switch-root` a 5.651583s; userspace visible via FIFO `/tmp/hotdog-drm-console.in`, preuve `POST_BOOT_DRM_CONSOLE_OK`, boot id `7854ea12-7415-41bc-8f2e-59d8865fd041`; SHA256 `1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019`. |
+| stock kernel+DTB + ramdisk pmOS superloop grow/ptmx 002100 | SSH OK | Ancien jalon stable; rootfs ~13.1G; `/dev/ptmx` OK; `sudo -n`/`doas -n` OK; SHA256 `0f9df5f1b5347374958cfbafb82be5ab1dccce8e6674029db4979157c83e4408`. |
 | flash boot_b depuis pmOS SSH 003222 | OK | Reflash de l'image courante, ecriture `/dev/disk/by-partlabel/boot_b`, readback SHA OK; log `logs/flash-boot-b-from-pmos-ssh-2026-07-09-003222`. |
 | cycle test depuis pmOS SSH 004142 | OK | Reflash image connue bonne, reboot sysrq, retour `pmos-ssh`; log `logs/test-boot-b-image-2026-07-09-004142`. |
 | mainline617 survival v2dtb dualport 004408 | fastboot immediat | Image SHA256 `3785d41b5dd092cdb3bff1e0960a99b44917754003cbdeba0860eb35c73e3d98`; retour fastboot apres reboot, slot `b` retry-count `2`, restore automatique image stock-kernel pmOS, set_active b, reboot system, SSH revenu; log `logs/test-boot-b-image-2026-07-09-004408`. |
@@ -152,6 +153,7 @@ Changer recovery/bootloader/lk2nd n'est pas justifie par les sources publiques n
 Le chemin externe canonique header v0 append-DTB ne boote pas sur ce boot stack: retour fastboot ~6s.
 Le bootloader accepte en revanche une enveloppe stock kernel+DTB avec ramdisk pmOS: Linux/initramfs atteint USB NCM.
 Le stock-kernel pmOS atteint maintenant le rootfs et SSH USB stable.
+Le stock-kernel pmOS avec helper DRM console atteint aussi un affichage texte visible depuis l'initramfs, puis un shell userspace commande par FIFO apres `switch_root`.
 Priorite immediate: conserver le workflow de flash boot_b depuis pmOS SSH et ne revenir a fastboot/recovery qu'en secours.
 Les tests du 2026-07-09 08:14-08:20 eliminent trois hypotheses :
 1) le format external-style header v0 append-DTB ne suffit pas ;

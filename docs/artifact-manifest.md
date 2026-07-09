@@ -12,7 +12,8 @@ only the artifacts you actually need.
 
 | Path | Purpose |
 |---|---|
-| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img` | Current stable pmOS boot image that boots to SSH over USB and auto-starts the DRM/Plymouth display hook. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img` | Current validated downstream pmOS boot image. It boots to SSH over USB, starts the initramfs DRM console, then starts the userspace visible command shell. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img` | Restore-baseline pmOS boot image used by the rescue watcher. It boots to SSH over USB and auto-starts the earlier DRM/Plymouth display hook. |
 | `/home/srobin/dev/hotdog/images/lineage/hotdog-20260703/recovery-adb-unsecure.img` | Patched recovery image used for recovery-side ADB. |
 | `/home/srobin/dev/hotdog/tools/recovery-zips/build/hotdog-reboot-bootloader.zip` | Sideload package for returning the device to bootloader. |
 
@@ -20,6 +21,7 @@ only the artifacts you actually need.
 
 | Path | Purpose |
 |---|---|
+| `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020` | Validated downstream DRM-console boot. pmOS SSH returned with boot id `7854ea12-7415-41bc-8f2e-59d8865fd041`; initramfs console marker appears at 2.029100s. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-201112` | Latest confirmed stable pmOS boot with automatic DRM/Plymouth hook. |
 | `/home/srobin/dev/hotdog/logs/live-pmos-2014-auto-plymouth/state.txt` | Captured stable pmOS state with DSI-1 enabled and plymouthd alive. |
 | `/home/srobin/dev/hotdog/logs/live-drm-visible-20260709-211128/state.txt` | Captured stable pmOS state after a visible `modetest` SMPTE pattern on DSI-1. |
@@ -46,6 +48,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt` | Mainline 6.17 timeout result and implication. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt` | Prepared minimal mainline 6.17 follow-up candidate. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt` | Visible downstream KMS pattern result and next `--drm-test` recommendation. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt` | Downstream initramfs DRM console and userspace visible command-shell milestone. |
 
 ## Resume order
 
@@ -55,7 +58,8 @@ only the artifacts you actually need.
    paths if needed.
 4. Restore any required local artifacts from the manifest, or rebuild them with
    the scripts already in the repo.
-5. Use `./scripts/show-stable-drm-pattern.sh start` to reproduce the known-good
-   stable KMS output once pmOS SSH is reachable.
+5. Use `./scripts/install-hotdog-drm-console.sh status` and
+   `./scripts/install-hotdog-drm-console.sh send 'dmesg | tail -40'` to confirm
+   the visible console once pmOS SSH is reachable.
 6. Re-run `./scripts/bootstrap-host.sh --check-host` before you pick up the next
    device step.
