@@ -1,0 +1,21 @@
+# Local workspace outputs
+android-dumps/
+build/
+downloads/
+experiments/
+images/
+logs/
+pmbootstrap-work/
+reports/
+rootfs/
+pmbootstrap_v3.cfg
+
+# External checkouts and cached tool trees
+src/
+tools/
+external-refs/
+
+# Generic scratch files
+*.swp
+*.swo
+*~

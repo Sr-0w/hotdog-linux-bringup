@@ -1,0 +1,57 @@
+2026-07-09 prepared mainline framebuffer candidate
+==================================================
+
+Purpose
+-------
+
+This image is prepared but not selected for the automatic next cycle. The next
+automatic test remains the downstream Lineage/OpenELA 4.14 framebuffer
+heartbeat image, because that kernel is already boot-proven on this device.
+
+This mainline image exists so that, once downstream confirms whether early
+framebuffer painting works, the same diagnostic can be replayed against the
+mainline 6.17 kernel that previously stopped returning immediately to fastboot.
+
+Image
+-----
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-192100-mainline617-fbtest-directshell-stockdtbpack-entry12-simplefb-rootwatchdog/boot-noefi-pmosdtb-watchdog-420s.img
+
+SHA256:
+
+  6164e247e934a199700dac58372d964096977159d011699ea7510e0baa9cac59
+
+Payloads:
+
+  kernel 84f33a57aa1f32bcf938d7e9f85e0f3acc2dbf159c8aaed8534e2f13a6fc4004
+  dtb    b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+
+Inputs
+------
+
+- Source boot image:
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-133900-lineage414357-manualkernel-pmbootstrap-rootfs-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+- Mainline kernel payload:
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-011500-mainline617-conservative-stockdtbpack-v2-rootwatchdog/components/kernel
+- DTB pack:
+  /home/srobin/dev/hotdog/build/experiments/2026-07-09-142300-stock-dtb-pack-entry12-simplefb/stock-dtb-pack-entry12-simplefb-x8-stdout.dtbpack
+
+Properties
+----------
+
+- same mainline kernel payload as the full-DTB-pack test that did not
+  immediately return to fastboot;
+- same stock DTB pack with entry12 simplefb/stdout-path instrumentation;
+- framebuffer paint test enabled;
+- direct initramfs telnet shell enabled if USB networking appears;
+- watchdog success mode is root;
+- watchdog timeout is 420 seconds;
+- OS version is 15.0.0 and patch level is 2025-08, matching the previous
+  mainline full-DTB-pack candidate.
+
+Do not auto-test yet
+--------------------
+
+Use this only after the downstream framebuffer heartbeat test gives a result.
+If downstream does not paint, this mainline image will not tell us whether the
+mainline kernel or the shared framebuffer instrumentation is at fault.

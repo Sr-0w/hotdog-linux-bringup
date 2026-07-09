@@ -1,0 +1,83 @@
+2026-07-09 boot-test findings
+=============================
+
+Known-good restore baseline
+---------------------------
+
+- Current known-good boot_b restore image:
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-133900-lineage414357-manualkernel-pmbootstrap-rootfs-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+- SHA256:
+  88d05c0116364596f66f464eead2679d6bd3eb831a205f20f0dbabec22354655
+- It boots pmOS SSH with current root UUIDs:
+  pmos_boot=/dev/disk/by-uuid/9ecffd22-eacf-4b9f-9b0f-3f7ca738a731
+  pmos_root=/dev/disk/by-uuid/de13a416-8942-4d87-9947-dce62fba9465
+
+Single-DTB result
+-----------------
+
+- Candidate:
+  images/pmos-experiments/2026-07-09-141748-mainline617-stockdtb-simplefb-x8-console-rootwatchdog/boot-noefi-pmosdtb-watchdog-420s.img
+- The image used a single extracted DTB, replacing the original full DTB pack.
+- Result: bootloader returned to fastboot almost immediately.
+- Interpretation: the bootloader path is sensitive to the packed DTB payload.
+  Do not use a single DTB for hotdog boot_b tests unless intentionally testing
+  bootloader rejection behavior.
+
+Full DTB-pack + entry12 simplefb result
+---------------------------------------
+
+- Patched DTB pack:
+  build/experiments/2026-07-09-142300-stock-dtb-pack-entry12-simplefb/stock-dtb-pack-entry12-simplefb-x8-stdout.dtbpack
+- SHA256:
+  b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+- The pack preserves all 20 stock entries and instruments entry 12, which is
+  the entry selected by the bootloader on this device.
+- Entry 12 simplefb properties:
+  framebuffer@9c000000, width 1440, height 3120, stride 5760,
+  format x8r8g8b8, stdout-path display0.
+
+- Candidate:
+  images/pmos-experiments/2026-07-09-142558-mainline617-currentroot-stockdtbpack-entry12-simplefb-x8-console-rootwatchdog/boot-noefi-pmosdtb-watchdog-420s.img
+- Result: no immediate fastboot return, no adb, no USB network, no SSH, no
+  telnet, and no USB reconnect observed by the host during the wait window.
+- Interpretation: the bootloader accepted the full DTB pack and probably jumped
+  into the kernel. The failure is now likely before initramfs watchdog/userspace
+  or before USB gadget setup. This is a better signal than earlier immediate
+  fastboot-return tests.
+
+Restore safety fix
+------------------
+
+- Some scripts still pointed to the old 2026-07-09-002100 restore boot image,
+  whose embedded UUIDs no longer match the current pmOS rootfs.
+- The shared script environment now defines HOTDOG_STABLE_PMOS_BOOT_B with the
+  2026-07-09-133900 known-good image, and restore/test scripts consume that
+  default to avoid stale-UUID recovery loops.
+
+Next diagnostic candidate
+-------------------------
+
+- Build linux-oneplus-hotdog-lineage414 with the already boot-proven downstream
+  kernel, but enable visible console support:
+  CONFIG_VT=y
+  CONFIG_VT_CONSOLE=y
+  CONFIG_FB_SIMPLE=y
+  CONFIG_FRAMEBUFFER_CONSOLE=y
+  CONFIG_DUMMY_CONSOLE=y
+- Also enable pstore/ramoops:
+  CONFIG_PSTORE=y
+  CONFIG_PSTORE_CONSOLE=y
+  CONFIG_PSTORE_PMSG=y
+  CONFIG_PSTORE_RAM=y
+- Package DTB payload should use the full stock DTB pack with entry12 simplefb
+  instrumentation, not a single DTB.
+
+Purpose of next test
+--------------------
+
+- If the downstream kernel still boots and screen text appears, the framebuffer
+  path is validated and can be used for future mainline debugging.
+- If the downstream kernel boots but screen text does not appear, the preserved
+  framebuffer parameters or console binding need more work.
+- If the downstream kernel stops booting, the entry12 DTB simplefb
+  instrumentation changed a boot-critical detail and should be reduced further.

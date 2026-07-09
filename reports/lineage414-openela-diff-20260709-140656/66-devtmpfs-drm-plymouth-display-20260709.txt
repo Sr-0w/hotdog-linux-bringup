@@ -1,0 +1,91 @@
+OnePlus 7T Pro hotdog - downstream DRM/Plymouth display result
+Date: 2026-07-09 20:05 CEST
+
+Summary
+-------
+The downstream Lineage/OpenELA 4.14.357 kernel was rebuilt with:
+
+- CONFIG_DEVTMPFS=y
+- CONFIG_DEVTMPFS_MOUNT=y
+- CONFIG_DRM_FBDEV_EMULATION=y
+- CONFIG_DRM_FBDEV_OVERALLOC=100
+
+The resulting boot image booted successfully from boot_b and returned pmOS SSH.
+
+Boot image
+----------
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+
+SHA256:
+d5d71d1b23d682c3061cb8158a157739602150a518acb60dcd694c40a2febbca
+
+Payload hashes:
+- kernel: dfac91230b3b2783fbd79408a5cd62f47bc2a86a4586347d814c5144d76d84d9
+- dtb pack: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+
+Boot result
+-----------
+Run directory:
+/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-195258
+
+Result:
+- flash boot_b from pmOS SSH: OK
+- boot_id changed: 8fd4bc4a-30a7-4c4a-bf3a-6d9ca35993b0 -> 0c6d3981-64d0-4034-baf6-e92ed23ece00
+- pmOS SSH returned on 172.16.42.1
+
+Display observations
+--------------------
+Good:
+- /dev/dri/card0 and /dev/dri/renderD128 are now created automatically.
+- drmdevice identifies the platform DRM node as /soc/qcom,mdss_mdp@ae00000,
+  compatible qcom,sde-kms.
+- modetest opens the device as "MSM Snapdragon DRM" on driver "msm_drm".
+- DSI-1 is connected, connector id 28, preferred mode 1440x3120x60x187200.
+- CRTC id 136 is available for 1440x3120.
+- modetest mode set commands return success and trigger panel/backlight logs.
+- plymouthd can keep /sys/class/drm/card0-DSI-1/enabled at "enabled".
+
+Still not solved:
+- /dev/fb0 is still absent.
+- simple-framebuffer still fails early:
+  simple-framebuffer chosen:framebuffer@9c000000: No memory resource
+- modetest exits immediately after setting a mode, so it only flashes the
+  backlight briefly before the connector returns to disabled.
+- kmscube starts EGL/GLES through llvmpipe but exits quickly and does not keep
+  DSI-1 enabled.
+
+Phone-side runtime hook
+-----------------------
+Installed on the booted pmOS rootfs:
+
+/etc/local.d/hotdog-plymouth.start
+
+It starts:
+plymouthd --no-daemon --mode=boot --tty=/dev/tty0 --graphical-boot --debug --debug-file=/tmp/hotdog-plymouth-debug.log --pid-file=/run/plymouth/pid
+
+Validation:
+- /sys/class/drm/card0-DSI-1/enabled stayed "enabled" after running the hook.
+- plymouthd remained alive as root.
+
+Reboot validation:
+- A first reboot showed that starting Plymouth directly from local.d was too
+  early; the daemon exited and DSI-1 returned to disabled.
+- The hook was changed to start a background waiter that waits for /dev/dri/card0
+  and DSI-1 connected before starting Plymouth.
+- After a second full reboot, the hook started Plymouth automatically.
+- Final boot_id: 0d9701d8-02e5-48b3-9056-2ee49fca91d5
+- Final validation run: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-201112
+- Final captured state: /home/srobin/dev/hotdog/logs/live-pmos-2014-auto-plymouth/state.txt
+
+Next implications
+-----------------
+For visual boot:
+- Use Plymouth/DRM as the practical display path for this downstream kernel.
+- Do not rely on /dev/fb0 unless the downstream msm_drm fbdev path is patched
+  or a different framebuffer handoff is fixed.
+
+For mainline:
+- The proven requirement is no longer merely "make USB work"; the userspace
+  display path needs a real DRM node and a compositor/splash to hold the panel.
+- The simplefb reserved-memory problem remains worth investigating, but it is
+  not required for a visible pmOS userspace splash once DRM is available.

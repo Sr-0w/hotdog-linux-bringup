@@ -1,0 +1,24 @@
+00-baseline.txt 636 bytes
+01-lineage-dts-hotdog-sm8150-filelist.txt 153567 bytes
+02-mainline-hotdog-filelist.txt 5089 bytes
+03-lineage-hotdog-symbol-grep.txt 1872239 bytes
+10-qcom-dts-diffstat.txt 59746 bytes
+11-arm64-dts-diffstat.txt 374798 bytes
+20-msm-display-diffstat.txt 14888 bytes
+21-lineage-display-filelist.txt 3935 bytes
+22-display-hotdog-grep.txt 2049886 bytes
+30-usb-drivers-diffstat.txt 9364 bytes
+31-qcom-phy-diffstat.txt 1256 bytes
+32-usb-hotdog-grep.txt 4306453 bytes
+40-configs-diffstat.txt 2635 bytes
+41-lineage-config-grep.txt 603294 bytes
+50-pmos-vs-sm8150-mainline-hotdog-dts.diff 12558 bytes
+51-sm8150-mainline-hotdog-vs-hwplus-usbc.diff 11696 bytes
+60-boot-test-findings-20260709.txt 3636 bytes
+61-openela-lineage-priority-20260709.txt 4671 bytes
+62-dt-overlay-notes-20260709.txt 3301 bytes
+63-framebuffer-heartbeat-candidates-20260709.txt 4080 bytes
+64-prepared-mainline-fbtest-candidate-20260709.txt 2279 bytes
+65-mainline-config-instrumentation-20260709.txt 2204 bytes
+66-devtmpfs-drm-plymouth-display-20260709.txt - downstream devtmpfs/DRM/Plymouth display milestone
+67-mainline617-timeout-20260709.txt - mainline 6.17 accepted then timed out without USB or watchdog recovery
