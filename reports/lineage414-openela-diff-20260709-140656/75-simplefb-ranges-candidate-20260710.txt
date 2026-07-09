@@ -67,6 +67,22 @@ plausible direct cause.
 Prepared fixed DTB pack
 -----------------------
 
+Reproducible builder:
+
+```text
+/home/srobin/dev/hotdog/scripts/build-entry12-simplefb-ranges-dtbpack.sh
+```
+
+Verification run:
+
+```text
+./scripts/build-entry12-simplefb-ranges-dtbpack.sh \
+  --source-pack /home/srobin/dev/hotdog/build/experiments/2026-07-09-142300-stock-dtb-pack-entry12-simplefb/stock-dtb-pack-entry12-simplefb-x8-stdout.dtbpack \
+  --outdir /home/srobin/dev/hotdog/build/experiments/2026-07-10-011500-verify-stock-dtb-pack-entry12-simplefb-ranges
+```
+
+The verification output reproduced the exact fixed pack SHA256 below.
+
 ```text
 path:
 /home/srobin/dev/hotdog/build/experiments/2026-07-10-010500-stock-dtb-pack-entry12-simplefb-ranges/stock-dtb-pack-entry12-simplefb-ranges-stdout.dtbpack
