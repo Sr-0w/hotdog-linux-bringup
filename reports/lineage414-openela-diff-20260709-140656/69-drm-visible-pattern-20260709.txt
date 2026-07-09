@@ -1,0 +1,61 @@
+# Downstream DRM visible pattern
+
+Date: 2026-07-09 21:12 CEST
+
+## Result
+
+The recovered downstream pmOS boot on the Lineage/OpenELA 4.14.357 kernel is
+not merely SSH-reachable: the built-in display panel can be driven visibly from
+userspace through DRM/KMS.
+
+Confirmed command on the booted pmOS system:
+
+```text
+modetest -s 28@136:#0 -F smpte
+```
+
+User-observed result:
+
+```text
+visible SMPTE-style test pattern on the OnePlus 7T Pro display
+```
+
+## DRM facts
+
+```text
+DRM device: /dev/dri/card0
+driver: MSM Snapdragon DRM / msm_drm
+connector: DSI-1, id 28, connected
+CRTC: 136
+preferred mode: #0, 1440x3120x60x187200
+panel: samsung dsc command-mode oneplus dsi panel
+```
+
+## Interpretation
+
+The earlier black screen on the stable pmOS boot was a userspace output issue,
+not proof of a dead panel path or failed boot. The downstream kernel has a
+working DSI/KMS path once a userspace client explicitly performs the modeset.
+
+`kmscube -D /dev/dri/card0` also completed through KMS/GBM/EGL, but Mesa used
+`llvmpipe`, so that test validates scanout plus software EGL rather than
+hardware Adreno acceleration.
+
+## Follow-up
+
+`scripts/build-watchdog-bootimg.sh --fb-test` only paints `/dev/fb0`, but the
+validated path is DRM/KMS on `/dev/dri/card0`. The next visual diagnostic should
+therefore be a new `--drm-test` path using either a small custom DRM dumb-buffer
+helper or a controlled `modetest` payload.
+
+Host helper for the stable boot:
+
+```text
+/home/srobin/dev/hotdog/scripts/show-stable-drm-pattern.sh start
+```
+
+Latest local capture:
+
+```text
+/home/srobin/dev/hotdog/logs/live-drm-visible-20260709-211128/state.txt
+```

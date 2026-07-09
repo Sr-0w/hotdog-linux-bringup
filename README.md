@@ -13,11 +13,11 @@ maintainable downstream-to-mainline split.
 
 ## Current status
 
-Status snapshot: 2026-07-09 20:58 CEST.
+Status snapshot: 2026-07-09 21:12 CEST.
 
 - a stable pmOS boot exists on the downstream Lineage/OpenELA 4.14.357 kernel
 - the stable image exposes USB SSH at `user@172.16.42.1`
-- the DRM/Plymouth userspace hook keeps DSI-1 enabled after boot
+- DSI-1 is visible: `modetest -s 28@136:#0 -F smpte` displays a test pattern
 - the latest mainline 6.17 test timed out before initramfs reachability and
   left no readable pstore record
 - the phone has been recovered to the stable downstream image
@@ -123,6 +123,7 @@ the project itself rather than on regenerated state.
 - [reports/lineage414-openela-diff-20260709-140656/66-devtmpfs-drm-plymouth-display-20260709.txt](reports/lineage414-openela-diff-20260709-140656/66-devtmpfs-drm-plymouth-display-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt](reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt](reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt)
+- [reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt](reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt)
 
 ## GitHub continuation
 
@@ -133,3 +134,7 @@ small patches in Git while leaving large generated artifacts local.
 For long hardware sessions, [scripts/start-stable-rescue-watcher.sh](scripts/start-stable-rescue-watcher.sh)
 starts the rescue watcher as a detached process and keeps the stable image
 available as a recovery target.
+
+[scripts/show-stable-drm-pattern.sh](scripts/show-stable-drm-pattern.sh) can
+start or collect the known-good KMS test pattern on an already booted stable
+pmOS system.

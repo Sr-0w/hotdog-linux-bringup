@@ -22,6 +22,7 @@ only the artifacts you actually need.
 |---|---|
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-201112` | Latest confirmed stable pmOS boot with automatic DRM/Plymouth hook. |
 | `/home/srobin/dev/hotdog/logs/live-pmos-2014-auto-plymouth/state.txt` | Captured stable pmOS state with DSI-1 enabled and plymouthd alive. |
+| `/home/srobin/dev/hotdog/logs/live-drm-visible-20260709-211128/state.txt` | Captured stable pmOS state after a visible `modetest` SMPTE pattern on DSI-1. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-202324` | Mainline 6.17 test that timed out without USB/fastboot/recovery return. |
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-204605-mainline617-minramdisk-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img` | Prepared minimal mainline 6.17 follow-up candidate; not yet tested. |
 | `/home/srobin/dev/hotdog/logs/current-stall-summary.txt` | Quick human-readable summary of the current blocker. |
@@ -44,6 +45,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/66-devtmpfs-drm-plymouth-display-20260709.txt` | Downstream devtmpfs/DRM/Plymouth display milestone. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt` | Mainline 6.17 timeout result and implication. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt` | Prepared minimal mainline 6.17 follow-up candidate. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt` | Visible downstream KMS pattern result and next `--drm-test` recommendation. |
 
 ## Resume order
 
@@ -53,5 +55,7 @@ only the artifacts you actually need.
    paths if needed.
 4. Restore any required local artifacts from the manifest, or rebuild them with
    the scripts already in the repo.
-5. Re-run `./scripts/bootstrap-host.sh --check-host` before you pick up the next
+5. Use `./scripts/show-stable-drm-pattern.sh start` to reproduce the known-good
+   stable KMS output once pmOS SSH is reachable.
+6. Re-run `./scripts/bootstrap-host.sh --check-host` before you pick up the next
    device step.
