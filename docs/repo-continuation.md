@@ -61,6 +61,12 @@ For a fuller host check without touching the phone:
 ./scripts/bootstrap-host.sh --autopilot
 ```
 
+For the live hardware session status:
+
+```bash
+./scripts/current-autopilot-status.sh
+```
+
 Fresh-machine checklist:
 
 1. Clone the repo and enter it.
