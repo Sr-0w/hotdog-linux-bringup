@@ -1,0 +1,87 @@
+# Reference: <https://postmarketos.org/vendorkernel>
+# Temporary boot-proven downstream kernel for oneplus-hotdog bring-up.
+
+pkgname=linux-oneplus-hotdog-lineage414
+pkgver=4.14.357_git20260703
+pkgrel=2
+pkgdesc="LineageOS downstream kernel for OnePlus 7T Pro"
+arch="aarch64"
+_carch="arm64"
+_flavor="oneplus-hotdog-lineage414"
+url="https://github.com/LineageOS/android_kernel_oneplus_sm8150"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps pmb:cross-native"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	devicepkg-dev
+	findutils
+	flex
+	lld
+	linux-headers
+	llvm
+	openssl-dev
+	perl
+	xz
+	"
+
+_repository="android_kernel_oneplus_sm8150"
+_commit="6ecfabed032b68a8f0a0fd003cf5fbfb6d672acb"
+_config="config-$_flavor.aarch64"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/LineageOS/$_repository/archive/$_commit.tar.gz
+	$_config
+	stock-hotdog-dtbpack.dtb
+	"
+builddir="$srcdir/$_repository-$_commit"
+_outdir="$srcdir/build-$_flavor"
+
+_makeargs="
+	O=$_outdir
+	ARCH=$_carch
+	LLVM=1
+	LLVM_IAS=1
+	CROSS_COMPILE=aarch64-linux-gnu-
+	CLANG_TRIPLE=aarch64-linux-gnu-
+	KCFLAGS=-Wno-error=implicit-enum-enum-cast
+	KBUILD_BUILD_VERSION=$((pkgrel + 1))-postmarketOS
+	"
+
+prepare() {
+	default_prepare
+	mkdir -p "$_outdir"
+	cp "$srcdir/$_config" "$_outdir/.config"
+	make $_makeargs olddefconfig
+}
+
+build() {
+	unset LDFLAGS
+	make $_makeargs Image modules
+}
+
+package() {
+	install -Dm644 "$_outdir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+
+	# Boot-proven stock DTB pack with dtb_idx=12 instrumented for
+	# simplefb and an explicit /chosen ranges mapping.
+	install -Dm644 "$srcdir/stock-hotdog-dtbpack.dtb" \
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
+
+	make $_makeargs \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_MOD_PATH="$pkgdir" \
+		modules_install
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$_outdir/include/config/kernel.release" \
+		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+}
+
+sha512sums="
+db3a83b6cc8ebca496b49ddac82a81c05d488808129bd51b0348dd411ceef7449fb293f77ae5a290fae8d2dde081e5cf35ec7617cb9aea98eb0ce72b85af9cc6  linux-oneplus-hotdog-lineage414-6ecfabed032b68a8f0a0fd003cf5fbfb6d672acb.tar.gz
+2c81240696e04548e2e73cb784af9e05a9e21559062a49939f09218021070360d3e4bc212818e8da24000c65c914e9d43aecb7ca2179df27cbaab969d663405f  config-oneplus-hotdog-lineage414.aarch64
+5d4bee9d38662642ef96cfefc0def0b427dca3ea71e7bd24c04d2ab16661e39d4cb61d2ef42d58a9008018ddb021d6ae15a116b8fa0e642c3a2790456c3dbc94  stock-hotdog-dtbpack.dtb
+"

@@ -82,6 +82,9 @@ The local downstream aport was updated too:
 path:
 /home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150/device/testing/linux-oneplus-hotdog-lineage414
 
+tracked snapshot:
+/home/srobin/dev/hotdog/aports/device/testing/linux-oneplus-hotdog-lineage414
+
 pkgrel:
 2
 
