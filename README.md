@@ -13,15 +13,20 @@ maintainable downstream-to-mainline split.
 
 ## Current status
 
-Status snapshot: 2026-07-09 21:12 CEST.
+Status snapshot: 2026-07-09 21:57 CEST.
 
 - a stable pmOS boot exists on the downstream Lineage/OpenELA 4.14.357 kernel
-- the stable image exposes USB SSH at `user@172.16.42.1`
+- the latest validated downstream image reaches USB SSH at `user@172.16.42.1`
+  and starts a visible DRM text console from initramfs
+- the current successful boot id is
+  `7854ea12-7415-41bc-8f2e-59d8865fd041`
+- host commands can be sent to the visible pmOS shell through
+  `scripts/install-hotdog-drm-console.sh send`
 - DSI-1 is visible: `modetest -s 28@136:#0 -F smpte` displays a test pattern
 - the latest mainline 6.17 test timed out before initramfs reachability and
   left no readable pstore record
-- the phone has been recovered to the stable downstream image
-- a rescue watcher is armed again for future fastboot/recovery appearances
+- the older downstream image remains the current restore target for rescue
+- a rescue watcher is available for future fastboot/recovery appearances
 
 The live boot state is tracked in [docs/current-boot-cycle.md](docs/current-boot-cycle.md).
 
@@ -86,7 +91,9 @@ The working pattern is:
 2. confirm the pmbootstrap setup with `./scripts/pmbootstrap-hotdog.sh status`
 3. build or refresh the relevant pmOS image, kernel, or device package
 4. test on the phone only after a rescue path exists
-5. capture the result in the matching log or report under `docs/` or `reports/`
+5. for display-sensitive tests, prefer the validated DRM console path over the
+   older `/dev/fb0` paint probe
+6. capture the result in the matching log or report under `docs/` or `reports/`
 
 The current boot-cycle notes document the stable downstream image, the latest
 mainline failure mode, and the preferred rescue path:
@@ -124,6 +131,7 @@ the project itself rather than on regenerated state.
 - [reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt](reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt](reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt](reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt)
+- [reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt](reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt)
 
 ## GitHub continuation
 

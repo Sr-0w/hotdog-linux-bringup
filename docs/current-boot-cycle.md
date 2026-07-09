@@ -1,22 +1,31 @@
 # Current boot cycle
 
-Date: 2026-07-09 21:12 CEST
+Date: 2026-07-09 21:57 CEST
 
 ## Current Status
 
-The phone has been recovered to the known-good downstream pmOS boot after the
-mainline 6.17 timeout.
+The phone is booted on the downstream Lineage/OpenELA 4.14.357 pmOS image with
+the new DRM console payload. USB SSH is reachable and the display shows a text
+console driven through DRM/KMS.
 
 ```text
 pmOS SSH: user@172.16.42.1 reachable
-boot_id: f43b6b3a-ee33-418b-865b-880b024cd770
+boot_id: 7854ea12-7415-41bc-8f2e-59d8865fd041
 kernel: Linux hotdog 4.14.357-openela-perf #2-postmarketOS
 DSI-1: enabled
-visible test: modetest SMPTE pattern on DSI-1
+visible test: DRM text console plus command-output transcript on DSI-1
 USB network: usb0 on the phone, 172.16.42.1/16
 ```
 
-Known-good boot image:
+Current validated boot image:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019
+test log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020
+```
+
+Restore baseline boot image:
 
 ```text
 /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
@@ -25,21 +34,41 @@ kernel sha256: dfac91230b3b2783fbd79408a5cd62f47bc2a86a4586347d814c5144d76d84d9
 dtb pack sha256: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
 ```
 
-Recovery path used:
+Latest test result:
 
 ```text
-/home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-09-203849/run.log
+flash boot_b from pmOS SSH: OK
+boot_b verification: OK
+reboot command: issued from pmOS SSH
+boot result: pmOS SSH returned
+pmOS boot_id changed: 7854ea12-7415-41bc-8f2e-59d8865fd041
+run log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020/run.log
 ```
 
-Result:
+## DRM Console Milestone
+
+The current image injects `hotdog-drm-console` into the initramfs and starts it
+as soon as `/dev/dri/card0` is available. It stops the initramfs instance before
+`switch_root`; the pmOS userspace hook then starts the persistent command
+console.
+
+Boot evidence:
 
 ```text
-fastboot appeared: 2026-07-09 20:51:48 CEST
-restored boot_b: OK
-set active slot b: OK
-reboot system: OK
-pmOS SSH returned: 2026-07-09 20:55:06 CEST
-post-recovery collection: /home/srobin/dev/hotdog/logs/pmos-usb-ssh-2026-07-09-205444
+[    2.029100] [hotdog-drm-console] starting DRM dmesg console at initramfs after 0s
+[    2.568984] [hotdog-watchdog] marker: usb-iface
+[    5.570778] [hotdog-watchdog] marker: root-mounted
+[    5.651583] [hotdog-watchdog] marker: switch-root
+```
+
+Visible shell evidence, sent from the host through the FIFO:
+
+```text
+command: scripts/install-hotdog-drm-console.sh send '... POST_BOOT_DRM_CONSOLE_OK ...'
+transcript: /tmp/hotdog-drm-console.transcript on the phone
+tty: /dev/pts/0
+whoami: root
+input FIFO: /tmp/hotdog-drm-console.in
 ```
 
 ## Display State
@@ -53,19 +82,27 @@ DSI-1: connected and enabled
 connector id: 28
 CRTC id: 136
 preferred mode: #0, 1440x3120x60x187200
-visible proof: modetest -s 28@136:#0 -F smpte
+visible evidence: modetest -s 28@136:#0 -F smpte
 ```
 
-The phone was reported black even though pmOS SSH was reachable. Installing
-`libdrm-tests` and running a held `modetest` pattern proved that the panel,
-KMS scanout, and backlight work on the downstream boot. The black screen was
-therefore a userspace output problem, not evidence that the stable pmOS boot or
-the panel path had failed.
+The phone was previously reported black even though pmOS SSH was reachable.
+Installing `libdrm-tests` and running a held `modetest` pattern proved that the
+panel, KMS scanout, and backlight work on the downstream boot. The newer
+`hotdog-drm-console` helper turns that evidence into a reusable text output
+path.
 
 Helper for reproducing the known-good visual pattern:
 
 ```text
 /home/srobin/dev/hotdog/scripts/show-stable-drm-pattern.sh start
+```
+
+Helper for interacting with the visible DRM console on a booted pmOS system:
+
+```text
+/home/srobin/dev/hotdog/scripts/install-hotdog-drm-console.sh status
+/home/srobin/dev/hotdog/scripts/install-hotdog-drm-console.sh send 'dmesg | tail -40'
+/home/srobin/dev/hotdog/scripts/install-hotdog-drm-console.sh transcript 120
 ```
 
 Evidence capture:
@@ -94,16 +131,17 @@ before the injected initramfs watchdog could run.
 
 ## Active Rescue Watcher
 
-A detached rescue watcher is armed again. If the phone appears in fastboot or
-recovery ADB, it restores the known-good boot image above to `boot_b`, sets slot
-`b` active, and reboots system.
+A detached rescue watcher is armed. If the phone appears in fastboot or
+recovery ADB, it restores the restore-baseline boot image above to `boot_b`,
+sets slot `b` active, and reboots system.
 
 ```text
-pid: 62915
+pid: 210606
 pid file: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-stable-drm-current.pid
 log link: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-stable-drm-current.log
 restore action: system reboot
 starter: /home/srobin/dev/hotdog/scripts/start-stable-rescue-watcher.sh
+restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
 ```
 
 ## Last Mainline Test
@@ -147,20 +185,18 @@ enough that the rescue path cannot run.
 
 ## Next Useful Work
 
-1. Keep the downstream 4.14 DRM/Plymouth image as the baseline for fast recovery
-   and for phone-side inspection.
-2. Add a true DRM visual diagnostic to the boot-image builder. The current
-   `--fb-test` paints `/dev/fb0`, but the working proof uses KMS on
-   `/dev/dri/card0`; a future `--drm-test` should use either a small custom DRM
-   dumb-buffer helper or a controlled `modetest` payload.
-3. Revalidate one low-risk downstream 4.14 boot with the same DTB
-   instrumentation before changing the mainline path again.
+1. Keep the downstream 4.14 DRM-console image as the visible baseline for fast
+   recovery and phone-side inspection.
+2. Use the DRM console payload, not the old `/dev/fb0` paint test, for the next
+   low-level boot diagnostics.
+3. Make the helper rebuildable on a fresh host instead of relying on the local
+   `build/hotdog-drm-console-aarch64` binary pulled from the phone.
 4. For mainline, stop treating USB gadget alone as the first milestone. The
-   current blocker is earlier: kernel entry, DTB compatibility, early console,
-   initramfs reachability, or a very early panic/hang.
+   next useful signal is visible text before USB, initramfs reachability, or a
+   very early kernel/DTB failure.
 5. Do not retest the exact `192100` mainline 6.17 image. If mainline is retried,
-   keep the 6.17 kernel but reduce the ramdisk candidate to watchdog/pstore
-   only before changing kernel entry code.
+   keep the 6.17 kernel but reduce the ramdisk candidate to watchdog/pstore plus
+   the DRM console instrumentation before changing kernel entry code.
 
 Prepared minimal mainline candidate for later, not yet tested:
 
@@ -186,4 +222,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt
 ```
