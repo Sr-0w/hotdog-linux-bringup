@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 01:35 CEST
+Date: 2026-07-10 01:39 CEST
 
 ## Current Status
 
@@ -17,6 +17,7 @@ host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
 pmOS SSH wait/test watcher: running, waiting for SSH before launching 013100
+passive phone-state watcher: running, logging ADB/fastboot/USB changes only
 ```
 
 Current validated boot image:
@@ -178,6 +179,20 @@ wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-sim
 script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
 next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
+```
+
+## Active Passive State Watcher
+
+This watcher only snapshots host-visible state. It does not flash, reboot,
+sideload, use SSH, or take the phone-operation lock.
+
+```text
+pid: 1428208
+launcher log: /home/srobin/dev/hotdog/logs/passive-phone-state-2026-07-10-013842/launcher.log
+run log: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-013842/run.log
+latest summary: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-013842/latest-summary.txt
+timeout: 21600s
+poll: 5s
 ```
 
 ## Prepared Downstream Console Candidate
