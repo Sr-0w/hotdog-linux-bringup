@@ -1,21 +1,21 @@
 # Current boot cycle
 
-Date: 2026-07-10 00:22 CEST
+Date: 2026-07-10 00:43 CEST
 
 ## Current Status
 
-The phone is recovered to downstream Lineage/OpenELA 4.14.357 pmOS after the
-latest mainline timeout. USB SSH is reachable, the userspace DRM console is
-running, and `boot_b` is verified as the validated DRM-console image.
+The phone is currently in a mainline 6.17 timeout state after testing the
+pstore-built kernel with the unmodified stock full DTB pack. No USB recovery
+path is visible from the host at the time of this update.
 
 ```text
-pmOS SSH: user@172.16.42.1 reachable
-live boot_id: 5a6cd93e-28c5-47dc-84fe-119534c8b2e1
-kernel: Linux hotdog 4.14.357-openela-perf #2-postmarketOS
-DSI-1: enabled
-visible test: userspace DRM text console plus command-output transcript on DSI-1
-USB network: usb0 on the phone, 172.16.42.1/16
-boot_b after recovery: verified as the validated 215005 DRM-console image
+pmOS SSH: not reachable
+fastboot: not visible
+recovery ADB: not visible
+ADB device: not visible
+host lsusb: no phone/Qualcomm device detected
+active test image on boot_b: 003000 mainline 6.17 pstore-built stock-DTB-pack candidate
+companion rescue watcher: running, waiting for fastboot or recovery ADB
 ```
 
 Current validated boot image:
@@ -50,18 +50,14 @@ run log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020/run.lo
 Latest mainline test:
 
 ```text
-test: mainline 6.17 with PSTORE/RAMOOPS built in plus DRM-console payload
-image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-224100-mainline617-pstorebuilt-drmconsole-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
-sha256: 50b09d45c650ac6ba7234a53dbcdd064d425d7df8c524133652b36696148fb40
+test: mainline 6.17 with PSTORE/RAMOOPS built in plus unmodified stock full DTB pack
+image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-003000-mainline617-pstorebuilt-drmconsole-stockdtbpack-unmodified-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: 87e62679c8f2aa7d1ce7df7cc7efec12ce2010a365becf99d2a323a85b7e712d
 kernel sha256: 48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83
-config sha256: af45c52e0176343e6696dbed5f6a65fd51af639441598ac9d010318b813ee185
-run log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052/run.log
+dtb pack sha256: f3afd969891fa461afe3bf61711863e6be3ba462d47e93794af1455b03253572
+run log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-10-003038/run.log
 result: timeout after 720s, no fastboot/recovery ADB/pmOS SSH/USB device
-manual fastboot return observed: 2026-07-10 00:17:58 CEST
-restore: 215005 DRM-console image flashed by rescue watcher, then system reboot
-pmOS SSH returned: 2026-07-10 00:21:14 CEST, boot_id 5a6cd93e-28c5-47dc-84fe-119534c8b2e1
-post-recovery boot_b: 215005 DRM-console image verified
-post-recovery pstore: mounted, empty
+rescue watcher: still running, waiting for target visibility
 ```
 
 ## DRM Console Milestone
@@ -151,17 +147,17 @@ injected initramfs watchdog or DRM-console helper could run.
 
 ## Active Rescue Watcher
 
-No detached rescue watcher is currently running after the 00:17:58 restoration.
-Future risky tests should start their own companion watcher.
+A detached rescue watcher is currently running for the latest mainline timeout.
+It should restore the validated `215005` downstream DRM-console image if the
+phone becomes visible in fastboot or recovery ADB.
 
-Latest watcher action:
+Current watcher:
 
 ```text
-watcher log: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-drmconsole-215005-current.log
-fastboot visible: 2026-07-10 00:17:58 CEST
-restored boot_b: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
-reboot system: OK
-post-recovery boot_b prefix sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019
+pid: 1056814
+watcher log: /home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-003053/run.log
+restore boot_b: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
+after restore: system
 ```
 
 ## Last Mainline Test
@@ -169,10 +165,10 @@ post-recovery boot_b prefix sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29
 Tested image:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-224100-mainline617-pstorebuilt-drmconsole-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
-sha256: 50b09d45c650ac6ba7234a53dbcdd064d425d7df8c524133652b36696148fb40
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-003000-mainline617-pstorebuilt-drmconsole-stockdtbpack-unmodified-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: 87e62679c8f2aa7d1ce7df7cc7efec12ce2010a365becf99d2a323a85b7e712d
 kernel sha256: 48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83
-dtb pack sha256: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+dtb pack sha256: f3afd969891fa461afe3bf61711863e6be3ba462d47e93794af1455b03253572
 initramfs: watchdog plus DRM-console helper
 kernel config: CONFIG_PSTORE=y, CONFIG_PSTORE_RAM=y, CONFIG_PSTORE_CONSOLE=y
 ```
@@ -180,7 +176,7 @@ kernel config: CONFIG_PSTORE=y, CONFIG_PSTORE_RAM=y, CONFIG_PSTORE_CONSOLE=y
 Run log:
 
 ```text
-/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052/run.log
+/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-10-003038/run.log
 ```
 
 Result:
@@ -192,19 +188,18 @@ reboot observed: USB ping dropped
 boot result after 720s: timeout
 fastboot/recovery ADB/pmOS SSH: none
 host lsusb during timeout: no phone device
-manual fastboot recovery later: 2026-07-10 00:17:58 CEST
-post-recovery pstore: empty
+rescue watcher: left running
 ```
 
 Interpretation:
 
 ```text
 The bootloader accepted the image well enough not to immediately return to
-fastboot, but the kernel did not reach a recoverable USB path. Adding the
-DRM-console payload and rebuilding mainline with built-in pstore/ramoops did
-not produce visible text, a pstore record, or a 420s watchdog return path. The
-hang is probably before the injected initramfs helper starts, before pstore can
-record, or before mainline can create `/dev/dri/card0`.
+fastboot, but the kernel did not reach a recoverable USB path. Replacing the
+entry12 simplefb/stdout-path DTB pack with the unmodified stock full DTB pack
+did not change the failure mode. The hang is probably below initramfs-side
+instrumentation, around kernel entry, early exception handling, GIC/SRE/EL2, or
+PSCI.
 ```
 
 ## Next Useful Work
@@ -213,12 +208,15 @@ record, or before mainline can create `/dev/dri/card0`.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Make the helper rebuildable on a fresh host instead of relying on the local
+3. Use the downstream 4.14 path for the next screen-side milestone: either
+   fbcon/simplefb handoff if the kernel supports it, or a faster initramfs DRM
+   dmesg replay if it does not.
+4. Make the helper rebuildable on a fresh host instead of relying on the local
    `build/hotdog-drm-console-aarch64` binary pulled from the phone.
-4. For mainline, stop treating USB gadget alone as the first milestone. The
+5. For mainline, stop treating USB gadget alone as the first milestone. The
    next useful signal is kernel-entry evidence, a bootloader-visible return
    reason, or initramfs reachability through a channel earlier than USB gadget.
-5. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
+6. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
 Previous minimal mainline candidate that led to the DRM-console follow-up:
@@ -248,4 +246,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/72-mainline617-pstorebuilt-timeout-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/73-mainline617-stockdtbpack-timeout-20260710.txt
 ```
