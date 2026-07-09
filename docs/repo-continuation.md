@@ -71,6 +71,12 @@ Fresh-machine checklist:
    regenerate them with the helper scripts already in the repo.
 5. Re-run `./scripts/bootstrap-host.sh --check-host` before resuming work.
 
+To seed the curated aport snapshots into a fresh local pmaports checkout:
+
+```bash
+./scripts/sync-aport-snapshots.sh --apply
+```
+
 For long hardware tests, use `./scripts/start-stable-rescue-watcher.sh` rather
 than a plain shell background job. It starts the rescue watcher with
 `start-stop-daemon`, writes a pidfile under `logs/manual-rescue-watchers/`, and
