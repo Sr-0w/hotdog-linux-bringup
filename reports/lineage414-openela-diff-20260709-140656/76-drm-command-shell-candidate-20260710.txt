@@ -29,7 +29,9 @@ The userspace DRM console path is unchanged. It still uses
 `/tmp/hotdog-drm-console.in` and `/tmp/hotdog-drm-console.transcript`.
 
 `scripts/build-hotdog-drm-console-helper.sh` now rebuilds the DRM helper from
-`helpers/hotdog-drm-console.c` through the pmbootstrap aarch64 buildroot:
+`helpers/hotdog-drm-console.c` through the pmbootstrap aarch64 buildroot.
+`scripts/build-watchdog-bootimg.sh` calls this automatically when `--drm-console`
+is enabled and the default helper binary is missing:
 
 ```text
 ./scripts/build-hotdog-drm-console-helper.sh

@@ -94,7 +94,8 @@ direct_debug_shell=0
 fb_test=0
 drm_console=0
 drm_console_userspace=0
-drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
+default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
+drm_console_helper="$default_drm_console_helper"
 os_version=""
 os_patch_level=""
 outdir=""
@@ -242,6 +243,9 @@ require_file "$source_boot"
 [ -z "$kernel_override" ] || require_file "$kernel_override"
 [ -z "$dtb_override" ] || require_file "$dtb_override"
 if [ "$drm_console" -eq 1 ]; then
+	if [ ! -f "$drm_console_helper" ] && [ "$drm_console_helper" = "$default_drm_console_helper" ]; then
+		"$script_dir/build-hotdog-drm-console-helper.sh" --output "$drm_console_helper"
+	fi
 	require_file "$drm_console_helper"
 fi
 require_file "$HOTDOG_BIN_ROOT/pmbootstrap"
