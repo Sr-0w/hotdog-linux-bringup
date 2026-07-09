@@ -1,0 +1,111 @@
+drm command shell candidate - 2026-07-10
+========================================
+
+Reason
+------
+
+The display path now produces visible text, but the previous initramfs DRM
+console command used a foreground `while :; dmesg; sleep 2; done` loop. That is
+useful as a text-output proof, but it keeps `/bin/sh` busy and makes the FIFO
+input path look like "not really a shell".
+
+Code change
+-----------
+
+`scripts/build-watchdog-bootimg.sh` now starts the initramfs DRM console with a
+one-shot boot snapshot:
+
+```text
+--- hotdog initramfs DRM command shell ---
+stage: ...
+cmdline: ...
+--- initial dmesg snapshot ---
+...
+--- ready: commands are read from /tmp/hotdog-drm-console.in ---
+initramfs#
+```
+
+The userspace DRM console path is unchanged. It still uses
+`/tmp/hotdog-drm-console.in` and `/tmp/hotdog-drm-console.transcript`.
+
+Prepared boot image
+-------------------
+
+```text
+image:
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-011900-lineage414-simplefb-ranges-fbtest-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+sha256:
+2855c26423300eefca569c8f19f232494a5a84296af38441b43e161e1323e262
+
+initramfs sha256:
+b040994fb9f8127510238b3294c0ee6da0b218f3df8fe9cc47e186224c180b90
+```
+
+Build shape:
+
+```text
+base image: validated downstream 215005
+DTB override: fixed entry12 /chosen ranges; DTB pack
+options: --fb-test --drm-console-userspace --watchdog-success root
+```
+
+Fixed DTB pack:
+
+```text
+path:
+/home/srobin/dev/hotdog/build/experiments/2026-07-10-010500-stock-dtb-pack-entry12-simplefb-ranges/stock-dtb-pack-entry12-simplefb-ranges-stdout.dtbpack
+
+sha256:
+9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+```
+
+pmaports local package promotion
+--------------------------------
+
+The local downstream aport was updated too:
+
+```text
+path:
+/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150/device/testing/linux-oneplus-hotdog-lineage414
+
+pkgrel:
+2
+
+stock-hotdog-dtbpack.dtb sha256:
+9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+
+stock-hotdog-dtbpack.dtb sha512:
+5d4bee9d38662642ef96cfefc0def0b427dca3ea71e7bd24c04d2ab16661e39d4cb61d2ef42d58a9008018ddb021d6ae15a116b8fa0e642c3a2790456c3dbc94
+```
+
+Validation:
+
+```text
+./scripts/pmbootstrap-hotdog.sh checksum linux-oneplus-hotdog-lineage414
+result: DONE
+```
+
+Build validation:
+
+```text
+./scripts/pmbootstrap-hotdog.sh build --arch aarch64 linux-oneplus-hotdog-lineage414
+result: DONE
+apk: /home/srobin/dev/hotdog/pmbootstrap-work/packages/edge/aarch64/linux-oneplus-hotdog-lineage414-4.14.357_git20260703-r2.apk
+apk sha256: f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff
+```
+
+Next test
+---------
+
+Test `011900` when the phone is commandable again. Expected signals:
+
+```text
+1. If simplefb is fixed: early /dev/fb0 paint or fbcon text appears.
+2. If DRM starts before rootfs: the screen shows an idle initramfs# prompt.
+3. If rootfs is reached: OpenRC local.d starts the persistent pmOS DRM command shell.
+```
+
+If `/dev/fb0` is still absent and `simple-framebuffer ... No memory resource`
+remains, the next target is deeper simplefb address/resource translation rather
+than more printk or console cmdline changes.

@@ -1090,12 +1090,12 @@ hotdog_drm_console_start() {
 					hotdog_drm_console_log "missing PSF font"
 					exit 0
 				}
-				hotdog_drm_console_log "starting DRM dmesg console at $stage after ${waited}s"
+				hotdog_drm_console_log "starting DRM command shell at $stage after ${waited}s"
 				/usr/bin/hotdog-drm-console \
 					--font /tmp/hotdog-ter-v32n.psf \
 					--fifo /tmp/hotdog-drm-console.in \
 					--transcript /tmp/hotdog-drm-console.transcript \
-					--command "export TERM=dumb; PS1='initramfs# '; export PS1; printf '\n--- hotdog initramfs DRM dmesg console ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; i=0; while :; do printf '\n--- dmesg snapshot %s ---\n' \"\$i\"; dmesg | tail -80; i=\$((i + 1)); sleep 2; done" \
+					--command "export TERM=dumb; PS1='initramfs# '; export PS1; printf '\n--- hotdog initramfs DRM command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -80; printf '\n--- ready: commands are read from /tmp/hotdog-drm-console.in ---\n'" \
 					>/tmp/hotdog-drm-console.log 2>&1 &
 				echo $! > /tmp/hotdog_drm_console.pid
 				exit 0
