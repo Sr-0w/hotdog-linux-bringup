@@ -36,6 +36,8 @@ The root repo can stay small and useful:
 - `docs/*.md`
 - `scripts/*.sh`
 - `patches/*.patch`
+- `aports/`: curated local pmaports package snapshots needed for reproducible
+  bring-up state
 - `pmbootstrap_v3.cfg.example`
 
 The real `pmbootstrap_v3.cfg` is machine-local because it normally contains
