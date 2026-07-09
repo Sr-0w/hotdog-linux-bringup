@@ -24,10 +24,40 @@ pid_line() {
   fi
 }
 
+pattern_lines() {
+  local label="$1"
+  local pattern="$2"
+  local matches=""
+
+  matches="$(pgrep -af "$pattern" 2>/dev/null || true)"
+  if [ -z "$matches" ]; then
+    printf '%-24s missing\n' "$label"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    local pid="${line%% *}"
+    local ppid=""
+    ppid="$(ps -o ppid= -p "$pid" 2>/dev/null | awk '{$1=$1; print}' || true)"
+    [ "$ppid" = "1" ] || continue
+    printf '%-24s running pid=%s elapsed=%s cmd=%s\n' \
+      "$label" \
+      "$pid" \
+      "$(ps -o etime= -p "$pid" 2>/dev/null | awk '{$1=$1; print}')" \
+      "${line#* }"
+  done <<EOF
+$matches
+EOF
+}
+
 latest_dir() {
   local base="$1"
   local pattern="$2"
-  find "$base" -maxdepth 1 -type d -name "$pattern" 2>/dev/null | sort | tail -n 1
+  find "$base" -maxdepth 1 -type d -name "$pattern" -printf '%T@ %p\n' 2>/dev/null |
+    sort -n |
+    tail -n 1 |
+    cut -d' ' -f2-
 }
 
 print_tail() {
@@ -68,6 +98,9 @@ main() {
   pid_line stall-summary "$HOTDOG_LOG_ROOT/watch-stall-summary.pid"
   pid_line adb-scrcpy "$HOTDOG_LOG_ROOT/watch-adb-scrcpy.pid"
   pid_line autopilot-health "$HOTDOG_LOG_ROOT/watch-autopilot-health.pid"
+  pattern_lines rescue-visible "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
+  pattern_lines wait-simplefb-shell "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
+  pattern_lines passive-phone-state "$HOTDOG_ROOT/scripts/watch-phone-state.sh --timeout 21600 --poll 5"
 
   printf '\n== phone lock ==\n'
   if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
@@ -88,6 +121,8 @@ main() {
   local scrcpy_dir
   local health_dir
   local edl_dir
+  local rescue_dir
+  local wait_simplefb_dir
 
   state_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-phone-state-*')"
   fastboot_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-fastboot-dump-*')"
@@ -96,6 +131,8 @@ main() {
   scrcpy_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-adb-scrcpy-*')"
   health_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-autopilot-health-*')"
   edl_dir="$(latest_dir "$HOTDOG_DUMP_ROOT/stock-before-flash" '*-edl-critical-blocks')"
+  rescue_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-visible-*')"
+  wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-lineage414-simplefb-shell-*')"
 
   printf '\n== latest dirs ==\n'
   printf 'state=%s\n' "${state_dir:-none}"
@@ -105,8 +142,16 @@ main() {
   printf 'scrcpy=%s\n' "${scrcpy_dir:-none}"
   printf 'health=%s\n' "${health_dir:-none}"
   printf 'edl=%s\n' "${edl_dir:-none}"
+  printf 'rescue=%s\n' "${rescue_dir:-none}"
+  printf 'wait_simplefb=%s\n' "${wait_simplefb_dir:-none}"
+
+  printf '\n== next prepared test ==\n'
+  printf 'wrapper=%s\n' "$HOTDOG_ROOT/scripts/test-next-lineage414-simplefb-shell.sh"
+  printf 'wait_wrapper=%s\n' "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
 
   [ -n "$state_dir" ] && print_tail phone-state "$state_dir/latest-summary.txt" 40
+  [ -n "$rescue_dir" ] && print_tail rescue-visible "$rescue_dir/run.log" 25
+  [ -n "$wait_simplefb_dir" ] && print_tail wait-simplefb-shell "$wait_simplefb_dir/run.log" 25
   [ -n "$fastboot_dir" ] && print_tail fastboot-dump "$fastboot_dir/watch.log" 25
   [ -n "$continue_dir" ] && print_tail continue-pmos "$continue_dir/run.log" 25
   [ -n "$stall_dir" ] && print_tail stall-summary "$stall_dir/run.log" 25
