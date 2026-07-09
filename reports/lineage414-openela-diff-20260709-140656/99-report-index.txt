@@ -31,3 +31,4 @@
 74-drm-console-userspace-candidate-20260710.txt - downstream 4.14 image prepared to auto-install userspace DRM console plus detached rescue watcher robustness fix
 75-simplefb-ranges-candidate-20260710.txt - missing /chosen ranges; explains simplefb No memory resource; prepared 010900 image to test fixed DTB pack
 76-drm-command-shell-candidate-20260710.txt - prepared 014400 image: fixed DTB pack plus initramfs DRM command shell prompt and background dmesg follower; local pmaports package promoted to pkgrel 2; helper rebuilt from source
+77-pmaports-kernel-fbcon-candidate-20260710.txt - prepared 015500 image: pmaports pkgrel 2 kernel with VT/fbcon/simplefb plus fixed DTB pack and DRM auto-diagnostic shell

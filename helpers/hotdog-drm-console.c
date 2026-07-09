@@ -518,7 +518,12 @@ int main(int argc, char **argv)
 		"printf '\\n--- hotdog pmOS command shell via DRM ---\\n'; "
 		"printf 'boot_id: '; cat /proc/sys/kernel/random/boot_id; "
 		"uname -a; "
-		"printf '\\n--- recent display messages ---\\n'; dmesg | grep -i -E 'drm|dsi|fb|console' | tail -20; "
+		"printf 'cmdline: '; cat /proc/cmdline; "
+		"printf '\\n--- initial network state ---\\n'; ip -br addr 2>/dev/null || ip addr 2>/dev/null || true; "
+		"printf '\\n--- recent display messages ---\\n'; dmesg | grep -i -E 'drm|dsi|fb|console|simple' | tail -40; "
+		"printf '\\n--- starting pmOS status follower every 10s ---\\n'; "
+		"(i=0; while :; do sleep 10; printf '\\n--- pmOS status %s ---\\n' \"$i\"; date; uptime 2>/dev/null || true; ip -br addr 2>/dev/null || true; dmesg | tail -50; i=$((i + 1)); done) & "
+		"printf 'follower pid: %s\\n' \"$!\"; "
 		"printf '\\n--- ready: commands are read from /tmp/hotdog-drm-console.in ---\\n'\n";
 
 	for (int i = 1; i < argc; i++) {
