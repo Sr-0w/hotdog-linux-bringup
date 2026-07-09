@@ -13,7 +13,8 @@ only the artifacts you actually need.
 | Path | Purpose |
 |---|---|
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img` | Current validated downstream pmOS boot image. It boots to SSH over USB, starts the initramfs DRM console, then starts the userspace visible command shell. |
-| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-010900-lineage414-simplefb-ranges-fbtest-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Prepared downstream 4.14 simplefb/fbcon follow-up image. Built from `215005`; overrides the DTB pack with entry12 `/chosen ranges;`, enables `--fb-test`, and auto-installs the userspace DRM command console. Not flashed yet; next priority candidate. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-011900-lineage414-simplefb-ranges-fbtest-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Prepared downstream 4.14 simplefb/fbcon follow-up image. Built from `215005`; overrides the DTB pack with entry12 `/chosen ranges;`, enables `--fb-test`, starts an initramfs DRM command shell that returns to a prompt, and auto-installs the userspace DRM command console. Not flashed yet; next priority candidate. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-010900-lineage414-simplefb-ranges-fbtest-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Superseded downstream 4.14 simplefb/fbcon candidate. It used the same fixed DTB pack, but its initramfs DRM console stayed in a foreground `dmesg` loop instead of returning to a command prompt. |
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-005100-lineage414-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Prepared downstream 4.14 follow-up image. Built from `215005`; adds `--drm-console-userspace` so the initramfs installs the visible DRM command console into the mounted rootfs before `switch_root`. Not flashed yet. |
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img` | Restore-baseline pmOS boot image used by the rescue watcher. It boots to SSH over USB and auto-starts the earlier DRM/Plymouth display hook. |
 | `/home/srobin/dev/hotdog/images/lineage/hotdog-20260703/recovery-adb-unsecure.img` | Patched recovery image used for recovery-side ADB. |
@@ -45,7 +46,9 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150` | Local pmaports fork with the hotdog device package. |
 | `/home/srobin/dev/hotdog/src/kernel/linux-postmarketos-qcom-sm8150-v6.17.0-sm8150` | Mainline/postmarketOS kernel work tree used for the current experiments. |
 | `/home/srobin/dev/hotdog/src/lineage/android_kernel_oneplus_sm8150` | Lineage kernel source checkout used for comparison. |
-| `/home/srobin/dev/hotdog/scripts/build-entry12-simplefb-ranges-dtbpack.sh` | Rebuilds the fixed entry12 simplefb `ranges;` DTB pack used by the prepared `010900` image. |
+| `/home/srobin/dev/hotdog/scripts/build-entry12-simplefb-ranges-dtbpack.sh` | Rebuilds the fixed entry12 simplefb `ranges;` DTB pack used by the prepared `011900` image. |
+| `/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150/device/testing/linux-oneplus-hotdog-lineage414` | Local downstream 4.14 aport. The local copy has `pkgrel=2` and `stock-hotdog-dtbpack.dtb` updated to the fixed entry12 `/chosen ranges;` DTB pack; `pmbootstrap checksum linux-oneplus-hotdog-lineage414` validated the SHA512 on 2026-07-10 01:15 CEST. |
+| `/home/srobin/dev/hotdog/pmbootstrap-work/packages/edge/aarch64/linux-oneplus-hotdog-lineage414-4.14.357_git20260703-r2.apk` | Built downstream 4.14 kernel package from the local `pkgrel=2` aport after the fixed DTB-pack promotion. SHA256 `f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff`. |
 
 ## Report set
 
@@ -63,6 +66,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/73-mainline617-stockdtbpack-timeout-20260710.txt` | Mainline 6.17 pstore-built with the unmodified stock full DTB pack still timed out, ruling out the entry12 simplefb/stdout DTB-pack modification as the main cause. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/74-drm-console-userspace-candidate-20260710.txt` | Prepared downstream 4.14 image that auto-installs the DRM command console into rootfs, plus rescue watcher robustness fix. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/75-simplefb-ranges-candidate-20260710.txt` | Offline root cause for simplefb `No memory resource`; prepared `010900` image with fixed entry12 `/chosen ranges;`, fb-test, and userspace DRM console. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/76-drm-command-shell-candidate-20260710.txt` | Follow-up image `011900` changes the initramfs DRM console from a foreground `dmesg` loop into a real command shell prompt and records the local pmaports DTB-pack promotion. |
 
 ## Resume order
 

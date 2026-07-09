@@ -47,12 +47,24 @@ firmware-oneplus-hotdog-modem-20241212-r0.apk
 firmware-oneplus-hotdog-venus-20241212-r0.apk
 firmware-oneplus-hotdog-wlan-20241212-r0.apk
 linux-postmarketos-sm8150-staging-6.8.7-r1.apk
+linux-oneplus-hotdog-lineage414-4.14.357_git20260703-r2.apk
 ```
 
 Paquets dans:
 
 ```text
 /home/srobin/dev/hotdog/pmbootstrap-work/packages/edge/aarch64
+```
+
+Mise a jour 2026-07-10 01:20 : le paquet local
+`linux-oneplus-hotdog-lineage414` a ete reconstruit en `r2` apres promotion du
+DTB pack entry12 simplefb avec `ranges;` sous `/chosen`.
+
+```text
+apk: /home/srobin/dev/hotdog/pmbootstrap-work/packages/edge/aarch64/linux-oneplus-hotdog-lineage414-4.14.357_git20260703-r2.apk
+sha256: f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff
+validation: ./scripts/pmbootstrap-hotdog.sh checksum linux-oneplus-hotdog-lineage414
+build: ./scripts/pmbootstrap-hotdog.sh build --arch aarch64 linux-oneplus-hotdog-lineage414
 ```
 
 ## Etat `pmbootstrap install`

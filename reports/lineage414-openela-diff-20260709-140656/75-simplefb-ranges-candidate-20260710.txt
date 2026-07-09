@@ -111,6 +111,11 @@ keep framebuffer reg size 0x1123800
 Prepared boot image
 -------------------
 
+Superseded by report `76-drm-command-shell-candidate-20260710.txt`.
+The `010900` image below keeps the right fixed DTB pack, but its initramfs DRM
+console starts a foreground `dmesg` loop. That displays text, but it does not
+leave the shell prompt idle for FIFO commands.
+
 ```text
 image:
 /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-010900-lineage414-simplefb-ranges-fbtest-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
@@ -148,5 +153,5 @@ Current status
 --------------
 
 Not flashed yet. The phone is still absent from fastboot, ADB, and `lsusb`
-after the latest mainline timeout. The active rescue watcher is still waiting
-to restore `215005` if the phone becomes visible.
+after the latest display-console work. The active rescue watcher is still
+waiting to restore `215005` if the phone becomes visible.
