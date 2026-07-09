@@ -13,20 +13,21 @@ maintainable downstream-to-mainline split.
 
 ## Current status
 
-Status snapshot: 2026-07-09 21:57 CEST.
+Status snapshot: 2026-07-09 22:36 CEST.
 
 - a stable pmOS boot exists on the downstream Lineage/OpenELA 4.14.357 kernel
 - the latest validated downstream image reaches USB SSH at `user@172.16.42.1`
   and starts a visible DRM text console from initramfs
-- the current successful boot id is
-  `7854ea12-7415-41bc-8f2e-59d8865fd041`
+- the live recovered boot id is `ce4726f0-952b-4571-bd9f-ab8eb4302648`
+- `boot_b` has been reflashed without reboot to the validated DRM-console image
+  for the next normal boot
 - host commands can be sent to the visible pmOS shell through
   `scripts/install-hotdog-drm-console.sh send`
 - DSI-1 is visible: `modetest -s 28@136:#0 -F smpte` displays a test pattern
-- the latest mainline 6.17 test timed out before initramfs reachability and
-  left no readable pstore record
+- the latest mainline 6.17 test with DRM-console instrumentation timed out
+  before any USB recovery path and left no readable pstore record
 - the older downstream image remains the current restore target for rescue
-- a rescue watcher is available for future fastboot/recovery appearances
+- future risky tests should start a fresh companion rescue watcher
 
 The live boot state is tracked in [docs/current-boot-cycle.md](docs/current-boot-cycle.md).
 
@@ -132,6 +133,7 @@ the project itself rather than on regenerated state.
 - [reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt](reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt](reports/lineage414-openela-diff-20260709-140656/69-drm-visible-pattern-20260709.txt)
 - [reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt](reports/lineage414-openela-diff-20260709-140656/70-drm-console-shell-initramfs-20260709.txt)
+- [reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt](reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt)
 
 ## GitHub continuation
 
