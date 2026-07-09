@@ -9,8 +9,8 @@ console command used a foreground `while :; dmesg; sleep 2; done` loop. That is
 useful as a text-output proof, but it keeps `/bin/sh` busy and makes the FIFO
 input path look like "not really a shell".
 
-Code change
------------
+Code changes
+------------
 
 `scripts/build-watchdog-bootimg.sh` now starts the initramfs DRM console with a
 one-shot boot snapshot:
@@ -28,18 +28,28 @@ initramfs#
 The userspace DRM console path is unchanged. It still uses
 `/tmp/hotdog-drm-console.in` and `/tmp/hotdog-drm-console.transcript`.
 
+`scripts/build-hotdog-drm-console-helper.sh` now rebuilds the DRM helper from
+`helpers/hotdog-drm-console.c` through the pmbootstrap aarch64 buildroot:
+
+```text
+./scripts/build-hotdog-drm-console-helper.sh
+output: /home/srobin/dev/hotdog/build/hotdog-drm-console-aarch64
+sha256: 302fa020286d2c7941ad1d26c9d4d2ce775dad15665b49b56bdfde6f2b4b6b5b
+file: ELF 64-bit LSB pie executable, ARM aarch64, interpreter /lib/ld-musl-aarch64.so.1
+```
+
 Prepared boot image
 -------------------
 
 ```text
 image:
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-011900-lineage414-simplefb-ranges-fbtest-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 
 sha256:
-2855c26423300eefca569c8f19f232494a5a84296af38441b43e161e1323e262
+bf7a6236e33a57f383d03daa490c054409b3529368c7b466dcd627199744faa2
 
 initramfs sha256:
-b040994fb9f8127510238b3294c0ee6da0b218f3df8fe9cc47e186224c180b90
+08a7f4e48ee2bf6e77af4e84aea1241f391fa4786ec1c59bb647426a9dbc0f8c
 ```
 
 Build shape:
@@ -47,6 +57,7 @@ Build shape:
 ```text
 base image: validated downstream 215005
 DTB override: fixed entry12 /chosen ranges; DTB pack
+DRM helper: rebuilt from source with scripts/build-hotdog-drm-console-helper.sh
 options: --fb-test --drm-console-userspace --watchdog-success root
 ```
 
@@ -98,7 +109,7 @@ apk sha256: f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff
 Next test
 ---------
 
-Test `011900` when the phone is commandable again. Expected signals:
+Test `013100` when the phone is commandable again. Expected signals:
 
 ```text
 1. If simplefb is fixed: early /dev/fb0 paint or fbcon text appears.

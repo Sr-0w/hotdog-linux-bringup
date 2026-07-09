@@ -1232,6 +1232,11 @@ build_bootimg_in_chroot() {
 	local mkbootimg_args=()
 
 	note "building boot.img with pmbootstrap native chroot mkbootimg"
+	"${pmb[@]}" chroot --add mkbootimg-osm0sis --output stdout -- true \
+		> "$mkbootimg_dir/pmbootstrap-chroot-mkbootimg-install.out" 2>&1 || {
+		sed -n '1,160p' "$mkbootimg_dir/pmbootstrap-chroot-mkbootimg-install.out" >&2 || true
+		die "could not install mkbootimg-osm0sis in pmbootstrap native chroot"
+	}
 	chroot_mkbootimg="$("${pmb[@]}" chroot --output stdout -- sh -c '
 		if command -v mkbootimg >/dev/null 2>&1; then
 			printf "%s\n" mkbootimg
