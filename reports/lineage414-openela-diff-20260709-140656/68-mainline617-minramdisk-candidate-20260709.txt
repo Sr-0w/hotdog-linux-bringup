@@ -1,0 +1,91 @@
+OnePlus 7T Pro hotdog - mainline 6.17 minimal ramdisk candidate
+Date: 2026-07-09 20:47 CEST
+
+Summary
+-------
+A smaller mainline 6.17 candidate was prepared after the `192100` image timed
+out before USB/watchdog recovery.
+
+This candidate is offline-only so far. It has not been flashed or boot-tested.
+
+Goal
+----
+Keep the same high-value variables from the failed mainline test:
+
+- mainline 6.17 kernel payload
+- full stock DTB pack with entry12 simplefb/stdout-path instrumentation
+- Android boot image v2 geometry and offsets
+- ramoops/pstore cmdline
+- root-mode initramfs rescue watchdog at 420s
+
+Remove two variables that were useful for visual/debug experiments but are not
+needed for a minimal early-boot control:
+
+- direct initramfs telnet shell
+- framebuffer paint test
+
+Boot image
+----------
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-204605-mainline617-minramdisk-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+
+SHA256:
+46e00544c908530944ed0edb3b96454e38f229e8ec4954dcd59cd756e9c2bd02
+
+Payload hashes:
+- kernel: 84f33a57aa1f32bcf938d7e9f85e0f3acc2dbf159c8aaed8534e2f13a6fc4004
+- dtb pack: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+- initramfs-watchdog: e6676fa9a83f88334bee919204b491c5c1eab3ce48564c9b3e28050dd38eb65f
+
+Source boot image:
+/home/srobin/dev/hotdog/images/pmos/2026-07-09-133154-lineage414357-localbuild-full-debug/boot.img
+
+Source SHA256:
+6f8e4b80cd57499eb74c21b9978f09724f9684a9b58ce3985663098a199fe46b
+
+Verification
+------------
+Manifest:
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-204605-mainline617-minramdisk-pstore-stockdtbpack-entry12-watchdog/MANIFEST.md
+
+Confirmed:
+
+```text
+Direct debug shell: 0
+Framebuffer paint test: 0
+HOTDOG_RESCUE_DIRECT_DEBUG_SHELL="0"
+busybox ash -n: OK for hotdog_rescue_watchdog.sh, init, init_2nd.sh
+```
+
+Build command
+-------------
+```bash
+/home/srobin/dev/hotdog/scripts/build-watchdog-bootimg.sh \
+  --source-boot /home/srobin/dev/hotdog/images/pmos/2026-07-09-133154-lineage414357-localbuild-full-debug/boot.img \
+  --watchdog-sec 420 \
+  --watchdog-success root \
+  --kernel /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-011500-mainline617-conservative-stockdtbpack-v2-rootwatchdog/components/kernel \
+  --dtb /home/srobin/dev/hotdog/build/experiments/2026-07-09-142300-stock-dtb-pack-entry12-simplefb/stock-dtb-pack-entry12-simplefb-x8-stdout.dtbpack \
+  --with-ramoops-cmdline \
+  --extra-cmdline 'rootwait ignore_loglevel loglevel=8 initcall_debug no_console_suspend printk.devkmsg=on keep_bootcon rd.info androidboot.memcg=1 androidboot.vbmeta.avb_version=1.0' \
+  --os-version 15.0.0 \
+  --os-patch-level 2025-08 \
+  --base 0x00000000 \
+  --kernel-offset 0x00008000 \
+  --ramdisk-offset 0x01000000 \
+  --second-offset 0x00000000 \
+  --tags-offset 0x00000100 \
+  --dtb-offset 0x01f00000 \
+  --outdir /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-204605-mainline617-minramdisk-pstore-stockdtbpack-entry12-watchdog
+```
+
+Suggested test order
+--------------------
+Do not test this while the phone is still invisible from the previous mainline
+timeout.
+
+1. Let the active rescue watcher restore the downstream stable pmOS image once
+   fastboot or recovery ADB returns.
+2. Confirm stable pmOS SSH and the DRM/Plymouth display hook.
+3. Prefer one low-risk downstream revalidation boot before this mainline
+   candidate.
+4. If mainline is retried, this candidate supersedes the failed `192100` image.

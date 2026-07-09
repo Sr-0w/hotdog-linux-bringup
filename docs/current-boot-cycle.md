@@ -119,6 +119,20 @@ path cannot run.
    keep the 6.17 kernel but reduce the ramdisk candidate to watchdog/pstore
    only before changing kernel entry code.
 
+Prepared minimal mainline candidate for later, not yet tested:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-204605-mainline617-minramdisk-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: 46e00544c908530944ed0edb3b96454e38f229e8ec4954dcd59cd756e9c2bd02
+kernel sha256: 84f33a57aa1f32bcf938d7e9f85e0f3acc2dbf159c8aaed8534e2f13a6fc4004
+dtb pack sha256: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+initramfs sha256: e6676fa9a83f88334bee919204b491c5c1eab3ce48564c9b3e28050dd38eb65f
+```
+
+This candidate removes the direct debug shell and framebuffer paint test from
+the failed `192100` shape while keeping mainline 6.17, the same stock DTB pack,
+ramoops/pstore cmdline, and the root-mode watchdog.
+
 ## Reports
 
 High-signal notes:
@@ -126,4 +140,5 @@ High-signal notes:
 ```text
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/66-devtmpfs-drm-plymouth-display-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/67-mainline617-timeout-20260709.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/68-mainline617-minramdisk-candidate-20260709.txt
 ```
