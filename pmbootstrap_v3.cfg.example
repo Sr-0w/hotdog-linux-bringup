@@ -1,0 +1,18 @@
+[pmbootstrap]
+aports = ./src/postmarketos/pmaports-sm8150
+build_default_device_arch = True
+ccache_size = 20G
+device = oneplus-hotdog
+hostname = hotdog
+is_default_channel = False
+jobs = 32
+kernel = edge
+locale = C.UTF-8
+sudo_timer = True
+systemd = never
+timezone = Europe/Brussels
+work = ./pmbootstrap-work
+
+[providers]
+
+[mirrors]

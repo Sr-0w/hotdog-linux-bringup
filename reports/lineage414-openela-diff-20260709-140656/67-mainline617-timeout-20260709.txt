@@ -1,0 +1,111 @@
+OnePlus 7T Pro hotdog - mainline 6.17 timeout result
+Date: 2026-07-09 20:38 CEST
+
+Summary
+-------
+The prepared mainline 6.17 boot image was tested from the stable downstream
+pmOS SSH environment by flashing boot_b from the phone itself, verifying the
+write, and rebooting.
+
+The result was a 720s timeout with no host-visible USB mode:
+
+- no pmOS SSH
+- no fastboot
+- no recovery ADB
+- no OnePlus/Google/Qualcomm phone device in lsusb
+
+Boot image
+----------
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-192100-mainline617-fbtest-directshell-stockdtbpack-entry12-simplefb-rootwatchdog/boot-noefi-pmosdtb-watchdog-420s.img
+
+SHA256:
+6164e247e934a199700dac58372d964096977159d011699ea7510e0baa9cac59
+
+Payload hashes:
+- kernel: 84f33a57aa1f32bcf938d7e9f85e0f3acc2dbf159c8aaed8534e2f13a6fc4004
+- dtb pack: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+- initramfs-watchdog: 3c7b5d87041a3a5b62246ede6ff34ec22ad7a2dbdf431f34815ef7b2b0ae5227
+
+Construction
+------------
+This image reused:
+
+- the downstream pmOS ramdisk/rootfs path from the stable boot image family
+- the full stock DTB pack
+- entry dtb_idx=12 simplefb/stdout-path instrumentation
+- Android boot header v2 geometry and offsets from the known working path
+- direct initramfs debug shell if USB networking appears
+- framebuffer paint test
+- root-mode initramfs rescue watchdog set to 420s
+
+It changed the kernel payload to the mainline 6.17 Image from:
+
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-011500-mainline617-conservative-stockdtbpack-v2-rootwatchdog/components/kernel
+
+Run
+---
+Run directory:
+/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-202324
+
+Known-good state before reboot:
+
+```text
+pmOS boot_id before reboot: 0d9701d8-02e5-48b3-9056-2ee49fca91d5
+```
+
+Flash from pmOS SSH:
+
+```text
+boot_b write: OK
+boot_b verify: OK
+sha256: 6164e247e934a199700dac58372d964096977159d011699ea7510e0baa9cac59
+USB ping dropped after reboot command: yes
+```
+
+Result:
+
+```text
+Timed out waiting for boot result after 720s
+Result: timeout
+No USB recovery path at timeout
+```
+
+Post-timeout host visibility:
+
+```text
+adb devices -l      -> empty
+fastboot devices -l -> empty
+lsusb               -> no phone device
+```
+
+Implication
+-----------
+This is stronger than a normal userspace/SSH failure. The injected initramfs
+watchdog did not produce a visible reboot after its 420s deadline, so the
+mainline 6.17 path likely fails before the watchdog is started, or fails early
+enough that the forced reboot path cannot execute.
+
+The bootloader did not immediately reject the image back to fastboot, so the
+next mainline investigation should focus on the earliest kernel path:
+
+- kernel entry and Android boot image expectations
+- DTB compatibility before initramfs
+- early console / bootconsole visibility
+- pstore/ramoops reachability after manual recovery
+- differences between the downstream 4.14 Image that boots and this mainline
+  Image before initramfs handoff
+
+Current recovery setup
+----------------------
+A detached rescue watcher was rearmed after the timeout:
+
+```text
+pid: 4166591
+pid file: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-stable-drm-current.pid
+log link: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-stable-drm-current.log
+restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+restore action: system reboot
+```
+
+When the phone reappears in fastboot or recovery ADB, the watcher should
+restore the downstream stable pmOS boot image automatically.

@@ -1,0 +1,122 @@
+2026-07-09 DT/DTBO overlay notes
+================================
+
+Scope
+-----
+
+Read-only spot check of the known Lineage DTBO dump, the local Lineage hotdog
+DTSI, and the pmaports/mainline hotdog DTS.
+
+USB
+---
+
+Lineage local source:
+
+```text
+/home/srobin/dev/hotdog/src/lineage/android_kernel_oneplus_sm8150/arch/arm64/boot/dts/19801/hotdog.dtsi
+```
+
+This file explicitly disables the downstream USB nodes:
+
+```text
+&extcon_usb1 { status = "disabled"; };
+&usb1        { status = "disabled"; };
+```
+
+Known Lineage DTBO dump:
+
+```text
+/home/srobin/dev/hotdog/images/lineage/hotdog-20260703/dtbo-dump/overlay.7.dts
+```
+
+The DTBO has several fragments targeting `usb1`:
+
+```text
+usb1 = "/fragment@66:target:0", "/fragment@110:target:0",
+       "/fragment@111:target:0", "/fragment@126:target:0";
+```
+
+Observed fragments include both enable and disable overlays:
+
+```text
+fragment@66:  extcon = <0x7b>; status = "ok";
+fragment@110: status = "disabled";
+fragment@111: extcon = <0x7b>; status = "disabled";
+```
+
+Conclusion: do not wholesale-copy the DTBO USB state. It is variant/order
+sensitive and tied to downstream driver names. For pmOS recovery/debug, the
+mainline USB2-only approach remains the safer minimal shape.
+
+Current mainline/pmaports hotdog DTS:
+
+```text
+/home/srobin/dev/hotdog/src/kernel/linux-postmarketos-qcom-sm8150-v6.17.0-sm8150/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+```
+
+Mainline hotdog currently uses:
+
+```text
+&usb_1 {
+        qcom,select-utmi-as-pipe-clk;
+        status = "okay";
+};
+
+&usb_1_qmpphy {
+        status = "disabled";
+};
+
+&usb_1_dwc3 {
+        dr_mode = "peripheral";
+        maximum-speed = "high-speed";
+        phys = <&usb_1_hsphy>;
+        phy-names = "usb2-phy";
+};
+```
+
+This is still the preferred minimal USB diagnostic configuration because it
+avoids the USB3/QMP path and keeps the pmOS gadget goal narrow.
+
+Display
+-------
+
+Lineage DTBO contains the real downstream panel/display data, including many
+`qcom,dsi-display@*` entries and active OnePlus/Samsung panel selections. The
+useful known identifiers include:
+
+```text
+dsi_samsung_oneplus_dsc_cmd_display
+dsi_samsung_s6e3fc2x01_cmd_display
+dsi_samsung_sofef03f_m_fhd_dsc_cmd_display
+```
+
+Those nodes require the downstream SDE/DSI/panel stack. They are not a minimal
+screen-debug path for mainline.
+
+For early visual diagnostics, keep using bootloader-preserved simplefb first:
+
+```text
+framebuffer@9c000000
+compatible = "simple-framebuffer"
+width = 1440
+height = 3120
+stride = 5760
+format = "x8r8g8b8"
+stdout-path = "display0"
+```
+
+This is testable in the DTB pack only, provided the kernel has `CONFIG_VT`,
+`CONFIG_FB_SIMPLE`, and `CONFIG_FRAMEBUFFER_CONSOLE`.
+
+Recommendations
+---------------
+
+1. Next phone test should remain the prepared downstream 4.14 console/pstore
+   image with entry12 simplefb. It validates whether simplefb can show anything
+   on this panel without the downstream display stack.
+2. Do not change the USB DT again until a visible console or pstore evidence
+   proves where the mainline hang occurs.
+3. If the downstream console image boots but shows no text, try reducing the
+   simplefb DTB patch before importing downstream display nodes.
+4. Treat Lineage DTBO display nodes as later real-display bring-up material, not
+   as immediate early-console material.

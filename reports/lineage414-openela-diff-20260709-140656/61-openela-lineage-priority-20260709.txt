@@ -1,0 +1,96 @@
+2026-07-09 OpenELA 4.14 vs boot-proven Lineage 4.14 priority notes
+===================================================================
+
+High-confidence current state
+-----------------------------
+
+- The bootloader accepts a full stock-style DTB pack and rejects or immediately
+  falls back from a single-DTB replacement.
+- The mainline 6.17 + full stock DTB pack + entry12 simplefb candidate did not
+  return immediately to fastboot. It likely reached the kernel, then hung before
+  pmOS initramfs USB/network/telnet became usable.
+- Therefore the next best diagnostic is not another blind 6.17 boot. It is a
+  known-boot downstream 4.14 kernel with framebuffer console enabled, using the
+  same full DTB pack instrumentation.
+
+Prepared next test artifact
+---------------------------
+
+- Candidate image:
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-185500-lineage414-console-pstore-dedupcmd-currentroot-stockdtbpack-entry12-simplefb-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+- Boot image SHA256:
+  16d720aa59a9d0011e27e635c85003b76370e7883bce46eab5f614b8794691ad
+- Kernel payload SHA256:
+  4619cd9b31469872f0f61235c0ba0a70526a0abefca2d27f2118532114a2f08a
+- DTB pack SHA256:
+  b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+- Kernel config now enables:
+  CONFIG_VT=y
+  CONFIG_VT_CONSOLE=y
+  CONFIG_FB_SIMPLE=y
+  CONFIG_FRAMEBUFFER_CONSOLE=y
+  CONFIG_DUMMY_CONSOLE=y
+  CONFIG_PSTORE=y
+  CONFIG_PSTORE_CONSOLE=y
+  CONFIG_PSTORE_PMSG=y
+  CONFIG_PSTORE_RAM=y
+- Cmdline includes:
+  console=tty0 fbcon=map:0 fbcon=font:VGA8x16 ignore_loglevel loglevel=7
+  printk.devkmsg=on vt.global_cursor_default=0 plus ramoops args. The command
+  line is deduplicated against the source image's existing keyed parameters.
+
+What this test answers
+----------------------
+
+- If it boots and shows text: framebuffer console is validated on this hardware
+  and can become the primary visual debug path for mainline.
+- If it boots but shows no text: downstream display can still boot, but the
+  preserved framebuffer/simplefb binding is wrong or fbcon is not attaching.
+- If it stops booting: the simplefb DTB instrumentation itself perturbs the
+  downstream boot path and must be reduced.
+
+OpenELA -> Lineage diff scope
+-----------------------------
+
+- arch/arm64/kernel has non-trivial downstream changes, including head.S,
+  setup.c, traps.c, smp.c, process.c, cpufeature.c, and errata/perf changes.
+  This is relevant only if we prove the failure is very early CPU/entry/setup.
+- drivers/of differs in fdt/base/reserved-memory handling and downstream adds
+  battery/slimbus helpers. This matters for DTB-pack parsing and reserved-memory
+  behavior, but should be inspected surgically.
+- drivers/clk/qcom is a huge downstream delta. It adds sm8150 gcc/dispcc/gpucc/
+  videocc/camcc/npucc/debugcc, rpmh clocks, gdsc regulator glue, mdss PLLs, and
+  virtual/voter clock helpers. This is likely necessary for a functional
+  downstream display/USB stack, but it is not a small first patch.
+- drivers/soc/qcom is also a huge downstream delta: rpmh, cmd-db, scm, socinfo,
+  smem/smp2p changes, msm_bus, subsys loaders, minidump/ramdump, watchdog_v2,
+  and many vendor services. Do not wholesale port this before narrowing the
+  hang point.
+- drivers/usb differs heavily, especially dwc3-msm, dbm, qti gadget functions,
+  Qualcomm RNDIS/GSI/data paths, and USB PHY drivers. This explains why a kernel
+  can boot without exposing the pmOS USB gadget.
+- display is a very large downstream-only stack: sde, dsi-staging, panel parser,
+  OPlus panel hooks, dispcc/mdss PLL support. This is likely required for real
+  display bring-up but is not required for testing bootloader-preserved simplefb.
+
+Priority order
+--------------
+
+1. Validate the downstream console/pstore image above as soon as fastboot or
+   pmOS SSH returns.
+2. If visible console works, retry a mainline-style kernel with the same DTB
+   pack and screen console settings to learn whether it prints before hanging.
+3. If no visible console, reduce the simplefb DTB patch and test downstream
+   again before touching mainline.
+4. Only after we know where the mainline hang happens, pick a minimal OpenELA
+   4.14 diff slice. First likely slices are arch/arm64 early boot or OF/FDT if
+   it dies before initramfs, and USB/PHY/gadget only if it reaches initramfs but
+   cannot expose USB.
+
+Anti-goals for the next cycle
+-----------------------------
+
+- Do not replace the DTB pack with a single DTB for normal tests.
+- Do not attempt a broad downstream driver transplant into OpenELA before we
+  have screen or pstore evidence.
+- Do not use stale 2026-07-09-002100 restore images; they embed old UUIDs.

@@ -1,0 +1,122 @@
+2026-07-09 framebuffer heartbeat candidates
+===========================================
+
+Why this exists
+---------------
+
+The mainline 6.17 full-DTB-pack test no longer returned immediately to
+fastboot, but it also produced no USB, SSH, telnet, adb, or visible console.
+That leaves two competing explanations:
+
+- the kernel reaches initramfs but console binding/fbcon does not show text;
+- the kernel hangs earlier than initramfs/userspace.
+
+The next diagnostic should separate those cases on the downstream 4.14 kernel
+that is already known to boot pmOS SSH. A raw /dev/fb0 paint test is more direct
+than relying on fbcon text. If simplefb is alive in initramfs, it should paint
+red, green, blue, then white even if the Linux console never binds correctly.
+
+Builder change
+--------------
+
+Script:
+
+  /home/srobin/dev/hotdog/scripts/build-watchdog-bootimg.sh
+
+New option:
+
+  --fb-test
+
+Effect:
+
+- injects /hotdog_fb_test.sh into the initramfs;
+- starts it before dynamic partition/root discovery in init_2nd;
+- waits up to 45 seconds for /dev/fb0 or /dev/graphics/fb0;
+- computes framebuffer bytes from /sys/class/graphics/fb0 when available;
+- falls back to 1440x3120x32bpp;
+- paints red, green, blue, then white;
+- logs as [hotdog-fb-test] to kmsg and stderr.
+
+Validated with:
+
+  busybox ash -n hotdog_fb_test.sh
+  busybox ash -n hotdog_rescue_watchdog.sh
+  busybox ash -n init
+  busybox ash -n init_2nd.sh
+
+Preferred next automatic test
+-----------------------------
+
+Image:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-191000-lineage414-fbtest-pstore-dedupcmd-currentroot-stockdtbpack-entry12-simplefb-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
+
+SHA256:
+
+  9b560c952a959ba613b0d3339f7d2d37a01e382e2ac6b5aeff094e2d4a1ca550
+
+Payloads:
+
+  kernel 4619cd9b31469872f0f61235c0ba0a70526a0abefca2d27f2118532114a2f08a
+  dtb    b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
+
+Properties:
+
+- same downstream Lineage/OpenELA 4.14 kernel as the current console/pstore
+  package;
+- same full stock DTB pack with entry12 simplefb/stdout-path instrumentation;
+- VT, FB_SIMPLE, FRAMEBUFFER_CONSOLE, PSTORE, and RAMOOPS enabled;
+- cmdline includes console=tty0, fbcon settings, keep_bootcon, and ramoops;
+- watchdog success mode is root;
+- watchdog timeout is 180 seconds;
+- no direct telnet shell.
+
+Wrapper:
+
+  /home/srobin/dev/hotdog/scripts/test-next-lineage414-fbtest-pstore.sh
+
+Current second-cycle watcher:
+
+  /home/srobin/dev/hotdog/logs/manual-rescue-watchers/wait-pmos-then-test-lineage414-fbtest-current.pid
+  /home/srobin/dev/hotdog/logs/manual-rescue-watchers/wait-pmos-then-test-lineage414-fbtest-current.log
+
+Fallback if USB appears but root/SSH does not
+---------------------------------------------
+
+Image:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-191600-lineage414-fbtest-directshell-usbsuccess-stockdtbpack-entry12-simplefb-watchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+SHA256:
+
+  2e4f74e8e0e45e88e9d228b09a2c5107bf46fdd58492d91ba85c8e31302ce006
+
+Differences from the preferred image:
+
+- direct initramfs telnet shell enabled after USB networking;
+- watchdog success mode is usb;
+- watchdog timeout is 300 seconds;
+- framebuffer paint test remains enabled.
+
+Interpretation matrix
+---------------------
+
+- Screen paints colors, then SSH returns:
+  simplefb works and root boot path survived; future mainline debugging can use
+  the same early framebuffer technique.
+
+- Screen paints colors, no SSH:
+  kernel reached initramfs and simplefb works; root discovery, USB gadget, or
+  switch-root needs investigation.
+
+- No colors, but SSH returns:
+  downstream still boots, but simplefb/fb0 binding is not alive; inspect
+  /proc/fb, /sys/class/graphics, dmesg simplefb/fbcon, and pstore.
+
+- No colors, no USB, and no fastboot return:
+  either the kernel hangs before initramfs or the bootloader framebuffer is not
+  exposed as Linux fb0 even with the DTB instrumentation.
+
+- Immediate fastboot return:
+  bootloader rejected the image or slot state changed; restore boot_b from the
+  stable image and inspect fastboot vars.
