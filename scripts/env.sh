@@ -11,7 +11,7 @@ HOTDOG_BIN_ROOT="${HOTDOG_BIN_ROOT:-$HOTDOG_TOOLS_ROOT/bin}"
 HOTDOG_PMAPORTS_SM8150="${HOTDOG_PMAPORTS_SM8150:-$HOTDOG_SRC_ROOT/postmarketos/pmaports-sm8150}"
 HOTDOG_PMBOOTSTRAP_CONFIG="${HOTDOG_PMBOOTSTRAP_CONFIG:-$HOTDOG_ROOT/pmbootstrap_v3.cfg}"
 HOTDOG_PMBOOTSTRAP_WORK="${HOTDOG_PMBOOTSTRAP_WORK:-$HOTDOG_ROOT/pmbootstrap-work}"
-HOTDOG_STABLE_PMOS_BOOT_B="${HOTDOG_STABLE_PMOS_BOOT_B:-$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img}"
+HOTDOG_STABLE_PMOS_BOOT_B="${HOTDOG_STABLE_PMOS_BOOT_B:-$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img}"
 
 export HOTDOG_ROOT HOTDOG_PROJECT_DOCS HOTDOG_DUMP_ROOT HOTDOG_LOG_ROOT
 export HOTDOG_SRC_ROOT HOTDOG_TOOLS_ROOT HOTDOG_BIN_ROOT

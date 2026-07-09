@@ -26,11 +26,11 @@ sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019
 test log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020
 ```
 
-Restore baseline boot image:
+Default restore baseline boot image:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img
-sha256: d5d71d1b23d682c3061cb8158a157739602150a518acb60dcd694c40a2febbca
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 1075757fe6c7a582b94c4a9f837cd71b830d36da8e29c60acba85c49e6c57019
 kernel sha256: dfac91230b3b2783fbd79408a5cd62f47bc2a86a4586347d814c5144d76d84d9
 dtb pack sha256: b8ea3d9f87a290c0dc2d94d952442d249c11edaee141a29bc219317f08164bdf
 ```
@@ -279,6 +279,9 @@ PSCI.
 5. Keep using `scripts/build-hotdog-drm-console-helper.sh` to regenerate the
    AArch64 DRM helper before building display-console candidates on a fresh
    host.
+6. The prepared wrapper for the next test is
+   `scripts/test-next-lineage414-simplefb-shell.sh`; if pmOS SSH returns first,
+   use `scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh`.
 6. For mainline, stop treating USB gadget alone as the first milestone. The
    next useful signal is kernel-entry evidence, a bootloader-visible return
    reason, or initramfs reachability through a channel earlier than USB gadget.

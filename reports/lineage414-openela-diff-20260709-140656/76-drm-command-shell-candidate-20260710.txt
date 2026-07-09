@@ -117,6 +117,13 @@ Test `013100` when the phone is commandable again. Expected signals:
 3. If rootfs is reached: OpenRC local.d starts the persistent pmOS DRM command shell.
 ```
 
+Prepared wrappers:
+
+```text
+scripts/test-next-lineage414-simplefb-shell.sh
+scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
+```
+
 If `/dev/fb0` is still absent and `simple-framebuffer ... No memory resource`
 remains, the next target is deeper simplefb address/resource translation rather
 than more printk or console cmdline changes.
