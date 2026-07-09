@@ -207,6 +207,7 @@ start_rescue_watcher() {
   if command -v start-stop-daemon >/dev/null 2>&1; then
     start-stop-daemon --start --background --make-pidfile --pidfile "$pidfile" \
       --chdir "$HOTDOG_ROOT" \
+      --env HOTDOG_RESCUE_LOG_TEE=0 \
       --stdout "$wrapper_log" --stderr "$wrapper_err" \
       --exec "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" -- \
       --serial "$SERIAL" \
@@ -216,7 +217,7 @@ start_rescue_watcher() {
       --poll "$RESCUE_WATCHER_POLL_SEC"
     RESCUE_WATCHER_PID="$(sed -n '1p' "$pidfile")"
   else
-    setsid "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
+    setsid env HOTDOG_RESCUE_LOG_TEE=0 "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
       --serial "$SERIAL" \
       --restore-boot-b "$RESTORE_IMAGE" \
       --after-restore "$RESTORE_AFTER_FASTBOOT" \

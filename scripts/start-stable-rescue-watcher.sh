@@ -100,6 +100,7 @@ rm -f "$pidfile"
 
 start-stop-daemon --start --background --make-pidfile --pidfile "$pidfile" \
   --chdir "$HOTDOG_ROOT" \
+  --env HOTDOG_RESCUE_LOG_TEE=0 \
   --stdout "$stdout_log" --stderr "$stderr_log" \
   --exec "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" -- \
   --serial "$SERIAL" \

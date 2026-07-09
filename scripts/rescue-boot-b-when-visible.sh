@@ -81,7 +81,11 @@ export ANDROID_SERIAL="$SERIAL"
 stamp="$(date +%F-%H%M%S)"
 run_dir="$HOTDOG_LOG_ROOT/rescue-boot-b-when-visible-$stamp"
 mkdir -p "$run_dir"
-exec > >(tee "$run_dir/run.log") 2>&1
+if [ "${HOTDOG_RESCUE_LOG_TEE:-1}" = "1" ]; then
+  exec > >(tee "$run_dir/run.log") 2>&1
+else
+  exec >> "$run_dir/run.log" 2>&1
+fi
 
 log() {
   printf '[%s] %s\n' "$(date '+%F %T')" "$*"
@@ -93,6 +97,8 @@ die() {
 }
 
 cleanup() {
+  local status=$?
+  log "Exiting with status $status"
   phone_lock_release || true
 }
 trap cleanup EXIT

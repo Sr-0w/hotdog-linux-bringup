@@ -36,6 +36,10 @@ Options:
   --drm-console
                      Start a DRM text console from initramfs as soon as
                      /dev/dri/card0 appears, then stop it before switch_root.
+  --drm-console-userspace
+                     Install a persistent OpenRC local.d DRM command console
+                     into the mounted rootfs before switch_root. Implies
+                     --drm-console.
   --drm-console-helper FILE
                      AArch64 hotdog-drm-console binary to inject. Default:
                      $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
@@ -89,6 +93,7 @@ with_ramoops_cmdline=0
 direct_debug_shell=0
 fb_test=0
 drm_console=0
+drm_console_userspace=0
 drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 os_version=""
 os_patch_level=""
@@ -144,6 +149,10 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--drm-console)
 			drm_console=1
+			;;
+		--drm-console-userspace)
+			drm_console=1
+			drm_console_userspace=1
 			;;
 		--drm-console-helper)
 			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
@@ -802,6 +811,90 @@ EOF
 chmod 0755 /sysroot/etc/local.d/hotdog-ptmx.start 2>/dev/null || true
 log "installed local.d ptmx repair"
 HOTDOG_ROOTFS_POSTMOUNT_SH
+	if [ "$drm_console_userspace" -eq 1 ]; then
+		cat >> "$helper" <<'HOTDOG_ROOTFS_DRM_CONSOLE_SH'
+
+install_drm_console_userspace() {
+	local bin_dir="/sysroot/usr/local/bin"
+	local data_dir="/sysroot/usr/local/share/hotdog"
+	local locald="/sysroot/etc/local.d/hotdog-drm-console.start"
+	local runlevel="/sysroot/etc/runlevels/default"
+	local initd="/sysroot/etc/init.d/local"
+
+	[ -x /usr/bin/hotdog-drm-console ] || {
+		log "missing initramfs hotdog-drm-console binary"
+		return 0
+	}
+
+	mkdir -p "$bin_dir" "$data_dir" /sysroot/etc/local.d 2>/dev/null || true
+	cp /usr/bin/hotdog-drm-console "$bin_dir/hotdog-drm-console" 2>/dev/null || {
+		log "could not copy hotdog-drm-console into rootfs"
+		return 0
+	}
+	chmod 0755 "$bin_dir/hotdog-drm-console" 2>/dev/null || true
+
+	if [ -r /usr/share/consolefonts/ter-v32n.psf.gz ]; then
+		gzip -dc /usr/share/consolefonts/ter-v32n.psf.gz > "$data_dir/ter-v32n.psf" 2>/dev/null || true
+	fi
+	if [ ! -s "$data_dir/ter-v32n.psf" ] && [ -r /tmp/hotdog-ter-v32n.psf ]; then
+		cp /tmp/hotdog-ter-v32n.psf "$data_dir/ter-v32n.psf" 2>/dev/null || true
+	fi
+	[ -s "$data_dir/ter-v32n.psf" ] || {
+		log "missing DRM console PSF font for rootfs"
+		return 0
+	}
+
+	cat > "$locald" <<'EOF' 2>/dev/null || true
+#!/bin/sh
+bin=/usr/local/bin/hotdog-drm-console
+font=/usr/local/share/hotdog/ter-v32n.psf
+fifo=/tmp/hotdog-drm-console.in
+transcript=/tmp/hotdog-drm-console.transcript
+
+[ -x "$bin" ] || exit 0
+[ -r "$font" ] || exit 0
+
+if [ -r /tmp/hotdog-drm-console.pid ]; then
+	pid="$(cat /tmp/hotdog-drm-console.pid 2>/dev/null || true)"
+	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+	sleep 1
+	[ -z "$pid" ] || [ ! -d "/proc/$pid" ] || kill -KILL "$pid" 2>/dev/null || true
+	rm -f /tmp/hotdog-drm-console.pid
+fi
+pidof hotdog-drm-console 2>/dev/null | tr ' ' '\n' | while read -r p; do
+	[ -n "$p" ] && kill -KILL "$p" 2>/dev/null || true
+done
+pgrep -x modetest 2>/dev/null | while read -r p; do kill "$p" 2>/dev/null || true; done
+pkill plymouthd 2>/dev/null || true
+
+for d in /sys/class/backlight/*; do
+	[ -w "$d/bl_power" ] && echo 0 > "$d/bl_power" || true
+	if [ -r "$d/max_brightness" ] && [ -w "$d/brightness" ]; then
+		cat "$d/max_brightness" > "$d/brightness" || true
+	fi
+done
+
+i=0
+while [ "$i" -lt 60 ] && [ ! -e /dev/dri/card0 ]; do
+	sleep 1
+	i=$((i + 1))
+done
+[ -e /dev/dri/card0 ] || exit 0
+
+nohup "$bin" --font "$font" --fifo "$fifo" --transcript "$transcript" \
+	>/tmp/hotdog-drm-console.log 2>&1 &
+echo $! >/tmp/hotdog-drm-console.pid
+EOF
+	chmod 0755 "$locald" 2>/dev/null || true
+	if [ -d "$runlevel" ] && [ -e "$initd" ]; then
+		ln -sf /etc/init.d/local "$runlevel/local" 2>/dev/null || true
+	fi
+	log "installed persistent DRM console local.d hook"
+}
+
+install_drm_console_userspace
+HOTDOG_ROOTFS_DRM_CONSOLE_SH
+	fi
 	chmod 0755 "$helper"
 }
 
@@ -1270,6 +1363,9 @@ write_manifest() {
 			fi
 			if [ "$drm_console" -eq 1 ]; then
 				printf ' --drm-console --drm-console-helper %q' "$drm_console_helper"
+			fi
+			if [ "$drm_console_userspace" -eq 1 ]; then
+				printf ' --drm-console-userspace'
 			fi
 			if [ -n "$extra_cmdline" ]; then
 				printf ' --extra-cmdline %q' "$extra_cmdline"
