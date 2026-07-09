@@ -194,6 +194,8 @@ fastboot_do() {
 
 start_rescue_watcher() {
   local wrapper_log="$run_dir/companion-rescue-watcher.log"
+  local wrapper_err="$run_dir/companion-rescue-watcher.err"
+  local pidfile="$run_dir/companion-rescue-watcher.pid"
 
   [ "$START_RESCUE_WATCHER" -eq 1 ] || return 0
   [ -z "$RESCUE_WATCHER_PID" ] || return 0
@@ -202,15 +204,28 @@ start_rescue_watcher() {
   [ -s "$RESTORE_IMAGE" ] || die "Rescue watcher restore image does not exist or is empty: $RESTORE_IMAGE" 2
 
   log "Starting companion rescue watcher for $SERIAL"
-  "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
-    --serial "$SERIAL" \
-    --restore-boot-b "$RESTORE_IMAGE" \
-    --after-restore "$RESTORE_AFTER_FASTBOOT" \
-    --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
-    --poll "$RESCUE_WATCHER_POLL_SEC" \
-    > "$wrapper_log" 2>&1 &
-  RESCUE_WATCHER_PID="$!"
-  printf '%s\n' "$RESCUE_WATCHER_PID" > "$run_dir/companion-rescue-watcher.pid"
+  if command -v start-stop-daemon >/dev/null 2>&1; then
+    start-stop-daemon --start --background --make-pidfile --pidfile "$pidfile" \
+      --chdir "$HOTDOG_ROOT" \
+      --stdout "$wrapper_log" --stderr "$wrapper_err" \
+      --exec "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" -- \
+      --serial "$SERIAL" \
+      --restore-boot-b "$RESTORE_IMAGE" \
+      --after-restore "$RESTORE_AFTER_FASTBOOT" \
+      --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
+      --poll "$RESCUE_WATCHER_POLL_SEC"
+    RESCUE_WATCHER_PID="$(sed -n '1p' "$pidfile")"
+  else
+    setsid "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
+      --serial "$SERIAL" \
+      --restore-boot-b "$RESTORE_IMAGE" \
+      --after-restore "$RESTORE_AFTER_FASTBOOT" \
+      --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
+      --poll "$RESCUE_WATCHER_POLL_SEC" \
+      > "$wrapper_log" 2> "$wrapper_err" < /dev/null &
+    RESCUE_WATCHER_PID="$!"
+    printf '%s\n' "$RESCUE_WATCHER_PID" > "$pidfile"
+  fi
   log "Companion rescue watcher PID: $RESCUE_WATCHER_PID"
 }
 
