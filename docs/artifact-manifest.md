@@ -45,6 +45,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150` | Local pmaports fork with the hotdog device package. |
 | `/home/srobin/dev/hotdog/src/kernel/linux-postmarketos-qcom-sm8150-v6.17.0-sm8150` | Mainline/postmarketOS kernel work tree used for the current experiments. |
 | `/home/srobin/dev/hotdog/src/lineage/android_kernel_oneplus_sm8150` | Lineage kernel source checkout used for comparison. |
+| `/home/srobin/dev/hotdog/scripts/build-entry12-simplefb-ranges-dtbpack.sh` | Rebuilds the fixed entry12 simplefb `ranges;` DTB pack used by the prepared `010900` image. |
 
 ## Report set
 
