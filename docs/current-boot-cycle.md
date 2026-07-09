@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 01:39 CEST
+Date: 2026-07-10 01:45 CEST
 
 ## Current Status
 
@@ -16,7 +16,7 @@ ADB device: not visible
 host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
-pmOS SSH wait/test watcher: running, waiting for SSH before launching 013100
+pmOS SSH wait/test watcher: running, waiting for SSH before launching 014400
 passive phone-state watcher: running, logging ADB/fastboot/USB changes only
 ```
 
@@ -169,7 +169,7 @@ after restore: system
 
 A detached wrapper is also waiting for pmOS SSH. It does not touch the phone
 until SSH at `172.16.42.1` returns. If the rescue watcher restores `215005` and
-pmOS SSH comes back, this wrapper launches the prepared `013100` test with
+pmOS SSH comes back, this wrapper launches the prepared `014400` test with
 `--from-pmos-ssh`:
 
 ```text
@@ -177,7 +177,7 @@ pid: 1409621
 launcher log: /home/srobin/dev/hotdog/logs/wait-and-test-lineage414-simplefb-shell-2026-07-10-013426/launcher.log
 wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-simplefb-shell-2026-07-10-013426/run.log
 script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
-next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-014400-lineage414-simplefb-ranges-rebuilt-drmconsole-follow-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 ```
 
@@ -198,27 +198,32 @@ poll: 5s
 ## Prepared Downstream Console Candidate
 
 Built but not flashed yet because the phone is still not visible over USB.
-The newer `013100` candidate should be tested before `005100`, `010900`, and `011900`
+The newer `014400` candidate should be tested before `005100`, `010900`, `011900`, and `013100`
 because it also tests a likely fix for the simplefb/fbcon resource issue and
 fixes the initramfs console so it returns to a command prompt. It also uses a
-DRM helper rebuilt from source through the pmbootstrap aarch64 buildroot:
+DRM helper rebuilt from source through the pmbootstrap aarch64 buildroot, and
+keeps a background dmesg follower running for visual-only debugging:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: bf7a6236e33a57f383d03daa490c054409b3529368c7b466dcd627199744faa2
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-014400-lineage414-simplefb-ranges-rebuilt-drmconsole-follow-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: f99529e3e626b44734e58bc16cb8df7fcbf5efbc76e144c27f19b43d5ea5cd3b
 dtb pack: /home/srobin/dev/hotdog/build/experiments/2026-07-10-010500-stock-dtb-pack-entry12-simplefb-ranges/stock-dtb-pack-entry12-simplefb-ranges-stdout.dtbpack
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
 DRM helper sha256: 302fa020286d2c7941ad1d26c9d4d2ce775dad15665b49b56bdfde6f2b4b6b5b
 base image: 215005 validated downstream 4.14 DRM-console boot image
 options: --fb-test --drm-console-userspace --watchdog-success root
-initramfs sha256: 08a7f4e48ee2bf6e77af4e84aea1241f391fa4786ec1c59bb647426a9dbc0f8c
+initramfs sha256: 899403669fdf5e9a42c8997cc648c66a4c7af9a67cd42bfb47611706e964a240
 entry12 DTB change: add ranges; under /chosen and use absolute stdout-path strings; keep framebuffer reg size 0x1123800
-console change: print one initial dmesg snapshot, then leave `initramfs#` idle for FIFO commands
+console change: print one initial dmesg snapshot, keep a background `dmesg` follower, and leave `initramfs#` usable for FIFO commands
 ```
 
 Superseded simplefb candidate:
 
 ```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: bf7a6236e33a57f383d03daa490c054409b3529368c7b466dcd627199744faa2
+reason superseded: command shell works, but the screen stops updating after the initial dmesg snapshot if there is no USB/FIFO input.
+
 /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-011900-lineage414-simplefb-ranges-fbtest-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 sha256: 2855c26423300eefca569c8f19f232494a5a84296af38441b43e161e1323e262
 reason superseded: behaviorally similar to 013100, but built before the helper rebuild path existed.
@@ -249,7 +254,7 @@ memory resource`; the reliable screen path is the DRM/KMS helper after
 `/dev/dri/card0` appears. Offline inspection found that the earlier
 multi-DTB-pack entry12 simplefb node was missing `ranges;` below `/chosen`,
 while older single-DTB experiments that looked healthier did include it. The
-`013100` image is the isolated test for that fix.
+`014400` image is the isolated test for that fix.
 
 ## Last Mainline Test
 
@@ -299,13 +304,13 @@ PSCI.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Test the prepared downstream `013100` image once the phone is back in a
+3. Test the prepared downstream `014400` image once the phone is back in a
    commandable state. Expected observations: early framebuffer color paint if
    `/dev/fb0` appears, then an idle `initramfs#` prompt and finally the
    userspace DRM command shell if rootfs is reached.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
    local downstream 4.14 pmaports package as `pkgrel=2` and validated with
-   `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `013100` still
+   `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `014400` still
    reports `No memory resource`, continue in the simplefb resource translation
    path rather than changing printk cmdline flags.
 5. Keep using `scripts/build-hotdog-drm-console-helper.sh` to regenerate the
@@ -314,10 +319,10 @@ PSCI.
 6. The prepared wrapper for the next test is
    `scripts/test-next-lineage414-simplefb-shell.sh`; if pmOS SSH returns first,
    use `scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh`.
-6. For mainline, stop treating USB gadget alone as the first milestone. The
+7. For mainline, stop treating USB gadget alone as the first milestone. The
    next useful signal is kernel-entry evidence, a bootloader-visible return
    reason, or initramfs reachability through a channel earlier than USB gadget.
-7. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
+8. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
 Previous minimal mainline candidate that led to the DRM-console follow-up:

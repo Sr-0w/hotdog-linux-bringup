@@ -13,7 +13,8 @@ Code changes
 ------------
 
 `scripts/build-watchdog-bootimg.sh` now starts the initramfs DRM console with a
-one-shot boot snapshot:
+one-shot boot snapshot, then leaves a lightweight background `dmesg` follower
+running every 5 seconds:
 
 ```text
 --- hotdog initramfs DRM command shell ---
@@ -21,6 +22,8 @@ stage: ...
 cmdline: ...
 --- initial dmesg snapshot ---
 ...
+--- starting background dmesg follower every 5s ---
+follower pid: ...
 --- ready: commands are read from /tmp/hotdog-drm-console.in ---
 initramfs#
 ```
@@ -45,13 +48,13 @@ Prepared boot image
 
 ```text
 image:
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-014400-lineage414-simplefb-ranges-rebuilt-drmconsole-follow-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 
 sha256:
-bf7a6236e33a57f383d03daa490c054409b3529368c7b466dcd627199744faa2
+f99529e3e626b44734e58bc16cb8df7fcbf5efbc76e144c27f19b43d5ea5cd3b
 
 initramfs sha256:
-08a7f4e48ee2bf6e77af4e84aea1241f391fa4786ec1c59bb647426a9dbc0f8c
+899403669fdf5e9a42c8997cc648c66a4c7af9a67cd42bfb47611706e964a240
 ```
 
 Build shape:
@@ -114,11 +117,12 @@ apk sha256: f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff
 Next test
 ---------
 
-Test `013100` when the phone is commandable again. Expected signals:
+Test `014400` when the phone is commandable again. Expected signals:
 
 ```text
 1. If simplefb is fixed: early /dev/fb0 paint or fbcon text appears.
-2. If DRM starts before rootfs: the screen shows an idle initramfs# prompt.
+2. If DRM starts before rootfs: the screen shows an idle initramfs# prompt and a
+   periodic background `dmesg` follower.
 3. If rootfs is reached: OpenRC local.d starts the persistent pmOS DRM command shell.
 ```
 
