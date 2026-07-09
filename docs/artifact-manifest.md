@@ -13,6 +13,8 @@ only the artifacts you actually need.
 | Path | Purpose |
 |---|---|
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img` | Current validated downstream pmOS boot image. It boots to SSH over USB, starts the initramfs DRM console, then starts the userspace visible command shell. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-010900-lineage414-simplefb-ranges-fbtest-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Prepared downstream 4.14 simplefb/fbcon follow-up image. Built from `215005`; overrides the DTB pack with entry12 `/chosen ranges;`, enables `--fb-test`, and auto-installs the userspace DRM command console. Not flashed yet; next priority candidate. |
+| `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-005100-lineage414-drmconsole-userspace-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img` | Prepared downstream 4.14 follow-up image. Built from `215005`; adds `--drm-console-userspace` so the initramfs installs the visible DRM command console into the mounted rootfs before `switch_root`. Not flashed yet. |
 | `/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-195300-lineage414-devtmpfs-drmfbdev-fbtest-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-180s.img` | Restore-baseline pmOS boot image used by the rescue watcher. It boots to SSH over USB and auto-starts the earlier DRM/Plymouth display hook. |
 | `/home/srobin/dev/hotdog/images/lineage/hotdog-20260703/recovery-adb-unsecure.img` | Patched recovery image used for recovery-side ADB. |
 | `/home/srobin/dev/hotdog/tools/recovery-zips/build/hotdog-reboot-bootloader.zip` | Sideload package for returning the device to bootloader. |
@@ -25,7 +27,8 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-220520` | Mainline 6.17 minimal/pstore plus DRM-console test. Timed out after 720s with no USB recovery path; manual fastboot recovery later restored the downstream image. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052` | Mainline 6.17 rebuilt with built-in PSTORE/RAMOOPS plus DRM-console test. Timed out after 720s with no USB recovery path; pstore was still empty after recovery. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-10-003038` | Mainline 6.17 pstore-built test with unmodified stock full DTB pack. Timed out after 720s with no USB recovery path; companion rescue watcher left running. |
-| `/home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-003053` | Active rescue watcher for the `003038` timeout; restores the validated `215005` downstream image if fastboot or recovery ADB returns. |
+| `/home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-003053` | First rescue watcher for the `003038` timeout; stopped without seeing USB/fastboot/recovery and without restoring. |
+| `/home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-005605` | Active file-only detached rescue watcher for the `003038` timeout; restores the validated `215005` downstream image if fastboot or recovery ADB returns. |
 | `/home/srobin/dev/hotdog/logs/flash-boot-b-from-pmos-ssh-2026-07-09-223252` | Post-recovery writeback of the validated `215005` DRM-console image to `boot_b` without reboot. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-201112` | Latest confirmed stable pmOS boot with automatic DRM/Plymouth hook. |
 | `/home/srobin/dev/hotdog/logs/live-pmos-2014-auto-plymouth/state.txt` | Captured stable pmOS state with DSI-1 enabled and plymouthd alive. |
@@ -57,6 +60,8 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt` | Mainline 6.17 with DRM-console instrumentation timed out before any visible or USB recovery signal. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/72-mainline617-pstorebuilt-timeout-20260710.txt` | Mainline 6.17 with built-in pstore/ramoops still timed out without visible, USB, or pstore signal. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/73-mainline617-stockdtbpack-timeout-20260710.txt` | Mainline 6.17 pstore-built with the unmodified stock full DTB pack still timed out, ruling out the entry12 simplefb/stdout DTB-pack modification as the main cause. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/74-drm-console-userspace-candidate-20260710.txt` | Prepared downstream 4.14 image that auto-installs the DRM command console into rootfs, plus rescue watcher robustness fix. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/75-simplefb-ranges-candidate-20260710.txt` | Offline root cause for simplefb `No memory resource`; prepared `010900` image with fixed entry12 `/chosen ranges;`, fb-test, and userspace DRM console. |
 
 ## Resume order
 

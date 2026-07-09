@@ -28,3 +28,5 @@
 71-mainline617-drmconsole-timeout-20260709.txt - mainline 6.17 with DRM-console instrumentation timed out without visible or USB signal
 72-mainline617-pstorebuilt-timeout-20260710.txt - mainline 6.17 with built-in pstore/ramoops still timed out without visible, USB, or pstore signal
 73-mainline617-stockdtbpack-timeout-20260710.txt - mainline 6.17 pstore-built with unmodified stock full DTB pack still timed out
+74-drm-console-userspace-candidate-20260710.txt - downstream 4.14 image prepared to auto-install userspace DRM console plus detached rescue watcher robustness fix
+75-simplefb-ranges-candidate-20260710.txt - missing /chosen ranges; explains simplefb No memory resource; prepared 010900 image to test fixed DTB pack
