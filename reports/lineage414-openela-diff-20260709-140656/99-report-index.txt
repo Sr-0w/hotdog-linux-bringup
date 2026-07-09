@@ -22,3 +22,4 @@
 65-mainline-config-instrumentation-20260709.txt 2204 bytes
 66-devtmpfs-drm-plymouth-display-20260709.txt - downstream devtmpfs/DRM/Plymouth display milestone
 67-mainline617-timeout-20260709.txt - mainline 6.17 accepted then timed out without USB/watchdog recovery; next-test guidance
+68-mainline617-minramdisk-candidate-20260709.txt - prepared minimal mainline 6.17 follow-up candidate
