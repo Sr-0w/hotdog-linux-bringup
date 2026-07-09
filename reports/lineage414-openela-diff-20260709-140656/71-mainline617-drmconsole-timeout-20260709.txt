@@ -1,0 +1,99 @@
+# Mainline 6.17 DRM-console timeout
+
+Date: 2026-07-09 22:36 CEST
+
+## Result
+
+Adding the validated downstream DRM-console payload to the mainline 6.17
+minimal/pstore candidate did not produce a visible screen signal, USB recovery
+path, or pstore record.
+
+Tested image:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-220500-mainline617-minramdisk-drmconsole-pstore-stockdtbpack-entry12-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: aaf7ee6e4b9315369ba577d6a86d4e2a6111bdeaaf744902be0d3d24dad27af4
+test log: /home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-220520
+```
+
+## Build shape
+
+The candidate keeps the previous mainline 6.17 kernel and stock DTB-pack
+experiment, then adds:
+
+```text
+--drm-console
+--drm-console-helper /home/srobin/dev/hotdog/build/hotdog-drm-console-aarch64
+console=tty0 fbcon=map:0 vt.global_cursor_default=0
+watchdog success mode: root
+watchdog seconds: 420
+ramoops cmdline: enabled
+```
+
+The initramfs contains:
+
+```text
+hotdog_drm_console_start.sh
+usr/bin/hotdog-drm-console
+```
+
+The `init_2nd` injection includes the stop hook before `exec switch_root`.
+
+## Test result
+
+Timeline:
+
+```text
+2026-07-09 22:05:20 CEST  flash boot_b from pmOS SSH started
+2026-07-09 22:05:24 CEST  boot_b verify OK
+2026-07-09 22:05:35 CEST  USB ping dropped after reboot command
+2026-07-09 22:17:37 CEST  timeout after 720s
+2026-07-09 22:28:58 CEST  fastboot returned after manual recovery
+2026-07-09 22:28:58 CEST  rescue watcher restored the 195300 downstream image
+2026-07-09 22:32:14 CEST  pmOS SSH returned, boot_id ce4726f0-952b-4571-bd9f-ab8eb4302648
+2026-07-09 22:32:56 CEST  215005 DRM-console image reflashed to boot_b without reboot
+```
+
+Observed during timeout:
+
+```text
+fastboot: none
+recovery ADB: none
+pmOS SSH: none
+USB NCM/ping: none
+host lsusb: no phone device
+visible DRM-console output: none reported
+```
+
+Post-recovery pstore:
+
+```text
+pstore mounted: yes
+/sys/fs/pstore: empty
+```
+
+## Interpretation
+
+The mainline kernel is accepted by the boot stack well enough to avoid immediate
+fastboot rejection, but the boot does not reach a recoverable USB path or a
+visible DRM-console path.
+
+The DRM-console helper can only render if the kernel reaches initramfs and
+creates `/dev/dri/card0`. This test did not prove either condition. The most
+useful reading is therefore:
+
+```text
+likely blocker: before initramfs helper starts, or before mainline can create DRM card0
+not explained by: missing userspace shell alone
+not fixed by: injecting the validated downstream DRM console into the ramdisk
+```
+
+## Follow-up
+
+- Do not retest this exact `220500` image without a new kernel or DTB
+  hypothesis.
+- Keep downstream `215005` as the current boot_b baseline.
+- For mainline, prioritize kernel-entry evidence, DTB/boot ABI differences, or
+  ramoops/pstore reliability before adding more userspace payloads.
+- If visible output is attempted again, add a non-DRM fallback only if the
+  kernel is known to expose a framebuffer-like device early enough.

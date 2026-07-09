@@ -25,3 +25,4 @@
 68-mainline617-minramdisk-candidate-20260709.txt - prepared minimal mainline 6.17 follow-up candidate
 69-drm-visible-pattern-20260709.txt - visible downstream KMS pattern result and next DRM diagnostic recommendation
 70-drm-console-shell-initramfs-20260709.txt - downstream initramfs DRM console and userspace visible command-shell milestone
+71-mainline617-drmconsole-timeout-20260709.txt - mainline 6.17 with DRM-console instrumentation timed out without visible or USB signal
