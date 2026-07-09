@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 01:31 CEST
+Date: 2026-07-10 01:35 CEST
 
 ## Current Status
 
@@ -16,6 +16,7 @@ ADB device: not visible
 host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
+pmOS SSH wait/test watcher: running, waiting for SSH before launching 013100
 ```
 
 Current validated boot image:
@@ -161,6 +162,22 @@ pid: 1166999
 watcher log: /home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-005605/run.log
 restore boot_b: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 after restore: system
+```
+
+## Active pmOS SSH Wait/Test Watcher
+
+A detached wrapper is also waiting for pmOS SSH. It does not touch the phone
+until SSH at `172.16.42.1` returns. If the rescue watcher restores `215005` and
+pmOS SSH comes back, this wrapper launches the prepared `013100` test with
+`--from-pmos-ssh`:
+
+```text
+pid: 1409621
+launcher log: /home/srobin/dev/hotdog/logs/wait-and-test-lineage414-simplefb-shell-2026-07-10-013426/launcher.log
+wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-simplefb-shell-2026-07-10-013426/run.log
+script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
+next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-013100-lineage414-simplefb-ranges-rebuilt-drmconsole-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 ```
 
 ## Prepared Downstream Console Candidate
