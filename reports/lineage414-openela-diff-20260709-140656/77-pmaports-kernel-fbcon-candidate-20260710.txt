@@ -59,6 +59,14 @@ DTB: pmaports pkgrel 2 fixed stock DTB pack
 options: --fb-test --drm-console-userspace --watchdog-success root
 ```
 
+Packaging sanity check:
+
+```text
+stable 215005 kernel: Linux kernel ARM64 boot executable Image, 4K pages
+pmaports r2 kernel:  Linux kernel ARM64 boot executable Image, 4K pages
+both kernel payloads are 42835992 bytes and share the same initial ARM64 Image header
+```
+
 The helper default script now prints initial network/display state and starts a
 background userspace status follower every 10s, so the screen should continue
 to provide signal even if USB/SSH is absent.
