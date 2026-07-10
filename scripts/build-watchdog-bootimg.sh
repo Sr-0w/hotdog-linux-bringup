@@ -46,6 +46,9 @@ Options:
   --visible-tty-shell
                      Install an OpenRC local.d shell/status follower on tty1
                      after switch_root, for screen-only rootfs diagnostics.
+  --visible-tty-autocycle
+                     Make the visible tty shell rotate full status pages
+                     automatically, for screen-only boots without button input.
   --drm-console-helper FILE
                      AArch64 hotdog-drm-console binary to inject. Default:
                      $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
@@ -106,6 +109,7 @@ drm_console=0
 drm_console_userspace=0
 tty_kmsg_console=0
 visible_tty_shell=0
+visible_tty_autocycle=0
 strip_drm_console=0
 default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 drm_console_helper="$default_drm_console_helper"
@@ -173,6 +177,10 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--visible-tty-shell)
 			visible_tty_shell=1
+			;;
+		--visible-tty-autocycle)
+			visible_tty_shell=1
+			visible_tty_autocycle=1
 			;;
 		--drm-console-helper)
 			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
@@ -939,6 +947,7 @@ install_visible_tty_shell() {
 	mkdir -p "$bin_dir" /sysroot/etc/local.d 2>/dev/null || true
 	cat > "$bin" <<'EOF' 2>/dev/null || true
 #!/bin/sh
+autocycle="__HOTDOG_VISIBLE_TTY_AUTOCYCLE__"
 tty="${1:-tty1}"
 dev="/dev/$tty"
 
@@ -963,7 +972,11 @@ ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
 printf '\n--- initial dmesg tail ---\n'
 dmesg | tail -120 2>/dev/null || true
 printf '\n--- buttons: Vol+ full status, Vol- network/display, Power dmesg tail ---\n'
-printf '--- status follower every 20s; shell prompt below if input exists ---\n'
+if [ "$autocycle" = "1" ]; then
+	printf -- '--- auto-cycle every 12s: full / net+display / dmesg; shell prompt below if input exists ---\n'
+else
+	printf -- '--- status follower every 20s; shell prompt below if input exists ---\n'
+fi
 
 print_full_status() {
 	reason="$1"
@@ -1021,6 +1034,16 @@ print_display_network() {
 	dmesg 2>/dev/null | grep -Ei 'drm|dsi|sde|mdss|panel|fb|framebuffer|simplefb|console|tty|backlight' | tail -120 || true
 }
 
+print_dmesg_page() {
+	reason="$1"
+	printf '\033c'
+	printf 'hotdog visible dmesg page\n'
+	printf 'reason: %s\n' "$reason"
+	printf 'date: '; date 2>/dev/null || true
+	printf '\n--- kernel tail ---\n'
+	dmesg | tail -180 2>/dev/null || true
+}
+
 button_action() {
 	code="$1"
 	dev="$2"
@@ -1058,8 +1081,17 @@ monitor_input_device() {
 (
 	i=0
 	while :; do
-		sleep 20
-		print_short_status "periodic $i"
+		if [ "$autocycle" = "1" ]; then
+			case $((i % 3)) in
+				0) print_full_status "auto full $i" ;;
+				1) print_display_network "auto display-network $i" ;;
+				2) print_dmesg_page "auto dmesg $i" ;;
+			esac
+			sleep 12
+		else
+			sleep 20
+			print_short_status "periodic $i"
+		fi
 		i=$((i + 1))
 	done
 ) &
@@ -1144,11 +1176,12 @@ EOF
 	log "installed visible tty shell local.d hook"
 }
 
-install_visible_tty_shell
+	install_visible_tty_shell
 HOTDOG_VISIBLE_TTY_SHELL_SH
-	fi
-	chmod 0755 "$helper"
-}
+			sed -i "s/__HOTDOG_VISIBLE_TTY_AUTOCYCLE__/$visible_tty_autocycle/g" "$helper"
+		fi
+		chmod 0755 "$helper"
+	}
 
 write_hotdog_fb_test_helper() {
 	local helper="$initramfs_tree/hotdog_fb_test.sh"
@@ -1773,6 +1806,7 @@ write_manifest() {
 			fi
 			printf -- '- TTY kmsg console: `%s`\n' "$tty_kmsg_console"
 			printf -- '- Visible tty shell: `%s`\n' "$visible_tty_shell"
+			printf -- '- Visible tty auto-cycle: `%s`\n' "$visible_tty_autocycle"
 			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
@@ -1824,6 +1858,9 @@ write_manifest() {
 			fi
 			if [ "$visible_tty_shell" -eq 1 ]; then
 				printf ' --visible-tty-shell'
+			fi
+			if [ "$visible_tty_autocycle" -eq 1 ]; then
+				printf ' --visible-tty-autocycle'
 			fi
 			if [ "$strip_drm_console" -eq 1 ]; then
 				printf ' --strip-drm-console'

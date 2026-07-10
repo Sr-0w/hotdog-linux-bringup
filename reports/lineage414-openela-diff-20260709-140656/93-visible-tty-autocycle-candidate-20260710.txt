@@ -1,0 +1,77 @@
+Prepared downstream pmaports 4.14 visible-tty auto-cycle candidate
+=================================================================
+
+Date: 2026-07-10 04:43 CEST
+
+Candidate:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-045000-lineage414-pmaports-kernel-ttyautocycle-strictusbwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+Hashes:
+
+  boot image: ab9339224e4b1075ebf78a6ea8fc51084fe8261bc04e7b9f2da51ce568ca70bb
+  kernel:     c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+  dtb pack:   9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+  initramfs:  29050216ec87e5b24df63077cef57a99fe9afa6ac5e19519c6a4f168cd21c315
+
+Purpose:
+
+  045000 supersedes 042500 as the automatic next hardware test. It keeps the
+  pmaports lineage414 kernel, fixed entry12 /chosen ranges; DTB pack, tty-kmsg
+  initramfs follower, DRM console userspace hook, visible rootfs tty shell,
+  strict USB-success watchdog, and sysrq-first timeout reboot.
+
+  The new behavior is screen-only autonomy after switch_root: the generated
+  hotdog-visible-tty-shell now rotates pages every 12s:
+
+    1. full status
+    2. display/network status
+    3. dmesg tail
+
+  This is meant for the exact failure mode just observed: the screen has text,
+  but the host cannot reach SSH, ADB, fastboot, or USB networking. If the rootfs
+  is alive enough to start OpenRC local.d, the phone should keep refreshing useful
+  information without requiring USB input or button input.
+
+Build command:
+
+  ./scripts/build-watchdog-bootimg.sh \
+    --source-boot /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img \
+    --watchdog-sec 300 \
+    --watchdog-success usb \
+    --kernel /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/vmlinuz \
+    --dtb /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb \
+    --with-ramoops-cmdline \
+    --fb-test \
+    --drm-console \
+    --drm-console-helper /home/srobin/dev/hotdog/build/hotdog-drm-console-aarch64 \
+    --drm-console-userspace \
+    --tty-kmsg-console \
+    --visible-tty-shell \
+    --visible-tty-autocycle \
+    --extra-cmdline 'loglevel=8 fbcon=map:0 fbcon=font:VGA8x16 fbcon=vc:1-1' \
+    --base 0x00000000 \
+    --kernel-offset 0x00008000 \
+    --ramdisk-offset 0x01000000 \
+    --second-offset 0x00000000 \
+    --tags-offset 0x00000100 \
+    --dtb-offset 0x01f00000 \
+    --outdir /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-045000-lineage414-pmaports-kernel-ttyautocycle-strictusbwatchdog
+
+Offline checks:
+
+  - Generated manifest records "Visible tty auto-cycle: 1".
+  - Embedded rootfs helper contains autocycle="1" and the "auto-cycle every 12s"
+    help/status text.
+  - Extracted hotdog-visible-tty-shell passes /bin/sh -n.
+  - scripts/test-next-lineage414-simplefb-shell.sh now points to 045000.
+  - scripts/validate-current-candidates.sh passes for 045000, 034200, and
+    025400.
+  - find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n passes.
+  - git diff --check passes.
+
+Next hardware action:
+
+  Let the existing wait-pmos-then-test watcher launch the wrapper if SSH returns,
+  or run scripts/test-next-lineage414-simplefb-shell.sh from fastboot/pmOS SSH
+  once the phone becomes commandable.
