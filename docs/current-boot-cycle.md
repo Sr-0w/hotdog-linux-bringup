@@ -349,8 +349,22 @@ PSCI.
 7. For mainline, stop treating USB gadget alone as the first milestone. The
    next useful signal is kernel-entry evidence, a bootloader-visible return
    reason, or initramfs reachability through a channel earlier than USB gadget.
-8. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
+8. A mainline RAM-marker candidate is prepared at `022522`. Use it when the
+   objective is to identify how far `arch/arm64/kernel/head.S` progresses:
+   it writes `ENT1`/`ENT2`/`SWT3` into the existing `0xa9800000` ramoops dump
+   window and can be launched with `scripts/test-next-mainline617-rammarker.sh`.
+9. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
+
+Prepared mainline RAM-marker candidate:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-022522-mainline617-rammarker-stockdtbpack-drmconsole-watchdog/boot-noefi-pmosdtb-watchdog-420s.img
+sha256: 545b21b1f626586b6ce4cbc36ab4ee81cfd23451421af4fb383128cc916f0e4d
+kernel sha256: 4cf970840c91e8ddd9c1e0b9051ac1955ad6a7fb0244d776254fcc05c4ad6063
+dtb pack sha256: f3afd969891fa461afe3bf61711863e6be3ba462d47e93794af1455b03253572
+wrapper: /home/srobin/dev/hotdog/scripts/test-next-mainline617-rammarker.sh
+```
 
 Previous minimal mainline candidate that led to the DRM-console follow-up:
 
@@ -380,4 +394,6 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/71-mainline617-drmconsole-timeout-20260709.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/72-mainline617-pstorebuilt-timeout-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/73-mainline617-stockdtbpack-timeout-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/79-mainline-entry-ram-marker-probe-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/80-mainline617-rammarker-candidate-20260710.txt
 ```
