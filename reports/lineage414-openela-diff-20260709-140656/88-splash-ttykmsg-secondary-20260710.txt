@@ -1,0 +1,77 @@
+88 - splash tty-kmsg secondary candidate
+=======================================
+
+Date: 2026-07-10 03:42 CEST
+
+Context
+-------
+
+The automatic next image remains 033600. It adds an initramfs tty-kmsg helper
+that waits for /dev/fb0, prepares framebuffer mode/backlight, and writes
+dmesg/status to tty0/tty1 before the DRM helper.
+
+An offline agent pointed out a complementary timing lever: pmOS defaults to
+nosplash=y unless the `splash` kernel cmdline word is present. Without splash,
+init_2nd.sh skips the normal pmOS setup_framebuffer() call before Plymouth.
+The 033600 helper covers that path directly, but a `splash` control image is
+useful if the manual framebuffer preparation still does not show early text.
+
+Prepared secondary image
+------------------------
+
+Image:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-034200-lineage414-pmaports-kernel-splash-ttykmsg-fbprep-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+SHA256:
+
+  51c0d12333407d31a01a3a7f5f3669a23bf5dfe4b9da4b850f2ac3e4c1cc0934
+
+Components:
+
+  kernel: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+  dtb pack: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+  initramfs: cb93effcaa53091bc1266d9cbb5d53b5995f0604910a5174135dca317f9dc4d3
+
+Differences from 033600:
+
+  - cmdline-extra.txt contains `splash`
+  - cmdline-watchdog.txt includes `splash` before the ramoops args
+  - init_2nd.sh therefore reaches the existing conditional:
+      if [ "$nosplash" != "y" ] && [ "$IN_CI" = "false" ]; then
+          setup_framebuffer
+          splash_start
+          splash_set_message "Loading"
+      fi
+
+Validation
+----------
+
+DTB-pack entry12 was rechecked with:
+
+  ./scripts/inspect-dtb-pack-simplefb.sh \
+    --dtb images/pmos-experiments/2026-07-10-034200-lineage414-pmaports-kernel-splash-ttykmsg-fbprep-rootwatchdog/components/dtb \
+    --entry 12
+
+Result:
+
+  entries=20
+  selected_entry=12
+  chosen_node=yes
+  chosen_ranges=yes
+  stdout_path=yes
+  linux_stdout_path=yes
+  simplefb_node=yes
+  simplefb_compatible=yes
+  display0_alias=yes
+
+Wrapper
+-------
+
+Added:
+
+  /home/srobin/dev/hotdog/scripts/test-lineage414-splash-ttykmsg.sh
+
+This is intentionally not the automatic next test. Use it after 033600 if the
+next hardware observation suggests that fb0 appears but the screen remains
+silent until later DRM/userspace takeover.

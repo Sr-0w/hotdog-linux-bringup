@@ -407,6 +407,19 @@ tty kmsg console: yes, initramfs helper waits for fb0, prepares fb mode/backligh
 visible tty shell: yes, local.d hook starts `hotdog-visible-tty-shell` on tty1/tty0 after switch_root
 ```
 
+Prepared secondary splash/fbprep candidate:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-034200-lineage414-pmaports-kernel-splash-ttykmsg-fbprep-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 51c0d12333407d31a01a3a7f5f3669a23bf5dfe4b9da4b850f2ac3e4c1cc0934
+kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+initramfs sha256: cb93effcaa53091bc1266d9cbb5d53b5995f0604910a5174135dca317f9dc4d3
+cmdline extra: splash
+wrapper: /home/srobin/dev/hotdog/scripts/test-lineage414-splash-ttykmsg.sh
+purpose: force the normal pmOS initramfs setup_framebuffer path in addition to the tty-kmsg/fbprep helper
+```
+
 Prepared secondary fbcon-only isolation candidate:
 
 ```text
