@@ -1,0 +1,75 @@
+DTB pack entry12 verification - 2026-07-10
+==========================================
+
+Reason
+------
+
+A plain `dtc -I dtb` inspection of the current downstream DTB payload only
+decompiles entry 0 from the concatenated Android DTB pack. That can falsely
+suggest that `/chosen/stdout-path` and `simple-framebuffer` are missing.
+
+The booted stock/downstream cmdline reports `androidboot.dtb_idx=12`, so the
+relevant entry for HD1913 hotdog is entry 12, not entry 0.
+
+Tooling added
+-------------
+
+Added:
+
+```text
+/home/srobin/dev/hotdog/scripts/inspect-dtb-pack-simplefb.sh
+```
+
+It splits a single-DTB or concatenated Android DTB pack, selects an entry
+(default `12`), decompiles only that entry with `dtc`, and reports the hotdog
+simplefb/stdout-path checks.
+
+Validation
+----------
+
+Command:
+
+```text
+/home/srobin/dev/hotdog/scripts/inspect-dtb-pack-simplefb.sh \
+  --dtb /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/components/dtb \
+  --entry 12 \
+  --outdir /home/srobin/dev/hotdog/build/experiments/2026-07-10-031300-verify-030600-dtb-entry12-simplefb
+```
+
+Result:
+
+```text
+dtb_sha256=9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+entries=20
+selected_entry=12
+selected_offset=6081168
+selected_size=508131
+entry_sha256=d8327cdeae5b59a74cff2c86f99f947c690b87bbe44fc413982dfb05ab71fae7
+chosen_node=yes
+chosen_ranges=yes
+stdout_path=yes
+linux_stdout_path=yes
+simplefb_node=yes
+simplefb_compatible=yes
+display0_alias=yes
+```
+
+Key selected-entry lines:
+
+```text
+23684: chosen {
+23685:     ranges;
+23686:     linux,stdout-path = "/chosen/framebuffer@9c000000";
+23687:     stdout-path = "/chosen/framebuffer@9c000000";
+23692:     framebuffer@9c000000 {
+23699:         compatible = "simple-framebuffer";
+23704:     display0 = "/chosen/framebuffer@9c000000";
+```
+
+Conclusion
+----------
+
+The `030600` next-test image already contains the fixed entry12 simplefb DTB
+pack. The current display limitation should not be attributed to a missing
+entry12 simple-framebuffer node unless the bootloader selects a different
+`dtb_idx`.
