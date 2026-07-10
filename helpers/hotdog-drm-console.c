@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
+#include <linux/input.h>
 #include <poll.h>
 #include <pty.h>
 #include <signal.h>
@@ -13,6 +15,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -57,6 +60,13 @@ struct terminal {
 	unsigned int row;
 	unsigned int col;
 	int esc;
+};
+
+#define MAX_INPUT_DEVICES 16
+
+struct input_device {
+	int fd;
+	char path[64];
 };
 
 static volatile sig_atomic_t running = 1;
@@ -494,6 +504,94 @@ static void transcript_write_cstr(FILE *fp, const char *s)
 	transcript_write(fp, s, (ssize_t)strlen(s));
 }
 
+static size_t open_input_devices(struct input_device *inputs, size_t max_inputs)
+{
+	DIR *dir;
+	struct dirent *ent;
+	size_t count = 0;
+
+	dir = opendir("/dev/input");
+	if (!dir)
+		return 0;
+
+	while ((ent = readdir(dir)) != NULL && count < max_inputs) {
+		char path[sizeof(inputs[count].path)];
+		int fd;
+
+		if (strncmp(ent->d_name, "event", 5) != 0)
+			continue;
+		snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
+		fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		inputs[count].fd = fd;
+		snprintf(inputs[count].path, sizeof(inputs[count].path), "%s", path);
+		count++;
+	}
+
+	closedir(dir);
+	return count;
+}
+
+static void close_input_devices(struct input_device *inputs, size_t input_count)
+{
+	for (size_t i = 0; i < input_count; i++) {
+		if (inputs[i].fd >= 0)
+			close(inputs[i].fd);
+		inputs[i].fd = -1;
+	}
+}
+
+static const char *button_command(unsigned int code, const char **name)
+{
+	switch (code) {
+	case KEY_VOLUMEUP:
+		*name = "volume-up";
+		return "printf '\\n--- button diag: status ---\\n'; "
+		       "date; uptime 2>/dev/null || true; "
+		       "ip -br addr 2>/dev/null || ip addr 2>/dev/null || true; "
+		       "printf '\\n--- usb gadget ---\\n'; "
+		       "ls -la /sys/class/udc 2>/dev/null || true; "
+		       "for f in /sys/class/udc/*/state /sys/kernel/config/usb_gadget/*/UDC; do [ -e \"$f\" ] || continue; echo \"===$f\"; cat \"$f\" 2>/dev/null || true; done; "
+		       "printf '\\n--- dmesg tail ---\\n'; dmesg | tail -100\n";
+	case KEY_VOLUMEDOWN:
+		*name = "volume-down";
+		return "printf '\\n--- button diag: display/input/storage ---\\n'; "
+		       "printf '\\n--- drm/fb/input nodes ---\\n'; "
+		       "ls -la /dev/dri /dev/fb* /dev/input 2>/dev/null || true; "
+		       "printf '\\n--- block labels ---\\n'; "
+		       "ls -la /dev/disk/by-partlabel /dev/disk/by-name /dev/disk/by-uuid 2>/dev/null || true; "
+		       "printf '\\n--- display dmesg ---\\n'; "
+		       "dmesg | grep -i -E 'drm|dsi|fb|console|simple|input|touch|pon' | tail -120\n";
+	default:
+		*name = NULL;
+		return NULL;
+	}
+}
+
+static bool handle_input_event(int pty_master, FILE *transcript, struct input_event *ev)
+{
+	const char *name;
+	const char *cmd;
+	char line[128];
+	char prompt_cmd[192];
+
+	if (ev->type != EV_KEY || ev->value != 1)
+		return false;
+
+	cmd = button_command(ev->code, &name);
+	if (!cmd)
+		return false;
+
+	snprintf(line, sizeof(line), "\n[button:%s] queued diagnostic command\n", name);
+	transcript_write_cstr(transcript, line);
+	snprintf(prompt_cmd, sizeof(prompt_cmd),
+		 "printf '\\n[button:%s] queued diagnostic command\\n'\n", name);
+	write_all(pty_master, prompt_cmd);
+	write_all(pty_master, cmd);
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	const char *device = "/dev/dri/card0";
@@ -506,6 +604,8 @@ int main(int argc, char **argv)
 	struct drm_state drm;
 	struct font font;
 	struct terminal term;
+	struct input_device inputs[MAX_INPUT_DEVICES];
+	size_t input_count = 0;
 	FILE *transcript = NULL;
 	int pty_master;
 	int fifo_fd = -1;
@@ -558,6 +658,9 @@ int main(int argc, char **argv)
 		die("load PSF font");
 	if (drm_init(&drm, device, connector_id, crtc_id, mode_index) != 0)
 		die("init DRM");
+	for (size_t i = 0; i < MAX_INPUT_DEVICES; i++)
+		inputs[i].fd = -1;
+	input_count = open_input_devices(inputs, MAX_INPUT_DEVICES);
 
 	unsigned int cols = (drm.mode.hdisplay - 32) / font.width;
 	unsigned int rows = (drm.mode.vdisplay - 32) / font.height;
@@ -585,17 +688,41 @@ int main(int argc, char **argv)
 	term_write_cstr(&term, "hotdog DRM boot console\n");
 	term_write_cstr(&term, "render: /dev/dri/card0 -> DSI-1, command FIFO: /tmp/hotdog-drm-console.in\n");
 	term_write_cstr(&term, "host input: scripts/install-hotdog-drm-console.sh send '<command>'\n\n");
+	if (input_count > 0) {
+		char line[160];
+
+		snprintf(line, sizeof(line), "local buttons: Vol+ status, Vol- devices (%zu input event nodes)\n\n",
+			 input_count);
+		term_write_cstr(&term, line);
+	} else {
+		term_write_cstr(&term, "local buttons: no /dev/input/event* nodes opened\n\n");
+	}
 	render(&drm, &font, &term);
 
 	write_all(pty_master, boot_script);
 
 	while (running) {
-		struct pollfd fds[2] = {
-			{ .fd = pty_master, .events = POLLIN },
-			{ .fd = fifo_fd, .events = POLLIN | POLLHUP },
-		};
-		int ret = poll(fds, 2, 100);
+		struct pollfd fds[2 + MAX_INPUT_DEVICES];
+		nfds_t nfds = 2;
+		int ret;
 		bool dirty = false;
+
+		fds[0].fd = pty_master;
+		fds[0].events = POLLIN;
+		fds[0].revents = 0;
+		fds[1].fd = fifo_fd;
+		fds[1].events = POLLIN | POLLHUP;
+		fds[1].revents = 0;
+		for (size_t i = 0; i < input_count; i++) {
+			if (inputs[i].fd < 0)
+				continue;
+			fds[nfds].fd = inputs[i].fd;
+			fds[nfds].events = POLLIN | POLLHUP | POLLERR;
+			fds[nfds].revents = 0;
+			nfds++;
+		}
+
+		ret = poll(fds, nfds, 100);
 		if (ret < 0) {
 			if (errno == EINTR)
 				continue;
@@ -620,6 +747,17 @@ int main(int argc, char **argv)
 		if (fds[1].revents & POLLHUP) {
 			close(fifo_fd);
 			fifo_fd = open(fifo_path, O_RDONLY | O_NONBLOCK);
+		}
+		for (nfds_t idx = 2; idx < nfds; idx++) {
+			if (fds[idx].revents & POLLIN) {
+				struct input_event ev;
+				ssize_t n;
+
+				while ((n = read(fds[idx].fd, &ev, sizeof(ev))) == sizeof(ev)) {
+					if (handle_input_event(pty_master, transcript, &ev))
+						dirty = true;
+				}
+			}
 		}
 
 		time_t now = time(NULL);
@@ -646,6 +784,7 @@ int main(int argc, char **argv)
 	kill(shell_pid, SIGTERM);
 	close(pty_master);
 	close(fifo_fd);
+	close_input_devices(inputs, input_count);
 	if (transcript)
 		fclose(transcript);
 	unlink(fifo_path);
