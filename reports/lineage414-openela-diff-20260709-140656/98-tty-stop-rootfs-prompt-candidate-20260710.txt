@@ -1,0 +1,81 @@
+Prepared downstream pmaports 4.14 tty-stop rootfs prompt candidate
+==================================================================
+
+Date: 2026-07-10 05:15 CEST
+
+Candidate:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-051407-lineage414-pmaports-kernel-ttystop-rootfsprompt-usbifwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+Hashes:
+
+  boot image: dd4474651c6a2cad96e8a4b07d08a0695a72f50f0d29683c8024c307d20068aa
+  kernel:     c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+  dtb pack:   9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+  initramfs:  c2a54c47d5ef535ef5ca4a10af6e6f55ba029602ee2e2a8196e59965703a55a4
+
+Purpose:
+
+  051407 supersedes 050008 as the automatic next hardware test. It keeps the
+  same pmaports lineage414 kernel r2, fixed entry12 /chosen ranges; DTB pack,
+  DRM/rootfs helpers, visible USB/watchdog diagnostics, and USB-interface-only
+  watchdog success detection.
+
+  The new behavior is prompt-first screen handoff:
+
+    - hotdog_tty_kmsg_console now writes a pidfile when it starts the early
+      initramfs tty log follower.
+    - init_2nd stops that follower before exec switch_root.
+    - the rootfs visible tty shell is generated with autocycle=0, so it leaves a
+      readable screen# prompt and only appends a short status refresh every 20s.
+
+Why:
+
+  The last phone photo showed useful framebuffer text, but not a clear rootfs
+  prompt. A likely cause is the initramfs tty log follower continuing to write
+  dmesg/status over the tty after the rootfs is ready. This candidate keeps the
+  early boot visibility we need, then releases the screen for the rootfs shell.
+
+Build command:
+
+  ./scripts/build-watchdog-bootimg.sh \
+    --source-boot /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img \
+    --watchdog-sec 300 \
+    --watchdog-success usb \
+    --kernel /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/vmlinuz \
+    --dtb /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb \
+    --with-ramoops-cmdline \
+    --fb-test \
+    --drm-console \
+    --drm-console-helper /home/srobin/dev/hotdog/build/hotdog-drm-console-aarch64 \
+    --drm-console-userspace \
+    --tty-kmsg-console \
+    --visible-tty-shell \
+    --extra-cmdline 'loglevel=8 fbcon=map:0 fbcon=font:VGA8x16 fbcon=vc:1-1' \
+    --base 0x00000000 \
+    --kernel-offset 0x00008000 \
+    --ramdisk-offset 0x01000000 \
+    --second-offset 0x00000000 \
+    --tags-offset 0x00000100 \
+    --dtb-offset 0x01f00000 \
+    --outdir /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-051407-lineage414-pmaports-kernel-ttystop-rootfsprompt-usbifwatchdog
+
+Offline checks:
+
+  - scripts/test-next-lineage414-simplefb-shell.sh points to 051407.
+  - Embedded visible shell has autocycle=0, status follower every 20s, screen#
+    prompt, button diagnostics, and usb/watchdog status.
+  - hotdog_tty_kmsg_console.sh contains hotdog_tty_kmsg_console_stop.
+  - init_2nd.sh calls hotdog_tty_kmsg_console_stop before exec switch_root.
+  - Watchdog success remains USB mode and checks only usb*, rndis*, and enx*
+    network interfaces for carrier/up state.
+  - validate-current-candidates.sh passes.
+  - find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n passes.
+  - git diff --check passes.
+
+Next hardware action:
+
+  Let the existing wait-pmos-then-test watcher launch the wrapper if SSH returns,
+  or run scripts/test-next-lineage414-simplefb-shell.sh once the phone becomes
+  commandable. The expected screen sequence is early tty/dmesg text, then a
+  rootfs visible shell banner and screen# prompt if switch_root succeeds.

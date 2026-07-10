@@ -1384,6 +1384,21 @@ hotdog_tty_kmsg_console_prepare_fb() {
 	done
 }
 
+hotdog_tty_kmsg_console_stop() {
+	local pid
+
+	if [ -r /tmp/hotdog_tty_kmsg_console.pid ]; then
+		pid="$(cat /tmp/hotdog_tty_kmsg_console.pid 2>/dev/null || true)"
+		if [ -n "$pid" ]; then
+			kill "$pid" 2>/dev/null || true
+			sleep 1
+			kill -KILL "$pid" 2>/dev/null || true
+		fi
+	fi
+	rm -f /tmp/hotdog_tty_kmsg_console.pid /tmp/hotdog_tty_kmsg_console.started 2>/dev/null || true
+	hotdog_tty_kmsg_console_log "stopped tty kmsg console"
+}
+
 hotdog_tty_kmsg_console_start() {
 	local stage="$1"
 
@@ -1441,6 +1456,7 @@ hotdog_tty_kmsg_console_start() {
 					i=$((i + 1))
 				done
 			' sh "$stage" "$tty" &
+			echo $! > /tmp/hotdog_tty_kmsg_console.pid 2>/dev/null || true
 		else
 			/bin/busybox ash -c '
 				stage="$1"
@@ -1460,6 +1476,7 @@ hotdog_tty_kmsg_console_start() {
 					dmesg | tail -90 2>/dev/null || true
 				done
 			' sh "$stage" "$tty" &
+			echo $! > /tmp/hotdog_tty_kmsg_console.pid 2>/dev/null || true
 		fi
 	) &
 }
@@ -1652,6 +1669,10 @@ if [ -r /hotdog_rescue_watchdog.sh ]; then
 	. /hotdog_rescue_watchdog.sh
 	hotdog_rescue_watchdog_mark switch-root
 fi
+if [ -r /hotdog_tty_kmsg_console.sh ]; then
+	. /hotdog_tty_kmsg_console.sh
+	hotdog_tty_kmsg_console_stop
+fi
 if [ -r /hotdog_drm_console_start.sh ]; then
 	. /hotdog_drm_console_start.sh
 	hotdog_drm_console_stop
@@ -1704,6 +1725,7 @@ fi
 
 	for init2_file in "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
 		[ -f "$init2_file" ] || continue
+		remove_marked_block "$init2_file" "hotdog rescue watchdog switch-root marker begin" "hotdog rescue watchdog switch-root marker end"
 		insert_after_once "$init2_file" "trap 'reboot -f' TERM" "hotdog rescue watchdog stage2 begin" "$stage2_snippet"
 		if [ "$tty_kmsg_console" -eq 1 ]; then
 			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog tty kmsg console begin" "$tty_kmsg_snippet"
