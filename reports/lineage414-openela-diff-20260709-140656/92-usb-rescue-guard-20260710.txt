@@ -37,12 +37,13 @@ scripts/rescue-boot-b-when-usb-visible.sh
   - refuses duplicate USB rescue watcher instances by default
   - avoids process-substitution / command-substitution self-detection false positives
   - matches --serial/--label with fixed token-boundary checks instead of broad globs
+  - writes current.run/current.log symlinks only from the instance that owns the watcher lock
   - treats fastboot restore exit 75 as a transient busy-lock condition and keeps watching
   - keeps EDL write disabled unless --edl-write is explicit
 
 scripts/current-autopilot-status.sh
   - reports any running rescue-boot-b-when-usb-visible.sh process
-  - prints the latest USB rescue watcher run log tail
+  - prints the active USB rescue watcher run log through current.run when available, not a newer duplicate-probe log
 
 scripts/watch-rescue-visible-supervisor.sh
   - avoids the same command-substitution self-detection false positive in future starts
