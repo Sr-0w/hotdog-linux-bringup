@@ -125,6 +125,7 @@ main() {
   pid_line adb-scrcpy "$HOTDOG_LOG_ROOT/watch-adb-scrcpy.pid"
   pid_line autopilot-health "$HOTDOG_LOG_ROOT/watch-autopilot-health.pid"
   pattern_lines rescue-visible "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
+  pattern_lines rescue-supervisor "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"
   pattern_lines wait-simplefb-shell "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
   pattern_lines passive-phone-state "$HOTDOG_ROOT/scripts/watch-phone-state.sh --timeout 21600 --poll 5"
 

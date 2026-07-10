@@ -16,6 +16,7 @@ ADB device: not visible
 host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
+rescue supervisor: running, restarts a stable rescue watcher if the current one expires
 pmOS SSH wait/test watcher: running, waiting for SSH before launching 034500
 passive phone-state watcher: running, logging ADB/fastboot/USB changes only
 ```
@@ -163,6 +164,23 @@ pid: 1166999
 watcher log: /home/srobin/dev/hotdog/logs/rescue-boot-b-when-visible-2026-07-10-005605/run.log
 restore boot_b: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 after restore: system
+```
+
+## Active Rescue Supervisor
+
+A passive supervisor is also running so the rescue path does not silently expire
+during a long session. It does not flash, reboot, sideload, or take the
+phone-operation lock. It only starts a fresh stable rescue watcher when no
+matching `rescue-boot-b-when-visible.sh` process exists:
+
+```text
+pid: 2080483
+script: /home/srobin/dev/hotdog/scripts/watch-rescue-visible-supervisor.sh
+log: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/rescue-supervisor-stable-guard-current.log
+restore boot_b: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
+after restore: system
+supervisor timeout: 604800s
+launched rescue timeout: 604800s
 ```
 
 ## Active pmOS SSH Wait/Test Watcher
