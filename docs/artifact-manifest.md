@@ -46,6 +46,7 @@ only the artifacts you actually need.
 | Path | Purpose |
 |---|---|
 | `/home/srobin/dev/hotdog/patches/experimental-android-kernel-header-text-offset.patch` | Local kernel header experiment kept outside the source checkouts. |
+| `/home/srobin/dev/hotdog/patches/experimental-mainline-entry-psci-reset-probe.patch` | Disposable mainline probe patch. It makes `primary_entry` immediately call PSCI SYSTEM_RESET through `smc #0`, to distinguish bootloader handoff failure from kernel-entry/early-exception failure. Do not apply to normal boot builds. |
 | `/home/srobin/dev/hotdog/aports/device/testing/linux-oneplus-hotdog-lineage414` | Tracked snapshot of the local downstream 4.14 aport, including the fixed `stock-hotdog-dtbpack.dtb` with SHA256 `9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040`. Use this to seed or compare a fresh `pmaports-sm8150` checkout. |
 | `/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150` | Local pmaports fork with the hotdog device package. |
 | `/home/srobin/dev/hotdog/src/kernel/linux-postmarketos-qcom-sm8150-v6.17.0-sm8150` | Mainline/postmarketOS kernel work tree used for the current experiments. |
@@ -76,6 +77,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/75-simplefb-ranges-candidate-20260710.txt` | Offline root cause for simplefb `No memory resource`; prepared `010900` image with fixed entry12 `/chosen ranges;`, fb-test, and userspace DRM console. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/76-drm-command-shell-candidate-20260710.txt` | Follow-up image `014400` changes the initramfs DRM console from a foreground `dmesg` loop into a command shell with a background `dmesg` follower, records the local pmaports DTB-pack promotion, and uses a helper rebuilt from source. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/77-pmaports-kernel-fbcon-candidate-20260710.txt` | Prepared image `015500` promotes the pmaports `pkgrel=2` kernel into the boot image to test VT/fbcon/simplefb kernel output on screen while keeping the DRM-console watchdog path. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/78-mainline-entry-reset-probe-20260710.txt` | Offline mainline entry-probe plan using PSCI SYSTEM_RESET at `primary_entry`. |
 
 ## Resume order
 
