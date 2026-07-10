@@ -16,7 +16,7 @@ Hashes:
 
 Purpose:
 
-  044715 supersedes 045000 as the automatic next hardware test. It keeps:
+  044715 initially superseded 045000 as the automatic next hardware test. It keeps:
 
     - pmaports lineage414 kernel r2
     - fixed entry12 /chosen ranges; DTB pack
@@ -29,6 +29,11 @@ Purpose:
   treats a configured configfs gadget/UDC as success. It now requires one of the
   USB network interfaces to show carrier=1, or operstate=up when carrier is not
   available.
+
+Superseded by:
+
+  045402 keeps the carrier/up watchdog behavior and adds visible USB/watchdog
+  diagnostics to the auto-cycle pages.
 
 Why:
 

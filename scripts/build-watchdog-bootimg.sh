@@ -993,6 +993,7 @@ print_full_status() {
 	printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
 	printf '\n--- network ---\n'
 	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+	print_usb_watchdog_status
 	printf '\n--- display/fb ---\n'
 	ls -la /dev/fb* /dev/dri /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
 	for d in /sys/class/backlight/*; do
@@ -1023,6 +1024,25 @@ print_short_status() {
 	dmesg | tail -50 2>/dev/null || true
 }
 
+print_usb_watchdog_status() {
+	printf '\n--- usb/watchdog ---\n'
+	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx* /sys/class/net/eth*; do
+		[ -e "$iface" ] || continue
+		base="${iface##*/}"
+		printf '%s carrier=' "$base"
+		cat "$iface/carrier" 2>/dev/null || printf '?'
+		printf ' operstate='
+		cat "$iface/operstate" 2>/dev/null || printf '?'
+		printf ' address='
+		cat "$iface/address" 2>/dev/null || printf '?'
+	done
+	for marker in /tmp/hotdog_rescue_watchdog.*; do
+		[ -e "$marker" ] || continue
+		printf 'marker=%s\n' "${marker##*/hotdog_rescue_watchdog.}"
+	done
+	cat /proc/cmdline 2>/dev/null | tr ' ' '\n' | grep '^hotdog_rescue_watchdog_sec=' || true
+}
+
 print_display_network() {
 	reason="$1"
 	printf '\033c'
@@ -1032,6 +1052,7 @@ print_display_network() {
 	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
 	printf '\n--- routes ---\n'
 	ip route 2>/dev/null || true
+	print_usb_watchdog_status
 	printf '\n--- display/fb ---\n'
 	ls -la /dev/fb* /dev/dri /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
 	printf '\n--- drm/fb dmesg ---\n'
