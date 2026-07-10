@@ -3,7 +3,7 @@
 
 pkgname=linux-oneplus-hotdog-lineage414
 pkgver=4.14.357_git20260703
-pkgrel=2
+pkgrel=3
 pkgdesc="LineageOS downstream kernel for OnePlus 7T Pro"
 arch="aarch64"
 _carch="arm64"
@@ -82,6 +82,6 @@ package() {
 
 sha512sums="
 db3a83b6cc8ebca496b49ddac82a81c05d488808129bd51b0348dd411ceef7449fb293f77ae5a290fae8d2dde081e5cf35ec7617cb9aea98eb0ce72b85af9cc6  linux-oneplus-hotdog-lineage414-6ecfabed032b68a8f0a0fd003cf5fbfb6d672acb.tar.gz
-2c81240696e04548e2e73cb784af9e05a9e21559062a49939f09218021070360d3e4bc212818e8da24000c65c914e9d43aecb7ca2179df27cbaab969d663405f  config-oneplus-hotdog-lineage414.aarch64
+f9a54da9bbdbc75fa58297b38c0f912acae2b9916e0d5d1fdab8add68c92f5828dec45ab11da95f7621be971f13ff7b45f8f04fca86e00b8ffd863cc305526d4  config-oneplus-hotdog-lineage414.aarch64
 5d4bee9d38662642ef96cfefc0def0b427dca3ea71e7bd24c04d2ab16661e39d4cb61d2ef42d58a9008018ddb021d6ae15a116b8fa0e642c3a2790456c3dbc94  stock-hotdog-dtbpack.dtb
 "
