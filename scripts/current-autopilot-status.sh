@@ -60,6 +60,22 @@ latest_dir() {
     cut -d' ' -f2-
 }
 
+latest_symlink_target() {
+  local base="$1"
+  local pattern="$2"
+  local link=""
+  local target=""
+
+  link="$(find "$base" -maxdepth 1 -type l -name "$pattern" -printf '%T@ %p\n' 2>/dev/null |
+    sort -n |
+    tail -n 1 |
+    cut -d' ' -f2-)"
+  [ -n "$link" ] || return 0
+  target="$(readlink -f "$link" 2>/dev/null || true)"
+  [ -d "$target" ] || return 0
+  printf '%s\n' "$target"
+}
+
 print_tail() {
   local label="$1"
   local file="$2"
@@ -161,7 +177,10 @@ main() {
   health_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-autopilot-health-*')"
   edl_dir="$(latest_dir "$HOTDOG_DUMP_ROOT/stock-before-flash" '*-edl-critical-blocks')"
   rescue_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-visible-*')"
-  rescue_usb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-usb-visible-*')"
+  rescue_usb_dir="$(latest_symlink_target "$HOTDOG_LOG_ROOT/manual-rescue-watchers" 'usb-rescue-*-current.run')"
+  if [ -z "$rescue_usb_dir" ]; then
+    rescue_usb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-usb-visible-*')"
+  fi
   wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-next-lineage414-simplefb-shell-*')"
   if [ -z "$wait_simplefb_dir" ]; then
     wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-lineage414-simplefb-shell-*')"

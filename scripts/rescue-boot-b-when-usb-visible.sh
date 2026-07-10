@@ -181,6 +181,8 @@ exec > >(tee "$run_dir/run.log") 2>&1
 safe_serial="$(safe_name "$SERIAL")"
 safe_label="$(safe_name "$LABEL")"
 instance_lock="$HOTDOG_LOG_ROOT/manual-rescue-watchers/usb-rescue-${safe_serial}-${safe_label}.lock"
+current_run_link="$HOTDOG_LOG_ROOT/manual-rescue-watchers/usb-rescue-${safe_serial}-${safe_label}-current.run"
+current_log_link="$HOTDOG_LOG_ROOT/manual-rescue-watchers/usb-rescue-${safe_serial}-${safe_label}-current.log"
 mkdir -p "$HOTDOG_LOG_ROOT/manual-rescue-watchers"
 if [ "$ALLOW_DUPLICATE" -ne 1 ]; then
 	if usb_rescue_running; then
@@ -192,6 +194,8 @@ if ! acquire_instance_lock; then
 	exit 0
 fi
 trap 'rm -rf "$instance_lock"' EXIT
+ln -sfn "$run_dir" "$current_run_link"
+ln -sfn "$run_dir/run.log" "$current_log_link"
 
 log "Run directory: $run_dir"
 log "Target serial: $SERIAL"
