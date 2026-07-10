@@ -101,11 +101,15 @@ validate_candidate_dir() {
   local image="$2"
   local require_buttons="$3"
   local dir="$4"
+  local expected_watchdog="${5:-}"
+  local expected_autocycle="${6:-}"
+  local expected_acm="${7:-no}"
   local cmdline="$dir/cmdline-watchdog.txt"
   local dtb="$dir/components/dtb"
   local postmount="$dir/initramfs-tree/hotdog_rootfs_postmount.sh"
   local tty_kmsg="$dir/initramfs-tree/hotdog_tty_kmsg_console.sh"
   local watchdog="$dir/initramfs-tree/hotdog_rescue_watchdog.sh"
+  local acm_helper="$dir/initramfs-tree/hotdog_usb_acm_getty.sh"
   local visible_shell="$tmpdir/${label}-hotdog-visible-tty-shell.sh"
 
   require_file "$image"
@@ -144,19 +148,38 @@ validate_candidate_dir() {
   if [ "$require_buttons" = "yes" ]; then
     grep -q 'buttons: Vol+ full status' "$visible_shell" || fail "$label visible shell missing button help text"
     grep -q 'monitor_input_device' "$visible_shell" || fail "$label visible shell missing input monitor"
-    grep -q 'autocycle="0"' "$visible_shell" || fail "$label visible shell is not prompt-first autocycle=0"
-    grep -q 'status follower every 20s' "$visible_shell" || fail "$label visible shell is still auto-cycle first instead of prompt-first"
+    if [ -n "$expected_autocycle" ]; then
+      grep -q "autocycle=\"$expected_autocycle\"" "$visible_shell" || fail "$label visible shell autocycle is not $expected_autocycle"
+    fi
+    if [ "$expected_autocycle" = "1" ]; then
+      grep -q 'auto-cycle every 12s' "$visible_shell" || fail "$label visible shell missing auto-cycle status text"
+    else
+      grep -q 'status follower every 20s' "$visible_shell" || fail "$label visible shell missing prompt-first status follower"
+    fi
     grep -q "PS1='screen# '" "$visible_shell" || fail "$label visible shell missing screen prompt"
     grep -q 'usb/watchdog' "$visible_shell" || fail "$label visible shell missing USB/watchdog status block"
-    grep -q 'hotdog-usb-watchdog.start' "$postmount" || fail "$label rootfs postmount missing USB watchdog local.d hook"
-    grep -q 'hotdog-rootfs-usb-watchdog' "$postmount" || fail "$label rootfs USB watchdog log tag missing"
+    if [ "$expected_acm" = "yes" ]; then
+      require_file "$acm_helper"
+      /bin/sh -n "$acm_helper"
+      grep -q 'setup_usb_acm_configfs' "$acm_helper" || fail "$label ACM helper does not call setup_usb_acm_configfs"
+      grep -q 'run_getty ttyGS0' "$acm_helper" || fail "$label ACM helper does not use ttyGS0 getty"
+      grep -q 'hotdog-usb-acm-getty.start' "$postmount" || fail "$label rootfs postmount missing USB ACM getty local.d hook"
+      grep -q 'hotdog-rootfs-usb-acm' "$postmount" || fail "$label rootfs USB ACM log tag missing"
+      log "$label USB ACM getty helper syntax OK"
+    fi
+    if [ "$expected_watchdog" = "usb" ]; then
+      grep -q 'hotdog-usb-watchdog.start' "$postmount" || fail "$label rootfs postmount missing USB watchdog local.d hook"
+      grep -q 'hotdog-rootfs-usb-watchdog' "$postmount" || fail "$label rootfs USB watchdog log tag missing"
+    fi
     grep -q 'hotdog_tty_kmsg_console_stop' "$tty_kmsg" || fail "$label tty-kmsg helper cannot stop before switch_root"
     grep -q 'hotdog_tty_kmsg_console_stop' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not stop tty-kmsg before switch_root"
     grep -q 'hotdog_rescue_watchdog_start switch-root' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not rearm watchdog after killall sh"
     grep -q 'fbcon=vc:1-1' "$cmdline" || fail "$label cmdline missing fbcon=vc:1-1"
     require_file "$watchdog"
     /bin/sh -n "$watchdog"
-    grep -q 'HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE="usb"' "$watchdog" || fail "$label watchdog is not USB-success mode"
+    if [ -n "$expected_watchdog" ]; then
+      grep -q "HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE=\"$expected_watchdog\"" "$watchdog" || fail "$label watchdog is not $expected_watchdog-success mode"
+    fi
     grep -q 'hotdog_rescue_watchdog.pid' "$watchdog" || fail "$label watchdog does not persist a pidfile"
     grep -q 'stale watchdog marker' "$watchdog" || fail "$label watchdog cannot rearm after stale pid"
     grep -q 'triggering sysrq reboot' "$watchdog" || fail "$label watchdog does not use sysrq reboot first"
@@ -203,7 +226,7 @@ main() {
   check_cmdline_word "$(cat "$cmdline")" "fbcon=font:VGA8x16"
   check_cmdline_word "$(cat "$cmdline")" "fbcon=vc:1-1"
   check_cmdline_word "$(cat "$cmdline")" "printk.devkmsg=on"
-  validate_candidate_dir next "$image" yes "$dir"
+  validate_candidate_dir next "$image" yes "$dir" root 1 yes
 
   for entry in \
     "secondary_splash:$splash_wrapper:no" \

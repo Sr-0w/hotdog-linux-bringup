@@ -30,6 +30,10 @@ Options:
   --direct-debug-shell
                      Start a direct telnet shell on 172.16.42.1:23 after
                      USB networking, without relying on the pmOS debug hook.
+  --usb-acm-getty
+                     Add a USB CDC ACM serial getty on ttyGS0 from initramfs
+                     and again after switch_root. This is a fallback for cases
+                     where the USB network gadget never becomes usable.
   --fb-test
                      Paint /dev/fb0 from initramfs when it appears. This is
                      an opt-in visual diagnostic for simplefb/fbcon bring-up.
@@ -104,6 +108,7 @@ watchdog_success="usb"
 extra_cmdline=""
 with_ramoops_cmdline=0
 direct_debug_shell=0
+usb_acm_getty=0
 fb_test=0
 drm_console=0
 drm_console_userspace=0
@@ -161,6 +166,9 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--direct-debug-shell)
 			direct_debug_shell=1
+			;;
+		--usb-acm-getty)
+			usb_acm_getty=1
 			;;
 		--fb-test)
 			fb_test=1
@@ -522,6 +530,8 @@ hotdog_rescue_watchdog_success_seen() {
 	case "$HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE" in
 	usb)
 		[ -e /tmp/hotdog_rescue_watchdog.usb-iface ] && return 0
+		[ -e /tmp/hotdog_rescue_watchdog.usb-acm ] && return 0
+		[ -e /dev/ttyGS0 ] && return 0
 		hotdog_rescue_watchdog_usb_seen && return 0
 		;;
 	root)
@@ -862,6 +872,124 @@ EOF
 chmod 0755 /sysroot/etc/local.d/hotdog-ptmx.start 2>/dev/null || true
 log "installed local.d ptmx repair"
 HOTDOG_ROOTFS_POSTMOUNT_SH
+	if [ "$usb_acm_getty" -eq 1 ]; then
+		cat >> "$helper" <<'HOTDOG_ROOTFS_USB_ACM_GETTY_SH'
+
+install_rootfs_usb_acm_getty() {
+	local locald="/sysroot/etc/local.d/hotdog-usb-acm-getty.start"
+	local runlevel="/sysroot/etc/runlevels/default"
+	local initd="/sysroot/etc/init.d/local"
+
+	cat > "$locald" <<'EOF' 2>/dev/null || true
+#!/bin/sh
+
+log() {
+	printf '%s\n' "[hotdog-rootfs-usb-acm] $*" > /dev/kmsg 2>/dev/null || true
+}
+
+mark_acm() {
+	mkdir -p /tmp 2>/dev/null || true
+	: > /tmp/hotdog_rescue_watchdog.usb-acm 2>/dev/null || true
+}
+
+bind_first_udc() {
+	local gadget="$1"
+	local udc
+
+	[ -w "$gadget/UDC" ] || return 0
+	[ -n "$(cat "$gadget/UDC" 2>/dev/null || true)" ] && return 0
+	for udc in /sys/class/udc/*; do
+		[ -e "$udc" ] || continue
+		echo "${udc##*/}" > "$gadget/UDC" 2>/dev/null || true
+		break
+	done
+}
+
+ensure_acm_configfs() {
+	local root gadget cfg active_udc
+
+	for root in /config/usb_gadget /sys/kernel/config/usb_gadget; do
+		[ -d "$root/g1/configs/c.1" ] || continue
+		gadget="$root/g1"
+		cfg="$gadget/configs/c.1"
+		active_udc="$(cat "$gadget/UDC" 2>/dev/null || true)"
+		[ -w "$gadget/UDC" ] && echo "" > "$gadget/UDC" 2>/dev/null || true
+		mkdir "$gadget/functions/acm.usb0" 2>/dev/null || true
+		ln -s "$gadget/functions/acm.usb0" "$cfg/acm.usb0" 2>/dev/null || true
+		if [ -n "$active_udc" ]; then
+			echo "$active_udc" > "$gadget/UDC" 2>/dev/null || true
+		else
+			bind_first_udc "$gadget"
+		fi
+		return 0
+	done
+	return 1
+}
+
+start_serial_shell() {
+	local shell="/usr/local/bin/hotdog-usb-acm-shell"
+	local getty=""
+	local i=0
+
+	mkdir -p /usr/local/bin 2>/dev/null || true
+	cat > "$shell" <<'SHELL_EOF' 2>/dev/null || true
+#!/bin/sh
+[ -r /etc/profile ] && . /etc/profile
+printf 'hotdog rootfs USB ACM shell\n'
+printf 'tty: ttyGS0\n'
+printf 'cmdline: '
+cat /proc/cmdline 2>/dev/null || true
+printf '\n'
+exec /bin/sh -l
+SHELL_EOF
+	chmod 0755 "$shell" 2>/dev/null || true
+
+	while [ "$i" -lt 90 ] && [ ! -e /dev/ttyGS0 ]; do
+		sleep 1
+		i=$((i + 1))
+	done
+	[ -e /dev/ttyGS0 ] || {
+		log "ttyGS0 did not appear"
+		return 0
+	}
+
+	mark_acm
+	log "starting serial shell on ttyGS0"
+	if command -v getty >/dev/null 2>&1; then
+		getty="$(command -v getty)"
+	elif [ -x /sbin/getty ]; then
+		getty=/sbin/getty
+	elif [ -x /bin/busybox ]; then
+		getty="/bin/busybox getty"
+	fi
+
+	while :; do
+		if [ -n "$getty" ]; then
+			# shellcheck disable=SC2086
+			$getty -n -l "$shell" ttyGS0 115200 vt100
+		else
+			"$shell" </dev/ttyGS0 >/dev/ttyGS0 2>&1
+		fi
+		sleep 1
+	done
+}
+
+(
+	log "arming rootfs USB ACM getty"
+	ensure_acm_configfs || log "could not update configfs; waiting for inherited ttyGS0"
+	start_serial_shell
+) &
+EOF
+	chmod 0755 "$locald" 2>/dev/null || true
+	if [ -d "$runlevel" ] && [ -e "$initd" ]; then
+		ln -sf /etc/init.d/local "$runlevel/local" 2>/dev/null || true
+	fi
+	log "installed rootfs USB ACM getty local.d hook"
+}
+
+install_rootfs_usb_acm_getty
+HOTDOG_ROOTFS_USB_ACM_GETTY_SH
+	fi
 	if [ "$watchdog_success" = "usb" ]; then
 		cat >> "$helper" <<'HOTDOG_ROOTFS_USB_WATCHDOG_SH'
 
@@ -1074,10 +1202,11 @@ printf 'tty: %s\n' "$tty"
 printf 'date: '; date 2>/dev/null || true
 printf 'uname: '; uname -a 2>/dev/null || true
 printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
-printf '\n--- initial network ---\n'
-ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
-printf '\n--- initial display/fb ---\n'
-ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
+		printf '\n--- initial network ---\n'
+		ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+		ls -la /dev/ttyGS* 2>/dev/null || true
+		printf '\n--- initial display/fb ---\n'
+		ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
 printf '\n--- initial dmesg tail ---\n'
 dmesg | tail -120 2>/dev/null || true
 printf '\n--- buttons: Vol+ full status, Vol- network/display, Power dmesg tail ---\n'
@@ -1098,6 +1227,7 @@ print_full_status() {
 	printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
 	printf '\n--- network ---\n'
 	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+	ls -la /dev/ttyGS* 2>/dev/null || true
 	print_usb_watchdog_status
 	printf '\n--- display/fb ---\n'
 	ls -la /dev/fb* /dev/dri /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
@@ -1155,6 +1285,7 @@ print_display_network() {
 	printf 'reason: %s\n' "$reason"
 	printf '\n--- network ---\n'
 	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+	ls -la /dev/ttyGS* 2>/dev/null || true
 	printf '\n--- routes ---\n'
 	ip route 2>/dev/null || true
 	print_usb_watchdog_status
@@ -1589,6 +1720,115 @@ HOTDOG_TTY_KMSG_CONSOLE_SH
 	chmod 0755 "$helper"
 }
 
+write_hotdog_usb_acm_getty_helper() {
+	local helper="$initramfs_tree/hotdog_usb_acm_getty.sh"
+
+	cat > "$helper" <<'HOTDOG_USB_ACM_GETTY_SH'
+#!/bin/busybox ash
+
+hotdog_usb_acm_log() {
+	local msg="$*"
+	[ -e /dev/kmsg ] && printf '%s\n' "[hotdog-usb-acm] $msg" > /dev/kmsg 2>/dev/null || true
+	printf '%s\n' "[hotdog-usb-acm] $msg" 2>/dev/null || true
+}
+
+hotdog_usb_acm_mark() {
+	mkdir -p /tmp 2>/dev/null || true
+	: > /tmp/hotdog_rescue_watchdog.usb-acm 2>/dev/null || true
+	hotdog_usb_acm_log "marker: usb-acm"
+}
+
+hotdog_usb_acm_install_shell() {
+	cat > /sbin/hotdog_acm_shell <<'EOF' 2>/dev/null || true
+#!/bin/sh
+[ -r /etc/profile ] && . /etc/profile
+printf 'hotdog initramfs USB ACM shell\n'
+printf 'tty: ttyGS0\n'
+printf 'cmdline: '
+cat /proc/cmdline 2>/dev/null || true
+printf '\n'
+printf 'Useful commands: cat /pmOS_init.log; dmesg | tail; pmos_continue_boot\n'
+exec /bin/sh -l
+EOF
+	chmod 0755 /sbin/hotdog_acm_shell 2>/dev/null || true
+
+	cat > /sbin/pmos_getty <<'EOF' 2>/dev/null || true
+#!/bin/sh
+exec /sbin/hotdog_acm_shell
+EOF
+	chmod 0755 /sbin/pmos_getty 2>/dev/null || true
+
+	if [ ! -x /sbin/pmos_continue_boot ]; then
+		cat > /sbin/pmos_continue_boot <<'EOF' 2>/dev/null || true
+#!/bin/sh
+echo "Continuing boot..."
+touch /tmp/continue_boot
+pkill -f 'telnetd.*:23' 2>/dev/null || true
+while sleep 1; do :; done
+EOF
+		chmod 0755 /sbin/pmos_continue_boot 2>/dev/null || true
+	fi
+}
+
+hotdog_usb_acm_start_getty_loop() {
+	if type run_getty >/dev/null 2>&1; then
+		run_getty ttyGS0
+	else
+		{
+			while :; do
+				if [ -x /sbin/getty ]; then
+					/sbin/getty -n -l /sbin/hotdog_acm_shell ttyGS0 115200 vt100
+				else
+					/sbin/hotdog_acm_shell </dev/ttyGS0 >/dev/ttyGS0 2>&1
+				fi
+				sleep 1
+			done
+		} &
+	fi
+}
+
+hotdog_usb_acm_getty_start() {
+	local stage="$1"
+
+	[ -e /tmp/hotdog_usb_acm_getty.started ] && return 0
+	: > /tmp/hotdog_usb_acm_getty.started 2>/dev/null || true
+
+	(
+		waited=0
+		[ -r /init_functions.sh ] && . /init_functions.sh
+
+		hotdog_usb_acm_log "arming at $stage"
+		hotdog_usb_acm_install_shell
+
+		if type setup_usb_acm_configfs >/dev/null 2>&1; then
+			setup_usb_acm_configfs || hotdog_usb_acm_log "setup_usb_acm_configfs failed"
+		else
+			hotdog_usb_acm_log "setup_usb_acm_configfs unavailable"
+		fi
+
+		while [ "$waited" -lt 30 ] && [ ! -e /dev/ttyGS0 ]; do
+			mdev -s >/tmp/hotdog-usb-acm-mdev.log 2>&1 || true
+			sleep 1
+			waited=$((waited + 1))
+		done
+
+		if [ -e /dev/ttyGS0 ]; then
+			hotdog_usb_acm_mark
+			hotdog_usb_acm_log "starting getty on ttyGS0 after ${waited}s"
+			hotdog_usb_acm_start_getty_loop
+		else
+			hotdog_usb_acm_log "ttyGS0 did not appear after ${waited}s"
+		fi
+
+		if type setup_usb_configfs_udc >/dev/null 2>&1; then
+			setup_usb_configfs_udc || hotdog_usb_acm_log "setup_usb_configfs_udc failed"
+		fi
+	) &
+}
+HOTDOG_USB_ACM_GETTY_SH
+	chmod 0755 "$helper"
+}
+
 remove_marked_block() {
 	local file="$1"
 	local begin_marker="$2"
@@ -1726,6 +1966,7 @@ patch_init_scripts() {
 	local drm_snippet
 	local drm_stop_snippet
 	local tty_kmsg_snippet
+	local usb_acm_snippet
 	local stage1_snippet
 	local stage2_snippet
 	local usb_snippet
@@ -1758,6 +1999,14 @@ if [ -r /hotdog_rescue_watchdog.sh ]; then
 	hotdog_rescue_direct_debug_shell_start
 fi
 # hotdog rescue watchdog usb marker end'
+
+	usb_acm_snippet='
+# hotdog USB ACM getty begin
+if [ -r /hotdog_usb_acm_getty.sh ]; then
+	. /hotdog_usb_acm_getty.sh
+	hotdog_usb_acm_getty_start initramfs
+fi
+# hotdog USB ACM getty end'
 
 	root_snippet='
 # hotdog rescue watchdog root marker begin
@@ -1825,6 +2074,9 @@ fi
 		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog DRM console begin" "$drm_snippet"
 	fi
 	insert_after_once "$init_file" "start_unudhcpd" "hotdog rescue watchdog usb marker begin" "$usb_snippet"
+	if [ "$usb_acm_getty" -eq 1 ]; then
+		insert_after_once "$init_file" "hotdog rescue watchdog usb marker end" "hotdog USB ACM getty begin" "$usb_acm_snippet"
+	fi
 	if [ "$fb_test" -eq 1 ]; then
 		insert_before_once "$init_file" "mount_subpartitions" "hotdog framebuffer paint test begin" "$fb_snippet"
 	fi
@@ -1840,6 +2092,9 @@ fi
 			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog DRM console begin" "$drm_snippet"
 		fi
 		insert_after_once "$init2_file" "start_unudhcpd" "hotdog rescue watchdog usb marker begin" "$usb_snippet"
+		if [ "$usb_acm_getty" -eq 1 ]; then
+			insert_after_once "$init2_file" "hotdog rescue watchdog usb marker end" "hotdog USB ACM getty begin" "$usb_acm_snippet"
+		fi
 		if [ "$fb_test" -eq 1 ]; then
 			insert_before_once "$init2_file" "setup_dynamic_partitions" "hotdog framebuffer paint test begin" "$fb_snippet"
 		fi
@@ -1952,6 +2207,7 @@ write_manifest() {
 				printf -- '- Ramoops cmdline: disabled\n\n'
 			fi
 			printf -- '- Direct debug shell: `%s`\n' "$direct_debug_shell"
+			printf -- '- USB ACM getty: `%s`\n' "$usb_acm_getty"
 			printf -- '- Framebuffer paint test: `%s`\n' "$fb_test"
 			printf -- '- DRM initramfs console: `%s`\n' "$drm_console"
 			if [ "$drm_console" -eq 1 ]; then
@@ -1996,6 +2252,9 @@ write_manifest() {
 			fi
 			if [ "$direct_debug_shell" -eq 1 ]; then
 				printf ' --direct-debug-shell'
+			fi
+			if [ "$usb_acm_getty" -eq 1 ]; then
+				printf ' --usb-acm-getty'
 			fi
 			if [ "$fb_test" -eq 1 ]; then
 				printf ' --fb-test'
@@ -2113,6 +2372,9 @@ if [ "$fb_test" -eq 1 ]; then
 fi
 if [ "$tty_kmsg_console" -eq 1 ]; then
 	write_hotdog_tty_kmsg_console_helper
+fi
+if [ "$usb_acm_getty" -eq 1 ]; then
+	write_hotdog_usb_acm_getty_helper
 fi
 if [ "$drm_console" -eq 1 ]; then
 	write_hotdog_drm_console_helper

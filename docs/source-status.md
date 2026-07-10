@@ -148,6 +148,19 @@ Le shim losetup local reste utile/defensif pour les initramfs edge Android-devic
 Le rootfs actuel doas-sudo-shim n'exige pas de reflash sudo-rs; sudo -n et doas -n sont deja OK.
 ```
 
+Artefact downstream prioritaire pour le prochain boot :
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-054356-lineage414-r3-acmgetty-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: c10f4705f2809c467e02620d9f7d6a9e6548c4218fec68f1608fedbd93af1b93
+kernel sha256: 8d542f8837950e20ecc17681c330c65303cb35e35345afe7e6a30cfc146c5df1
+dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+initramfs sha256: 0815744fa8aa7e682343cfbd11d125dc917cf4e1d22c4aa58f3fc77dd238439a
+notes: pmaports local pkgrel=3, USB ACM gadget enabled in kernel config, initramfs/rootfs getty on ttyGS0, visible tty autocycle, root watchdog.
+wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
+validation: /home/srobin/dev/hotdog/scripts/validate-current-candidates.sh OK on 2026-07-10 05:45 CEST
+```
+
 Artefact stock-kernel actuellement valide sur `boot_b` :
 
 ```text

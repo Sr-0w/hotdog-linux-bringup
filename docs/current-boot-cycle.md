@@ -442,18 +442,18 @@ PSCI.
    shell text if only KMS works, and finally a tty1/tty0 rootfs status page plus
    a `screen#` prompt if rootfs is reached.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
-   local downstream 4.14 pmaports package as `pkgrel=2` and validated with
-   `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `052210` still
-   reports `No memory resource`, continue in the simplefb resource translation
-   path rather than changing printk cmdline flags. If `052210` fails earlier
-   than `014400`, compare the pmaports kernel Image packaging/config against
-   the boot-proven `215005` kernel.
+   local downstream 4.14 pmaports package. The current local package is
+   `pkgrel=3`, adds USB CDC ACM gadget support, and was validated with
+   `pmbootstrap checksum linux-oneplus-hotdog-lineage414` plus an APK rebuild.
+   The next test keeps the same fixed DTB pack and only changes the kernel
+   config plus initramfs/rootfs access hooks.
 5. Keep using `scripts/build-hotdog-drm-console-helper.sh` to regenerate the
    AArch64 DRM helper before building display-console candidates on a fresh
    host.
 6. Run `scripts/validate-current-candidates.sh` before the next hardware cycle
    after changing wrappers, DTB packs, cmdline, or initramfs helper generation.
-   It validates `052210`, `034200`, and `025400` without phone commands.
+   It validates the current `054356` next candidate, `034200`, and `025400`
+   without phone commands.
 7. The prepared wrapper for the next test is
    `scripts/test-next-lineage414-simplefb-shell.sh`; if pmOS SSH returns first,
    use `scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh`.
@@ -472,20 +472,21 @@ PSCI.
 10. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
-Prepared downstream screen-shell/fbcon candidate:
+Prepared downstream screen-shell/USB-ACM candidate:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: 95293d7914633a1368ab54bbdd6f5c36323523c331027262506af189448fde2b
-kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-054356-lineage414-r3-acmgetty-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: c10f4705f2809c467e02620d9f7d6a9e6548c4218fec68f1608fedbd93af1b93
+kernel sha256: 8d542f8837950e20ecc17681c330c65303cb35e35345afe7e6a30cfc146c5df1
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-initramfs sha256: cab3233877b8f262330096f05cd41ca978d5a0bacf4e051f0caf7d03a8a84af9
+initramfs sha256: 0815744fa8aa7e682343cfbd11d125dc917cf4e1d22c4aa58f3fc77dd238439a
 helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
 tty kmsg console: yes, initramfs helper waits for fb0, prepares fb mode/backlight, writes dmesg/status to tty0/tty1 before DRM helper, then stops before switch_root
-visible tty shell: yes, local.d hook starts `hotdog-visible-tty-shell` on tty1/tty0 after switch_root; Vol+ prints full status, Vol- prints network/display status, Power prints a dmesg tail; autocycle=0 keeps a readable `screen#` prompt with 20s status refreshes
-watchdog: USB carrier/up success only for usb*/rndis*/enx*, visible USB/watchdog status block, sysrq reboot first on timeout
-rootfs watchdog: yes, `/etc/local.d/hotdog-usb-watchdog.start` repeats the USB carrier/up timeout after OpenRC starts
+visible tty shell: yes, local.d hook starts `hotdog-visible-tty-shell` on tty1/tty0 after switch_root; Vol+ prints full status, Vol- prints network/display status, Power prints a dmesg tail; autocycle=1 rotates full/network/dmesg pages every 12s while keeping a `screen#` prompt if input exists
+USB ACM serial fallback: yes, initramfs `hotdog_usb_acm_getty.sh` calls pmOS `setup_usb_acm_configfs`, starts a getty on `ttyGS0`, and rootfs local.d repeats the `ttyGS0` shell setup after switch_root
+direct telnet fallback: yes, starts after USB networking if the network gadget becomes usable
+watchdog: root-mounted/switch-root success mode, sysrq reboot first on timeout
 ```
 
 Prepared secondary splash/fbprep candidate:
