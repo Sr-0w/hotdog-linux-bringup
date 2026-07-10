@@ -35,4 +35,5 @@
 78-mainline-entry-reset-probe-20260710.txt - prepared offline PSCI reset probe patch for testing whether mainline reaches arch/arm64 primary_entry
 79-mainline-entry-ram-marker-probe-20260710.txt - prepared preferred offline RAM marker probe patch writing ENT1/ENT2/SWT3 into the 0xa9800000 ramoops dump window
 80-mainline617-rammarker-candidate-20260710.txt - prepared 022522 boot image with RAM-marker mainline kernel plus the previously tested stock full DTB pack/cmdline shape
-81-drm-console-button-input-candidate-20260710.txt - prepared 023410 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics; next wrapper points here
+81-drm-console-button-input-candidate-20260710.txt - prepared 023410 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics; superseded by 024200
+82-drm-console-button-rescan-candidate-20260710.txt - prepared 024200 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics and periodic input-device rescans; next wrapper points here
