@@ -86,7 +86,9 @@ To seed the curated aport snapshots into a fresh local pmaports checkout:
 For long hardware tests, use `./scripts/start-stable-rescue-watcher.sh` rather
 than a plain shell background job. It starts the rescue watcher with
 `start-stop-daemon`, writes a pidfile under `logs/manual-rescue-watchers/`, and
-survives the parent shell exiting.
+survives the parent shell exiting. The launcher now serializes starts per phone
+serial and refuses duplicate rescue watchers unless `--allow-duplicate` is
+passed intentionally.
 
 ## GitHub notes
 

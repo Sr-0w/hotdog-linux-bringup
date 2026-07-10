@@ -44,3 +44,4 @@
 87-tty-kmsg-screen-candidate-20260710.txt - prepared 033600 downstream pmaports candidate with initramfs tty0/tty1 dmesg/status plus fb0/backlight preparation before the DRM helper
 88-splash-ttykmsg-secondary-20260710.txt - prepared 034200 secondary downstream pmaports candidate with splash cmdline to force pmOS setup_framebuffer before the same tty-kmsg/fbprep diagnostics
 89-button-visible-tty-candidate-20260710.txt - prepared 034500 downstream pmaports candidate with rootfs visible tty status pages controllable by Vol+/Vol-/Power
+90-rescue-watcher-concurrency-20260710.txt - offline rescue watcher concurrency hardening around phone-lock retry, serial-level launcher start lock, and supervisor instance lock

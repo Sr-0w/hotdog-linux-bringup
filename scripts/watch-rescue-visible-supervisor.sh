@@ -10,6 +10,7 @@ TIMEOUT_SEC="${TIMEOUT_SEC:-604800}"
 RESCUE_TIMEOUT_SEC="${RESCUE_TIMEOUT_SEC:-604800}"
 POLL_SEC="${POLL_SEC:-60}"
 LABEL="${LABEL:-stable-guard}"
+ALLOW_DUPLICATE="${ALLOW_DUPLICATE:-0}"
 
 usage() {
   cat <<'USAGE'
@@ -27,6 +28,7 @@ Options:
   --rescue-timeout SEC        Timeout for launched rescue watchers. Default: 604800.
   --poll SEC                  Supervisor poll interval. Default: 60.
   --label NAME                Label passed to start-stable-rescue-watcher. Default: stable-guard.
+  --allow-duplicate           Allow another supervisor for the same serial/label.
   -h, --help                  Show this help.
 USAGE
 }
@@ -67,6 +69,9 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { echo "Missing value for --label" >&2; exit 2; }
       LABEL="$2"
       shift
+      ;;
+    --allow-duplicate)
+      ALLOW_DUPLICATE=1
       ;;
     -h|--help)
       usage
@@ -112,6 +117,52 @@ rescue_running() {
   return 1
 }
 
+safe_name() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.:-' '_'
+}
+
+supervisor_running() {
+  local pid
+  local args
+
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    [ "$pid" != "$$" ] || continue
+    args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+    case "$args" in
+      *"$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"*"--serial $SERIAL"*|*"$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"*"--serial=$SERIAL"*)
+        case "$args" in
+          *"--label $LABEL"*|*"--label=$LABEL"*)
+            printf '%s\n' "$pid"
+            return 0
+            ;;
+        esac
+        ;;
+    esac
+  done < <(pgrep -f "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh" 2>/dev/null || true)
+
+  return 1
+}
+
+acquire_instance_lock() {
+  local owner=""
+
+  while true; do
+    if mkdir "$instance_lock" 2>/dev/null; then
+      printf '%s\n' "$$" > "$instance_lock/pid"
+      return 0
+    fi
+
+    owner="$(sed -n '1p' "$instance_lock/pid" 2>/dev/null || true)"
+    if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then
+      echo "Supervisor instance lock is busy by PID $owner: $instance_lock" >&2
+      return 1
+    fi
+
+    rm -rf "$instance_lock"
+  done
+}
+
 start_rescue() {
   "$HOTDOG_ROOT/scripts/start-stable-rescue-watcher.sh" \
     --serial "$SERIAL" \
@@ -135,6 +186,22 @@ main() {
   run_dir="$HOTDOG_LOG_ROOT/watch-rescue-visible-supervisor-$stamp"
   mkdir -p "$run_dir"
   exec > >(tee "$run_dir/run.log") 2>&1
+
+  safe_serial="$(safe_name "$SERIAL")"
+  safe_label="$(safe_name "$LABEL")"
+  instance_lock="$HOTDOG_LOG_ROOT/manual-rescue-watchers/rescue-supervisor-${safe_serial}-${safe_label}.lock"
+  mkdir -p "$HOTDOG_LOG_ROOT/manual-rescue-watchers"
+  if [ "$ALLOW_DUPLICATE" -ne 1 ]; then
+    running_pid="$(supervisor_running || true)"
+    if [ -n "$running_pid" ]; then
+      log "Supervisor already running for $SERIAL/$LABEL: PID $running_pid"
+      exit 0
+    fi
+  fi
+  if ! acquire_instance_lock; then
+    exit 0
+  fi
+  trap 'rm -rf "$instance_lock"' EXIT
 
   log "Run directory: $run_dir"
   log "Target serial: $SERIAL"

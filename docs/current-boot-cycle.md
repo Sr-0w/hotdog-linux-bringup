@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 03:47 CEST
+Date: 2026-07-10 04:08 CEST
 
 ## Current Status
 
@@ -19,6 +19,7 @@ companion rescue watcher: running, waiting for fastboot or recovery ADB
 rescue supervisor: running, restarts a stable rescue watcher if the current one expires
 pmOS SSH wait/test watcher: running, waiting for SSH before launching 034500
 passive phone-state watcher: running, logging ADB/fastboot/USB changes only
+autopilot hardening: duplicate rescue/supervisor starts now refused by default
 ```
 
 Current validated boot image:
@@ -182,6 +183,12 @@ after restore: system
 supervisor timeout: 604800s
 launched rescue timeout: 604800s
 ```
+
+The scripts have also been hardened offline so future launches do not create
+parallel rescue paths for the same phone by accident: the rescue watcher retries
+if the phone-operation lock is busy, the stable watcher launcher serializes
+starts per phone serial, and the supervisor holds a per-serial/label instance
+lock.
 
 ## Active pmOS SSH Wait/Test Watcher
 
