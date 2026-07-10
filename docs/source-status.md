@@ -151,14 +151,15 @@ Le rootfs actuel doas-sudo-shim n'exige pas de reflash sudo-rs; sudo -n et doas 
 Artefact downstream prioritaire pour le prochain boot :
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-054356-lineage414-r3-acmgetty-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: c10f4705f2809c467e02620d9f7d6a9e6548c4218fec68f1608fedbd93af1b93
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-061200-lineage414-r3-fbdevconsole-acmretry-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 61677f02032308de88b5a08c64c0f3705d9b56c5c45481d5a2616a182991aa27
 kernel sha256: 8d542f8837950e20ecc17681c330c65303cb35e35345afe7e6a30cfc146c5df1
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-initramfs sha256: 0815744fa8aa7e682343cfbd11d125dc917cf4e1d22c4aa58f3fc77dd238439a
-notes: pmaports local pkgrel=3, USB ACM gadget enabled in kernel config, initramfs/rootfs getty on ttyGS0, visible tty autocycle, root watchdog.
+initramfs sha256: 84873c5fe7dfb3b420d9a389db31e47ea0e7d9720c4f6abbe5168f314c3abfbf
+helper sha256: b00ccd3b07751d4644242c195525c5d9d4e17709b77d70b27a0efd3cbb3362ec
+notes: pmaports local pkgrel=3, USB ACM gadget enabled in kernel config, initramfs fbdev text console on /dev/fb0, stronger initramfs/rootfs ttyGS0 ACM retry, visible tty autocycle, root watchdog.
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
-validation: /home/srobin/dev/hotdog/scripts/validate-current-candidates.sh OK on 2026-07-10 05:45 CEST
+validation: /home/srobin/dev/hotdog/scripts/validate-current-candidates.sh OK on 2026-07-10 06:13 CEST
 ```
 
 Artefact stock-kernel actuellement valide sur `boot_b` :

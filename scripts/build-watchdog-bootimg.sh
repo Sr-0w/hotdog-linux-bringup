@@ -37,6 +37,9 @@ Options:
   --fb-test
                      Paint /dev/fb0 from initramfs when it appears. This is
                      an opt-in visual diagnostic for simplefb/fbcon bring-up.
+  --fbdev-console
+                     Start a PSF text console directly on /dev/fb0 from
+                     initramfs when fbcon is not taking over the screen.
   --drm-console
                      Start a DRM text console from initramfs as soon as
                      /dev/dri/card0 appears, then stop it before switch_root.
@@ -110,6 +113,7 @@ with_ramoops_cmdline=0
 direct_debug_shell=0
 usb_acm_getty=0
 fb_test=0
+fbdev_console=0
 drm_console=0
 drm_console_userspace=0
 tty_kmsg_console=0
@@ -172,6 +176,9 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--fb-test)
 			fb_test=1
+			;;
+		--fbdev-console)
+			fbdev_console=1
 			;;
 		--drm-console)
 			drm_console=1
@@ -280,7 +287,7 @@ done
 require_file "$source_boot"
 [ -z "$kernel_override" ] || require_file "$kernel_override"
 [ -z "$dtb_override" ] || require_file "$dtb_override"
-if [ "$drm_console" -eq 1 ]; then
+if [ "$drm_console" -eq 1 ] || [ "$fbdev_console" -eq 1 ]; then
 	if [ ! -f "$drm_console_helper" ] && [ "$drm_console_helper" = "$default_drm_console_helper" ]; then
 		"$script_dir/build-hotdog-drm-console-helper.sh" --output "$drm_console_helper"
 	fi
@@ -944,7 +951,10 @@ exec /bin/sh -l
 SHELL_EOF
 	chmod 0755 "$shell" 2>/dev/null || true
 
-	while [ "$i" -lt 90 ] && [ ! -e /dev/ttyGS0 ]; do
+	while [ "$i" -lt 120 ] && [ ! -e /dev/ttyGS0 ]; do
+		if [ $((i % 5)) -eq 0 ]; then
+			ensure_acm_configfs >/tmp/hotdog-rootfs-usb-acm-retry.log 2>&1 || true
+		fi
 		sleep 1
 		i=$((i + 1))
 	done
@@ -1805,9 +1815,15 @@ hotdog_usb_acm_getty_start() {
 		else
 			hotdog_usb_acm_log "setup_usb_acm_configfs unavailable"
 		fi
+		if type setup_usb_configfs_udc >/dev/null 2>&1; then
+			setup_usb_configfs_udc || hotdog_usb_acm_log "setup_usb_configfs_udc failed before ttyGS0 wait"
+		fi
 
-		while [ "$waited" -lt 30 ] && [ ! -e /dev/ttyGS0 ]; do
+		while [ "$waited" -lt 120 ] && [ ! -e /dev/ttyGS0 ]; do
 			mdev -s >/tmp/hotdog-usb-acm-mdev.log 2>&1 || true
+			if [ $((waited % 5)) -eq 0 ] && type setup_usb_configfs_udc >/dev/null 2>&1; then
+				setup_usb_configfs_udc >/tmp/hotdog-usb-acm-udc-retry.log 2>&1 || true
+			fi
 			sleep 1
 			waited=$((waited + 1))
 		done
@@ -1826,6 +1842,122 @@ hotdog_usb_acm_getty_start() {
 	) &
 }
 HOTDOG_USB_ACM_GETTY_SH
+	chmod 0755 "$helper"
+}
+
+write_hotdog_fbdev_console_helper() {
+	local helper="$initramfs_tree/hotdog_fbdev_console_start.sh"
+
+	install -m 0755 "$drm_console_helper" "$initramfs_tree/usr/bin/hotdog-drm-console"
+
+	cat > "$helper" <<'HOTDOG_FBDEV_CONSOLE_SH'
+#!/bin/busybox ash
+
+hotdog_fbdev_console_log() {
+	local msg="$*"
+	[ -e /dev/kmsg ] && printf '%s\n' "[hotdog-fbdev-console] $msg" > /dev/kmsg 2>/dev/null || true
+	printf '%s\n' "[hotdog-fbdev-console] $msg" 2>/dev/null || true
+}
+
+hotdog_fbdev_console_make_node() {
+	local dev major minor node
+
+	[ -e /dev/fb0 ] && return 0
+	mdev -s >/tmp/hotdog-fbdev-console-mdev.log 2>&1 || true
+	[ -e /dev/fb0 ] && return 0
+
+	for node in /sys/class/graphics/fb0/dev /sys/devices/virtual/graphics/fb0/dev; do
+		[ -r "$node" ] || continue
+		dev="$(cat "$node" 2>/dev/null || true)"
+		major="${dev%:*}"
+		minor="${dev#*:}"
+		case "$major:$minor" in
+			*[!0-9:]*|:|*:)
+				continue
+				;;
+		esac
+		mknod /dev/fb0 c "$major" "$minor" 2>/dev/null || true
+		[ -e /dev/fb0 ] && return 0
+	done
+
+	return 1
+}
+
+hotdog_fbdev_console_prepare_display() {
+	local d mode
+
+	if [ -r /sys/class/graphics/fb0/modes ] && [ -w /sys/class/graphics/fb0/mode ]; then
+		mode="$(cat /sys/class/graphics/fb0/mode 2>/dev/null || true)"
+		if [ -z "$mode" ]; then
+			mode="$(sed -n '1p' /sys/class/graphics/fb0/modes 2>/dev/null || true)"
+			[ -n "$mode" ] && echo "$mode" > /sys/class/graphics/fb0/mode 2>/dev/null || true
+		fi
+	fi
+
+	for d in /sys/class/backlight/*; do
+		[ -w "$d/bl_power" ] && echo 0 > "$d/bl_power" 2>/dev/null || true
+		if [ -r "$d/max_brightness" ] && [ -w "$d/brightness" ]; then
+			cat "$d/max_brightness" > "$d/brightness" 2>/dev/null || true
+		fi
+	done
+}
+
+hotdog_fbdev_console_prepare_font() {
+	if [ -r /usr/share/consolefonts/ter-v32n.psf.gz ]; then
+		gzip -dc /usr/share/consolefonts/ter-v32n.psf.gz > /tmp/hotdog-ter-v32n.psf 2>/dev/null || true
+	fi
+	[ -s /tmp/hotdog-ter-v32n.psf ]
+}
+
+hotdog_fbdev_console_stop() {
+	local pid
+
+	if [ -r /tmp/hotdog_fbdev_console.pid ]; then
+		pid="$(cat /tmp/hotdog_fbdev_console.pid 2>/dev/null || true)"
+		[ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+		rm -f /tmp/hotdog_fbdev_console.pid
+	fi
+	rm -f /tmp/hotdog_fbdev_console.waiting 2>/dev/null || true
+	hotdog_fbdev_console_log "stopped fbdev console"
+}
+
+hotdog_fbdev_console_start() {
+	local stage="$1"
+
+	[ -x /usr/bin/hotdog-drm-console ] || {
+		hotdog_fbdev_console_log "missing /usr/bin/hotdog-drm-console"
+		return 0
+	}
+	[ -e /tmp/hotdog_fbdev_console.waiting ] && return 0
+	: > /tmp/hotdog_fbdev_console.waiting 2>/dev/null || true
+
+	(
+		waited=0
+		while [ "$waited" -lt 90 ]; do
+			if hotdog_fbdev_console_make_node; then
+				hotdog_fbdev_console_prepare_display
+				hotdog_fbdev_console_prepare_font || {
+					hotdog_fbdev_console_log "missing PSF font"
+					exit 0
+				}
+				hotdog_fbdev_console_log "starting fbdev command shell at $stage after ${waited}s"
+				/usr/bin/hotdog-drm-console \
+					--fbdev /dev/fb0 \
+					--font /tmp/hotdog-ter-v32n.psf \
+					--fifo /tmp/hotdog-fbdev-console.in \
+					--transcript /tmp/hotdog-fbdev-console.transcript \
+					--command "export TERM=dumb; PS1='fbdev# '; export PS1; printf '\n--- hotdog initramfs fbdev command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- framebuffer state ---\n'; cat /proc/fb 2>/dev/null || true; ls -la /dev/fb* /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -120; printf '\n--- starting background dmesg follower every 4s ---\n'; (i=0; while :; do sleep 4; printf '\n--- fbdev dmesg follow %s ---\n' \"\$i\"; date 2>/dev/null || true; dmesg | tail -90; i=\$((i + 1)); done) & printf 'follower pid: %s\n' \"\$!\"; printf '\n--- ready: commands are read from /tmp/hotdog-fbdev-console.in ---\n'" \
+					>/tmp/hotdog-fbdev-console.log 2>&1 &
+				echo $! > /tmp/hotdog_fbdev_console.pid
+				exit 0
+			fi
+			sleep 1
+			waited=$((waited + 1))
+		done
+		hotdog_fbdev_console_log "no /dev/fb0 by $stage"
+	) &
+}
+HOTDOG_FBDEV_CONSOLE_SH
 	chmod 0755 "$helper"
 }
 
@@ -1859,12 +1991,15 @@ strip_inherited_drm_console() {
 
 	rm -f \
 		"$initramfs_tree/hotdog_drm_console_start.sh" \
+		"$initramfs_tree/hotdog_fbdev_console_start.sh" \
 		"$initramfs_tree/usr/bin/hotdog-drm-console" \
 		2>/dev/null || true
 
 	for init_file in "$initramfs_tree/init" "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
 		remove_marked_block "$init_file" "hotdog DRM console begin" "hotdog DRM console end"
 		remove_marked_block "$init_file" "hotdog DRM console switch-root stop begin" "hotdog DRM console switch-root stop end"
+		remove_marked_block "$init_file" "hotdog fbdev console begin" "hotdog fbdev console end"
+		remove_marked_block "$init_file" "hotdog fbdev console switch-root stop begin" "hotdog fbdev console switch-root stop end"
 	done
 }
 
@@ -1963,6 +2098,8 @@ patch_init_scripts() {
 	local init_file="$initramfs_tree/init"
 	local init2_file
 	local fb_snippet
+	local fbdev_console_snippet
+	local fbdev_console_stop_snippet
 	local drm_snippet
 	local drm_stop_snippet
 	local tty_kmsg_snippet
@@ -2032,6 +2169,10 @@ if [ -r /hotdog_drm_console_start.sh ]; then
 	. /hotdog_drm_console_start.sh
 	hotdog_drm_console_stop
 fi
+if [ -r /hotdog_fbdev_console_start.sh ]; then
+	. /hotdog_fbdev_console_start.sh
+	hotdog_fbdev_console_stop
+fi
 # hotdog rescue watchdog switch-root marker end'
 
 	fb_snippet='
@@ -2050,6 +2191,14 @@ if [ -r /hotdog_tty_kmsg_console.sh ]; then
 fi
 # hotdog tty kmsg console end'
 
+	fbdev_console_snippet='
+# hotdog fbdev console begin
+if [ -r /hotdog_fbdev_console_start.sh ]; then
+	. /hotdog_fbdev_console_start.sh
+	hotdog_fbdev_console_start initramfs
+fi
+# hotdog fbdev console end'
+
 	drm_snippet='
 # hotdog DRM console begin
 if [ -r /hotdog_drm_console_start.sh ]; then
@@ -2066,7 +2215,18 @@ if [ -r /hotdog_drm_console_start.sh ]; then
 fi
 # hotdog DRM console switch-root stop end'
 
+	fbdev_console_stop_snippet='
+# hotdog fbdev console switch-root stop begin
+if [ -r /hotdog_fbdev_console_start.sh ]; then
+	. /hotdog_fbdev_console_start.sh
+	hotdog_fbdev_console_stop
+fi
+# hotdog fbdev console switch-root stop end'
+
 	insert_after_once "$init_file" "mount_proc_sys_dev" "hotdog rescue watchdog stage1 begin" "$stage1_snippet"
+	if [ "$fbdev_console" -eq 1 ]; then
+		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog fbdev console begin" "$fbdev_console_snippet"
+	fi
 	if [ "$tty_kmsg_console" -eq 1 ]; then
 		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog tty kmsg console begin" "$tty_kmsg_snippet"
 	fi
@@ -2085,6 +2245,9 @@ fi
 		[ -f "$init2_file" ] || continue
 		remove_marked_block "$init2_file" "hotdog rescue watchdog switch-root marker begin" "hotdog rescue watchdog switch-root marker end"
 		insert_after_once "$init2_file" "trap 'reboot -f' TERM" "hotdog rescue watchdog stage2 begin" "$stage2_snippet"
+		if [ "$fbdev_console" -eq 1 ]; then
+			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog fbdev console begin" "$fbdev_console_snippet"
+		fi
 		if [ "$tty_kmsg_console" -eq 1 ]; then
 			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog tty kmsg console begin" "$tty_kmsg_snippet"
 		fi
@@ -2100,6 +2263,9 @@ fi
 		fi
 		insert_after_once "$init2_file" "mount_root_partition" "hotdog rescue watchdog root marker begin" "$root_snippet"
 		insert_before_once "$init2_file" "exec switch_root /sysroot" "hotdog rescue watchdog switch-root marker begin" "$switch_snippet"
+		if [ "$fbdev_console" -eq 1 ]; then
+			insert_before_once "$init2_file" "exec switch_root /sysroot" "hotdog fbdev console switch-root stop begin" "$fbdev_console_stop_snippet"
+		fi
 		if [ "$drm_console" -eq 1 ]; then
 			insert_before_once "$init2_file" "exec switch_root /sysroot" "hotdog DRM console switch-root stop begin" "$drm_stop_snippet"
 		fi
@@ -2209,9 +2375,10 @@ write_manifest() {
 			printf -- '- Direct debug shell: `%s`\n' "$direct_debug_shell"
 			printf -- '- USB ACM getty: `%s`\n' "$usb_acm_getty"
 			printf -- '- Framebuffer paint test: `%s`\n' "$fb_test"
+			printf -- '- FBDEV initramfs console: `%s`\n' "$fbdev_console"
 			printf -- '- DRM initramfs console: `%s`\n' "$drm_console"
-			if [ "$drm_console" -eq 1 ]; then
-				printf -- '- DRM console helper: `%s`\n' "$drm_console_helper"
+			if [ "$drm_console" -eq 1 ] || [ "$fbdev_console" -eq 1 ]; then
+				printf -- '- Console helper: `%s`\n' "$drm_console_helper"
 			fi
 			printf -- '- TTY kmsg console: `%s`\n' "$tty_kmsg_console"
 			printf -- '- Visible tty shell: `%s`\n' "$visible_tty_shell"
@@ -2258,6 +2425,9 @@ write_manifest() {
 			fi
 			if [ "$fb_test" -eq 1 ]; then
 				printf ' --fb-test'
+			fi
+			if [ "$fbdev_console" -eq 1 ]; then
+				printf ' --fbdev-console'
 			fi
 			if [ "$drm_console" -eq 1 ]; then
 				printf ' --drm-console --drm-console-helper %q' "$drm_console_helper"
@@ -2375,6 +2545,9 @@ if [ "$tty_kmsg_console" -eq 1 ]; then
 fi
 if [ "$usb_acm_getty" -eq 1 ]; then
 	write_hotdog_usb_acm_getty_helper
+fi
+if [ "$fbdev_console" -eq 1 ]; then
+	write_hotdog_fbdev_console_helper
 fi
 if [ "$drm_console" -eq 1 ]; then
 	write_hotdog_drm_console_helper

@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 05:23 CEST
+Date: 2026-07-10 06:10 CEST
 
 ## Current Status
 
@@ -17,7 +17,7 @@ host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
 rescue supervisor: running, restarts a stable rescue watcher if the current one expires
-pmOS SSH wait/test watcher: running, waiting for SSH before launching 052210
+pmOS SSH wait/test watcher: running, waiting for SSH before launching 061200
 passive phone-state watcher: running, logging ADB/fastboot/USB and host kernel USB-log changes
 autopilot hardening: duplicate rescue/supervisor starts now refused by default
 USB rescue guard: running, no EDL writes, can run beside rescue-visible because fastboot restore now takes phone-operation.lock
@@ -218,7 +218,7 @@ edl write: 0
 
 A detached wrapper is also waiting for pmOS SSH. It does not touch the phone
 until SSH at `172.16.42.1` returns. If the rescue watcher restores `215005` and
-pmOS SSH comes back, this wrapper launches the prepared `052210` test with
+pmOS SSH comes back, this wrapper launches the prepared `061200` test with
 `--from-pmos-ssh`:
 
 ```text
@@ -226,7 +226,7 @@ pid: 1409621
 launcher log: /home/srobin/dev/hotdog/logs/wait-and-test-lineage414-simplefb-shell-2026-07-10-013426/launcher.log
 wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-simplefb-shell-2026-07-10-013426/run.log
 script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
-next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt/boot-noefi-pmosdtb-watchdog-300s.img
+next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-061200-lineage414-r3-fbdevconsole-acmretry-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 ```
 
@@ -252,45 +252,26 @@ even when `lsusb` stays empty.
 ## Prepared Kernel-Console Candidate
 
 Built but not flashed yet because the phone is still not visible over USB.
-The current automatic next candidate is `052210`. It supersedes `051407` while
-keeping the same local pmaports `pkgrel=2` kernel config with `VT`,
-`FB_SIMPLE`, `FRAMEBUFFER_CONSOLE`, and `DRM_FBDEV_EMULATION` enabled. It also
-keeps the fixed entry12 `/chosen ranges;` DTB pack, the initramfs watchdog, the
-`fb-test`, the DRM helper with Vol+/Vol- diagnostics, and the rootfs
-`hotdog-visible-tty-shell` local.d hook. Inherited from `033600`: an initramfs
-`hotdog_tty_kmsg_console` starts before the DRM helper, waits for `/dev/fb0`,
-sets an empty framebuffer mode when possible, boosts backlight, then writes
-dmesg/status to `/dev/tty0`, `/dev/tty1`, or `/dev/console`. If
-fbcon/simplefb is usable before DRM, the screen should show kernel-log text
-before the DRM console. Inherited from `034500`: the rootfs visible tty page can
-be controlled with phone buttons when no USB input exists. Inherited from
-`044715`: USB
-watchdog success requires a carrier/up USB network interface; a configured
-gadget/UDC alone no longer stops the 300s timeout reboot. Inherited from
-`045402`: the visible rootfs page prints `usb/watchdog` status with carrier,
-operstate, interface address, and watchdog markers. Inherited from `050008`: generic
-`eth*` interfaces no longer count as USB watchdog success; only `usb*`,
-`rndis*`, and `enx*` are considered. Inherited from `051407`: the initramfs
-`hotdog_tty_kmsg_console` writes kernel text during early boot, records a pid,
-and is stopped just before `switch_root` so the rootfs `screen#` prompt is not
-painted over. The visible rootfs shell is prompt-first (`autocycle=0`) with a
-20s status follower. New in `052210`: the initramfs watchdog records a pid and
-can rearm after pmOS kills background shells before `switch_root`, and the
-rootfs installs `hotdog-usb-watchdog.start` so the USB watchdog continues after
-OpenRC starts:
+The current automatic next candidate is `061200`. It supersedes `054356` and
+the older `052210` path by keeping the `pkgrel=3` kernel/DTB/root watchdog/ACM
+shape, but replacing the initramfs tty-kmsg experiment with a direct fbdev text
+renderer. The helper now supports `--fbdev /dev/fb0`, loads a PSF font, renders
+shell output directly into the framebuffer, follows dmesg every 4s, and stops
+before `switch_root` so the rootfs visible tty shell can take over. Compared
+with `060600`, it binds/retries the USB configfs UDC while waiting for `ttyGS0`.
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: 95293d7914633a1368ab54bbdd6f5c36323523c331027262506af189448fde2b
-kernel override: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/vmlinuz
-kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
-dtb pack: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-061200-lineage414-r3-fbdevconsole-acmretry-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 61677f02032308de88b5a08c64c0f3705d9b56c5c45481d5a2616a182991aa27
+kernel override: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r3/boot/vmlinuz
+kernel sha256: 8d542f8837950e20ecc17681c330c65303cb35e35345afe7e6a30cfc146c5df1
+dtb pack: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r3/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-DRM helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
+console helper sha256: b00ccd3b07751d4644242c195525c5d9d4e17709b77d70b27a0efd3cbb3362ec
 base image: 215005 validated downstream 4.14 DRM-console boot image
-options: --kernel pmaports-r2 --dtb fixed-entry12 --fb-test --tty-kmsg-console --drm-console-userspace --visible-tty-shell --with-ramoops-cmdline --watchdog-success usb --extra-cmdline 'loglevel=8 fbcon=map:0 fbcon=font:VGA8x16 fbcon=vc:1-1'
-initramfs sha256: cab3233877b8f262330096f05cd41ca978d5a0bacf4e051f0caf7d03a8a84af9
-expected new signal: tty0/tty1 dmesg/status text if fbcon/simplefb binds, DRM helper text if only KMS/DRM works, then the initramfs tty follower stops before `switch_root` and a visible rootfs `screen#` prompt/status page appears. If no USB carrier/up state appears, either the rearmed initramfs watchdog or the rootfs local.d watchdog should reboot instead of staying stuck.
+options: --kernel pmaports-r3 --dtb fixed-entry12 --fbdev-console --usb-acm-getty --visible-tty-shell --visible-tty-autocycle --direct-debug-shell --with-ramoops-cmdline --watchdog-success root --strip-drm-console --extra-cmdline 'loglevel=8 ignore_loglevel fbcon=map:0 fbcon=font:VGA8x16 fbcon=vc:1-1'
+initramfs sha256: 84873c5fe7dfb3b420d9a389db31e47ea0e7d9720c4f6abbe5168f314c3abfbf
+expected new signal: fbdev-rendered initramfs dmesg/status text if /dev/fb0 appears, USB ACM serial shell if ttyGS0 enumerates after configfs/UDC retry, then a visible rootfs `screen#` page if switch_root succeeds.
 ```
 
 DTB-pack verification note: the payload is a concatenated 20-entry Android DTB
@@ -299,11 +280,11 @@ for this phone. Use:
 
 ```text
 /home/srobin/dev/hotdog/scripts/inspect-dtb-pack-simplefb.sh \
-  --dtb /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt/components/dtb \
+  --dtb /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-061200-lineage414-r3-fbdevconsole-acmretry-visibletty-rootwatchdog/components/dtb \
   --entry 12
 ```
 
-The verified `052210` entry 12 result is:
+The verified `061200` entry 12 result is:
 
 ```text
 entries=20
@@ -373,11 +354,9 @@ memory resource`; the reliable screen path is the DRM/KMS helper after
 multi-DTB-pack entry12 simplefb node was missing `ranges;` below `/chosen`,
 while older single-DTB experiments that looked healthier did include it. The
 `014400` image is the isolated ramdisk/DTB-only fallback for that fix, while
-`052210` tests the pmaports kernel config required for fbcon with the most useful
-screen-side diagnostics, an initramfs tty-kmsg/fbprep follower that stops before
-`switch_root`, and a prompt-first rootfs visible tty shell with button-triggered
-status pages plus a rootfs USB watchdog. `025400` is the stricter no-DRM-helper
-isolation test.
+`060600` tests the pmaports r3 kernel plus direct fbdev text rendering for the
+next screen-only diagnostic path. It keeps the visible rootfs tty shell and USB
+ACM fallback. `025400` remains the stricter no-DRM-helper fbcon isolation test.
 
 ## Last Mainline Test
 
@@ -427,20 +406,16 @@ PSCI.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Test the prepared downstream `052210` image once the phone is back in a
-   commandable state. It keeps the `024200` pmaports kernel/DTB/cmdline shape
-   and adds an initramfs tty-kmsg/fbprep follower plus a visible rootfs tty
-   shell/status follower controllable with Vol+/Vol-/Power on top of the local
-   DRM Vol+/Vol- diagnostics and periodic input-device rescan. Compared with
-   `051407`, it also rearms the initramfs watchdog after pmOS kills background
-   shells, and installs a rootfs `local.d` USB watchdog. It keeps carrier/up USB
-   watchdog success, visible `usb/watchdog` status, and the `usb*`, `rndis*`,
-   `enx*` success filter so a generic `eth*` interface cannot stop the rescue
-   reboot.
-   Expected observations: tty0/tty1 kernel-log text if simplefb/fbcon binds,
-   early framebuffer color paint if `/dev/fb0` appears, then the DRM command
-   shell text if only KMS works, and finally a tty1/tty0 rootfs status page plus
-   a `screen#` prompt if rootfs is reached.
+3. Test the prepared downstream `060600` image once the phone is back in a
+   commandable state. It keeps the `pkgrel=3` pmaports kernel/DTB/cmdline shape,
+   but replaces the fragile initramfs tty-kmsg path with a direct fbdev PSF text
+   console on `/dev/fb0`. That should show dmesg/status as soon as fb0 exists
+   even if fbcon never takes over the boot console. It also keeps direct telnet
+   after USB networking, USB ACM `ttyGS0` getty fallback, and the rootfs visible
+   tty auto-cycle shell after `switch_root`.
+   Expected observations: fbdev-rendered initramfs text if `/dev/fb0` appears,
+   then a tty1/tty0 rootfs status page plus a `screen#` prompt if rootfs is
+   reached. If USB ACM enumerates, the host watcher captures `/dev/ttyACM*`.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
    local downstream 4.14 pmaports package. The current local package is
    `pkgrel=3`, adds USB CDC ACM gadget support, and was validated with
@@ -452,7 +427,7 @@ PSCI.
    host.
 6. Run `scripts/validate-current-candidates.sh` before the next hardware cycle
    after changing wrappers, DTB packs, cmdline, or initramfs helper generation.
-   It validates the current `054356` next candidate, `034200`, and `025400`
+   It validates the current `061200` next candidate, `034200`, and `025400`
    without phone commands.
 7. The prepared wrapper for the next test is
    `scripts/test-next-lineage414-simplefb-shell.sh`; if pmOS SSH returns first,
@@ -472,17 +447,18 @@ PSCI.
 10. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
-Prepared downstream screen-shell/USB-ACM candidate:
+Prepared downstream fbdev-console/screen-shell/USB-ACM candidate:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-054356-lineage414-r3-acmgetty-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: c10f4705f2809c467e02620d9f7d6a9e6548c4218fec68f1608fedbd93af1b93
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-061200-lineage414-r3-fbdevconsole-acmretry-visibletty-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 61677f02032308de88b5a08c64c0f3705d9b56c5c45481d5a2616a182991aa27
 kernel sha256: 8d542f8837950e20ecc17681c330c65303cb35e35345afe7e6a30cfc146c5df1
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-initramfs sha256: 0815744fa8aa7e682343cfbd11d125dc917cf4e1d22c4aa58f3fc77dd238439a
-helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
+initramfs sha256: 84873c5fe7dfb3b420d9a389db31e47ea0e7d9720c4f6abbe5168f314c3abfbf
+helper sha256: b00ccd3b07751d4644242c195525c5d9d4e17709b77d70b27a0efd3cbb3362ec
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
-tty kmsg console: yes, initramfs helper waits for fb0, prepares fb mode/backlight, writes dmesg/status to tty0/tty1 before DRM helper, then stops before switch_root
+fbdev console: yes, initramfs helper waits for /dev/fb0, prepares mode/backlight/font, renders dmesg/status directly into the framebuffer, and stops before switch_root
+tty kmsg console: no, replaced by direct fbdev rendering for the next test
 visible tty shell: yes, local.d hook starts `hotdog-visible-tty-shell` on tty1/tty0 after switch_root; Vol+ prints full status, Vol- prints network/display status, Power prints a dmesg tail; autocycle=1 rotates full/network/dmesg pages every 12s while keeping a `screen#` prompt if input exists
 USB ACM serial fallback: yes, initramfs `hotdog_usb_acm_getty.sh` calls pmOS `setup_usb_acm_configfs`, starts a getty on `ttyGS0`, and rootfs local.d repeats the `ttyGS0` shell setup after switch_root
 direct telnet fallback: yes, starts after USB networking if the network gadget becomes usable

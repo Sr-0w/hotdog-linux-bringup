@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <linux/fb.h>
 #include <linux/input.h>
 #include <poll.h>
 #include <pty.h>
@@ -38,9 +40,14 @@ struct font {
 struct dumb_fb {
 	uint32_t handle;
 	uint32_t fb_id;
+	uint32_t width;
+	uint32_t height;
 	uint32_t pitch;
 	uint64_t size;
 	uint32_t *map;
+	uint32_t red_offset;
+	uint32_t green_offset;
+	uint32_t blue_offset;
 };
 
 struct drm_state {
@@ -51,6 +58,11 @@ struct drm_state {
 	struct dumb_fb fb[2];
 	unsigned int front;
 	bool active;
+};
+
+struct fbdev_state {
+	int fd;
+	struct dumb_fb fb;
 };
 
 struct terminal {
@@ -66,7 +78,7 @@ struct terminal {
 
 struct input_device {
 	int fd;
-	char path[64];
+	char path[PATH_MAX];
 };
 
 static volatile sig_atomic_t running = 1;
@@ -213,8 +225,13 @@ static void create_fb(struct drm_state *drm, struct dumb_fb *fb)
 		die("DRM_IOCTL_MODE_CREATE_DUMB");
 
 	fb->handle = creq.handle;
+	fb->width = creq.width;
+	fb->height = creq.height;
 	fb->pitch = creq.pitch;
 	fb->size = creq.size;
+	fb->red_offset = 16;
+	fb->green_offset = 8;
+	fb->blue_offset = 0;
 
 	if (drmModeAddFB(drm->fd, creq.width, creq.height, 24, 32, fb->pitch,
 			 fb->handle, &fb->fb_id) != 0)
@@ -294,15 +311,63 @@ static void drm_cleanup(struct drm_state *drm)
 		close(drm->fd);
 }
 
-static uint32_t rgb(unsigned int r, unsigned int g, unsigned int b)
+static int fbdev_init(struct fbdev_state *fbdev, const char *device)
 {
-	return ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
+	struct fb_var_screeninfo var;
+	struct fb_fix_screeninfo fix;
+	uint64_t map_size;
+
+	memset(fbdev, 0, sizeof(*fbdev));
+	fbdev->fd = open(device, O_RDWR | O_CLOEXEC);
+	if (fbdev->fd < 0)
+		return -1;
+
+	if (ioctl(fbdev->fd, FBIOGET_VSCREENINFO, &var) < 0)
+		return -1;
+	if (ioctl(fbdev->fd, FBIOGET_FSCREENINFO, &fix) < 0)
+		return -1;
+	if (var.bits_per_pixel != 32) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	fbdev->fb.width = var.xres;
+	fbdev->fb.height = var.yres;
+	fbdev->fb.pitch = fix.line_length;
+	map_size = fix.smem_len;
+	if (map_size < (uint64_t)fix.line_length * var.yres)
+		map_size = (uint64_t)fix.line_length * var.yres;
+	fbdev->fb.size = map_size;
+	fbdev->fb.red_offset = var.red.offset;
+	fbdev->fb.green_offset = var.green.offset;
+	fbdev->fb.blue_offset = var.blue.offset;
+	fbdev->fb.map = mmap(NULL, fbdev->fb.size, PROT_READ | PROT_WRITE, MAP_SHARED,
+			      fbdev->fd, 0);
+	if (fbdev->fb.map == MAP_FAILED)
+		return -1;
+	return 0;
 }
 
-static void clear_fb(struct drm_state *drm, struct dumb_fb *fb, uint32_t color)
+static void fbdev_cleanup(struct fbdev_state *fbdev)
 {
-	unsigned int width = drm->mode.hdisplay;
-	unsigned int height = drm->mode.vdisplay;
+	if (fbdev->fb.map && fbdev->fb.map != MAP_FAILED)
+		munmap(fbdev->fb.map, fbdev->fb.size);
+	if (fbdev->fd >= 0)
+		close(fbdev->fd);
+	memset(fbdev, 0, sizeof(*fbdev));
+}
+
+static uint32_t fb_rgb(struct dumb_fb *fb, unsigned int r, unsigned int g, unsigned int b)
+{
+	return ((r & 0xff) << fb->red_offset) |
+	       ((g & 0xff) << fb->green_offset) |
+	       ((b & 0xff) << fb->blue_offset);
+}
+
+static void clear_fb(struct dumb_fb *fb, uint32_t color)
+{
+	unsigned int width = fb->width;
+	unsigned int height = fb->height;
 	unsigned int stride = fb->pitch / 4;
 
 	for (unsigned int y = 0; y < height; y++) {
@@ -312,7 +377,7 @@ static void clear_fb(struct drm_state *drm, struct dumb_fb *fb, uint32_t color)
 	}
 }
 
-static void draw_glyph(struct drm_state *drm, struct dumb_fb *fb, struct font *font,
+static void draw_glyph(struct dumb_fb *fb, struct font *font,
 		       unsigned int x, unsigned int y, unsigned char ch,
 		       uint32_t fg, uint32_t bg)
 {
@@ -322,11 +387,11 @@ static void draw_glyph(struct drm_state *drm, struct dumb_fb *fb, struct font *f
 	unsigned char *src = font->data + glyph * font->bytes_per_glyph;
 
 	for (unsigned int gy = 0; gy < font->height; gy++) {
-		if (y + gy >= drm->mode.vdisplay)
+		if (y + gy >= fb->height)
 			break;
 		uint32_t *dst = fb->map + (y + gy) * stride + x;
 		for (unsigned int gx = 0; gx < font->width; gx++) {
-			if (x + gx >= drm->mode.hdisplay)
+			if (x + gx >= fb->width)
 				break;
 			unsigned char byte = src[gy * bytes_per_row + gx / 8];
 			bool on = byte & (0x80 >> (gx % 8));
@@ -421,24 +486,30 @@ static void term_write_cstr(struct terminal *term, const char *s)
 	term_write(term, s, (ssize_t)strlen(s));
 }
 
-static void render(struct drm_state *drm, struct font *font, struct terminal *term)
+static void render_to_fb(struct dumb_fb *fb, struct font *font, struct terminal *term)
 {
-	struct dumb_fb *fb = &drm->fb[0];
 	unsigned int margin_x = 16;
 	unsigned int margin_y = 16;
-	uint32_t bg = rgb(0, 0, 0);
-	uint32_t fg = rgb(225, 255, 225);
-	uint32_t header = rgb(120, 255, 120);
+	uint32_t bg = fb_rgb(fb, 0, 0, 0);
+	uint32_t fg = fb_rgb(fb, 225, 255, 225);
+	uint32_t header = fb_rgb(fb, 120, 255, 120);
 
-	clear_fb(drm, fb, bg);
+	clear_fb(fb, bg);
 	for (unsigned int row = 0; row < term->rows; row++) {
 		for (unsigned int col = 0; col < term->cols; col++) {
 			unsigned char ch = (unsigned char)term->cells[(size_t)row * term->cols + col];
 			uint32_t color = row < 3 ? header : fg;
-			draw_glyph(drm, fb, font, margin_x + col * font->width,
+			draw_glyph(fb, font, margin_x + col * font->width,
 				   margin_y + row * font->height, ch, color, bg);
 		}
 	}
+}
+
+static void render(struct drm_state *drm, struct font *font, struct terminal *term)
+{
+	struct dumb_fb *fb = &drm->fb[0];
+
+	render_to_fb(fb, font, term);
 
 	drmModeDirtyFB(drm->fd, fb->fb_id, NULL, 0);
 	if (!drm->active) {
@@ -447,6 +518,12 @@ static void render(struct drm_state *drm, struct font *font, struct terminal *te
 			die("drmModeSetCrtc");
 		drm->active = true;
 	}
+}
+
+static void render_fbdev(struct fbdev_state *fbdev, struct font *font, struct terminal *term)
+{
+	render_to_fb(&fbdev->fb, font, term);
+	msync(fbdev->fb.map, fbdev->fb.size, MS_ASYNC);
 }
 
 static int spawn_shell(int *pty_master)
@@ -610,10 +687,12 @@ int main(int argc, char **argv)
 	const char *font_path = "/tmp/hotdog-ter-v32n.psf";
 	const char *fifo_path = "/tmp/hotdog-drm-console.in";
 	const char *transcript_path = "/tmp/hotdog-drm-console.transcript";
+	bool use_fbdev = false;
 	uint32_t connector_id = 28;
 	uint32_t crtc_id = 136;
 	unsigned int mode_index = 0;
 	struct drm_state drm;
+	struct fbdev_state fbdev;
 	struct font font;
 	struct terminal term;
 	struct input_device inputs[MAX_INPUT_DEVICES];
@@ -642,6 +721,13 @@ int main(int argc, char **argv)
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--device") && i + 1 < argc)
 			device = argv[++i];
+		else if (!strcmp(argv[i], "--fbdev")) {
+			use_fbdev = true;
+			if (i + 1 < argc && argv[i + 1][0] != '-')
+				device = argv[++i];
+			else
+				device = "/dev/fb0";
+		}
 		else if (!strcmp(argv[i], "--font") && i + 1 < argc)
 				font_path = argv[++i];
 			else if (!strcmp(argv[i], "--fifo") && i + 1 < argc)
@@ -657,7 +743,7 @@ int main(int argc, char **argv)
 			else if (!strcmp(argv[i], "--mode-index") && i + 1 < argc)
 				mode_index = (unsigned int)strtoul(argv[++i], NULL, 0);
 			else {
-				fprintf(stderr, "usage: %s [--device PATH] [--font PSF] [--fifo PATH] [--transcript PATH] [--command SHELL] [--connector ID] [--crtc ID] [--mode-index N]\n", argv[0]);
+				fprintf(stderr, "usage: %s [--device PATH] [--fbdev [PATH]] [--font PSF] [--fifo PATH] [--transcript PATH] [--command SHELL] [--connector ID] [--crtc ID] [--mode-index N]\n", argv[0]);
 				return 2;
 			}
 		}
@@ -669,15 +755,24 @@ int main(int argc, char **argv)
 
 	if (load_psf(font_path, &font) != 0)
 		die("load PSF font");
-	if (drm_init(&drm, device, connector_id, crtc_id, mode_index) != 0)
-		die("init DRM");
+	drm.fd = -1;
+	fbdev.fd = -1;
+	if (use_fbdev) {
+		if (fbdev_init(&fbdev, device) != 0)
+			die("init fbdev");
+	} else {
+		if (drm_init(&drm, device, connector_id, crtc_id, mode_index) != 0)
+			die("init DRM");
+	}
 	for (size_t i = 0; i < MAX_INPUT_DEVICES; i++)
 		inputs[i].fd = -1;
 	open_input_devices(inputs, &input_count, MAX_INPUT_DEVICES);
 	last_input_scan = time(NULL);
 
-	unsigned int cols = (drm.mode.hdisplay - 32) / font.width;
-	unsigned int rows = (drm.mode.vdisplay - 32) / font.height;
+	unsigned int screen_width = use_fbdev ? fbdev.fb.width : drm.mode.hdisplay;
+	unsigned int screen_height = use_fbdev ? fbdev.fb.height : drm.mode.vdisplay;
+	unsigned int cols = (screen_width - 32) / font.width;
+	unsigned int rows = (screen_height - 32) / font.height;
 	if (cols < 20 || rows < 10) {
 		fprintf(stderr, "screen/font geometry too small\n");
 		return 1;
@@ -699,8 +794,18 @@ int main(int argc, char **argv)
 		die("spawn shell");
 	fcntl(pty_master, F_SETFL, fcntl(pty_master, F_GETFL, 0) | O_NONBLOCK);
 
-	term_write_cstr(&term, "hotdog DRM boot console\n");
-	term_write_cstr(&term, "render: /dev/dri/card0 -> DSI-1, command FIFO: /tmp/hotdog-drm-console.in\n");
+	term_write_cstr(&term, "hotdog boot console\n");
+	if (use_fbdev) {
+		char line[160];
+
+		snprintf(line, sizeof(line), "render: %s fbdev, command FIFO: %s\n", device, fifo_path);
+		term_write_cstr(&term, line);
+	} else {
+		char line[160];
+
+		snprintf(line, sizeof(line), "render: /dev/dri/card0 -> DSI-1, command FIFO: %s\n", fifo_path);
+		term_write_cstr(&term, line);
+	}
 	term_write_cstr(&term, "host input: scripts/install-hotdog-drm-console.sh send '<command>'\n\n");
 	if (input_count > 0) {
 		char line[160];
@@ -711,7 +816,10 @@ int main(int argc, char **argv)
 	} else {
 		term_write_cstr(&term, "local buttons: no /dev/input/event* nodes opened\n\n");
 	}
-	render(&drm, &font, &term);
+	if (use_fbdev)
+		render_fbdev(&fbdev, &font, &term);
+	else
+		render(&drm, &font, &term);
 
 	write_all(pty_master, boot_script);
 
@@ -791,7 +899,10 @@ int main(int argc, char **argv)
 			}
 		}
 		if (dirty || now != last_render) {
-			render(&drm, &font, &term);
+			if (use_fbdev)
+				render_fbdev(&fbdev, &font, &term);
+			else
+				render(&drm, &font, &term);
 			last_render = now;
 		}
 
@@ -806,7 +917,10 @@ int main(int argc, char **argv)
 				}
 				fcntl(pty_master, F_SETFL, fcntl(pty_master, F_GETFL, 0) | O_NONBLOCK);
 				write_all(pty_master, boot_script);
-				render(&drm, &font, &term);
+				if (use_fbdev)
+					render_fbdev(&fbdev, &font, &term);
+				else
+					render(&drm, &font, &term);
 			}
 	}
 
@@ -817,7 +931,10 @@ int main(int argc, char **argv)
 	if (transcript)
 		fclose(transcript);
 	unlink(fifo_path);
-	drm_cleanup(&drm);
+	if (use_fbdev)
+		fbdev_cleanup(&fbdev);
+	else
+		drm_cleanup(&drm);
 	free(term.cells);
 	free(font.data);
 	return 0;
