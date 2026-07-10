@@ -33,3 +33,4 @@
 76-drm-command-shell-candidate-20260710.txt - prepared 014400 image: fixed DTB pack plus initramfs DRM command shell prompt and background dmesg follower; local pmaports package promoted to pkgrel 2; helper rebuilt from source
 77-pmaports-kernel-fbcon-candidate-20260710.txt - prepared 015500 image: pmaports pkgrel 2 kernel with VT/fbcon/simplefb plus fixed DTB pack and DRM auto-diagnostic shell
 78-mainline-entry-reset-probe-20260710.txt - prepared offline PSCI reset probe patch for testing whether mainline reaches arch/arm64 primary_entry
+79-mainline-entry-ram-marker-probe-20260710.txt - prepared preferred offline RAM marker probe patch writing ENT1/ENT2/SWT3 into the 0xa9800000 ramoops dump window

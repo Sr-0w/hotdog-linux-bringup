@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hotdog local experiment <hotdog-local@example.invalid>
+Date: Fri, 10 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: hotdog: add early RAM marker entry probe
+
+This patch writes three 32-bit ASCII markers into the already reserved
+ramoops window at 0xa9800000. It is a non-USB mainline entry probe for cases
+where the phone returns to recovery/fastboot but the tested kernel never
+reaches initramfs, pstore, or USB.
+
+The existing recovery crash collector dumps the full 4 MiB window through
+/dev/mem. If the markers are present in that raw dump, the bootloader reached
+the corresponding early kernel stage.
+
+Apply with:
+
+  git apply --unidiff-zero experimental-mainline-entry-ram-marker-probe.patch
+
+Do not ship this in a normal kernel build.
+---
+ arch/arm64/kernel/head.S | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -39,0 +40,13 @@
++
++#define HOTDOG_PROBE_BASE_HI16 0xa980
++
++.macro hotdog_probe lo, hi, off
++	movz	x10, #HOTDOG_PROBE_BASE_HI16, lsl #16
++	movz	w11, #\lo
++	movk	w11, #\hi, lsl #16
++	str	w11, [x10, #\off]
++	mov	x0, x10
++	add	x1, x10, #0x40
++	adr_l	x2, dcache_clean_poc
++	blr	x2
++.endm
+@@ -98,0 +112,1 @@
++	hotdog_probe 0x5431, 0x454e, 0
+@@ -140,0 +155,1 @@
++	hotdog_probe 0x5432, 0x454e, 4
+@@ -519,0 +535,1 @@
++	hotdog_probe 0x5433, 0x5357, 8
