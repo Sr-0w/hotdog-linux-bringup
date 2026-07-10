@@ -957,20 +957,112 @@ printf '\n--- initial display/fb ---\n'
 ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
 printf '\n--- initial dmesg tail ---\n'
 dmesg | tail -120 2>/dev/null || true
-printf '\n--- status follower every 10s; shell prompt below ---\n'
+printf '\n--- buttons: Vol+ full status, Vol- network/display, Power dmesg tail ---\n'
+printf '--- status follower every 20s; shell prompt below if input exists ---\n'
+
+print_full_status() {
+	reason="$1"
+	printf '\033c'
+	printf 'hotdog visible rootfs shell\n'
+	printf 'reason: %s\n' "$reason"
+	printf 'tty: %s\n' "$tty"
+	printf 'date: '; date 2>/dev/null || true
+	printf 'uptime: '; uptime 2>/dev/null || true
+	printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
+	printf '\n--- network ---\n'
+	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+	printf '\n--- display/fb ---\n'
+	ls -la /dev/fb* /dev/dri /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
+	for d in /sys/class/backlight/*; do
+		[ -e "$d" ] || continue
+		printf '%s brightness=' "$d"
+		cat "$d/brightness" 2>/dev/null || true
+		printf '%s max_brightness=' "$d"
+		cat "$d/max_brightness" 2>/dev/null || true
+	done
+	printf '\n--- input devices ---\n'
+	for ev in /sys/class/input/event*; do
+		[ -e "$ev" ] || continue
+		printf '%s ' "${ev##*/}"
+		cat "$ev/device/name" 2>/dev/null || true
+	done
+	printf '\n--- process tail ---\n'
+	ps 2>/dev/null | tail -30 || true
+	printf '\n--- dmesg tail ---\n'
+	dmesg | tail -120 2>/dev/null || true
+}
+
+print_short_status() {
+	reason="$1"
+	printf '\n--- visible tty status: %s ---\n' "$reason"
+	date 2>/dev/null || true
+	uptime 2>/dev/null || true
+	ip -br addr 2>/dev/null || true
+	dmesg | tail -50 2>/dev/null || true
+}
+
+print_display_network() {
+	reason="$1"
+	printf '\033c'
+	printf 'hotdog visible display/network page\n'
+	printf 'reason: %s\n' "$reason"
+	printf '\n--- network ---\n'
+	ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+	printf '\n--- routes ---\n'
+	ip route 2>/dev/null || true
+	printf '\n--- display/fb ---\n'
+	ls -la /dev/fb* /dev/dri /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
+	printf '\n--- drm/fb dmesg ---\n'
+	dmesg 2>/dev/null | grep -Ei 'drm|dsi|sde|mdss|panel|fb|framebuffer|simplefb|console|tty|backlight' | tail -120 || true
+}
+
+button_action() {
+	code="$1"
+	dev="$2"
+	name="$3"
+	case "$code" in
+		115)
+			print_full_status "Vol+ from $dev $name"
+			;;
+		114)
+			print_display_network "Vol- from $dev $name"
+			;;
+		116)
+			print_short_status "Power from $dev $name"
+			;;
+	esac
+}
+
+monitor_input_device() {
+	dev="$1"
+	name="$(cat "/sys/class/input/${dev##*/}/device/name" 2>/dev/null || true)"
+	[ -n "$name" ] || name="$dev"
+	while :; do
+		event="$(dd if="$dev" bs=24 count=1 2>/dev/null | od -An -tu2 -w24 2>/dev/null | awk 'NF >= 11 { print $9, $10, $11; exit }')"
+		[ -n "$event" ] || break
+		set -- $event
+		type="$1"
+		code="$2"
+		value="$3"
+		[ "$type" = 1 ] || continue
+		[ "$value" = 1 ] || continue
+		button_action "$code" "$dev" "$name"
+	done
+}
 
 (
 	i=0
 	while :; do
-		sleep 10
-		printf '\n--- visible tty status %s ---\n' "$i"
-		date 2>/dev/null || true
-		uptime 2>/dev/null || true
-		ip -br addr 2>/dev/null || true
-		dmesg | tail -80 2>/dev/null || true
+		sleep 20
+		print_short_status "periodic $i"
 		i=$((i + 1))
 	done
 ) &
+
+for evdev in /dev/input/event*; do
+	[ -r "$evdev" ] || continue
+	monitor_input_device "$evdev" &
+done
 
 export TERM=linux
 export PS1='screen# '

@@ -43,3 +43,4 @@
 86-dtb-pack-entry12-verification-20260710.txt - added DTB-pack entry inspector and verified 030600 entry12 has ranges/stdout-path/simple-framebuffer
 87-tty-kmsg-screen-candidate-20260710.txt - prepared 033600 downstream pmaports candidate with initramfs tty0/tty1 dmesg/status plus fb0/backlight preparation before the DRM helper
 88-splash-ttykmsg-secondary-20260710.txt - prepared 034200 secondary downstream pmaports candidate with splash cmdline to force pmOS setup_framebuffer before the same tty-kmsg/fbprep diagnostics
+89-button-visible-tty-candidate-20260710.txt - prepared 034500 downstream pmaports candidate with rootfs visible tty status pages controllable by Vol+/Vol-/Power

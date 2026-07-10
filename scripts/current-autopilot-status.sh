@@ -158,7 +158,10 @@ main() {
   health_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-autopilot-health-*')"
   edl_dir="$(latest_dir "$HOTDOG_DUMP_ROOT/stock-before-flash" '*-edl-critical-blocks')"
   rescue_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-visible-*')"
-  wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-lineage414-simplefb-shell-*')"
+  wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-next-lineage414-simplefb-shell-*')"
+  if [ -z "$wait_simplefb_dir" ]; then
+    wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-lineage414-simplefb-shell-*')"
+  fi
 
   printf '\n== latest dirs ==\n'
   printf 'state=%s\n' "${state_dir:-none}"

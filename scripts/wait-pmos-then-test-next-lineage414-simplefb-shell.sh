@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 
 stamp="$(date +%F-%H%M%S)"
-run_dir="$HOTDOG_LOG_ROOT/wait-pmos-then-test-lineage414-simplefb-shell-$stamp"
+run_dir="$HOTDOG_LOG_ROOT/wait-pmos-then-test-next-lineage414-simplefb-shell-$stamp"
 mkdir -p "$run_dir"
 
 exec > >(tee "$run_dir/run.log") 2>&1
