@@ -498,7 +498,7 @@ hotdog_rescue_watchdog_cmdline_sec() {
 hotdog_rescue_watchdog_usb_seen() {
 	local iface base carrier operstate
 
-	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx* /sys/class/net/eth*; do
+	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx*; do
 		[ -e "$iface" ] || continue
 		base="$(basename "$iface")"
 		[ "$base" = "lo" ] && continue
@@ -1026,7 +1026,7 @@ print_short_status() {
 
 print_usb_watchdog_status() {
 	printf '\n--- usb/watchdog ---\n'
-	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx* /sys/class/net/eth*; do
+	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx*; do
 		[ -e "$iface" ] || continue
 		base="${iface##*/}"
 		printf '%s carrier=' "$base"

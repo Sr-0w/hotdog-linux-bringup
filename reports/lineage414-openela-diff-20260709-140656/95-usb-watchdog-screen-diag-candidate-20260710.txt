@@ -16,7 +16,7 @@ Hashes:
 
 Purpose:
 
-  045402 supersedes 044715 as the automatic next hardware test. It keeps the
+  045402 initially superseded 044715 as the automatic next hardware test. It keeps the
   pmaports lineage414 kernel, fixed entry12 /chosen ranges; DTB pack,
   initramfs tty-kmsg/fbprep follower, DRM console userspace hook, visible tty
   auto-cycle pages, USB carrier/up watchdog success, and sysrq-first timeout
@@ -37,6 +37,12 @@ Why:
   device, the next question is whether Linux thinks the USB link is up or whether
   only the gadget was configured. This candidate should show that directly on
   screen while still rebooting after 300s if carrier/up state never appears.
+
+Superseded by:
+
+  050008 keeps the same visible diagnostics but removes generic eth* from
+  USB-success detection. Only usb*, rndis*, and enx* are considered USB-like
+  interfaces.
 
 Build command:
 
