@@ -370,6 +370,18 @@ helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
 ```
 
+Prepared secondary fbcon-only isolation candidate:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-025400-lineage414-pmaports-kernel-fbcon-only-fbtest-stripdrm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: aa176c852c3fe359839d18d80ff5d68f5ff0edaa2584c98e96362976083f8fca
+kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+initramfs sha256: 496618344e3b3eda03c8bab22b33aec232c3a87613e08eebd401ae74e37c6a4a
+wrapper: /home/srobin/dev/hotdog/scripts/test-lineage414-fbcon-only.sh
+purpose: isolate kernel/simplefb/fbcon output by stripping inherited DRM-console hooks
+```
+
 Prepared mainline RAM-marker candidate:
 
 ```text
@@ -412,4 +424,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/80-mainline617-rammarker-candidate-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/81-drm-console-button-input-candidate-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/82-drm-console-button-rescan-candidate-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/83-fbcon-only-stripdrm-candidate-20260710.txt
 ```

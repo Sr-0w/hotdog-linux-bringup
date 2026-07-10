@@ -43,6 +43,10 @@ Options:
   --drm-console-helper FILE
                      AArch64 hotdog-drm-console binary to inject. Default:
                      $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
+  --strip-drm-console
+                     Remove inherited hotdog DRM console hooks from the source
+                     initramfs before adding this candidate's hooks. Useful for
+                     fbcon-only isolation tests built from a DRM-console source.
   --os-version V     Set Android boot image OS version, e.g. 15.0.0.
   --os-patch-level D Set Android boot image patch level, e.g. 2025-08.
   --base HEX         Android boot image base address. Default: 0x00000000
@@ -94,6 +98,7 @@ direct_debug_shell=0
 fb_test=0
 drm_console=0
 drm_console_userspace=0
+strip_drm_console=0
 default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 drm_console_helper="$default_drm_console_helper"
 os_version=""
@@ -159,6 +164,9 @@ while [ "$#" -gt 0 ]; do
 			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
 			drm_console_helper="$2"
 			shift
+			;;
+		--strip-drm-console)
+			strip_drm_console=1
 			;;
 		--os-version)
 			[ "$#" -ge 2 ] || die "--os-version requires a value"
@@ -1023,6 +1031,45 @@ HOTDOG_FB_TEST_SH
 	chmod 0755 "$helper"
 }
 
+remove_marked_block() {
+	local file="$1"
+	local begin_marker="$2"
+	local end_marker="$3"
+	local tmp="$file.tmp.$$"
+
+	[ -f "$file" ] || return 0
+	grep -Fq "$begin_marker" "$file" || return 0
+
+	awk -v begin="$begin_marker" -v end="$end_marker" '
+		index($0, begin) {
+			skip = 1
+			next
+		}
+		skip && index($0, end) {
+			skip = 0
+			next
+		}
+		!skip {
+			print
+		}
+	' "$file" > "$tmp"
+	replace_preserving_mode "$tmp" "$file"
+}
+
+strip_inherited_drm_console() {
+	local init_file
+
+	rm -f \
+		"$initramfs_tree/hotdog_drm_console_start.sh" \
+		"$initramfs_tree/usr/bin/hotdog-drm-console" \
+		2>/dev/null || true
+
+	for init_file in "$initramfs_tree/init" "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
+		remove_marked_block "$init_file" "hotdog DRM console begin" "hotdog DRM console end"
+		remove_marked_block "$init_file" "hotdog DRM console switch-root stop begin" "hotdog DRM console switch-root stop end"
+	done
+}
+
 write_hotdog_drm_console_helper() {
 	local helper="$initramfs_tree/hotdog_drm_console_start.sh"
 
@@ -1331,6 +1378,7 @@ write_manifest() {
 			if [ "$drm_console" -eq 1 ]; then
 				printf -- '- DRM console helper: `%s`\n' "$drm_console_helper"
 			fi
+			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
 			printf -- '- Boot base: `%s`\n' "$boot_base"
@@ -1375,6 +1423,9 @@ write_manifest() {
 			fi
 			if [ "$drm_console_userspace" -eq 1 ]; then
 				printf ' --drm-console-userspace'
+			fi
+			if [ "$strip_drm_console" -eq 1 ]; then
+				printf ' --strip-drm-console'
 			fi
 			if [ -n "$extra_cmdline" ]; then
 				printf ' --extra-cmdline %q' "$extra_cmdline"
@@ -1463,6 +1514,9 @@ note "injecting watchdog helper and init hooks"
 write_watchdog_helper
 write_hotdog_super_loop_hook
 write_hotdog_rootfs_postmount_helper
+if [ "$strip_drm_console" -eq 1 ]; then
+	strip_inherited_drm_console
+fi
 if [ "$fb_test" -eq 1 ]; then
 	write_hotdog_fb_test_helper
 fi

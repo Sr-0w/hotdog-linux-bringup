@@ -1,0 +1,79 @@
+Fbcon-only strip-DRM candidate - 2026-07-10
+================================================
+
+Reason
+------
+
+Euclid's read-only analysis confirmed that the pmaports 4.14 kernel config and
+cmdline already try the `simplefb`/`fbcon` path. The remaining question is
+whether kernel/simplefb/fbcon ever takes over a usable framebuffer before the
+DRM/KMS helper paints text later in boot.
+
+The first local attempt, `024900`, was not a valid fbcon-only candidate because
+it was built from `215005`, whose initramfs already contained DRM-console hooks.
+The builder now has `--strip-drm-console` to remove inherited hotdog DRM console
+files and marked init snippets before adding the new candidate's hooks.
+
+Builder change
+--------------
+
+`scripts/build-watchdog-bootimg.sh` now supports:
+
+```text
+--strip-drm-console
+```
+
+It removes:
+
+```text
+/hotdog_drm_console_start.sh
+/usr/bin/hotdog-drm-console
+marked "hotdog DRM console" init/init_2nd blocks
+```
+
+The default behavior is unchanged.
+
+Boot image candidate
+--------------------
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-025400-lineage414-pmaports-kernel-fbcon-only-fbtest-stripdrm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: aa176c852c3fe359839d18d80ff5d68f5ff0edaa2584c98e96362976083f8fca
+```
+
+Components:
+
+```text
+kernel:    c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+dtb:       9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+initramfs: 496618344e3b3eda03c8bab22b33aec232c3a87613e08eebd401ae74e37c6a4a
+```
+
+Validation
+----------
+
+The candidate manifest records:
+
+```text
+DRM initramfs console: 0
+Strip inherited DRM console: 1
+```
+
+Local grep validation found no `hotdog-drm-console`,
+`hotdog_drm_console_start`, or marked DRM-console init blocks in the repacked
+initramfs listing and init scripts. The framebuffer paint test hook remains
+present in both init stages.
+
+Wrapper
+-------
+
+Manual wrapper:
+
+```text
+/home/srobin/dev/hotdog/scripts/test-lineage414-fbcon-only.sh
+```
+
+This is intentionally not the automatic next test. `024200` remains the safer
+next automatic candidate because it preserves a visible DRM command shell and
+local Vol+/Vol- diagnostics. `025400` is for isolating whether kernel/simplefb
+output itself becomes visible.
