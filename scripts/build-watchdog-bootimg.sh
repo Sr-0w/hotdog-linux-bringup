@@ -496,18 +496,22 @@ hotdog_rescue_watchdog_cmdline_sec() {
 }
 
 hotdog_rescue_watchdog_usb_seen() {
-	local iface udc
+	local iface base carrier operstate
 
 	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx* /sys/class/net/eth*; do
 		[ -e "$iface" ] || continue
-		[ "$(basename "$iface")" = "lo" ] && continue
-		return 0
+		base="$(basename "$iface")"
+		[ "$base" = "lo" ] && continue
+		if [ -r "$iface/carrier" ]; then
+			carrier="$(cat "$iface/carrier" 2>/dev/null || true)"
+			[ "$carrier" = "1" ] && return 0
+			continue
+		fi
+		if [ -r "$iface/operstate" ]; then
+			operstate="$(cat "$iface/operstate" 2>/dev/null || true)"
+			[ "$operstate" = "up" ] && return 0
+		fi
 	done
-
-	if [ -r /sys/kernel/config/usb_gadget/g1/UDC ]; then
-		udc="$(cat /sys/kernel/config/usb_gadget/g1/UDC 2>/dev/null || true)"
-		[ -n "$udc" ] && return 0
-	fi
 
 	return 1
 }

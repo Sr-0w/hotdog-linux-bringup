@@ -150,8 +150,12 @@ validate_candidate_dir() {
     /bin/sh -n "$watchdog"
     grep -q 'HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE="usb"' "$watchdog" || fail "$label watchdog is not USB-success mode"
     grep -q 'triggering sysrq reboot' "$watchdog" || fail "$label watchdog does not use sysrq reboot first"
+    grep -q '/carrier' "$watchdog" || fail "$label watchdog does not require carrier/up USB network state"
     if grep -Fq '/sys/class/udc/*' "$watchdog"; then
       fail "$label watchdog treats a bare UDC controller as USB success"
+    fi
+    if grep -Fq '/sys/kernel/config/usb_gadget/g1/UDC' "$watchdog"; then
+      fail "$label watchdog treats a configfs UDC bind as USB success"
     fi
   fi
 }

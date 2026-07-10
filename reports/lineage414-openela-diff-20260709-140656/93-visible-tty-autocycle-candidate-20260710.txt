@@ -16,7 +16,7 @@ Hashes:
 
 Purpose:
 
-  045000 supersedes 042500 as the automatic next hardware test. It keeps the
+  045000 initially superseded 042500 as the automatic next hardware test. It keeps the
   pmaports lineage414 kernel, fixed entry12 /chosen ranges; DTB pack, tty-kmsg
   initramfs follower, DRM console userspace hook, visible rootfs tty shell,
   strict USB-success watchdog, and sysrq-first timeout reboot.
@@ -32,6 +32,11 @@ Purpose:
   but the host cannot reach SSH, ADB, fastboot, or USB networking. If the rootfs
   is alive enough to start OpenRC local.d, the phone should keep refreshing useful
   information without requiring USB input or button input.
+
+Superseded by:
+
+  044715 keeps the auto-cycle behavior but tightens watchdog success to USB
+  network carrier/up state. That is safer for the observed host-invisible case.
 
 Build command:
 
