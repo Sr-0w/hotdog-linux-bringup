@@ -173,12 +173,15 @@ main() {
 
   printf '\n== next prepared test ==\n'
   local next_wrapper="$HOTDOG_ROOT/scripts/test-next-lineage414-simplefb-shell.sh"
+  local splash_wrapper="$HOTDOG_ROOT/scripts/test-lineage414-splash-ttykmsg.sh"
   local fbcon_wrapper="$HOTDOG_ROOT/scripts/test-lineage414-fbcon-only.sh"
   local mainline_wrapper="$HOTDOG_ROOT/scripts/test-next-mainline617-rammarker.sh"
   local mainline_wait_wrapper="$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-mainline617-rammarker.sh"
   printf 'wrapper=%s\n' "$next_wrapper"
   print_wrapper_paths "$next_wrapper"
   printf 'wait_wrapper=%s\n' "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
+  printf 'secondary_splash_wrapper=%s\n' "$splash_wrapper"
+  print_wrapper_paths "$splash_wrapper" "secondary_splash_"
   printf 'secondary_fbcon_wrapper=%s\n' "$fbcon_wrapper"
   print_wrapper_paths "$fbcon_wrapper" "secondary_fbcon_"
   printf 'mainline_rammarker_wrapper=%s\n' "$mainline_wrapper"
