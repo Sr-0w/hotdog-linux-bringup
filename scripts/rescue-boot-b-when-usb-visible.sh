@@ -11,6 +11,9 @@ EDL_WRITE=0
 FASTBOOT_RESTORE_SCRIPT="${FASTBOOT_RESTORE_SCRIPT:-$HOTDOG_ROOT/scripts/restore-pmos-boot-b-from-fastboot.sh}"
 EDL_RESTORE_SCRIPT="${EDL_RESTORE_SCRIPT:-$HOTDOG_ROOT/scripts/restore-boot-b-from-edl-firehose.sh}"
 QDL_BIN="${QDL_BIN:-$HOTDOG_ROOT/tools/qdl-install/bin/qdl}"
+LABEL="${LABEL:-usb-visible}"
+ALLOW_DUPLICATE="${ALLOW_DUPLICATE:-0}"
+USB_RESCUE_RUNNING_PID=""
 
 usage() {
 	cat <<'EOF'
@@ -31,6 +34,8 @@ Options:
   --after-fastboot MODE   system, bootloader, or none. Default: system.
   --edl-write             If 9008 appears and validation passes, write boot_b.
   --no-edl-write          Validate only on 9008. Default.
+  --label NAME            Instance label. Default: usb-visible.
+  --allow-duplicate       Allow another USB rescue watcher for same serial/label.
   -h, --help              Show this help.
 EOF
 }
@@ -72,6 +77,14 @@ while [ "$#" -gt 0 ]; do
 		--no-edl-write)
 			EDL_WRITE=0
 			;;
+		--label)
+			[ "$#" -ge 2 ] || die "--label requires a value"
+			LABEL="$2"
+			shift
+			;;
+		--allow-duplicate)
+			ALLOW_DUPLICATE=1
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -98,15 +111,93 @@ esac
 command -v fastboot >/dev/null 2>&1 || die "missing fastboot"
 command -v lsusb >/dev/null 2>&1 || die "missing lsusb"
 
+safe_name() {
+	printf '%s' "$1" | tr -c 'A-Za-z0-9_.:-' '_'
+}
+
+args_has_option_value() {
+	local args_text=" $1 "
+	local opt="$2"
+	local value="$3"
+
+	printf '%s\n' "$args_text" | grep -F -- " $opt $value " >/dev/null 2>&1 ||
+		printf '%s\n' "$args_text" | grep -F -- " $opt=$value " >/dev/null 2>&1
+}
+
+usb_rescue_running() {
+	local pid
+	local args
+	local comm
+	local pids_file="$run_dir/usb-rescue-pids.txt"
+
+	USB_RESCUE_RUNNING_PID=""
+	pgrep -f "$HOTDOG_ROOT/scripts/rescue-boot-b-when-usb-visible.sh" > "$pids_file" 2>/dev/null || true
+	while read -r pid; do
+		[ -n "$pid" ] || continue
+		[ "$pid" != "$$" ] || continue
+		args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+		comm="$(ps -o comm= -p "$pid" 2>/dev/null || true)"
+		case "$comm:$args" in
+			bash:"$HOTDOG_ROOT/scripts/rescue-boot-b-when-usb-visible.sh"*|bash:"bash $HOTDOG_ROOT/scripts/rescue-boot-b-when-usb-visible.sh"*|rescue-boot-b-when-usb-visible.sh:*)
+				;;
+			*)
+				continue
+				;;
+		esac
+		if args_has_option_value "$args" "--serial" "$SERIAL" &&
+			args_has_option_value "$args" "--label" "$LABEL"; then
+			USB_RESCUE_RUNNING_PID="$pid"
+			return 0
+		fi
+	done < "$pids_file"
+
+	return 1
+}
+
+acquire_instance_lock() {
+	local owner=""
+
+	while true; do
+		if mkdir "$instance_lock" 2>/dev/null; then
+			printf '%s\n' "$$" > "$instance_lock/pid"
+			return 0
+		fi
+
+		owner="$(sed -n '1p' "$instance_lock/pid" 2>/dev/null || true)"
+		if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then
+			printf 'USB rescue watcher instance lock is busy by PID %s: %s\n' "$owner" "$instance_lock" >&2
+			return 1
+		fi
+
+		rm -rf "$instance_lock"
+	done
+}
+
 stamp="$(date +%F-%H%M%S)"
 run_dir="$HOTDOG_LOG_ROOT/rescue-boot-b-when-usb-visible-$stamp"
 mkdir -p "$run_dir"
 exec > >(tee "$run_dir/run.log") 2>&1
 
+safe_serial="$(safe_name "$SERIAL")"
+safe_label="$(safe_name "$LABEL")"
+instance_lock="$HOTDOG_LOG_ROOT/manual-rescue-watchers/usb-rescue-${safe_serial}-${safe_label}.lock"
+mkdir -p "$HOTDOG_LOG_ROOT/manual-rescue-watchers"
+if [ "$ALLOW_DUPLICATE" -ne 1 ]; then
+	if usb_rescue_running; then
+		log "USB rescue watcher already running for $SERIAL/$LABEL: PID $USB_RESCUE_RUNNING_PID"
+		exit 0
+	fi
+fi
+if ! acquire_instance_lock; then
+	exit 0
+fi
+trap 'rm -rf "$instance_lock"' EXIT
+
 log "Run directory: $run_dir"
 log "Target serial: $SERIAL"
 log "Timeout: ${TIMEOUT_SEC}s"
 log "EDL write: $EDL_WRITE"
+log "Label: $LABEL"
 
 deadline=$((SECONDS + TIMEOUT_SEC))
 last_state=""
@@ -136,11 +227,19 @@ while [ "$SECONDS" -lt "$deadline" ]; do
 	case "$state" in
 		fastboot)
 			log "fastboot visible; restoring pmOS boot_b"
+			set +e
 			"$FASTBOOT_RESTORE_SCRIPT" \
 				--serial "$SERIAL" \
 				--after-restore "$AFTER_FASTBOOT_RESTORE" \
 				2>&1 | tee "$run_dir/restore-fastboot.log"
-			exit "${PIPESTATUS[0]}"
+			rc="${PIPESTATUS[0]}"
+			set -e
+			if [ "$rc" -eq 75 ]; then
+				log "Fastboot restore lock busy; leaving target untouched and retrying"
+				sleep "$POLL_SEC"
+				continue
+			fi
+			exit "$rc"
 			;;
 		qualcomm-9008)
 			log "EDL 9008 visible; validating Firehose path"

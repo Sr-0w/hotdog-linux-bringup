@@ -125,6 +125,7 @@ main() {
   pid_line adb-scrcpy "$HOTDOG_LOG_ROOT/watch-adb-scrcpy.pid"
   pid_line autopilot-health "$HOTDOG_LOG_ROOT/watch-autopilot-health.pid"
   pattern_lines rescue-visible "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
+  pattern_lines rescue-usb-visible "$HOTDOG_ROOT/scripts/rescue-boot-b-when-usb-visible.sh"
   pattern_lines rescue-supervisor "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"
   pattern_lines wait-simplefb-shell "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
   pattern_lines passive-phone-state "$HOTDOG_ROOT/scripts/watch-phone-state.sh --timeout 21600 --poll 5"
@@ -149,6 +150,7 @@ main() {
   local health_dir
   local edl_dir
   local rescue_dir
+  local rescue_usb_dir
   local wait_simplefb_dir
 
   state_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-phone-state-*')"
@@ -159,6 +161,7 @@ main() {
   health_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'watch-autopilot-health-*')"
   edl_dir="$(latest_dir "$HOTDOG_DUMP_ROOT/stock-before-flash" '*-edl-critical-blocks')"
   rescue_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-visible-*')"
+  rescue_usb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'rescue-boot-b-when-usb-visible-*')"
   wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-next-lineage414-simplefb-shell-*')"
   if [ -z "$wait_simplefb_dir" ]; then
     wait_simplefb_dir="$(latest_dir "$HOTDOG_LOG_ROOT" 'wait-pmos-then-test-lineage414-simplefb-shell-*')"
@@ -173,6 +176,7 @@ main() {
   printf 'health=%s\n' "${health_dir:-none}"
   printf 'edl=%s\n' "${edl_dir:-none}"
   printf 'rescue=%s\n' "${rescue_dir:-none}"
+  printf 'rescue_usb=%s\n' "${rescue_usb_dir:-none}"
   printf 'wait_simplefb=%s\n' "${wait_simplefb_dir:-none}"
 
   printf '\n== next prepared test ==\n'
@@ -194,6 +198,7 @@ main() {
 
   [ -n "$state_dir" ] && print_tail phone-state "$state_dir/latest-summary.txt" 40
   [ -n "$rescue_dir" ] && print_tail rescue-visible "$rescue_dir/run.log" 25
+  [ -n "$rescue_usb_dir" ] && print_tail rescue-usb-visible "$rescue_usb_dir/run.log" 25
   [ -n "$wait_simplefb_dir" ] && print_tail wait-simplefb-shell "$wait_simplefb_dir/run.log" 25
   [ -n "$fastboot_dir" ] && print_tail fastboot-dump "$fastboot_dir/watch.log" 25
   [ -n "$continue_dir" ] && print_tail continue-pmos "$continue_dir/run.log" 25

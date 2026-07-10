@@ -2,11 +2,13 @@
 set -euo pipefail
 
 source "$(dirname "$0")/env.sh"
+source "$(dirname "$0")/phone-lock.sh"
 
 SERIAL="${ANDROID_SERIAL:-b6bd2252}"
 RESTORE_IMAGE="$HOTDOG_STABLE_PMOS_BOOT_B"
 AFTER_RESTORE="system"
 FASTBOOT_TIMEOUT_SEC="${FASTBOOT_TIMEOUT_SEC:-20}"
+LOCK_WAIT_SEC="${LOCK_WAIT_SEC:-0}"
 
 usage() {
 	cat <<'EOF'
@@ -22,6 +24,7 @@ Options:
   --restore-boot-b FILE  Boot image to flash to boot_b.
   --after-restore MODE   system, bootloader, or none. Default: system.
   --timeout SEC          Timeout for each fastboot command. Default: 20.
+  --lock-wait SEC        Seconds to wait for phone-operation lock. Default: 0.
   -h, --help             Show this help.
 EOF
 }
@@ -53,6 +56,11 @@ while [ "$#" -gt 0 ]; do
 			FASTBOOT_TIMEOUT_SEC="$2"
 			shift
 			;;
+		--lock-wait)
+			[ "$#" -ge 2 ] || die "--lock-wait requires a value"
+			LOCK_WAIT_SEC="$2"
+			shift
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -72,6 +80,7 @@ case "$AFTER_RESTORE" in
 		;;
 esac
 [ -s "$RESTORE_IMAGE" ] || die "missing restore image: $RESTORE_IMAGE"
+[[ "$LOCK_WAIT_SEC" =~ ^[0-9]+$ ]] || die "--lock-wait must be numeric: $LOCK_WAIT_SEC"
 command -v fastboot >/dev/null 2>&1 || die "missing fastboot"
 command -v sha256sum >/dev/null 2>&1 || die "missing sha256sum"
 
@@ -79,6 +88,11 @@ stamp="$(date +%F-%H%M%S)"
 run_dir="$HOTDOG_LOG_ROOT/restore-pmos-boot-b-from-fastboot-$stamp"
 mkdir -p "$run_dir"
 exec > >(tee "$run_dir/run.log") 2>&1
+
+cleanup() {
+	phone_lock_release || true
+}
+trap cleanup EXIT
 
 log() {
 	printf '[%s] %s\n' "$(date '+%F %T')" "$*"
@@ -92,6 +106,11 @@ log "Run directory: $run_dir"
 log "Target serial: $SERIAL"
 log "Restore image: $RESTORE_IMAGE"
 sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
+
+if ! phone_lock_acquire "restore pmOS boot_b from fastboot" "$LOCK_WAIT_SEC"; then
+	log "Phone operation lock is busy; leaving target untouched"
+	exit 75
+fi
 
 timeout "$FASTBOOT_TIMEOUT_SEC" fastboot devices -l | tee "$run_dir/fastboot-devices.txt"
 if ! grep -q "^${SERIAL}[[:space:]]" "$run_dir/fastboot-devices.txt"; then

@@ -53,7 +53,7 @@ Ce fichier est le suivi court et operationnel. La checklist complete reste dans 
 | DTB hotdog | first-pass OK | DTS minimal UFS + USB gadget + `ramoops@a9800000`, sans display/touch. |
 | Image pmOS | OK | `images/pmos/2026-07-08-070531-console-uncompressed-ramoops`. |
 | EDL tooling | OK | bkerler/edl local + loader OnePlus OP7T + udev `05c6:9008`. |
-| Automation | OK pour boot_b SSH | Scripts de test/rescue/collecte prets; `flash-boot-b-from-pmos-ssh.sh` est le chemin prioritaire tant que SSH pmOS repond. |
+| Automation | OK pour boot_b SSH | Scripts de test/rescue/collecte prets; `flash-boot-b-from-pmos-ssh.sh` est le chemin prioritaire tant que SSH pmOS repond; les chemins de rescue fastboot/recovery/USB partagent maintenant `phone-operation.lock`. |
 | Visual diagnostics | OK downstream | `--drm-console` injecte un helper DRM/KMS dans l'initramfs; `--drm-console-userspace` prepare en plus un service OpenRC `local.d` dans le rootfs pour retrouver un shell ecran apres `switch_root`. A porter ensuite vers les candidats mainline. |
 
 DTB SM8150 construits actuellement :

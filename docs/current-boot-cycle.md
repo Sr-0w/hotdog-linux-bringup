@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 04:20 CEST
+Date: 2026-07-10 04:30 CEST
 
 ## Current Status
 
@@ -20,6 +20,7 @@ rescue supervisor: running, restarts a stable rescue watcher if the current one 
 pmOS SSH wait/test watcher: running, waiting for SSH before launching 042500
 passive phone-state watcher: running, logging ADB/fastboot/USB changes only
 autopilot hardening: duplicate rescue/supervisor starts now refused by default
+USB rescue guard: running, no EDL writes, can run beside rescue-visible because fastboot restore now takes phone-operation.lock
 ```
 
 Current validated boot image:
@@ -189,6 +190,29 @@ parallel rescue paths for the same phone by accident: the rescue watcher retries
 if the phone-operation lock is busy, the stable watcher launcher serializes
 starts per phone serial, and the supervisor holds a per-serial/label instance
 lock.
+
+The standalone fastboot restore helper now takes the same phone-operation lock,
+and the USB rescue watcher has a per-serial/label instance lock. This lets a
+long USB watcher run beside the existing fastboot/recovery ADB watcher without
+creating a double-restore race. EDL writes remain disabled unless `--edl-write`
+is passed explicitly.
+
+## Active USB Rescue Guard
+
+This watcher is complementary to the primary fastboot/recovery ADB rescue
+watcher. It watches raw USB states too: fastboot, Qualcomm 9008, Qualcomm 900e,
+and other Android/Qualcomm identities. EDL write mode is disabled; a 9008 sighting
+will run validation only.
+
+```text
+pid: 2272770
+run log: /home/srobin/dev/hotdog/logs/rescue-boot-b-when-usb-visible-2026-07-10-042926/run.log
+pidfile: /home/srobin/dev/hotdog/logs/manual-rescue-watchers/usb-rescue-b6bd2252-host-usb-guard-current.pid
+label: host-usb-guard
+timeout: 604800s
+poll: 5s
+edl write: 0
+```
 
 ## Active pmOS SSH Wait/Test Watcher
 
