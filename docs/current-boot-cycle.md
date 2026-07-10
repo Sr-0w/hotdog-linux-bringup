@@ -395,13 +395,16 @@ PSCI.
 5. Keep using `scripts/build-hotdog-drm-console-helper.sh` to regenerate the
    AArch64 DRM helper before building display-console candidates on a fresh
    host.
-6. The prepared wrapper for the next test is
+6. Run `scripts/validate-current-candidates.sh` before the next hardware cycle
+   after changing wrappers, DTB packs, cmdline, or initramfs helper generation.
+   It validates `034500`, `034200`, and `025400` without phone commands.
+7. The prepared wrapper for the next test is
    `scripts/test-next-lineage414-simplefb-shell.sh`; if pmOS SSH returns first,
    use `scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh`.
-7. For mainline, stop treating USB gadget alone as the first milestone. The
+8. For mainline, stop treating USB gadget alone as the first milestone. The
    next useful signal is kernel-entry evidence, a bootloader-visible return
    reason, or initramfs reachability through a channel earlier than USB gadget.
-8. A mainline RAM-marker candidate is prepared at `022522`. Use it when the
+9. A mainline RAM-marker candidate is prepared at `022522`. Use it when the
    objective is to identify how far `arch/arm64/kernel/head.S` progresses:
    it writes `ENT1`/`ENT2`/`SWT3` into the existing `0xa9800000` ramoops dump
    window and can be launched with `scripts/test-next-mainline617-rammarker.sh`.
@@ -410,7 +413,7 @@ PSCI.
    If recovery ADB returns afterwards, `collect-recovery-crash-artifacts.sh`
    now emits `ramoops-marker-scan.txt` with marker offsets when the raw
    `/dev/mem` dump is available.
-9. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
+10. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
 Prepared downstream screen-shell/fbcon candidate:
