@@ -11,6 +11,7 @@ RESCUE_TIMEOUT_SEC="${RESCUE_TIMEOUT_SEC:-604800}"
 POLL_SEC="${POLL_SEC:-60}"
 LABEL="${LABEL:-stable-guard}"
 ALLOW_DUPLICATE="${ALLOW_DUPLICATE:-0}"
+SUPERVISOR_RUNNING_PID=""
 
 usage() {
   cat <<'USAGE'
@@ -121,25 +122,32 @@ safe_name() {
   printf '%s' "$1" | tr -c 'A-Za-z0-9_.:-' '_'
 }
 
+args_has_option_value() {
+  local args_text=" $1 "
+  local opt="$2"
+  local value="$3"
+
+  printf '%s\n' "$args_text" | grep -F -- " $opt $value " >/dev/null 2>&1 ||
+    printf '%s\n' "$args_text" | grep -F -- " $opt=$value " >/dev/null 2>&1
+}
+
 supervisor_running() {
   local pid
   local args
+  local pids_file="$run_dir/supervisor-pids.txt"
 
+  SUPERVISOR_RUNNING_PID=""
+  pgrep -f "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh" > "$pids_file" 2>/dev/null || true
   while read -r pid; do
     [ -n "$pid" ] || continue
     [ "$pid" != "$$" ] || continue
     args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
-    case "$args" in
-      *"$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"*"--serial $SERIAL"*|*"$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"*"--serial=$SERIAL"*)
-        case "$args" in
-          *"--label $LABEL"*|*"--label=$LABEL"*)
-            printf '%s\n' "$pid"
-            return 0
-            ;;
-        esac
-        ;;
-    esac
-  done < <(pgrep -f "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh" 2>/dev/null || true)
+    if args_has_option_value "$args" "--serial" "$SERIAL" &&
+      args_has_option_value "$args" "--label" "$LABEL"; then
+      SUPERVISOR_RUNNING_PID="$pid"
+      return 0
+    fi
+  done < "$pids_file"
 
   return 1
 }
@@ -192,9 +200,8 @@ main() {
   instance_lock="$HOTDOG_LOG_ROOT/manual-rescue-watchers/rescue-supervisor-${safe_serial}-${safe_label}.lock"
   mkdir -p "$HOTDOG_LOG_ROOT/manual-rescue-watchers"
   if [ "$ALLOW_DUPLICATE" -ne 1 ]; then
-    running_pid="$(supervisor_running || true)"
-    if [ -n "$running_pid" ]; then
-      log "Supervisor already running for $SERIAL/$LABEL: PID $running_pid"
+    if supervisor_running; then
+      log "Supervisor already running for $SERIAL/$LABEL: PID $SUPERVISOR_RUNNING_PID"
       exit 0
     fi
   fi
