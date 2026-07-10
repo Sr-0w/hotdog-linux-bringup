@@ -47,3 +47,4 @@
 90-rescue-watcher-concurrency-20260710.txt - offline rescue watcher concurrency hardening around phone-lock retry, serial-level launcher start lock, and supervisor instance lock
 91-strict-usb-watchdog-candidate-20260710.txt - prepared 042500 downstream pmaports candidate: 034500 diagnostics plus strict USB-success watchdog and sysrq-first timeout reboot
 92-usb-rescue-guard-20260710.txt - hardened standalone fastboot restore with phone-operation.lock and made the USB rescue watcher duplicate-safe / lock-busy tolerant
+93-visible-tty-autocycle-candidate-20260710.txt - prepared 045000 downstream pmaports candidate: 042500 strict USB watchdog plus automatic visible tty status page rotation
