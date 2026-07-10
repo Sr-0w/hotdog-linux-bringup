@@ -105,6 +105,7 @@ validate_candidate_dir() {
   local dtb="$dir/components/dtb"
   local postmount="$dir/initramfs-tree/hotdog_rootfs_postmount.sh"
   local tty_kmsg="$dir/initramfs-tree/hotdog_tty_kmsg_console.sh"
+  local watchdog="$dir/initramfs-tree/hotdog_rescue_watchdog.sh"
   local visible_shell="$tmpdir/${label}-hotdog-visible-tty-shell.sh"
 
   require_file "$image"
@@ -144,6 +145,13 @@ validate_candidate_dir() {
     grep -q 'buttons: Vol+ full status' "$visible_shell" || fail "$label visible shell missing button help text"
     grep -q 'monitor_input_device' "$visible_shell" || fail "$label visible shell missing input monitor"
     grep -q 'fbcon=vc:1-1' "$cmdline" || fail "$label cmdline missing fbcon=vc:1-1"
+    require_file "$watchdog"
+    /bin/sh -n "$watchdog"
+    grep -q 'HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE="usb"' "$watchdog" || fail "$label watchdog is not USB-success mode"
+    grep -q 'triggering sysrq reboot' "$watchdog" || fail "$label watchdog does not use sysrq reboot first"
+    if grep -Fq '/sys/class/udc/*' "$watchdog"; then
+      fail "$label watchdog treats a bare UDC controller as USB success"
+    fi
   fi
 }
 

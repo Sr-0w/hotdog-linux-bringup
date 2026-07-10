@@ -15,7 +15,7 @@ Options:
                      Default: 90
   --watchdog-success MODE
                      Success condition for the rescue watchdog:
-                     usb  = current behavior, USB gadget or later stage.
+                     usb  = USB gadget/network only.
                      root = require root mount or switch-root.
                      Default: usb
   --source-boot IMG  Source Android boot image. Default:
@@ -501,26 +501,25 @@ hotdog_rescue_watchdog_usb_seen() {
 		[ -n "$udc" ] && return 0
 	fi
 
-	for udc in /sys/class/udc/*; do
-		[ -e "$udc" ] && return 0
-	done
-
 	return 1
 }
 
 hotdog_rescue_watchdog_success_seen() {
 	[ -e /tmp/hotdog_rescue_watchdog.ok ] && return 0
-	[ -e /tmp/hotdog_rescue_watchdog.switch-root ] && return 0
-	[ -e /tmp/hotdog_rescue_watchdog.root-mounted ] && return 0
 
-	if mountpoint -q /sysroot 2>/dev/null && [ -e /sysroot/etc/os-release ]; then
-		return 0
-	fi
-
-	if [ "$HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE" = "usb" ]; then
+	case "$HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE" in
+	usb)
 		[ -e /tmp/hotdog_rescue_watchdog.usb-iface ] && return 0
 		hotdog_rescue_watchdog_usb_seen && return 0
-	fi
+		;;
+	root)
+		[ -e /tmp/hotdog_rescue_watchdog.switch-root ] && return 0
+		[ -e /tmp/hotdog_rescue_watchdog.root-mounted ] && return 0
+		if mountpoint -q /sysroot 2>/dev/null && [ -e /sysroot/etc/os-release ]; then
+			return 0
+		fi
+		;;
+	esac
 
 	return 1
 }
@@ -627,6 +626,12 @@ hotdog_rescue_watchdog_start() {
 
 		hotdog_rescue_watchdog_log "no ${HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE} success marker after ${sec}s; forcing reboot"
 		sync 2>/dev/null || true
+		if [ -w /proc/sysrq-trigger ]; then
+			hotdog_rescue_watchdog_log "triggering sysrq reboot"
+			echo b > /proc/sysrq-trigger
+		fi
+		sleep 3
+		hotdog_rescue_watchdog_log "sysrq reboot failed or returned; trying reboot -f"
 		reboot -f 2>/dev/null || true
 		sleep 3
 		hotdog_rescue_watchdog_log "reboot -f failed or returned; triggering sysrq panic"
