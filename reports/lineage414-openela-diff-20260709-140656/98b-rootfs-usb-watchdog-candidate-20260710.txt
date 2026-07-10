@@ -1,0 +1,93 @@
+Prepared downstream pmaports 4.14 rootfs USB-watchdog prompt candidate
+=====================================================================
+
+Date: 2026-07-10 05:23 CEST
+
+Candidate:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt/boot-noefi-pmosdtb-watchdog-300s.img
+
+Hashes:
+
+  boot image: 95293d7914633a1368ab54bbdd6f5c36323523c331027262506af189448fde2b
+  kernel:     c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+  dtb pack:   9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+  initramfs:  cab3233877b8f262330096f05cd41ca978d5a0bacf4e051f0caf7d03a8a84af9
+
+Purpose:
+
+  052210 supersedes 051407 as the automatic next hardware test. It keeps:
+
+    - pmaports lineage414 kernel r2
+    - fixed entry12 /chosen ranges; DTB pack
+    - initramfs tty-kmsg/fbprep text before switch_root
+    - tty-kmsg stop before switch_root
+    - prompt-first rootfs visible tty shell with autocycle=0
+    - visible USB/watchdog diagnostics
+    - USB-interface-only carrier/up watchdog success
+
+  New in this candidate:
+
+    - hotdog_rescue_watchdog writes /tmp/hotdog_rescue_watchdog.pid.
+    - hotdog_rescue_watchdog_start detects stale pid/started markers and rearms.
+    - init_2nd calls hotdog_rescue_watchdog_start switch-root after pmOS has run
+      its background-shell cleanup.
+    - hotdog_rootfs_postmount.sh installs
+      /etc/local.d/hotdog-usb-watchdog.start into the rootfs, so a no-USB rootfs
+      boot still has a reboot guard after OpenRC starts.
+
+Why:
+
+  postmarketOS init_2nd runs `pidof sh` and kills shell processes just before
+  switch_root. Our initramfs watchdog and tty follower are shell jobs, so the
+  previous candidate could still lose the no-USB reboot guard at the rootfs
+  handoff. This candidate preserves the screen handoff work and adds a second
+  guard on the rootfs side.
+
+Build command:
+
+  ./scripts/build-watchdog-bootimg.sh \
+    --source-boot /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img \
+    --watchdog-sec 300 \
+    --watchdog-success usb \
+    --kernel /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/vmlinuz \
+    --dtb /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb \
+    --with-ramoops-cmdline \
+    --fb-test \
+    --drm-console \
+    --drm-console-helper /home/srobin/dev/hotdog/build/hotdog-drm-console-aarch64 \
+    --drm-console-userspace \
+    --tty-kmsg-console \
+    --visible-tty-shell \
+    --extra-cmdline 'loglevel=8 fbcon=map:0 fbcon=font:VGA8x16 fbcon=vc:1-1' \
+    --base 0x00000000 \
+    --kernel-offset 0x00008000 \
+    --ramdisk-offset 0x01000000 \
+    --second-offset 0x00000000 \
+    --tags-offset 0x00000100 \
+    --dtb-offset 0x01f00000 \
+    --outdir /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-052210-lineage414-pmaports-kernel-rootfsusbwatchdog-prompt
+
+Offline checks:
+
+  - scripts/test-next-lineage414-simplefb-shell.sh points to 052210.
+  - Embedded visible shell has autocycle=0, status follower every 20s, screen#
+    prompt, button diagnostics, and usb/watchdog status.
+  - hotdog_tty_kmsg_console.sh contains hotdog_tty_kmsg_console_stop.
+  - init_2nd.sh calls hotdog_tty_kmsg_console_stop before exec switch_root.
+  - init_2nd.sh calls hotdog_rescue_watchdog_start switch-root.
+  - hotdog_rescue_watchdog.sh records a pidfile and can rearm from a stale pid.
+  - hotdog_rootfs_postmount.sh installs hotdog-usb-watchdog.start.
+  - Watchdog success remains USB mode and checks only usb*, rndis*, and enx*
+    network interfaces for carrier/up state.
+  - validate-current-candidates.sh passes.
+  - find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n passes.
+  - git diff --check passes.
+
+Next hardware action:
+
+  Let the existing wait-pmos-then-test watcher launch the wrapper if SSH returns,
+  or run scripts/test-next-lineage414-simplefb-shell.sh once the phone becomes
+  commandable. Expected screen sequence: early tty/dmesg text, rootfs visible
+  shell banner and screen# prompt if switch_root succeeds, then automatic reboot
+  if no usb/rndis/enx carrier/up state appears before the watchdog deadline.

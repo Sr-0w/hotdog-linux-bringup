@@ -53,3 +53,4 @@
 96-usb-if-only-watchdog-candidate-20260710.txt - prepared 050008 downstream pmaports candidate: 045402 visible diagnostics plus USB success limited to usb/rndis/enx interfaces
 97-passive-usb-dmesg-watcher-20260710.txt - updated passive host watcher to snapshot filtered kernel USB/dmesg changes and fixed current-autopilot-status passive watcher matching
 98-tty-stop-rootfs-prompt-candidate-20260710.txt - prepared 051407 downstream pmaports candidate: 050008 USB-if watchdog plus tty-kmsg stop before switch_root and prompt-first rootfs screen shell
+98b-rootfs-usb-watchdog-candidate-20260710.txt - prepared 052210 downstream pmaports candidate: 051407 prompt handoff plus initramfs watchdog rearm and rootfs local.d USB watchdog
