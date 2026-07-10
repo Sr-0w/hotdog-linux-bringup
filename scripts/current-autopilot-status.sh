@@ -222,7 +222,15 @@ main() {
   [ -n "$state_dir" ] && print_tail phone-state "$state_dir/latest-summary.txt" 40
   [ -n "$rescue_dir" ] && print_tail rescue-visible "$rescue_dir/run.log" 25
   [ -n "$rescue_usb_dir" ] && print_tail rescue-usb-visible "$rescue_usb_dir/run.log" 25
-  [ -n "$acm_dir" ] && print_tail usb-acm-console "$acm_dir/capture.txt" 40
+  if [ -n "$acm_dir" ]; then
+    if [ -s "$acm_dir/capture.txt" ]; then
+      print_tail usb-acm-console "$acm_dir/capture.txt" 40
+    elif [ -s "$HOTDOG_LOG_ROOT/watch-usb-acm-console-launch.log" ]; then
+      print_tail usb-acm-console "$HOTDOG_LOG_ROOT/watch-usb-acm-console-launch.log" 20
+    else
+      print_tail usb-acm-console "$acm_dir/capture.txt" 40
+    fi
+  fi
   [ -n "$wait_simplefb_dir" ] && print_tail wait-simplefb-shell "$wait_simplefb_dir/run.log" 25
   [ -n "$fastboot_dir" ] && print_tail fastboot-dump "$fastboot_dir/watch.log" 25
   [ -n "$continue_dir" ] && print_tail continue-pmos "$continue_dir/run.log" 25

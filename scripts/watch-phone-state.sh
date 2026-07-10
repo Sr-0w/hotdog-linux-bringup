@@ -89,6 +89,16 @@ capture_usb_details() {
     done
 }
 
+read_dmesg() {
+  if dmesg --ctime >/dev/null 2>&1; then
+    dmesg --ctime
+  elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    sudo dmesg --ctime
+  else
+    dmesg --ctime 2>&1 || true
+  fi
+}
+
 write_snapshot() {
   local snapshot_dir="$1"
 
@@ -96,9 +106,10 @@ write_snapshot() {
   adb devices -l > "$snapshot_dir/adb-devices.txt" 2>&1 || true
   fastboot devices -l > "$snapshot_dir/fastboot-devices.txt" 2>&1 || true
   lsusb > "$snapshot_dir/lsusb.txt" 2>&1 || true
-  { dmesg --ctime 2>&1 || true; } | tail -200 > "$snapshot_dir/dmesg-usb-tail.txt"
+  read_dmesg | tail -260 > "$snapshot_dir/dmesg-usb-tail.txt"
   grep -Ei 'usb|dwc3|xhci|cdc|ncm|rndis|android|qualcomm|05c6|18d1|2a70|descriptor|enumerat|disconnect|reset' \
     "$snapshot_dir/dmesg-usb-tail.txt" > "$snapshot_dir/dmesg-usb-interesting.txt" 2>/dev/null || true
+  ls -l /dev/ttyACM* /dev/serial/by-id/* > "$snapshot_dir/tty-acm.txt" 2>&1 || true
   capture_usb_details "$snapshot_dir"
 
   {
@@ -112,6 +123,10 @@ write_snapshot() {
     if [ -s "$snapshot_dir/dmesg-usb-interesting.txt" ]; then
       printf 'dmesg_usb=\n'
       tail -30 "$snapshot_dir/dmesg-usb-interesting.txt" | sed 's/^/  /'
+    fi
+    if [ -s "$snapshot_dir/tty-acm.txt" ]; then
+      printf 'tty_acm=\n'
+      sed 's/^/  /' "$snapshot_dir/tty-acm.txt"
     fi
     if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
       printf 'phone_lock=present\n'
@@ -130,6 +145,7 @@ snapshot_key() {
     cat "$snapshot_dir/fastboot-devices.txt"
     grep -Ei '18d1|2a70|05c6' "$snapshot_dir/lsusb.txt" || true
     cat "$snapshot_dir/dmesg-usb-interesting.txt" 2>/dev/null || true
+    cat "$snapshot_dir/tty-acm.txt" 2>/dev/null || true
     if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
       cat "$HOTDOG_LOG_ROOT/phone-operation.lock/pid" 2>/dev/null || true
     fi
