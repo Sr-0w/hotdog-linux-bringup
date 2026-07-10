@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 
 serial="${ANDROID_SERIAL:-b6bd2252}"
-image="$HOTDOG_ROOT/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
+image="$HOTDOG_ROOT/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 restore="$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img"
 
 exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \

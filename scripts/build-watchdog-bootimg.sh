@@ -40,6 +40,9 @@ Options:
                      Install a persistent OpenRC local.d DRM command console
                      into the mounted rootfs before switch_root. Implies
                      --drm-console.
+  --visible-tty-shell
+                     Install an OpenRC local.d shell/status follower on tty1
+                     after switch_root, for screen-only rootfs diagnostics.
   --drm-console-helper FILE
                      AArch64 hotdog-drm-console binary to inject. Default:
                      $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
@@ -98,6 +101,7 @@ direct_debug_shell=0
 fb_test=0
 drm_console=0
 drm_console_userspace=0
+visible_tty_shell=0
 strip_drm_console=0
 default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 drm_console_helper="$default_drm_console_helper"
@@ -159,6 +163,9 @@ while [ "$#" -gt 0 ]; do
 		--drm-console-userspace)
 			drm_console=1
 			drm_console_userspace=1
+			;;
+		--visible-tty-shell)
+			visible_tty_shell=1
 			;;
 		--drm-console-helper)
 			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
@@ -907,6 +914,135 @@ EOF
 install_drm_console_userspace
 HOTDOG_ROOTFS_DRM_CONSOLE_SH
 	fi
+	if [ "$visible_tty_shell" -eq 1 ]; then
+		cat >> "$helper" <<'HOTDOG_VISIBLE_TTY_SHELL_SH'
+
+install_visible_tty_shell() {
+	local bin_dir="/sysroot/usr/local/bin"
+	local bin="$bin_dir/hotdog-visible-tty-shell"
+	local locald="/sysroot/etc/local.d/hotdog-visible-tty-shell.start"
+	local runlevel="/sysroot/etc/runlevels/default"
+	local initd="/sysroot/etc/init.d/local"
+
+	mkdir -p "$bin_dir" /sysroot/etc/local.d 2>/dev/null || true
+	cat > "$bin" <<'EOF' 2>/dev/null || true
+#!/bin/sh
+tty="${1:-tty1}"
+dev="/dev/$tty"
+
+if [ ! -e "$dev" ] && [ -e /dev/tty0 ]; then
+	tty="tty0"
+	dev="/dev/tty0"
+fi
+[ -e "$dev" ] || exit 0
+
+exec <"$dev" >"$dev" 2>&1
+
+printf '\033c'
+printf 'hotdog visible rootfs shell\n'
+printf 'tty: %s\n' "$tty"
+printf 'date: '; date 2>/dev/null || true
+printf 'uname: '; uname -a 2>/dev/null || true
+printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
+printf '\n--- initial network ---\n'
+ip -br addr 2>/dev/null || ip addr 2>/dev/null || true
+printf '\n--- initial display/fb ---\n'
+ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
+printf '\n--- initial dmesg tail ---\n'
+dmesg | tail -120 2>/dev/null || true
+printf '\n--- status follower every 10s; shell prompt below ---\n'
+
+(
+	i=0
+	while :; do
+		sleep 10
+		printf '\n--- visible tty status %s ---\n' "$i"
+		date 2>/dev/null || true
+		uptime 2>/dev/null || true
+		ip -br addr 2>/dev/null || true
+		dmesg | tail -80 2>/dev/null || true
+		i=$((i + 1))
+	done
+) &
+
+export TERM=linux
+export PS1='screen# '
+exec /bin/sh -i
+EOF
+	chmod 0755 "$bin" 2>/dev/null || true
+
+	cat > "$locald" <<'EOF' 2>/dev/null || true
+#!/bin/sh
+bin=/usr/local/bin/hotdog-visible-tty-shell
+[ -x "$bin" ] || exit 0
+
+log() {
+	printf '%s\n' "[hotdog-visible-tty-shell] $*" > /dev/kmsg 2>/dev/null || true
+}
+
+pick_tty() {
+	for tty in tty1 tty0; do
+		[ -e "/dev/$tty" ] && {
+			printf '%s\n' "$tty"
+			return 0
+		}
+	done
+	return 1
+}
+
+stop_getty_on_tty() {
+	local tty="$1"
+	local proc cmd
+
+	for proc in /proc/[0-9]*; do
+		[ -r "$proc/cmdline" ] || continue
+		cmd="$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null || true)"
+		case "$cmd" in
+			*getty*" $tty"*|*getty*"/dev/$tty"*|*agetty*" $tty"*|*agetty*"/dev/$tty"*)
+				kill "${proc##*/}" 2>/dev/null || true
+				;;
+		esac
+	done
+}
+
+(
+	i=0
+	while [ "$i" -lt 60 ]; do
+		tty="$(pick_tty)" && break
+		sleep 1
+		i=$((i + 1))
+	done
+	[ -n "${tty:-}" ] || {
+		log "no visible tty found"
+		exit 0
+	}
+
+	stop_getty_on_tty "$tty"
+	for d in /sys/class/backlight/*; do
+		[ -w "$d/bl_power" ] && echo 0 > "$d/bl_power" || true
+		if [ -r "$d/max_brightness" ] && [ -w "$d/brightness" ]; then
+			cat "$d/max_brightness" > "$d/brightness" || true
+		fi
+	done
+
+	log "starting $bin on $tty"
+	if command -v setsid >/dev/null 2>&1; then
+		setsid "$bin" "$tty" &
+	else
+		"$bin" "$tty" &
+	fi
+) &
+EOF
+	chmod 0755 "$locald" 2>/dev/null || true
+	if [ -d "$runlevel" ] && [ -e "$initd" ]; then
+		ln -sf /etc/init.d/local "$runlevel/local" 2>/dev/null || true
+	fi
+	log "installed visible tty shell local.d hook"
+}
+
+install_visible_tty_shell
+HOTDOG_VISIBLE_TTY_SHELL_SH
+	fi
 	chmod 0755 "$helper"
 }
 
@@ -1378,6 +1514,7 @@ write_manifest() {
 			if [ "$drm_console" -eq 1 ]; then
 				printf -- '- DRM console helper: `%s`\n' "$drm_console_helper"
 			fi
+			printf -- '- Visible tty shell: `%s`\n' "$visible_tty_shell"
 			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
@@ -1423,6 +1560,9 @@ write_manifest() {
 			fi
 			if [ "$drm_console_userspace" -eq 1 ]; then
 				printf ' --drm-console-userspace'
+			fi
+			if [ "$visible_tty_shell" -eq 1 ]; then
+				printf ' --visible-tty-shell'
 			fi
 			if [ "$strip_drm_console" -eq 1 ]; then
 				printf ' --strip-drm-console'

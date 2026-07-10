@@ -36,7 +36,8 @@
 79-mainline-entry-ram-marker-probe-20260710.txt - prepared preferred offline RAM marker probe patch writing ENT1/ENT2/SWT3 into the 0xa9800000 ramoops dump window
 80-mainline617-rammarker-candidate-20260710.txt - prepared 022522 boot image with RAM-marker mainline kernel plus the previously tested stock full DTB pack/cmdline shape
 81-drm-console-button-input-candidate-20260710.txt - prepared 023410 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics; superseded by 024200
-82-drm-console-button-rescan-candidate-20260710.txt - prepared 024200 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics and periodic input-device rescans; next wrapper points here
+82-drm-console-button-rescan-candidate-20260710.txt - prepared 024200 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics and periodic input-device rescans; superseded by 030600
 83-fbcon-only-stripdrm-candidate-20260710.txt - prepared 025400 secondary downstream pmaports fbcon-only isolation candidate with inherited DRM console hooks stripped
 84-recovery-rammarker-scan-20260710.txt - recovery crash collector now emits ramoops-marker-scan.txt for ENT1/ENT2/SWT3 marker hits in the raw 0xa9800000 dump
 85-mainline-rammarker-wait-wrapper-20260710.txt - added pmOS SSH wait wrapper for 022522 mainline RAM-marker test and clarified collector help for raw ramoops marker scan
+86-dtb-pack-entry12-verification-20260710.txt - added DTB-pack entry inspector and verified 030600 entry12 has ranges/stdout-path/simple-framebuffer

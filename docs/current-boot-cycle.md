@@ -16,7 +16,7 @@ ADB device: not visible
 host lsusb: no phone/Qualcomm device detected
 screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
-pmOS SSH wait/test watcher: running, waiting for SSH before launching 024200
+pmOS SSH wait/test watcher: running, waiting for SSH before launching 030600
 passive phone-state watcher: running, logging ADB/fastboot/USB changes only
 ```
 
@@ -169,7 +169,7 @@ after restore: system
 
 A detached wrapper is also waiting for pmOS SSH. It does not touch the phone
 until SSH at `172.16.42.1` returns. If the rescue watcher restores `215005` and
-pmOS SSH comes back, this wrapper launches the prepared `024200` test with
+pmOS SSH comes back, this wrapper launches the prepared `030600` test with
 `--from-pmos-ssh`:
 
 ```text
@@ -177,7 +177,7 @@ pid: 1409621
 launcher log: /home/srobin/dev/hotdog/logs/wait-and-test-lineage414-simplefb-shell-2026-07-10-013426/launcher.log
 wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-simplefb-shell-2026-07-10-013426/run.log
 script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
-next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 ```
 
@@ -198,25 +198,48 @@ poll: 5s
 ## Prepared Kernel-Console Candidate
 
 Built but not flashed yet because the phone is still not visible over USB.
-The current automatic next candidate is `024200`. It supersedes `015500` and
-`023410`, while keeping the same local pmaports `pkgrel=2` kernel config with
-`VT`, `FB_SIMPLE`, `FRAMEBUFFER_CONSOLE`, and `DRM_FBDEV_EMULATION` enabled. It
-also keeps the fixed entry12 `/chosen ranges;` DTB pack, the initramfs watchdog,
-the `fb-test`, and the DRM helper path. Compared with `023410`, the helper now
-rescans `/dev/input/event*` so late Vol+/Vol- input nodes can become usable:
+The current automatic next candidate is `030600`. It supersedes `024200` while
+keeping the same local pmaports `pkgrel=2` kernel config with `VT`,
+`FB_SIMPLE`, `FRAMEBUFFER_CONSOLE`, and `DRM_FBDEV_EMULATION` enabled. It also
+keeps the fixed entry12 `/chosen ranges;` DTB pack, the initramfs watchdog, the
+`fb-test`, the DRM helper with Vol+/Vol- diagnostics, and adds a rootfs
+`hotdog-visible-tty-shell` local.d hook. If rootfs is reached, the screen should
+show a tty1/tty0 shell prompt plus a 10s status follower after `switch_root`:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: 1031e5b3e538e309facc3b024911e4845f6b42fa9768672d86d467e5f33893ca
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: c36b84a0299952569c6a21599a573aff123eee372b3417130f590eef274b91e4
 kernel override: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/vmlinuz
 kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
 dtb pack: /home/srobin/dev/hotdog/build/apk-extract/linux-oneplus-hotdog-lineage414-r2/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
 DRM helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
 base image: 215005 validated downstream 4.14 DRM-console boot image
-options: --kernel pmaports-r2 --dtb fixed-entry12 --fb-test --drm-console-userspace --watchdog-success root
-initramfs sha256: c46832eb1141af0be82d1ee5ba0141a9a6d0308b8cbc5f6358f6370eec3ed4f3
-expected new signal: fbcon/simplefb kernel text before the DRM userspace console, if the bootloader accepts the pmaports kernel payload
+options: --kernel pmaports-r2 --dtb fixed-entry12 --fb-test --drm-console-userspace --visible-tty-shell --with-ramoops-cmdline --watchdog-success root
+initramfs sha256: e14c04d0e1b2ce580137c1aae6e37382308209e9aa92d5cb6af0a23233a448d7
+expected new signal: fbcon/simplefb kernel text before the DRM userspace console, then a visible rootfs tty shell/status follower if rootfs is reached
+```
+
+DTB-pack verification note: the payload is a concatenated 20-entry Android DTB
+pack. Plain `dtc -I dtb components/dtb` only shows entry 0 and is misleading
+for this phone. Use:
+
+```text
+/home/srobin/dev/hotdog/scripts/inspect-dtb-pack-simplefb.sh \
+  --dtb /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/components/dtb \
+  --entry 12
+```
+
+The verified `030600` entry 12 result is:
+
+```text
+entries=20
+selected_entry=12
+chosen_ranges=yes
+stdout_path=yes
+linux_stdout_path=yes
+simplefb_compatible=yes
+display0_alias=yes
 ```
 
 ## Fallback Downstream Console Candidate
@@ -277,8 +300,9 @@ memory resource`; the reliable screen path is the DRM/KMS helper after
 multi-DTB-pack entry12 simplefb node was missing `ranges;` below `/chosen`,
 while older single-DTB experiments that looked healthier did include it. The
 `014400` image is the isolated ramdisk/DTB-only fallback for that fix, while
-`024200` tests the pmaports kernel config required for fbcon with the most useful
-screen-side diagnostics. `025400` is the stricter no-DRM-helper isolation test.
+`030600` tests the pmaports kernel config required for fbcon with the most useful
+screen-side diagnostics and a rootfs visible tty shell. `025400` is the stricter
+no-DRM-helper isolation test.
 
 ## Last Mainline Test
 
@@ -328,18 +352,19 @@ PSCI.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Test the prepared downstream `024200` image once the phone is back in a
-   commandable state. It keeps the `015500` pmaports kernel/DTB/cmdline shape
-   and adds local Vol+/Vol- diagnostics to the DRM command shell, including a
-   periodic rescan for input devices that appear after the helper starts.
+3. Test the prepared downstream `030600` image once the phone is back in a
+   commandable state. It keeps the `024200` pmaports kernel/DTB/cmdline shape
+   and adds a visible rootfs tty shell/status follower on top of the local
+   Vol+/Vol- diagnostics and periodic input-device rescan.
    Expected observations: kernel/fbcon text if simplefb binds, early framebuffer
    color paint if `/dev/fb0` appears, then an idle `initramfs#` prompt and
-   finally the userspace DRM command shell if rootfs is reached.
+   finally either the userspace DRM command shell or a tty1/tty0 `screen#`
+   prompt if rootfs is reached.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
    local downstream 4.14 pmaports package as `pkgrel=2` and validated with
-   `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `024200` still
+   `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `030600` still
    reports `No memory resource`, continue in the simplefb resource translation
-   path rather than changing printk cmdline flags. If `024200` fails earlier
+   path rather than changing printk cmdline flags. If `030600` fails earlier
    than `014400`, compare the pmaports kernel Image packaging/config against
    the boot-proven `215005` kernel.
 5. Keep using `scripts/build-hotdog-drm-console-helper.sh` to regenerate the
@@ -363,16 +388,17 @@ PSCI.
 9. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
-Prepared downstream button-input/fbcon candidate:
+Prepared downstream screen-shell/fbcon candidate:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: 1031e5b3e538e309facc3b024911e4845f6b42fa9768672d86d467e5f33893ca
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-030600-lineage414-pmaports-kernel-screen-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: c36b84a0299952569c6a21599a573aff123eee372b3417130f590eef274b91e4
 kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-initramfs sha256: c46832eb1141af0be82d1ee5ba0141a9a6d0308b8cbc5f6358f6370eec3ed4f3
+initramfs sha256: e14c04d0e1b2ce580137c1aae6e37382308209e9aa92d5cb6af0a23233a448d7
 helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
+visible tty shell: yes, local.d hook starts `hotdog-visible-tty-shell` on tty1/tty0 after switch_root
 ```
 
 Prepared secondary fbcon-only isolation candidate:
