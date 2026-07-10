@@ -606,9 +606,16 @@ hotdog_rescue_watchdog_try_modules() {
 
 hotdog_rescue_watchdog_start() {
 	local stage="$1"
-	local sec
+	local pid sec
 
-	[ -e /tmp/hotdog_rescue_watchdog.started ] && return 0
+	if [ -e /tmp/hotdog_rescue_watchdog.started ]; then
+		if [ -r /tmp/hotdog_rescue_watchdog.pid ]; then
+			pid="$(cat /tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true)"
+			[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+		fi
+		hotdog_rescue_watchdog_log "stale watchdog marker at $stage; rearming"
+		rm -f /tmp/hotdog_rescue_watchdog.started /tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true
+	fi
 
 	sec="$(hotdog_rescue_watchdog_cmdline_sec)" || return 0
 	mkdir -p /tmp 2>/dev/null || true
@@ -652,6 +659,7 @@ hotdog_rescue_watchdog_start() {
 		fi
 		hotdog_rescue_watchdog_log "sysrq panic trigger failed or unavailable"
 	) &
+	echo $! > /tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true
 }
 WATCHDOG_SH
 	sed -i "s/__HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE__/$watchdog_success/g" "$helper"
@@ -854,6 +862,103 @@ EOF
 chmod 0755 /sysroot/etc/local.d/hotdog-ptmx.start 2>/dev/null || true
 log "installed local.d ptmx repair"
 HOTDOG_ROOTFS_POSTMOUNT_SH
+	if [ "$watchdog_success" = "usb" ]; then
+		cat >> "$helper" <<'HOTDOG_ROOTFS_USB_WATCHDOG_SH'
+
+install_rootfs_usb_watchdog() {
+	local locald="/sysroot/etc/local.d/hotdog-usb-watchdog.start"
+	local runlevel="/sysroot/etc/runlevels/default"
+	local initd="/sysroot/etc/init.d/local"
+
+	cat > "$locald" <<'EOF' 2>/dev/null || true
+#!/bin/sh
+
+log() {
+	printf '%s\n' "[hotdog-rootfs-usb-watchdog] $*" > /dev/kmsg 2>/dev/null || true
+}
+
+cmdline_sec() {
+	local word sec
+	[ -r /proc/cmdline ] || return 1
+	for word in $(cat /proc/cmdline); do
+		case "$word" in
+			hotdog_rescue_watchdog_sec=*)
+				sec="${word#hotdog_rescue_watchdog_sec=}"
+				;;
+		esac
+	done
+	case "$sec" in
+		""|*[!0-9]*)
+			return 1
+			;;
+	esac
+	[ "$sec" -gt 0 ] || return 1
+	printf '%s\n' "$sec"
+}
+
+usb_seen() {
+	local iface carrier operstate
+	for iface in /sys/class/net/usb* /sys/class/net/rndis* /sys/class/net/enx*; do
+		[ -e "$iface" ] || continue
+		if [ -r "$iface/carrier" ]; then
+			carrier="$(cat "$iface/carrier" 2>/dev/null || true)"
+			[ "$carrier" = "1" ] && return 0
+			continue
+		fi
+		if [ -r "$iface/operstate" ]; then
+			operstate="$(cat "$iface/operstate" 2>/dev/null || true)"
+			[ "$operstate" = "up" ] && return 0
+		fi
+	done
+	return 1
+}
+
+sec="$(cmdline_sec)" || exit 0
+
+(
+	log "armed for ${sec}s"
+	if [ -w /proc/sys/kernel/sysrq ]; then
+		echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true
+	fi
+	slept=0
+	while [ "$slept" -lt "$sec" ]; do
+		if usb_seen; then
+			log "USB carrier/up seen before deadline"
+			exit 0
+		fi
+		sleep 1
+		slept=$((slept + 1))
+	done
+	if usb_seen; then
+		log "USB carrier/up seen at deadline"
+		exit 0
+	fi
+	log "no USB carrier/up after ${sec}s; forcing reboot"
+	sync 2>/dev/null || true
+	if [ -w /proc/sysrq-trigger ]; then
+		log "triggering sysrq reboot"
+		echo b > /proc/sysrq-trigger
+	fi
+	sleep 3
+	log "sysrq reboot failed or returned; trying reboot -f"
+	reboot -f 2>/dev/null || true
+	sleep 3
+	if [ -w /proc/sysrq-trigger ]; then
+		log "triggering sysrq panic"
+		echo c > /proc/sysrq-trigger
+	fi
+) &
+EOF
+	chmod 0755 "$locald" 2>/dev/null || true
+	if [ -d "$runlevel" ] && [ -e "$initd" ]; then
+		ln -sf /etc/init.d/local "$runlevel/local" 2>/dev/null || true
+	fi
+	log "installed rootfs USB watchdog local.d hook"
+}
+
+install_rootfs_usb_watchdog
+HOTDOG_ROOTFS_USB_WATCHDOG_SH
+	fi
 	if [ "$drm_console_userspace" -eq 1 ]; then
 		cat >> "$helper" <<'HOTDOG_ROOTFS_DRM_CONSOLE_SH'
 
@@ -1668,6 +1773,7 @@ fi
 if [ -r /hotdog_rescue_watchdog.sh ]; then
 	. /hotdog_rescue_watchdog.sh
 	hotdog_rescue_watchdog_mark switch-root
+	hotdog_rescue_watchdog_start switch-root
 fi
 if [ -r /hotdog_tty_kmsg_console.sh ]; then
 	. /hotdog_tty_kmsg_console.sh
