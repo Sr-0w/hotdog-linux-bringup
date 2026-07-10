@@ -197,7 +197,6 @@ wait_recovery_adb() {
 }
 
 restore_from_fastboot() {
-  phone_lock_acquire "rescue restore boot_b" 0
   validate_fastboot_identity
   get_fastboot_var current-slot | tee "$run_dir/current-slot-before.txt" || true
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
@@ -271,6 +270,11 @@ main() {
   while [ "$SECONDS" -lt "$deadline" ]; do
     if fastboot_present; then
       log "Target visible in fastboot"
+      if ! phone_lock_acquire "rescue restore boot_b" 0; then
+        log "Phone operation lock is busy; leaving target untouched and retrying"
+        sleep "$POLL_SEC"
+        continue
+      fi
       restore_from_fastboot
       exit 0
     fi
@@ -278,18 +282,32 @@ main() {
     state="$(adb_state)"
     if [ "$state" = "recovery" ]; then
       log "Target visible in recovery ADB; rebooting to bootloader for boot_b restore"
+      if ! phone_lock_acquire "rescue recovery-to-fastboot boot_b restore" 0; then
+        log "Phone operation lock is busy; leaving recovery untouched and retrying"
+        sleep "$POLL_SEC"
+        continue
+      fi
       collect_recovery_crash_artifacts "direct-recovery-before-restore"
-      phone_lock_acquire "rescue recovery-to-fastboot boot_b restore" 0
       adb_do reboot bootloader
       phone_lock_release
       local fastboot_deadline=$((SECONDS + 90))
+      local fastboot_seen_but_lock_busy=0
       while [ "$SECONDS" -lt "$fastboot_deadline" ]; do
         if fastboot_present; then
+          if ! phone_lock_acquire "rescue restore boot_b" 0; then
+            log "Phone operation lock is busy after recovery handoff; retrying outer wait loop"
+            fastboot_seen_but_lock_busy=1
+            break
+          fi
           restore_from_fastboot
           exit 0
         fi
         sleep 2
       done
+      if [ "$fastboot_seen_but_lock_busy" -eq 1 ]; then
+        sleep "$POLL_SEC"
+        continue
+      fi
       die "Recovery rebooted but fastboot did not appear" 3
     fi
 

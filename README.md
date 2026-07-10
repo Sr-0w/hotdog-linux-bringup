@@ -145,7 +145,8 @@ small patches in Git while leaving large generated artifacts local.
 
 For long hardware sessions, [scripts/start-stable-rescue-watcher.sh](scripts/start-stable-rescue-watcher.sh)
 starts the rescue watcher as a detached process and keeps the stable image
-available as a recovery target.
+available as a recovery target. It refuses to start a second rescue watcher for
+the same serial unless `--allow-duplicate` is passed intentionally.
 
 [scripts/show-stable-drm-pattern.sh](scripts/show-stable-drm-pattern.sh) can
 start or collect the known-good KMS test pattern on an already booted stable

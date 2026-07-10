@@ -9,6 +9,7 @@ AFTER_RESTORE="${AFTER_RESTORE:-system}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-21600}"
 POLL_SEC="${POLL_SEC:-5}"
 LABEL="${LABEL:-stable-drm}"
+ALLOW_DUPLICATE="${ALLOW_DUPLICATE:-0}"
 
 usage() {
   cat <<'USAGE'
@@ -25,6 +26,7 @@ Options:
   --timeout SEC          Watcher timeout. Default: 21600.
   --poll SEC             Poll interval. Default: 5.
   --label NAME           Log/pid label. Default: stable-drm.
+  --allow-duplicate      Allow another rescue watcher for the same serial.
   -h, --help             Show this help.
 USAGE
 }
@@ -55,6 +57,9 @@ while [ "$#" -gt 0 ]; do
       LABEL="$2"
       shift
       ;;
+    --allow-duplicate)
+      ALLOW_DUPLICATE=1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -81,10 +86,68 @@ watch_dir="$HOTDOG_LOG_ROOT/manual-rescue-watchers"
 mkdir -p "$watch_dir"
 
 stamp="$(date +%F-%H%M%S)"
-pidfile="$watch_dir/rescue-${LABEL}-current.pid"
-stdout_log="$watch_dir/rescue-${LABEL}-start-stop-daemon-$stamp.log"
-stderr_log="$watch_dir/rescue-${LABEL}-start-stop-daemon-$stamp.err"
-current_log="$watch_dir/rescue-${LABEL}-current.log"
+safe_name() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.:-' '_'
+}
+
+rescue_watcher_pid_for_serial() {
+  local pid
+  local args
+
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+    case "$args" in
+      *"$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"*"--serial $SERIAL"*|*"$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"*"--serial=$SERIAL"*)
+        printf '%s\n' "$pid"
+        return 0
+        ;;
+    esac
+  done < <(pgrep -f "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" 2>/dev/null || true)
+
+  return 1
+}
+
+acquire_start_lock() {
+  local owner=""
+
+  while true; do
+    if mkdir "$start_lock" 2>/dev/null; then
+      printf '%s\n' "$$" > "$start_lock/pid"
+      return 0
+    fi
+
+    owner="$(sed -n '1p' "$start_lock/pid" 2>/dev/null || true)"
+    if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then
+      echo "Rescue watcher start lock is busy by PID $owner: $start_lock" >&2
+      return 1
+    fi
+
+    rm -rf "$start_lock"
+  done
+}
+
+safe_serial="$(safe_name "$SERIAL")"
+safe_label="$(safe_name "$LABEL")"
+pidfile="$watch_dir/rescue-${safe_serial}-${safe_label}-current.pid"
+stdout_log="$watch_dir/rescue-${safe_serial}-${safe_label}-start-stop-daemon-$stamp.log"
+stderr_log="$watch_dir/rescue-${safe_serial}-${safe_label}-start-stop-daemon-$stamp.err"
+current_log="$watch_dir/rescue-${safe_serial}-${safe_label}-current.log"
+start_lock="$watch_dir/rescue-${safe_serial}.start.lock"
+
+if ! acquire_start_lock; then
+  exit 0
+fi
+trap 'rm -rf "$start_lock"' EXIT
+
+if [ "$ALLOW_DUPLICATE" -ne 1 ]; then
+  running_pid="$(rescue_watcher_pid_for_serial || true)"
+  if [ -n "$running_pid" ]; then
+    echo "Rescue watcher already running for $SERIAL: PID $running_pid"
+    echo "Use --allow-duplicate only for intentional diagnostics."
+    exit 0
+  fi
+fi
 
 if [ -s "$pidfile" ]; then
   old_pid="$(sed -n '1p' "$pidfile" 2>/dev/null || true)"

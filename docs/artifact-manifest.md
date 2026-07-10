@@ -72,8 +72,9 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/scripts/test-lineage414-splash-ttykmsg.sh` | Manual wrapper for the secondary `034200` splash/fbprep screen test. It restores `boot_b` to `215005` and starts a companion rescue watcher, but it is not the automatic next test. |
 | `/home/srobin/dev/hotdog/scripts/test-lineage414-fbcon-only.sh` | Manual wrapper for the secondary `025400` fbcon-only isolation test. It restores `boot_b` to `215005` and starts a companion rescue watcher, but it is not the automatic next test. |
 | `/home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh` | Waits for pmOS SSH, then launches the current downstream pmaports/fbcon test from the booted pmOS system with `--from-pmos-ssh`. |
+| `/home/srobin/dev/hotdog/scripts/start-stable-rescue-watcher.sh` | Starts a detached stable rescue watcher with `start-stop-daemon`. It serializes starts per phone serial and refuses duplicate rescue watchers unless `--allow-duplicate` is passed intentionally. |
 | `/home/srobin/dev/hotdog/scripts/start-rescue-visible-supervisor.sh` | Starts a detached supervisor that keeps one stable `rescue-boot-b-when-visible.sh` watcher alive without flashing or touching the phone itself. |
-| `/home/srobin/dev/hotdog/scripts/watch-rescue-visible-supervisor.sh` | Passive rescue watcher supervisor. It only starts `start-stable-rescue-watcher.sh` when no matching rescue watcher is alive. |
+| `/home/srobin/dev/hotdog/scripts/watch-rescue-visible-supervisor.sh` | Passive rescue watcher supervisor. It only starts `start-stable-rescue-watcher.sh` when no matching rescue watcher is alive, and now holds a per-serial/label instance lock to avoid duplicate supervisors. |
 | `/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150/device/testing/linux-oneplus-hotdog-lineage414` | Local downstream 4.14 aport. The local copy has `pkgrel=2` and `stock-hotdog-dtbpack.dtb` updated to the fixed entry12 `/chosen ranges;` DTB pack; `pmbootstrap checksum linux-oneplus-hotdog-lineage414` validated the SHA512 on 2026-07-10 01:15 CEST. |
 | `/home/srobin/dev/hotdog/pmbootstrap-work/packages/edge/aarch64/linux-oneplus-hotdog-lineage414-4.14.357_git20260703-r2.apk` | Built downstream 4.14 kernel package from the local `pkgrel=2` aport after the fixed DTB-pack promotion. SHA256 `f50f98ee251f1f4658aba1ea6bfc8141db79359485e0b15076370c19702482ff`. |
 
@@ -107,6 +108,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/87-tty-kmsg-screen-candidate-20260710.txt` | Prepared boot image `033600`, which adds an initramfs tty0/tty1 kmsg/status follower plus fb0/backlight preparation before the DRM helper while preserving the verified pmaports kernel and entry12 simplefb DTB pack. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/88-splash-ttykmsg-secondary-20260710.txt` | Prepared secondary boot image `034200`, which appends `splash` to exercise the normal pmOS initramfs framebuffer setup path before the same tty-kmsg/fbprep diagnostics. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/89-button-visible-tty-candidate-20260710.txt` | Prepared boot image `034500`, which keeps the `033600` pmaports kernel/DTB path and makes the rootfs visible tty console controllable through Vol+/Vol-/Power. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/90-rescue-watcher-concurrency-20260710.txt` | Offline autopilot hardening: explicit phone-lock retry in rescue, serial-level launcher start lock, and supervisor instance lock. |
 
 ## Resume order
 
