@@ -51,3 +51,4 @@
 94-usb-carrier-watchdog-candidate-20260710.txt - prepared 044715 downstream pmaports candidate: 045000 auto-cycle plus USB carrier/up watchdog success only
 95-usb-watchdog-screen-diag-candidate-20260710.txt - prepared 045402 downstream pmaports candidate: 044715 USB-carrier watchdog plus visible USB/watchdog diagnostics
 96-usb-if-only-watchdog-candidate-20260710.txt - prepared 050008 downstream pmaports candidate: 045402 visible diagnostics plus USB success limited to usb/rndis/enx interfaces
+97-passive-usb-dmesg-watcher-20260710.txt - updated passive host watcher to snapshot filtered kernel USB/dmesg changes and fixed current-autopilot-status passive watcher matching

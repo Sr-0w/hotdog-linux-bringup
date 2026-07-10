@@ -41,6 +41,7 @@ only the artifacts you actually need.
 | Path | Purpose |
 |---|---|
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-215020` | Validated downstream DRM-console boot. pmOS SSH returned with boot id `7854ea12-7415-41bc-8f2e-59d8865fd041`; initramfs console marker appears at 2.029100s. |
+| `/home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-050641` | Active passive host watcher. It snapshots ADB, fastboot, lsusb, USB descriptors, udev, and recent host kernel USB messages; changes in filtered `dmesg_usb` lines now create a new snapshot even when `lsusb` remains empty. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-220520` | Mainline 6.17 minimal/pstore plus DRM-console test. Timed out after 720s with no USB recovery path; manual fastboot recovery later restored the downstream image. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-09-224052` | Mainline 6.17 rebuilt with built-in PSTORE/RAMOOPS plus DRM-console test. Timed out after 720s with no USB recovery path; pstore was still empty after recovery. |
 | `/home/srobin/dev/hotdog/logs/test-boot-b-image-2026-07-10-003038` | Mainline 6.17 pstore-built test with unmodified stock full DTB pack. Timed out after 720s with no USB recovery path; companion rescue watcher left running. |
