@@ -328,11 +328,12 @@ PSCI.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Test the prepared downstream `015500` image once the phone is back in a
-   commandable state. Expected observations: kernel/fbcon text if simplefb
-   binds, early framebuffer color paint if `/dev/fb0` appears, then an idle
-   `initramfs#` prompt and finally the userspace DRM command shell if rootfs is
-   reached.
+3. Test the prepared downstream `023410` image once the phone is back in a
+   commandable state. It keeps the `015500` pmaports kernel/DTB/cmdline shape
+   and adds local Vol+/Vol- diagnostics to the DRM command shell. Expected
+   observations: kernel/fbcon text if simplefb binds, early framebuffer color
+   paint if `/dev/fb0` appears, then an idle `initramfs#` prompt and finally
+   the userspace DRM command shell if rootfs is reached.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
    local downstream 4.14 pmaports package as `pkgrel=2` and validated with
    `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `015500` still
@@ -355,6 +356,17 @@ PSCI.
    window and can be launched with `scripts/test-next-mainline617-rammarker.sh`.
 9. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
+
+Prepared downstream button-input/fbcon candidate:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-023410-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 3ba2d5ad8ed99dad18e249e9a1ab481183b96a2fed360a533248c037126f44b7
+kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+helper sha256: 7ae2995a6cc0f8c6d4b5838d3f0039ac07bbe6effba47552ba08bfeb860365b2
+wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
+```
 
 Prepared mainline RAM-marker candidate:
 
@@ -396,4 +408,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/73-mainline617-stockdtbpack-timeout-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/79-mainline-entry-ram-marker-probe-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/80-mainline617-rammarker-candidate-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/81-drm-console-button-input-candidate-20260710.txt
 ```
