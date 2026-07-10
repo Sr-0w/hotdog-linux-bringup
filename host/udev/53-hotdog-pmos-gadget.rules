@@ -1,0 +1,5 @@
+# OnePlus 7T Pro postmarketOS USB gadget used during hotdog bring-up.
+# Grants the local plugdev user access to the pmOS CDC ACM serial console and
+# keeps modem managers from probing it as an AT modem.
+SUBSYSTEM=="tty", KERNEL=="ttyACM*", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="d001", MODE="0660", GROUP="plugdev", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="d001", MODE="0660", GROUP="plugdev", TAG+="uaccess"

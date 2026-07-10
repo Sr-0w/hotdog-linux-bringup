@@ -1,6 +1,6 @@
 # Host preparation status
 
-Date : 2026-07-09
+Date : 2026-07-10
 
 Machine : Gentoo Linux, OpenRC, x86_64, kernel `7.1.3-gentoo-dist-bin`.
 
@@ -25,8 +25,9 @@ Machine : Gentoo Linux, OpenRC, x86_64, kernel `7.1.3-gentoo-dist-bin`.
 | bkerler EDL | OK | Installe localement dans `src/qualcomm/edl`, wrapper `tools/bin/edl`, Loaders initialises. |
 | linux-msm qdl | OK | Installe localement dans `src/qualcomm/qdl`, build Meson dans `tools/qdl-install`, wrapper `tools/bin/qdl`. |
 | Regles udev EDL | OK | `/etc/udev/rules.d/52-hotdog-edl.rules` pour `05c6:9008`, `900e`, `9006` via groupe `plugdev`. |
+| Regles udev pmOS gadget | OK | `/etc/udev/rules.d/53-hotdog-pmos-gadget.rules`, versionnee dans `host/udev/53-hotdog-pmos-gadget.rules`, pour le gadget `18d1:d001`, `ttyACM*`, groupe `plugdev`, `TAG+="uaccess"`, et `ID_MM_DEVICE_IGNORE=1`. |
 | ModemManager | OK | Service OpenRC arrete; pas de conflit observe. |
-| Serial console tools | OK | `picocom` et `minicom` installes. |
+| Serial console tools | OK | `socat`, `picocom`, `minicom` et `stty` disponibles. |
 | Network debug tools | OK | `tcpdump` et `nmap` installes pour USB networking/SSH. |
 | Cross-GCC AArch64 | OK via pmbootstrap | La toolchain Alpine a compile le kernel `linux-postmarketos-sm8150-staging`. |
 
@@ -46,7 +47,7 @@ Machine : Gentoo Linux, OpenRC, x86_64, kernel `7.1.3-gentoo-dist-bin`.
 
 | Item | Etat | Action |
 |---|---|---|
-| Telephone | pmOS SSH USB | `user@172.16.42.1`, mot de passe `147147`, kernel stock Android/Lineage `4.14.356-openela-rc1-perf-gdd6ca02fc3f9`. |
+| Telephone | Actuellement invisible USB | Dernier boot valide connu: pmOS SSH USB `user@172.16.42.1`, mot de passe `147147`, kernel stock Android/Lineage `4.14.356-openela-rc1-perf-gdd6ca02fc3f9`. Les watchers attendent fastboot/recovery/USB sans action physique. |
 | Ecran telephone | Non fiable pour le succes | Le logo/ecran noir ne suffit pas a juger; le signal de boot actuel est SSH USB. |
 | Fastboot/recovery | Secours seulement | Ne les demander que si SSH/telnet/watchdog ne reviennent pas. |
 | Flash boot_b depuis pmOS | OK | `flash-boot-b-from-pmos-ssh.sh` a reflashe l'image courante et verifie le SHA relu depuis `boot_b`. Utiliser ce flux en priorite. |
@@ -61,6 +62,7 @@ Machine : Gentoo Linux, OpenRC, x86_64, kernel `7.1.3-gentoo-dist-bin`.
 | Watcher EDL read-only | Disponible | `watch-edl-dump-critical.sh --timeout 604800`; utilise le loader OnePlus OP7T `000a50e100514985_2acf3a85fde334e2_fhprg_op7t.bin`. |
 | Watcher continuation pmOS | Disponible | `continue-after-dump-to-pmos.sh --timeout 604800 --flash-timeout 900 --ssh-timeout 1200 --handoff-timeout 180 --serial b6bd2252`; attendre un candidat boot plus sûr avant de relancer. |
 | Watcher etat passif | Disponible | `watch-phone-state.sh --timeout 604800 --poll 5`; archive ADB/fastboot/USB/descripteurs et lignes kernel USB host sans prendre le verrou telephone. |
+| Watcher USB ACM | Actif | `watch-usb-acm-console.sh --timeout 604800 --poll 2`; attend `/dev/ttyACM*`, capture dans `logs/watch-usb-acm-console-*`, et expose `input.fifo` pour parler au shell série sans ADB/fastboot/SSH. |
 | Watcher resume incident | Disponible | `watch-stall-summary.sh --timeout 604800 --poll 30`; rafraichit `logs/current-stall-summary.txt` sans prendre le verrou telephone. |
 | Watcher scrcpy | Disponible | `watch-adb-scrcpy.sh --timeout 604800 --poll 3 --serial b6bd2252`; ouvre scrcpy automatiquement quand Android expose ADB `device`. |
 | Watcher sante autopilot | Disponible | `watch-autopilot-health.sh --timeout 604800 --poll 60 --serial b6bd2252`; rearme les six watchers principaux si l'un meurt et si aucun verrou telephone n'est tenu; `--check-once` verifie sans redemarrer. |
