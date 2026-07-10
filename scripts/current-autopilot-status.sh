@@ -144,7 +144,7 @@ main() {
   pattern_lines rescue-usb-visible "$HOTDOG_ROOT/scripts/rescue-boot-b-when-usb-visible.sh"
   pattern_lines rescue-supervisor "$HOTDOG_ROOT/scripts/watch-rescue-visible-supervisor.sh"
   pattern_lines wait-simplefb-shell "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
-  pattern_lines passive-phone-state "$HOTDOG_ROOT/scripts/watch-phone-state.sh --timeout 21600 --poll 5"
+  pattern_lines passive-phone-state "watch-phone-state.sh --timeout 21600 --poll 5"
 
   printf '\n== phone lock ==\n'
   if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then

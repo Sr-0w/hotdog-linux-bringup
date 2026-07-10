@@ -97,6 +97,8 @@ write_snapshot() {
   fastboot devices -l > "$snapshot_dir/fastboot-devices.txt" 2>&1 || true
   lsusb > "$snapshot_dir/lsusb.txt" 2>&1 || true
   { dmesg --ctime 2>&1 || true; } | tail -200 > "$snapshot_dir/dmesg-usb-tail.txt"
+  grep -Ei 'usb|dwc3|xhci|cdc|ncm|rndis|android|qualcomm|05c6|18d1|2a70|descriptor|enumerat|disconnect|reset' \
+    "$snapshot_dir/dmesg-usb-tail.txt" > "$snapshot_dir/dmesg-usb-interesting.txt" 2>/dev/null || true
   capture_usb_details "$snapshot_dir"
 
   {
@@ -107,6 +109,10 @@ write_snapshot() {
     sed 's/^/  /' "$snapshot_dir/fastboot-devices.txt"
     printf 'usb=\n'
     grep -Ei '18d1|2a70|05c6' "$snapshot_dir/lsusb.txt" | sed 's/^/  /' || true
+    if [ -s "$snapshot_dir/dmesg-usb-interesting.txt" ]; then
+      printf 'dmesg_usb=\n'
+      tail -30 "$snapshot_dir/dmesg-usb-interesting.txt" | sed 's/^/  /'
+    fi
     if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
       printf 'phone_lock=present\n'
       sed 's/^/  /' "$HOTDOG_LOG_ROOT/phone-operation.lock/pid" 2>/dev/null || true
@@ -123,6 +129,7 @@ snapshot_key() {
     cat "$snapshot_dir/adb-devices.txt"
     cat "$snapshot_dir/fastboot-devices.txt"
     grep -Ei '18d1|2a70|05c6' "$snapshot_dir/lsusb.txt" || true
+    cat "$snapshot_dir/dmesg-usb-interesting.txt" 2>/dev/null || true
     if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
       cat "$HOTDOG_LOG_ROOT/phone-operation.lock/pid" 2>/dev/null || true
     fi

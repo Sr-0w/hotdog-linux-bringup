@@ -1,6 +1,6 @@
 # Current boot cycle
 
-Date: 2026-07-10 05:04 CEST
+Date: 2026-07-10 05:09 CEST
 
 ## Current Status
 
@@ -18,7 +18,7 @@ screen: visible text reported, not yet a host-commandable shell
 companion rescue watcher: running, waiting for fastboot or recovery ADB
 rescue supervisor: running, restarts a stable rescue watcher if the current one expires
 pmOS SSH wait/test watcher: running, waiting for SSH before launching 050008
-passive phone-state watcher: running, logging ADB/fastboot/USB changes only
+passive phone-state watcher: running, logging ADB/fastboot/USB and host kernel USB-log changes
 autopilot hardening: duplicate rescue/supervisor starts now refused by default
 USB rescue guard: running, no EDL writes, can run beside rescue-visible because fastboot restore now takes phone-operation.lock
 ```
@@ -236,13 +236,18 @@ This watcher only snapshots host-visible state. It does not flash, reboot,
 sideload, use SSH, or take the phone-operation lock.
 
 ```text
-pid: 1428208
-launcher log: /home/srobin/dev/hotdog/logs/passive-phone-state-2026-07-10-013842/launcher.log
-run log: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-013842/run.log
-latest summary: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-013842/latest-summary.txt
+pid: 2464827
+pidfile: /home/srobin/dev/hotdog/logs/watch-phone-state.pid
+run log: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-050641/run.log
+latest summary: /home/srobin/dev/hotdog/logs/watch-phone-state-2026-07-10-050641/latest-summary.txt
 timeout: 21600s
 poll: 5s
 ```
+
+In addition to `adb`, `fastboot`, `lsusb`, USB descriptors, and udev details,
+the watcher now includes recent host kernel USB lines in `dmesg_usb=` and treats
+changes there as new snapshots. This catches host-side enumeration/reset errors
+even when `lsusb` stays empty.
 
 ## Prepared Kernel-Console Candidate
 

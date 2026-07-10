@@ -156,7 +156,7 @@ Le watcher de continuation :
 Le watcher d'etat :
 
 - ne touche pas au telephone ;
-- archive les transitions `adb`, `fastboot`, `lsusb`, descriptors USB et udev ;
+- archive les transitions `adb`, `fastboot`, `lsusb`, descriptors USB, udev et les lignes recentes `dmesg` USB cote host ;
 - ecrit le resume courant dans `logs/watch-phone-state-*/latest-summary.txt`.
 
 Le watcher de resume incident :
