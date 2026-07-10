@@ -158,6 +158,9 @@ validate_candidate_dir() {
     if grep -Fq '/sys/kernel/config/usb_gadget/g1/UDC' "$watchdog"; then
       fail "$label watchdog treats a configfs UDC bind as USB success"
     fi
+    if grep -Fq '/sys/class/net/eth*' "$watchdog"; then
+      fail "$label watchdog treats generic eth* as USB success"
+    fi
   fi
 }
 
