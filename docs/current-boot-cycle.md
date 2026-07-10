@@ -355,6 +355,9 @@ PSCI.
    objective is to identify how far `arch/arm64/kernel/head.S` progresses:
    it writes `ENT1`/`ENT2`/`SWT3` into the existing `0xa9800000` ramoops dump
    window and can be launched with `scripts/test-next-mainline617-rammarker.sh`.
+   If recovery ADB returns afterwards, `collect-recovery-crash-artifacts.sh`
+   now emits `ramoops-marker-scan.txt` with marker offsets when the raw
+   `/dev/mem` dump is available.
 9. Do not retest the exact `192100`, `220500`, or `224100` mainline 6.17 images
    without a new kernel/DTB hypothesis.
 
@@ -425,4 +428,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/81-drm-console-button-input-candidate-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/82-drm-console-button-rescan-candidate-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/83-fbcon-only-stripdrm-candidate-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/84-recovery-rammarker-scan-20260710.txt
 ```

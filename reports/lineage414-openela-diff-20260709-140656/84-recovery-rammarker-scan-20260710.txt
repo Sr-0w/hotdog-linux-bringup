@@ -1,0 +1,39 @@
+Recovery RAM-marker scan - 2026-07-10
+======================================
+
+Reason
+------
+
+The mainline RAM-marker candidate writes `ENT1`/`ENT2`/`SWT3` into the existing
+`0xa9800000` ramoops dump window, but the recovery collector previously only
+saved the raw dump. That meant a follow-up step had to remember the byte order
+and search manually.
+
+Collector change
+----------------
+
+`scripts/collect-recovery-crash-artifacts.sh` now writes:
+
+```text
+ramoops-marker-scan.txt
+```
+
+after the existing `ramoops-phys-a9800000-4m.img` capture attempt.
+
+The scan reports:
+
+```text
+ENT1 little-endian bytes: 31 54 4e 45
+ENT2 little-endian bytes: 32 54 4e 45
+SWT3 little-endian bytes: 33 54 57 53
+```
+
+For each hit it prints both the file offset and physical address relative to
+base `0xa9800000`. If the raw dump is absent or empty, it records
+`missing-or-empty-dump` instead of failing the collection.
+
+Scope
+-----
+
+This is a host-side reporting improvement only. It does not add any new device
+write, flash, reboot, wipe, or partition modification.
