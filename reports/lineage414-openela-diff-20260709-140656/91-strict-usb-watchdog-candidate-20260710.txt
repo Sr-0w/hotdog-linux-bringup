@@ -1,0 +1,74 @@
+# 91 - Strict USB-watchdog screen candidate
+
+Date: 2026-07-10 04:20 CEST
+
+Prepared image:
+
+```text
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-042500-lineage414-pmaports-kernel-ttykmsg-buttonshell-strictusbwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+```
+
+Purpose:
+
+Promote the `034500` screen/button diagnostics to the automatic next hardware
+test, but avoid the root-success watchdog weakness. The previous `034500`
+candidate intentionally used `--watchdog-success root`, which is useful for
+long observation when rootfs boots, but it can leave the phone in a visible
+rootfs state without host USB/SSH. The `042500` candidate keeps the same kernel,
+DTB pack, tty-kmsg/fbprep hooks, DRM helper, and rootfs button tty shell, while
+requiring a USB gadget/network success marker to stop the watchdog.
+
+Builder hardening:
+
+```text
+--watchdog-success usb now means USB-only:
+  - /tmp/hotdog_rescue_watchdog.ok still overrides intentionally
+  - usb/rndis/enx/eth network interface succeeds
+  - non-empty /sys/kernel/config/usb_gadget/g1/UDC succeeds
+  - bare /sys/class/udc/* controller presence no longer succeeds
+
+watchdog timeout action:
+  - sync
+  - sysrq reboot via /proc/sysrq-trigger b
+  - fallback reboot -f
+  - fallback sysrq panic
+```
+
+Hashes:
+
+```text
+boot image sha256: cd51f8d5e3cbbf4a984c119f69ee1c3040db1213d69607ab591579fdea2744df
+kernel sha256:     c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+dtb pack sha256:   9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+initramfs sha256:  ea268033a4804b919370c16664b5eaa6ad3b81cdb252a48944a2c718ae0eb826
+```
+
+Validation:
+
+```text
+scripts/inspect-dtb-pack-simplefb.sh --dtb \
+  images/pmos-experiments/2026-07-10-042500-lineage414-pmaports-kernel-ttykmsg-buttonshell-strictusbwatchdog/components/dtb \
+  --entry 12
+
+Result:
+chosen_node=yes
+chosen_ranges=yes
+stdout_path=yes
+linux_stdout_path=yes
+simplefb_node=yes
+simplefb_compatible=yes
+display0_alias=yes
+
+scripts/validate-current-candidates.sh
+  all current candidates validated
+```
+
+Wrapper:
+
+```text
+scripts/test-next-lineage414-simplefb-shell.sh
+```
+
+The active `wait-pmos-then-test-next-lineage414-simplefb-shell.sh` process reads
+that wrapper only after pmOS SSH becomes reachable, so updating the wrapper is
+enough to make this the next automatic test without restarting the wait watcher.

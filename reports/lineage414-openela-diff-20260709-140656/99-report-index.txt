@@ -45,3 +45,4 @@
 88-splash-ttykmsg-secondary-20260710.txt - prepared 034200 secondary downstream pmaports candidate with splash cmdline to force pmOS setup_framebuffer before the same tty-kmsg/fbprep diagnostics
 89-button-visible-tty-candidate-20260710.txt - prepared 034500 downstream pmaports candidate with rootfs visible tty status pages controllable by Vol+/Vol-/Power
 90-rescue-watcher-concurrency-20260710.txt - offline rescue watcher concurrency hardening around phone-lock retry, serial-level launcher start lock, and supervisor instance lock
+91-strict-usb-watchdog-candidate-20260710.txt - prepared 042500 downstream pmaports candidate: 034500 diagnostics plus strict USB-success watchdog and sysrq-first timeout reboot
