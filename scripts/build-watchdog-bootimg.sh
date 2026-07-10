@@ -40,6 +40,9 @@ Options:
                      Install a persistent OpenRC local.d DRM command console
                      into the mounted rootfs before switch_root. Implies
                      --drm-console.
+  --tty-kmsg-console
+                     Start an initramfs /dev/tty0 dmesg/status follower before
+                     the DRM helper, to test simplefb/fbcon screen output.
   --visible-tty-shell
                      Install an OpenRC local.d shell/status follower on tty1
                      after switch_root, for screen-only rootfs diagnostics.
@@ -101,6 +104,7 @@ direct_debug_shell=0
 fb_test=0
 drm_console=0
 drm_console_userspace=0
+tty_kmsg_console=0
 visible_tty_shell=0
 strip_drm_console=0
 default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
@@ -163,6 +167,9 @@ while [ "$#" -gt 0 ]; do
 		--drm-console-userspace)
 			drm_console=1
 			drm_console_userspace=1
+			;;
+		--tty-kmsg-console)
+			tty_kmsg_console=1
 			;;
 		--visible-tty-shell)
 			visible_tty_shell=1
@@ -1167,6 +1174,144 @@ HOTDOG_FB_TEST_SH
 	chmod 0755 "$helper"
 }
 
+write_hotdog_tty_kmsg_console_helper() {
+	local helper="$initramfs_tree/hotdog_tty_kmsg_console.sh"
+
+	cat > "$helper" <<'HOTDOG_TTY_KMSG_CONSOLE_SH'
+#!/bin/busybox ash
+
+hotdog_tty_kmsg_console_log() {
+	local msg="$*"
+	[ -e /dev/kmsg ] && printf '%s\n' "[hotdog-tty-kmsg] $msg" > /dev/kmsg 2>/dev/null || true
+	printf '%s\n' "[hotdog-tty-kmsg] $msg" 2>/dev/null || true
+}
+
+hotdog_tty_kmsg_console_pick_tty() {
+	local tty
+
+	for tty in /dev/tty0 /dev/tty1 /dev/console; do
+		[ -e "$tty" ] || continue
+		printf '%s\n' "$tty"
+		return 0
+	done
+	return 1
+}
+
+hotdog_tty_kmsg_console_prepare_fb() {
+	local d fbdir mode waited
+
+	waited=0
+	while [ "$waited" -lt 30 ]; do
+		[ -e /dev/fb0 ] && break
+		sleep 1
+		waited=$((waited + 1))
+	done
+
+	if [ -e /dev/fb0 ]; then
+		hotdog_tty_kmsg_console_log "fb0 visible before tty output after ${waited}s"
+		fbdir="/sys/class/graphics/fb0"
+		if [ -r "$fbdir/modes" ] && [ -w "$fbdir/mode" ]; then
+			mode="$(cat "$fbdir/mode" 2>/dev/null || true)"
+			if [ -z "$mode" ]; then
+				mode="$(sed -n '1p' "$fbdir/modes" 2>/dev/null || true)"
+				[ -n "$mode" ] && echo "$mode" > "$fbdir/mode" 2>/dev/null || true
+			fi
+		fi
+	else
+		hotdog_tty_kmsg_console_log "fb0 not visible before tty output"
+	fi
+
+	for d in /sys/class/backlight/*; do
+		[ -w "$d/bl_power" ] && echo 0 > "$d/bl_power" 2>/dev/null || true
+		if [ -r "$d/max_brightness" ] && [ -w "$d/brightness" ]; then
+			cat "$d/max_brightness" > "$d/brightness" 2>/dev/null || true
+		fi
+	done
+}
+
+hotdog_tty_kmsg_console_start() {
+	local stage="$1"
+
+	[ -e /tmp/hotdog_tty_kmsg_console.started ] && return 0
+	: > /tmp/hotdog_tty_kmsg_console.started 2>/dev/null || true
+
+	(
+		waited=0
+		tty=""
+		while [ "$waited" -lt 90 ]; do
+			tty="$(hotdog_tty_kmsg_console_pick_tty 2>/dev/null || true)"
+			[ -n "$tty" ] && break
+			sleep 1
+			waited=$((waited + 1))
+		done
+		[ -n "$tty" ] || {
+			hotdog_tty_kmsg_console_log "no tty after ${waited}s at $stage"
+			exit 0
+		}
+
+		hotdog_tty_kmsg_console_log "starting tty kmsg console on $tty at $stage after ${waited}s"
+		hotdog_tty_kmsg_console_prepare_fb
+		{
+			echo "8 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+			echo on > /proc/sys/kernel/printk_devkmsg 2>/dev/null || true
+		} >/dev/null 2>&1
+
+		if command -v setsid >/dev/null 2>&1; then
+			setsid /bin/busybox ash -c '
+				stage="$1"
+				tty="$2"
+				exec <"$tty" >"$tty" 2>&1
+				printf "\033c"
+				printf "hotdog tty kernel log console\n"
+				printf "stage: %s\n" "$stage"
+				printf "tty: %s\n" "$tty"
+				printf "active console: "
+				cat /sys/devices/virtual/tty/console/active 2>/dev/null || true
+				printf "\ncmdline: "
+				cat /proc/cmdline 2>/dev/null || true
+				printf "\n--- framebuffer state ---\n"
+				ls -la /dev/fb* /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true
+				printf "\n--- dmesg tail ---\n"
+				dmesg | tail -140 2>/dev/null || true
+				i=0
+				while :; do
+					sleep 4
+					printf "\n--- tty kmsg refresh %s ---\n" "$i"
+					date 2>/dev/null || true
+					printf "active console: "
+					cat /sys/devices/virtual/tty/console/active 2>/dev/null || true
+					printf "\n"
+					ls -la /dev/fb* /sys/class/graphics/fb0 2>/dev/null || true
+					dmesg | tail -90 2>/dev/null || true
+					i=$((i + 1))
+				done
+			' sh "$stage" "$tty" &
+		else
+			/bin/busybox ash -c '
+				stage="$1"
+				tty="$2"
+				exec <"$tty" >"$tty" 2>&1
+				printf "\033c"
+				printf "hotdog tty kernel log console\n"
+				printf "stage: %s\n" "$stage"
+				printf "tty: %s\n" "$tty"
+				printf "cmdline: "
+				cat /proc/cmdline 2>/dev/null || true
+				printf "\n--- dmesg tail ---\n"
+				dmesg | tail -140 2>/dev/null || true
+				while :; do
+					sleep 4
+					printf "\n--- tty kmsg refresh ---\n"
+					dmesg | tail -90 2>/dev/null || true
+				done
+			' sh "$stage" "$tty" &
+		fi
+	) &
+}
+HOTDOG_TTY_KMSG_CONSOLE_SH
+	chmod 0755 "$helper"
+}
+
 remove_marked_block() {
 	local file="$1"
 	local begin_marker="$2"
@@ -1303,6 +1448,7 @@ patch_init_scripts() {
 	local fb_snippet
 	local drm_snippet
 	local drm_stop_snippet
+	local tty_kmsg_snippet
 	local stage1_snippet
 	local stage2_snippet
 	local usb_snippet
@@ -1365,6 +1511,14 @@ if [ -r /hotdog_fb_test.sh ]; then
 fi
 # hotdog framebuffer paint test end'
 
+	tty_kmsg_snippet='
+# hotdog tty kmsg console begin
+if [ -r /hotdog_tty_kmsg_console.sh ]; then
+	. /hotdog_tty_kmsg_console.sh
+	hotdog_tty_kmsg_console_start initramfs
+fi
+# hotdog tty kmsg console end'
+
 	drm_snippet='
 # hotdog DRM console begin
 if [ -r /hotdog_drm_console_start.sh ]; then
@@ -1382,6 +1536,9 @@ fi
 # hotdog DRM console switch-root stop end'
 
 	insert_after_once "$init_file" "mount_proc_sys_dev" "hotdog rescue watchdog stage1 begin" "$stage1_snippet"
+	if [ "$tty_kmsg_console" -eq 1 ]; then
+		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog tty kmsg console begin" "$tty_kmsg_snippet"
+	fi
 	if [ "$drm_console" -eq 1 ]; then
 		insert_after_once "$init_file" "hotdog rescue watchdog stage1 end" "hotdog DRM console begin" "$drm_snippet"
 	fi
@@ -1393,6 +1550,9 @@ fi
 	for init2_file in "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
 		[ -f "$init2_file" ] || continue
 		insert_after_once "$init2_file" "trap 'reboot -f' TERM" "hotdog rescue watchdog stage2 begin" "$stage2_snippet"
+		if [ "$tty_kmsg_console" -eq 1 ]; then
+			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog tty kmsg console begin" "$tty_kmsg_snippet"
+		fi
 		if [ "$drm_console" -eq 1 ]; then
 			insert_after_once "$init2_file" "hotdog rescue watchdog stage2 end" "hotdog DRM console begin" "$drm_snippet"
 		fi
@@ -1514,6 +1674,7 @@ write_manifest() {
 			if [ "$drm_console" -eq 1 ]; then
 				printf -- '- DRM console helper: `%s`\n' "$drm_console_helper"
 			fi
+			printf -- '- TTY kmsg console: `%s`\n' "$tty_kmsg_console"
 			printf -- '- Visible tty shell: `%s`\n' "$visible_tty_shell"
 			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
@@ -1560,6 +1721,9 @@ write_manifest() {
 			fi
 			if [ "$drm_console_userspace" -eq 1 ]; then
 				printf ' --drm-console-userspace'
+			fi
+			if [ "$tty_kmsg_console" -eq 1 ]; then
+				printf ' --tty-kmsg-console'
 			fi
 			if [ "$visible_tty_shell" -eq 1 ]; then
 				printf ' --visible-tty-shell'
@@ -1659,6 +1823,9 @@ if [ "$strip_drm_console" -eq 1 ]; then
 fi
 if [ "$fb_test" -eq 1 ]; then
 	write_hotdog_fb_test_helper
+fi
+if [ "$tty_kmsg_console" -eq 1 ]; then
+	write_hotdog_tty_kmsg_console_helper
 fi
 if [ "$drm_console" -eq 1 ]; then
 	write_hotdog_drm_console_helper

@@ -1,0 +1,105 @@
+87 - tty-kmsg screen candidate
+================================
+
+Date: 2026-07-10 03:25 CEST
+
+Context
+-------
+
+The previous next image, 030600, already used the pmaports downstream 4.14
+kernel package with VT/fbcon/simplefb enabled, the fixed entry12 simplefb DTB
+pack, the framebuffer paint test, the initramfs DRM helper, and the rootfs
+visible tty shell. Offline DTB-pack verification showed that entry 12 contains
+the expected /chosen ranges, stdout-path, linux,stdout-path, display0 alias,
+and simple-framebuffer node.
+
+The remaining screen-side question is whether kernel/simplefb/fbcon text can
+reach the panel before the DRM helper appears. The user reported that the
+visible output comes after the bootloader logo, not as early kernel-verbose
+text. That can mean fbcon does not bind to simplefb, that it binds but no
+user-visible log dump is routed to the active tty early enough, or that the
+initramfs never runs its normal setup_framebuffer path because splash is not on
+the cmdline.
+
+Builder change
+--------------
+
+scripts/build-watchdog-bootimg.sh now has:
+
+  --tty-kmsg-console
+
+When enabled, the initramfs gets hotdog_tty_kmsg_console.sh. The helper starts
+after the rescue watchdog in both stage1 and stage2, before the DRM helper. It
+waits for /dev/tty0, /dev/tty1, or /dev/console, waits up to 30 seconds for
+/dev/fb0, sets an empty framebuffer mode from /sys/class/graphics/fb0/modes
+when possible, boosts backlight, forces a high printk level, prints
+cmdline/framebuffer state plus dmesg tail, and refreshes dmesg/status every
+four seconds.
+
+Prepared image
+--------------
+
+Image:
+
+  /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-033600-lineage414-pmaports-kernel-ttykmsg-fbprep-screen-shell-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+
+SHA256:
+
+  8fb34d436fdb7c73a5de5f6fad7cebeb30cc787ca08d3f1117c8fd44e3f69d92
+
+Components:
+
+  kernel: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
+  dtb pack: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
+  initramfs: b1fb0efa1a9ba246b5304031699d414077d6587ffa29aa54ba5812e680ec124b
+
+Options:
+
+  --kernel pmaports-r2
+  --dtb fixed-entry12
+  --fb-test
+  --tty-kmsg-console
+  --drm-console-userspace
+  --visible-tty-shell
+  --with-ramoops-cmdline
+  --watchdog-success root
+
+Verification
+------------
+
+The rebuilt initramfs contains hotdog_tty_kmsg_console.sh, including the
+hotdog_tty_kmsg_console_prepare_fb helper, and both init and init_2nd.sh call
+hotdog_tty_kmsg_console_start before hotdog_drm_console_start.
+
+DTB-pack entry12 was rechecked with:
+
+  ./scripts/inspect-dtb-pack-simplefb.sh \
+    --dtb images/pmos-experiments/2026-07-10-033600-lineage414-pmaports-kernel-ttykmsg-fbprep-screen-shell-rootwatchdog/components/dtb \
+    --entry 12
+
+Result:
+
+  entries=20
+  selected_entry=12
+  chosen_node=yes
+  chosen_ranges=yes
+  stdout_path=yes
+  linux_stdout_path=yes
+  simplefb_node=yes
+  simplefb_compatible=yes
+  display0_alias=yes
+
+Next test
+---------
+
+scripts/test-next-lineage414-simplefb-shell.sh now points to 033600. The
+existing wait-pmos watcher calls that wrapper by path once pmOS SSH returns, so
+it will pick up this new image without needing to restart the watcher.
+
+Expected observations:
+
+  - tty0/tty1 dmesg/status text means simplefb/fbcon is usable before DRM
+    after direct fb0/backlight preparation
+  - no tty text but DRM-helper text means KMS/DRM works while fbcon/simplefb
+    still does not route to the panel
+  - rootfs screen# prompt means switch_root and the rootfs local.d hook worked
