@@ -15,6 +15,11 @@ Collect recovery-side crash evidence after a failed boot attempt. This script
 only uses recovery ADB reads. It does not reboot, flash, wipe, or write device
 partitions.
 
+It also attempts a raw recovery-side /dev/mem dump of the 0xa9800000 ramoops
+window into ramoops-phys-a9800000-4m.img, then writes ramoops-marker-scan.txt
+with any ENT1/ENT2/SWT3 RAM-marker hits. If recovery does not expose /dev/mem,
+the scan records missing-or-empty-dump and collection continues.
+
 Options:
   --out DIR       Output directory for collected artifacts.
   --serial SERIAL Target ADB serial.
