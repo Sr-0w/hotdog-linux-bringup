@@ -504,33 +504,45 @@ static void transcript_write_cstr(FILE *fp, const char *s)
 	transcript_write(fp, s, (ssize_t)strlen(s));
 }
 
-static size_t open_input_devices(struct input_device *inputs, size_t max_inputs)
+static bool input_path_known(struct input_device *inputs, size_t input_count, const char *path)
+{
+	for (size_t i = 0; i < input_count; i++) {
+		if (!strcmp(inputs[i].path, path))
+			return true;
+	}
+	return false;
+}
+
+static size_t open_input_devices(struct input_device *inputs, size_t *input_count, size_t max_inputs)
 {
 	DIR *dir;
 	struct dirent *ent;
-	size_t count = 0;
+	size_t added = 0;
 
 	dir = opendir("/dev/input");
 	if (!dir)
 		return 0;
 
-	while ((ent = readdir(dir)) != NULL && count < max_inputs) {
-		char path[sizeof(inputs[count].path)];
+	while ((ent = readdir(dir)) != NULL && *input_count < max_inputs) {
+		char path[sizeof(inputs[*input_count].path)];
 		int fd;
 
 		if (strncmp(ent->d_name, "event", 5) != 0)
 			continue;
 		snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
+		if (input_path_known(inputs, *input_count, path))
+			continue;
 		fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 		if (fd < 0)
 			continue;
-		inputs[count].fd = fd;
-		snprintf(inputs[count].path, sizeof(inputs[count].path), "%s", path);
-		count++;
+		inputs[*input_count].fd = fd;
+		snprintf(inputs[*input_count].path, sizeof(inputs[*input_count].path), "%s", path);
+		(*input_count)++;
+		added++;
 	}
 
 	closedir(dir);
-	return count;
+	return added;
 }
 
 static void close_input_devices(struct input_device *inputs, size_t input_count)
@@ -612,6 +624,7 @@ int main(int argc, char **argv)
 	int shell_pid;
 	char buf[4096];
 	time_t last_render = 0;
+	time_t last_input_scan = 0;
 	const char *boot_script = NULL;
 	const char *default_boot_script =
 		"export TERM=dumb; PS1='hotdog# '; export PS1; "
@@ -660,7 +673,8 @@ int main(int argc, char **argv)
 		die("init DRM");
 	for (size_t i = 0; i < MAX_INPUT_DEVICES; i++)
 		inputs[i].fd = -1;
-	input_count = open_input_devices(inputs, MAX_INPUT_DEVICES);
+	open_input_devices(inputs, &input_count, MAX_INPUT_DEVICES);
+	last_input_scan = time(NULL);
 
 	unsigned int cols = (drm.mode.hdisplay - 32) / font.width;
 	unsigned int rows = (drm.mode.vdisplay - 32) / font.height;
@@ -761,6 +775,21 @@ int main(int argc, char **argv)
 		}
 
 		time_t now = time(NULL);
+		if (now - last_input_scan >= 2 && input_count < MAX_INPUT_DEVICES) {
+			size_t added = open_input_devices(inputs, &input_count, MAX_INPUT_DEVICES);
+
+			last_input_scan = now;
+			if (added > 0) {
+				char line[160];
+
+				snprintf(line, sizeof(line),
+					 "\n[input] added %zu local input device(s), total %zu\n",
+					 added, input_count);
+				term_write_cstr(&term, line);
+				transcript_write_cstr(transcript, line);
+				dirty = true;
+			}
+		}
 		if (dirty || now != last_render) {
 			render(&drm, &font, &term);
 			last_render = now;

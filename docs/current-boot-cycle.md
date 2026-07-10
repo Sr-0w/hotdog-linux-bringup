@@ -169,7 +169,7 @@ after restore: system
 
 A detached wrapper is also waiting for pmOS SSH. It does not touch the phone
 until SSH at `172.16.42.1` returns. If the rescue watcher restores `215005` and
-pmOS SSH comes back, this wrapper launches the prepared `015500` test with
+pmOS SSH comes back, this wrapper launches the prepared `024200` test with
 `--from-pmos-ssh`:
 
 ```text
@@ -177,7 +177,7 @@ pid: 1409621
 launcher log: /home/srobin/dev/hotdog/logs/wait-and-test-lineage414-simplefb-shell-2026-07-10-013426/launcher.log
 wrapper run log: /home/srobin/dev/hotdog/logs/wait-pmos-then-test-lineage414-simplefb-shell-2026-07-10-013426/run.log
 script: /home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh
-next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-015500-lineage414-pmaports-kernel-fbcon-drmconsole-autodiag-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+next image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
 restore image: /home/srobin/dev/hotdog/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img
 ```
 
@@ -328,12 +328,13 @@ PSCI.
    recovery and phone-side inspection.
 2. Treat the mainline timeout as pre-initramfs/pre-pstore or pre-DRM until
    there is evidence that `/init` starts.
-3. Test the prepared downstream `023410` image once the phone is back in a
+3. Test the prepared downstream `024200` image once the phone is back in a
    commandable state. It keeps the `015500` pmaports kernel/DTB/cmdline shape
-   and adds local Vol+/Vol- diagnostics to the DRM command shell. Expected
-   observations: kernel/fbcon text if simplefb binds, early framebuffer color
-   paint if `/dev/fb0` appears, then an idle `initramfs#` prompt and finally
-   the userspace DRM command shell if rootfs is reached.
+   and adds local Vol+/Vol- diagnostics to the DRM command shell, including a
+   periodic rescan for input devices that appear after the helper starts.
+   Expected observations: kernel/fbcon text if simplefb binds, early framebuffer
+   color paint if `/dev/fb0` appears, then an idle `initramfs#` prompt and
+   finally the userspace DRM command shell if rootfs is reached.
 4. The fixed entry12 `ranges;` DTB pack has already been promoted into the
    local downstream 4.14 pmaports package as `pkgrel=2` and validated with
    `pmbootstrap checksum linux-oneplus-hotdog-lineage414`. If `015500` still
@@ -360,11 +361,12 @@ PSCI.
 Prepared downstream button-input/fbcon candidate:
 
 ```text
-/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-023410-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
-sha256: 3ba2d5ad8ed99dad18e249e9a1ab481183b96a2fed360a533248c037126f44b7
+/home/srobin/dev/hotdog/images/pmos-experiments/2026-07-10-024200-lineage414-pmaports-kernel-fbcon-drmconsole-buttons-rescan-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img
+sha256: 1031e5b3e538e309facc3b024911e4845f6b42fa9768672d86d467e5f33893ca
 kernel sha256: c6411a83cc004d52209b39d9ac6fa552d93b5be719bbaa0536060c78e4d4266e
 dtb pack sha256: 9ed26b5cc289633ae1b98ce3212a084d673779fb188307a442f4922588032040
-helper sha256: 7ae2995a6cc0f8c6d4b5838d3f0039ac07bbe6effba47552ba08bfeb860365b2
+initramfs sha256: c46832eb1141af0be82d1ee5ba0141a9a6d0308b8cbc5f6358f6370eec3ed4f3
+helper sha256: 4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8
 wrapper: /home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh
 ```
 
@@ -409,4 +411,5 @@ High-signal notes:
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/79-mainline-entry-ram-marker-probe-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/80-mainline617-rammarker-candidate-20260710.txt
 /home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/81-drm-console-button-input-candidate-20260710.txt
+/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/82-drm-console-button-rescan-candidate-20260710.txt
 ```
