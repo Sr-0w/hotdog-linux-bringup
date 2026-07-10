@@ -6,9 +6,10 @@ Date: 2026-07-10 03:42 CEST
 Context
 -------
 
-The automatic next image remains 033600. It adds an initramfs tty-kmsg helper
-that waits for /dev/fb0, prepares framebuffer mode/backlight, and writes
-dmesg/status to tty0/tty1 before the DRM helper.
+The automatic next image is now 034500. It keeps the 033600 initramfs tty-kmsg
+helper that waits for /dev/fb0, prepares framebuffer mode/backlight, and writes
+dmesg/status to tty0/tty1 before the DRM helper, then adds a button-controllable
+rootfs visible tty page.
 
 An offline agent pointed out a complementary timing lever: pmOS defaults to
 nosplash=y unless the `splash` kernel cmdline word is present. Without splash,
@@ -72,6 +73,6 @@ Added:
 
   /home/srobin/dev/hotdog/scripts/test-lineage414-splash-ttykmsg.sh
 
-This is intentionally not the automatic next test. Use it after 033600 if the
+This is intentionally not the automatic next test. Use it after 034500 if the
 next hardware observation suggests that fb0 appears but the screen remains
 silent until later DRM/userspace takeover.
