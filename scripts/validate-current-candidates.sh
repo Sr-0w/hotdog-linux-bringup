@@ -144,8 +144,12 @@ validate_candidate_dir() {
   if [ "$require_buttons" = "yes" ]; then
     grep -q 'buttons: Vol+ full status' "$visible_shell" || fail "$label visible shell missing button help text"
     grep -q 'monitor_input_device' "$visible_shell" || fail "$label visible shell missing input monitor"
-    grep -q 'auto-cycle every 12s' "$visible_shell" || fail "$label visible shell missing auto-cycle status pages"
+    grep -q 'autocycle="0"' "$visible_shell" || fail "$label visible shell is not prompt-first autocycle=0"
+    grep -q 'status follower every 20s' "$visible_shell" || fail "$label visible shell is still auto-cycle first instead of prompt-first"
+    grep -q "PS1='screen# '" "$visible_shell" || fail "$label visible shell missing screen prompt"
     grep -q 'usb/watchdog' "$visible_shell" || fail "$label visible shell missing USB/watchdog status block"
+    grep -q 'hotdog_tty_kmsg_console_stop' "$tty_kmsg" || fail "$label tty-kmsg helper cannot stop before switch_root"
+    grep -q 'hotdog_tty_kmsg_console_stop' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not stop tty-kmsg before switch_root"
     grep -q 'fbcon=vc:1-1' "$cmdline" || fail "$label cmdline missing fbcon=vc:1-1"
     require_file "$watchdog"
     /bin/sh -n "$watchdog"
