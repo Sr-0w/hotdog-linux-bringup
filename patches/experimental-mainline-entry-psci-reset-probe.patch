@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hotdog local experiment <hotdog-local@example.invalid>
+Date: Fri, 10 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: hotdog: add early PSCI reset entry probe
+
+This patch is intentionally destructive for normal boot: it turns the arm64
+primary entry path into an immediate PSCI SYSTEM_RESET request.
+
+Use it only for a dedicated mainline probe image. If the bootloader branches
+into the kernel, the phone should reset quickly through PSCI `smc #0`. If the
+phone still hangs with no reset/USB/fastboot return, the failure is likely
+before `primary_entry`, in the bootloader handoff, or in a very early exception
+around the SMC itself.
+
+The stock and mainline SM8150 DTs both advertise PSCI method "smc"; the stock
+entry12 DTB pack also contains `compatible = "arm,psci-1.0"; method = "smc";`.
+---
+ arch/arm64/kernel/head.S | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -96,1 +96,20 @@
+ SYM_CODE_START(primary_entry)
++	/*
++	 * Hotdog early-entry probe.
++	 *
++	 * PSCI_0_2_FN_SYSTEM_RESET = 0x84000009. The stock DTB pack and the
++	 * mainline sm8150.dtsi both describe PSCI as SMC, so this should reset
++	 * the phone immediately if the bootloader reaches primary_entry.
++	 *
++	 * Do not ship this in a bootable kernel. It is a one-shot diagnostic
++	 * for distinguishing "bootloader never entered the kernel" from
++	 * "kernel entered but hangs before initramfs/pstore/USB".
++	 */
++	movz	x0, #0x0009
++	movk	x0, #0x8400, lsl #16
++	mov	x1, xzr
++	mov	x2, xzr
++	mov	x3, xzr
++	smc	#0
++0:	wfe
++	b	0b
