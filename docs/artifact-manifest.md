@@ -59,6 +59,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/scripts/build-entry12-simplefb-ranges-dtbpack.sh` | Rebuilds the fixed entry12 simplefb `ranges;` DTB pack used by the prepared `014400` and `015500` images. |
 | `/home/srobin/dev/hotdog/scripts/build-hotdog-drm-console-helper.sh` | Rebuilds `helpers/hotdog-drm-console.c` as an AArch64 Alpine/pmOS binary through the pmbootstrap aarch64 buildroot. `build-watchdog-bootimg.sh` calls it automatically if the default helper is missing. Latest helper SHA256 `4aec4bca3b6849fbb31a826adddce781146400bb3676b8503b387bc41dc8ffe8`. |
 | `/home/srobin/dev/hotdog/scripts/test-next-mainline617-rammarker.sh` | Manual test wrapper for the prepared `022522` mainline RAM-marker candidate. It starts the normal rescue watcher and restores the validated downstream `215005` image when fastboot/recovery ADB returns. |
+| `/home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-mainline617-rammarker.sh` | Waits for pmOS SSH, then launches the `022522` mainline RAM-marker test from the booted pmOS system with `--from-pmos-ssh`. |
 | `/home/srobin/dev/hotdog/scripts/collect-recovery-crash-artifacts.sh` | Recovery-ADB collector used by rescue/test wrappers after failed boots. It attempts pstore and raw `0xa9800000` ramoops-window reads and now writes `ramoops-marker-scan.txt` to report any `ENT1`/`ENT2`/`SWT3` RAM-marker hits. |
 | `/home/srobin/dev/hotdog/scripts/sync-aport-snapshots.sh` | Check or copy tracked aport snapshots under `aports/` into the local `pmaports-sm8150` checkout. Default is check-only; use `--apply` on a fresh machine. |
 | `/home/srobin/dev/hotdog/scripts/test-next-lineage414-simplefb-shell.sh` | Wrapper for the next `024200` hardware test. It restores `boot_b` to `215005` and starts a companion rescue watcher. |
@@ -92,6 +93,7 @@ only the artifacts you actually need.
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/82-drm-console-button-rescan-candidate-20260710.txt` | Prepared boot image `024200` using the same pmaports 4.14 fbcon candidate plus a DRM console helper that rescans local input devices while running. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/83-fbcon-only-stripdrm-candidate-20260710.txt` | Prepared boot image `025400` for the secondary no-DRM-helper fbcon/simplefb isolation test. |
 | `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/84-recovery-rammarker-scan-20260710.txt` | Added automatic `ENT1`/`ENT2`/`SWT3` scan output to the recovery crash collector. |
+| `/home/srobin/dev/hotdog/reports/lineage414-openela-diff-20260709-140656/85-mainline-rammarker-wait-wrapper-20260710.txt` | Added the pmOS-SSH wait wrapper for the `022522` mainline RAM-marker test and clarified recovery collector help text. |
 
 ## Resume order
 

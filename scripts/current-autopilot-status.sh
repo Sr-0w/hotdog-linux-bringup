@@ -86,6 +86,32 @@ print_head() {
   fi
 }
 
+expand_hotdog_path() {
+  local path="$1"
+
+  case "$path" in
+    '$HOTDOG_ROOT'/*)
+      printf '%s/%s\n' "$HOTDOG_ROOT" "${path#\$HOTDOG_ROOT/}"
+      ;;
+    *)
+      printf '%s\n' "$path"
+      ;;
+  esac
+}
+
+print_wrapper_paths() {
+  local wrapper="$1"
+  local prefix="${2:-}"
+  local image=""
+  local restore=""
+
+  [ -r "$wrapper" ] || return 0
+  image="$(awk -F'"' '/^image=/{ print $2; exit }' "$wrapper")"
+  restore="$(awk -F'"' '/^restore=/{ print $2; exit }' "$wrapper")"
+  [ -n "$image" ] && printf '%simage=%s\n' "$prefix" "$(expand_hotdog_path "$image")"
+  [ -n "$restore" ] && printf '%srestore=%s\n' "$prefix" "$(expand_hotdog_path "$restore")"
+}
+
 main() {
   printf 'timestamp=%s\n' "$(date '+%F %T')"
   printf 'root=%s\n\n' "$HOTDOG_ROOT"
@@ -146,8 +172,18 @@ main() {
   printf 'wait_simplefb=%s\n' "${wait_simplefb_dir:-none}"
 
   printf '\n== next prepared test ==\n'
-  printf 'wrapper=%s\n' "$HOTDOG_ROOT/scripts/test-next-lineage414-simplefb-shell.sh"
+  local next_wrapper="$HOTDOG_ROOT/scripts/test-next-lineage414-simplefb-shell.sh"
+  local fbcon_wrapper="$HOTDOG_ROOT/scripts/test-lineage414-fbcon-only.sh"
+  local mainline_wrapper="$HOTDOG_ROOT/scripts/test-next-mainline617-rammarker.sh"
+  local mainline_wait_wrapper="$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-mainline617-rammarker.sh"
+  printf 'wrapper=%s\n' "$next_wrapper"
+  print_wrapper_paths "$next_wrapper"
   printf 'wait_wrapper=%s\n' "$HOTDOG_ROOT/scripts/wait-pmos-then-test-next-lineage414-simplefb-shell.sh"
+  printf 'secondary_fbcon_wrapper=%s\n' "$fbcon_wrapper"
+  print_wrapper_paths "$fbcon_wrapper" "secondary_fbcon_"
+  printf 'mainline_rammarker_wrapper=%s\n' "$mainline_wrapper"
+  print_wrapper_paths "$mainline_wrapper" "mainline_rammarker_"
+  printf 'mainline_rammarker_wait_wrapper=%s\n' "$mainline_wait_wrapper"
 
   [ -n "$state_dir" ] && print_tail phone-state "$state_dir/latest-summary.txt" 40
   [ -n "$rescue_dir" ] && print_tail rescue-visible "$rescue_dir/run.log" 25

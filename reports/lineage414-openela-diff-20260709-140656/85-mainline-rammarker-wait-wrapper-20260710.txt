@@ -1,0 +1,42 @@
+Mainline RAM-marker wait wrapper - 2026-07-10
+================================================
+
+Reason
+------
+
+The downstream fbcon path already had a wrapper that waits for pmOS USB SSH
+before launching the next boot test. The mainline RAM-marker candidate did not
+have the same convenience wrapper, so running it from a restored pmOS baseline
+required remembering the lower-level command.
+
+Changes
+-------
+
+Added:
+
+```text
+/home/srobin/dev/hotdog/scripts/wait-pmos-then-test-next-mainline617-rammarker.sh
+```
+
+It waits for pmOS SSH through `wait-pmos-usb-ssh.sh`, then launches:
+
+```text
+/home/srobin/dev/hotdog/scripts/test-next-mainline617-rammarker.sh --from-pmos-ssh
+```
+
+Also clarified `collect-recovery-crash-artifacts.sh --help` so it explicitly
+mentions the raw `0xa9800000` dump and `ramoops-marker-scan.txt` output.
+
+Validation
+----------
+
+```text
+bash -n scripts/collect-recovery-crash-artifacts.sh \
+  scripts/wait-pmos-then-test-next-mainline617-rammarker.sh \
+  scripts/current-autopilot-status.sh \
+  scripts/test-next-mainline617-rammarker.sh
+```
+
+`scripts/current-autopilot-status.sh` now prints the resolved image/restore
+paths for the automatic `024200` test, the secondary `025400` fbcon-only test,
+and the `022522` mainline RAM-marker wrapper.
