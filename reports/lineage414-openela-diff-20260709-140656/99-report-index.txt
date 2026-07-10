@@ -37,3 +37,4 @@
 80-mainline617-rammarker-candidate-20260710.txt - prepared 022522 boot image with RAM-marker mainline kernel plus the previously tested stock full DTB pack/cmdline shape
 81-drm-console-button-input-candidate-20260710.txt - prepared 023410 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics; superseded by 024200
 82-drm-console-button-rescan-candidate-20260710.txt - prepared 024200 downstream pmaports fbcon candidate with DRM console Vol+/Vol- diagnostics and periodic input-device rescans; next wrapper points here
+83-fbcon-only-stripdrm-candidate-20260710.txt - prepared 025400 secondary downstream pmaports fbcon-only isolation candidate with inherited DRM console hooks stripped
