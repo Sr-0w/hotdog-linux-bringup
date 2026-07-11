@@ -8,6 +8,8 @@ single developer workstation or a live debugging session.
 - [status.md](status.md): current hardware support matrix and known limitations
 - [mainline-bringup.md](mainline-bringup.md): validated mainline fixes and their
   technical rationale
+- [direct-boot.md](direct-boot.md): direct bootloader handoff experiments and
+  completion criteria
 - [boot-flow.md](boot-flow.md): downstream bridge, kexec, initramfs, and rootfs
   architecture
 - [host-setup.md](host-setup.md): host requirements and source bootstrap

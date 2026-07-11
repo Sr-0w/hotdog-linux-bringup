@@ -6,13 +6,19 @@ usage() {
 Usage: build-pmos-android-kernel-header-experiment.sh [--prepare-only|--build-kernel|--install] [--keep-overlay]
 
 Prepare an experimental pmaports overlay for oneplus-hotdog where the SM8150
-kernel uses an Android/Lineage-style ARM64 Image header:
+kernel uses an Android/Lineage-style ARM64 Image entry layout:
 
   - CONFIG_EFI=n, resolved through upstream Kconfig
   - no EFI stub/MZ signature
+  - branch-to-entry in code0 and a zero code1 word
   - ARM64 Image text_offset advertised as 0x80000
+  - strict no-argument prototypes when the source includes the downstream FTS driver
 
 No adb, fastboot, scrcpy, or other phone command is used.
+
+The copied legacy DTS patch is checked and its new-file hunk length is
+normalized before checksums are generated. The source snapshot currently
+declares 379 lines while carrying 389, which otherwise truncates the DTS.
 
 Modes:
   --prepare-only  Create/update the overlay and checksums only. This is default.
@@ -64,8 +70,10 @@ experiment_pmaports="$experiment_root/pmaports-sm8150"
 experiment_pkg="$experiment_pmaports/$pkg_rel"
 experiment_logs="$experiment_root/logs"
 experiment_images="$experiment_root/images"
-header_patch_src="$HOTDOG_ROOT/patches/experimental-android-kernel-header-text-offset.patch"
-header_patch_name="0002-arm64-head-use-android-text-offset.patch"
+header_patch_src="$HOTDOG_ROOT/patches/experimental-android-kernel-entry-layout.patch"
+header_patch_name="0002-arm64-head-use-android-entry-layout.patch"
+fts_patch_src="$HOTDOG_ROOT/patches/mainline-fts-strict-prototypes.patch"
+fts_patch_name="0003-input-fts-use-strict-prototypes.patch"
 
 pmb=(
 	"$HOTDOG_BIN_ROOT/pmbootstrap"
@@ -97,12 +105,59 @@ require_dir() {
 	fi
 }
 
+normalize_hotdog_dts_patch() {
+	local patch_path="$1"
+	python3 - "$patch_path" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text().splitlines()
+marker = "diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts"
+
+try:
+    diff_start = lines.index(marker)
+except ValueError as exc:
+    raise SystemExit(f"missing hotdog DTS diff in {path}") from exc
+
+hunk_index = next(
+    (index for index in range(diff_start + 1, len(lines)) if lines[index].startswith("@@ ")),
+    None,
+)
+if hunk_index is None:
+    raise SystemExit(f"missing hotdog DTS hunk in {path}")
+
+match = re.fullmatch(r"@@ -0,0 \+1,(\d+) @@", lines[hunk_index])
+if match is None:
+    raise SystemExit(f"unexpected hotdog DTS hunk header: {lines[hunk_index]}")
+
+diff_end = next(
+    (index for index in range(hunk_index + 1, len(lines)) if lines[index].startswith("diff --git ")),
+    len(lines),
+)
+hunk_lines = lines[hunk_index + 1:diff_end]
+if not hunk_lines or any(not line.startswith("+") for line in hunk_lines):
+    raise SystemExit("hotdog DTS new-file hunk contains non-addition lines")
+
+actual_count = len(hunk_lines)
+declared_count = int(match.group(1))
+if declared_count != actual_count:
+    lines[hunk_index] = f"@@ -0,0 +1,{actual_count} @@"
+    path.write_text("\n".join(lines) + "\n")
+    print(f"normalized hotdog DTS hunk length: {declared_count} -> {actual_count}")
+else:
+    print(f"hotdog DTS hunk length already correct: {actual_count}")
+PY
+}
+
 prepare_overlay() {
 	require_dir "$HOTDOG_PMAPORTS_SM8150"
 	require_dir "$orig_pkg"
 	require_file "$orig_pkg/APKBUILD"
 	require_file "$orig_pkg/config-sm8150.aarch64"
 	require_file "$header_patch_src"
+	require_file "$fts_patch_src"
 
 	mkdir -p "$experiment_root" "$experiment_logs" "$experiment_images"
 
@@ -117,11 +172,14 @@ prepare_overlay() {
 
 	require_dir "$experiment_pkg"
 	require_file "$experiment_pkg/APKBUILD"
+	require_file "$experiment_pkg/0001-arm64-dts-qcom-add-oneplus-hotdog.patch"
+	normalize_hotdog_dts_patch "$experiment_pkg/0001-arm64-dts-qcom-add-oneplus-hotdog.patch"
 
 	local apkbuild="$experiment_pkg/APKBUILD"
 	local pkgname
 	local repository
 	local commit
+	local use_fts_patch=0
 	pkgname="$(read_apkbuild_var pkgname "$apkbuild")"
 	repository="$(read_apkbuild_var _repository "$apkbuild")"
 	commit="$(read_apkbuild_var _commit "$apkbuild")"
@@ -137,6 +195,9 @@ prepare_overlay() {
 	tar -xf "$distfile" -C "$src_tmp"
 	local clean_src="$src_tmp/${repository}-${commit}"
 	require_dir "$clean_src"
+	if [ -f "$clean_src/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c" ]; then
+		use_fts_patch=1
+	fi
 
 	cp "$orig_pkg/config-sm8150.aarch64" "$cfg_tmp/.config"
 	"$clean_src/scripts/config" --file "$cfg_tmp/.config" -d EFI -d EFI_STUB
@@ -145,6 +206,12 @@ prepare_overlay() {
 	rm -rf "$src_tmp" "$cfg_tmp"
 
 	cp "$header_patch_src" "$experiment_pkg/$header_patch_name"
+	if [ "$use_fts_patch" -eq 1 ]; then
+		cp "$fts_patch_src" "$experiment_pkg/$fts_patch_name"
+	else
+		rm -f "$experiment_pkg/$fts_patch_name"
+		sed -i "\\|$fts_patch_name|d" "$apkbuild"
+	fi
 
 	if ! grep -q "^pkgrel=2$" "$apkbuild"; then
 		sed -i 's/^pkgrel=.*/pkgrel=2/' "$apkbuild"
@@ -154,6 +221,14 @@ prepare_overlay() {
 		awk -v patch="$header_patch_name" '
 			{ print }
 			/0001-arm64-dts-qcom-add-oneplus-hotdog.patch/ { print "\t" patch }
+		' "$apkbuild" > "$apkbuild.tmp"
+		mv "$apkbuild.tmp" "$apkbuild"
+	fi
+
+	if [ "$use_fts_patch" -eq 1 ] && ! grep -q "$fts_patch_name" "$apkbuild"; then
+		awk -v anchor="$header_patch_name" -v patch="$fts_patch_name" '
+			{ print }
+			index($0, anchor) { print "\t" patch }
 		' "$apkbuild" > "$apkbuild.tmp"
 		mv "$apkbuild.tmp" "$apkbuild"
 	fi

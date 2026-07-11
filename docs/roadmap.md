@@ -2,6 +2,8 @@
 
 ## Priority 0: reproducible mainline boot
 
+- validate a built-in Qualcomm APSS watchdog and reliable software reboot
+- test the exact kexec-validated payload in the working header-v2 boot contract
 - move the validated device changes into the pmaports package flow
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
