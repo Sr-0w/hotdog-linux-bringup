@@ -33,7 +33,7 @@ _commit="93f303701cafa17135d8ee563ffdc39f319783f1"
 
 # Source
 source="
-	$_repo-$_tag.tar.bz2::https://gitlab.com/sm8150-mainline/linux/-/archive/$_commit/linux-$_commit.tar.bz2
+	$_repo-$_commit.tar.bz2::https://gitlab.com/sm8150-mainline/linux/-/archive/$_commit/linux-$_commit.tar.bz2
 	$_config
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -64,6 +64,6 @@ package() {
 }
 
 sha512sums="
-fde637d245fa55525763d509caeb038005b419ddddfb28bd5087826c3b38e88126cacee048cdef191c2df67cb421cda19ad125ecaa83e0668de0d848a3f38318  linux-.tar.bz2
+fde637d245fa55525763d509caeb038005b419ddddfb28bd5087826c3b38e88126cacee048cdef191c2df67cb421cda19ad125ecaa83e0668de0d848a3f38318  linux-93f303701cafa17135d8ee563ffdc39f319783f1.tar.bz2
 f958d2beef988264db726cc1eb6b7da42bedc6eb0c7096c40aefd98d9fb91fff37517f701207d1b7ef67d4832d9638e72ad46f670d30caffd9e0fc40edae11a9  config-postmarketos-qcom-sm8150.aarch64
 "
