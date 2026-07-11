@@ -21,6 +21,37 @@ The validated cycle reaches:
 The complete launcher is `scripts/test-mainline617-pmos-full.sh`. It verifies
 the SHA256 of every local boot artifact before executing kexec.
 
+## Verified 2026-07-11 cycle
+
+The public evidence for this cycle is versioned in
+[evidence/2026-07-11-mainline-k1.md](evidence/2026-07-11-mainline-k1.md).
+It records the K1 payload hashes, kexec/USB/SSH timeline, no-echo ACM capture,
+exact `qcom-wdt.ko` module load, reboot behavior, and temporary
+`fastboot boot` controls.
+
+Summary:
+
+- the exact K1 Linux 6.17 payload reached postmarketOS userspace through the
+  downstream kexec bridge
+- the ACM capture path was corrected to passive raw/no-echo reading
+- the exact K1-compatible Qualcomm watchdog module loaded after userspace and
+  registered `watchdog0`
+- `RESTART2(bootloader)` from mainline produced a physical reboot back to the
+  normal persistent bridge boot, leaving boot-mode mapping unresolved
+- the D1 raw direct image returned `OKAY` under temporary `fastboot boot` but
+  did not leave the original fastboot USB instance
+- bridge raw no-paint, bridge AVB, and Lineage raw controls failed explicitly
+  with `Load Error`
+
+Secondary local run IDs:
+`test-mainline-via-kexec-2026-07-11-163810`,
+`pmos-usb-ssh-2026-07-11-164111`,
+`mainline617-k1-qcom-wdt-live-2026-07-11-164151`,
+`reboot-pmos-bootloader-2026-07-11-164349`,
+`pmos-usb-ssh-2026-07-11-164526`,
+`direct-d1-acm-2026-07-11-164835`, and
+`test-fastboot-boot-image-2026-07-11-164847/165222/165329/165412`.
+
 ## 1. Firmware-owned memory gap
 
 The runtime firmware map reserves `0x86200000-0x8b700000`. The initial
@@ -98,8 +129,17 @@ Two timing constraints are currently hardware-validated:
 - retain the inherited framebuffer probe as a 45-second wait-only poll
 
 A 15-second pre-init delay failed. Removing the framebuffer poll entirely also
-caused mainline to reset to the persistent bridge. The current helper contains
-no framebuffer fill code and never emits RGB test frames.
+caused mainline to reset to the persistent bridge. The earlier RGB test frames
+were written by the downstream 4.14 initramfs userspace helper
+`/hotdog_fb_test.sh`, not by the Linux 6.17/mainline kernel. The current helper
+contains no framebuffer fill code and never emits RGB test frames.
+
+The stable bridge pointer defaults to the r5 no-paint relay
+`2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog`
+(`23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50`).
+Older dated experiment scripts and images that still hard-code RGB-capable
+helpers are historical-only for this path and require the explicit
+`HOTDOG_ALLOW_HISTORICAL_RGB=1` opt-in before their wrappers will run.
 
 Builder: `scripts/build-mainline-pmos-wrapper-initramfs.sh`
 
@@ -135,4 +175,7 @@ rules.
 3. Replace fixed timing waits with deterministic probe ordering.
 4. Describe the full RAM map instead of exposing only the low bank.
 5. Bring up display clocks, DSI, panel, and DRM under mainline.
-6. Package the final device changes in pmaports rather than local artifacts.
+6. Add the missing boot-mode mapping so `RESTART2(bootloader)` enters
+   fastboot instead of falling back to normal boot.
+7. Validate the exact direct payload from persistent `boot_b`.
+8. Package the final device changes in pmaports rather than local artifacts.

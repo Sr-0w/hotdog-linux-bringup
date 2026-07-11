@@ -51,13 +51,18 @@ The raw image SHA256 is
 the deterministic AVB copy SHA256 is
 `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`.
 These hashes describe prepared artifacts, not a successful hardware result.
+The raw `8eee58ec...` image is a temporary packaging and `fastboot boot`
+artifact only; it must not be flashed. The AVB image
+`f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`
+is the image pinned by the next persistent `boot_b` test.
 
 A debug kernel retaining the K1 Android entry layout and changing
 `CONFIG_QCOM_WDT=m` to `CONFIG_QCOM_WDT=y` has also been built. Its Image
 SHA256 is
 `c1d19855e75dd1cfa7ab8e6dd21c0751b6c6f79b5bc588b6c4f5fa7d8d42941e`.
-The only other config change is `CONFIG_WATCHDOG_SYSFS=y`; this is the next
-kexec candidate. The change is tracked in
+The only other config change is `CONFIG_WATCHDOG_SYSFS=y`; this was prepared
+as a watchdog/restart-handler debug control, not as the pinned D1 persistent
+test. The change is tracked in
 [mainline-direct-debug.fragment](../configs/mainline-direct-debug.fragment),
 and [test-mainline617-qcom-wdt.sh](../scripts/test-mainline617-qcom-wdt.sh)
 hash-checks the complete test tuple.
@@ -67,8 +72,7 @@ image SHA256 is
 `c5b31bc45096705a16255efe059306368de97570cf2e385c6187227e346e4580`;
 its AVB copy SHA256 is
 `74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d`.
-It must not be tested directly until the `c1d19855...` Image has reached SSH
-through kexec and successfully rebooted to fastboot.
+It is not the pinned D1 persistent test.
 
 An additional control uses the same watchdog config with the unmodified
 upstream EFI-compatible ARM64 header. Its Image SHA256 is
@@ -104,7 +108,7 @@ Build D1 offline with:
   --dtb /path/to/sm8150-oneplus-hotdog.dtb \
   --ramdisk /path/to/initramfs.cpio \
   --cmdline-file /path/to/cmdline.txt \
-  --outdir "$PWD/images/pmos-experiments/direct-d1"
+  --outdir /path/to/local-output/direct-d1
 ```
 
 The builder re-extracts the result and byte-compares all three payloads. It
@@ -115,6 +119,37 @@ footer with `avbtool verify_image`. It never communicates with the phone.
 The default `100663296`-byte partition size is the value observed on the
 tested HD1913. It is not permission to flash another device: verify that
 device's partition geometry and recovery path independently.
+
+## Pinned persistent D1 launcher
+
+[test-mainline617-direct-d1.sh](../scripts/test-mainline617-direct-d1.sh) is
+the next persistent direct-boot launcher. It intentionally narrows the test to
+one pinned D1 image and one pinned recovery bridge:
+
+| Item | Pinned value |
+|---|---|
+| image under test | D1 AVB image, `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994` |
+| restore image | r5 no-paint bridge, `23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50` |
+| source state | healthy postmarketOS SSH from the bridge |
+| rescue policy | companion watcher prearmed before flashing `boot_b` |
+| expected kernel | `6.17.0-sm8150` prefix |
+| boot observation window | 540 seconds by default; overrides below 480 seconds are rejected |
+| post-restore action | restore `boot_b` and reboot system when the recovery path appears |
+
+The launcher rejects arguments that would change the image, restore image,
+source mode, expected kernel, restore mode, rescue watcher, or boot-wait
+policy. It accepts only narrow operational options such as serial selection,
+polling intervals, and fastboot/rescue timeouts.
+
+The starting bridge must be a healthy postmarketOS SSH boot. The launcher
+checks that source state before flashing, prearms the rescue watcher, writes
+the pinned AVB image to `boot_b`, reboots, and then classifies the result.
+
+A success requires a new postmarketOS SSH boot whose kernel release starts
+with `6.17.0-sm8150`. A restored bridge is not success: if SSH returns on the
+downstream 4.14 bridge, or if fastboot returns and the no-paint bridge is
+restored, the run only proves that recovery worked. A timeout without a USB
+recovery path leaves the companion watcher running.
 
 ## DTB-pack control
 
@@ -131,7 +166,7 @@ other FDT:
   --cmdline-file /path/to/cmdline.txt \
   --source-dtb-pack /path/to/stock-hotdog.dtbpack \
   --dtb-entry 12 \
-  --outdir "$PWD/images/pmos-experiments/direct-d1-pack"
+  --outdir /path/to/local-output/direct-d1-pack
 ```
 
 The single-DTB form remains the primary D1 experiment because it changes the
@@ -144,7 +179,7 @@ bootloader DTB selection.
 |---|---|---|
 | K0 | Boot the downstream bridge directly | Is the bootloader and recovery baseline intact? |
 | K1 | Load the pinned mainline payload by kexec | Does the payload itself still work? |
-| D1 | Put the exact K1 payload in header v2 | Which direct-handoff variables remain after payload parity? |
+| D1 | Flash the pinned AVB header-v2 image to `boot_b` with `test-mainline617-direct-d1.sh` | Does the exact K1 payload survive the persistent bootloader handoff? |
 | D1-pack | Replace DTB-pack entry 12 with the K1 DTB | Does the bootloader require Android DTB selection? |
 | D2 | Append the K1 DTB to Image in header v0 | Is separate-DTB handoff the failure? |
 | D3 | Compare minimal and full command lines | Are injected Android bootargs involved? |
@@ -167,14 +202,16 @@ kernel package and generate its boot image through the normal pmaports flow.
 
 ## Recovery requirement
 
-Temporary `fastboot boot` is preferred while direct entry is unproven. The
-persistent downstream bridge remains the recovery image.
+Temporary `fastboot boot` remains useful only as a packaging and loader
+control. The raw D1 artifact is not the persistent test image and must not be
+flashed. The persistent downstream no-paint bridge remains the recovery image
+and the pinned launcher restores it whenever the recovery path appears.
 
-The validated Linux 6.17 config currently builds the Qualcomm APSS watchdog as
-a module, while the root filesystem still contains downstream 4.14 modules.
-That leaves mainline without its hardware restart handler after kexec. The
-next debug kernel builds `CONFIG_QCOM_WDT=y`; this must be validated before
-automating repeated direct-boot cycles without physical intervention.
+The K1-compatible Qualcomm watchdog module has been validated after mainline
+userspace, but `RESTART2(bootloader)` still falls back to normal boot without
+the missing boot-mode mapping. The D1 persistent test therefore depends on the
+prearmed rescue watcher and restore image rather than on mainline rebooting
+itself cleanly into fastboot.
 
 ## Completion criteria
 

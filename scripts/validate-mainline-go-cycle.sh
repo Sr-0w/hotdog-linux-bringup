@@ -11,6 +11,13 @@ bridge_dtb="$HOTDOG_ROOT/build/apk-extract/linux-oneplus-hotdog-lineage414-r5/bo
 r4_dtb="$HOTDOG_ROOT/build/apk-extract/linux-oneplus-hotdog-lineage414-r4/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
 r4_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-10-073742-lineage414-r4-simplefb-nomap-ttykmsg-visibletty-prompt-verbose-acm-rootwatchdog"
 r4_listing="$r4_dir/initramfs-watchdog-contents.txt"
+d1_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c"
+d1_avb_image="$d1_dir/boot.img"
+d1_raw_image="$d1_dir/boot-mainline617-direct-d1.img"
+d1_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1.sh"
+boot_b_tester="$HOTDOG_ROOT/scripts/test-boot-b-image.sh"
+fastboot_boot_tester="$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh"
+acm_collector="$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh"
 
 psci_kernel_dir="$HOTDOG_ROOT/build/experiments/2026-07-10-172000-mainline617-psci-entry-reset-kernel"
 psci_boot_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-10-172100-mainline617-psci-entry-reset-stockdtbpack-fastbootboot"
@@ -41,6 +48,77 @@ check_sha() {
   printf 'OK sha256 %s  %s\n' "$actual" "$file"
 }
 
+check_size() {
+  local file="$1"
+  local expected="$2"
+  local actual=""
+
+  actual="$(stat -c %s "$file")"
+  [ "$actual" = "$expected" ] || fail "size mismatch for $file: $actual"
+  printf 'OK size %s  %s\n' "$actual" "$file"
+}
+
+require_text() {
+  local label="$1"
+  local file="$2"
+  local text="$3"
+
+  grep -Fq -- "$text" "$file" || fail "$label missing expected text in $file: $text"
+}
+
+validate_kernel_prefix_tester_guards() {
+  bash -n "$boot_b_tester" "$fastboot_boot_tester"
+
+  require_text "boot_b tester documents kernel-prefix guard" "$boot_b_tester" "--expect-kernel-prefix PREFIX"
+  require_text "boot_b tester parses kernel-prefix guard" "$boot_b_tester" "--expect-kernel-prefix)"
+  require_text "boot_b tester rejects empty kernel prefix" "$boot_b_tester" "--expect-kernel-prefix must not be empty"
+  require_text "boot_b tester checks expected kernel prefix" "$boot_b_tester" '"$EXPECT_KERNEL_PREFIX"*)'
+  require_text "boot_b tester reports kernel mismatch" "$boot_b_tester" "pmos-ssh-kernel-mismatch"
+  require_text "boot_b tester rejects unchanged boot_id under guard" "$boot_b_tester" "pmos-ssh-unchanged-boot-id"
+  require_text "boot_b tester returns nonzero for kernel guard failures" "$boot_b_tester" "return 5"
+
+  require_text "fastboot tester documents kernel-prefix guard" "$fastboot_boot_tester" "--expect-kernel-prefix PREFIX"
+  require_text "fastboot tester parses kernel-prefix guard" "$fastboot_boot_tester" "--expect-kernel-prefix)"
+  require_text "fastboot tester checks expected kernel prefix" "$fastboot_boot_tester" '"$ssh_kernel" != "$EXPECTED_KERNEL_PREFIX"*'
+  require_text "fastboot tester classifies bridge recovery" "$fastboot_boot_tester" "pmos-bridge-recovery"
+  require_text "fastboot tester classifies unexpected kernel" "$fastboot_boot_tester" "pmos-unexpected-kernel"
+  require_text "fastboot tester returns nonzero for kernel guard failures" "$fastboot_boot_tester" "return 5"
+  printf 'OK kernel-prefix guards in boot_b and fastboot boot testers\n'
+}
+
+validate_d1_direct_launcher() {
+  bash -n "$d1_launcher"
+  require_text "D1 launcher pins AVB image" "$d1_launcher" 'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/boot.img"'
+  require_text "D1 launcher pins restore image" "$d1_launcher" 'RESTORE_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"'
+  require_text "D1 launcher pins boot wait default" "$d1_launcher" 'BOOT_WAIT_SEC="${HOTDOG_D1_BOOT_WAIT_SEC:-540}"'
+  require_text "D1 launcher enforces minimum wait" "$d1_launcher" 'HOTDOG_D1_BOOT_WAIT_SEC must be at least 480'
+  require_text "D1 launcher hash-checks AVB image" "$d1_launcher" 'f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994'
+  require_text "D1 launcher hash-checks restore image" "$d1_launcher" '23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50'
+  require_text "D1 launcher requires pmOS password" "$d1_launcher" "hotdog_require_pmos_password"
+  require_text "D1 launcher rejects unsupported options" "$d1_launcher" "Unsupported option for pinned D1 test"
+  require_text "D1 launcher uses boot_b tester" "$d1_launcher" 'exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh"'
+  require_text "D1 launcher starts from pmOS SSH" "$d1_launcher" "--from-pmos-ssh"
+  require_text "D1 launcher prearms rescue watcher" "$d1_launcher" "--start-rescue-watcher"
+  require_text "D1 launcher enforces mainline kernel prefix" "$d1_launcher" "--expect-kernel-prefix 6.17.0-sm8150"
+  require_text "D1 launcher restores to system" "$d1_launcher" "--restore-after system"
+  printf 'OK D1 direct launcher format\n'
+}
+
+validate_acm_collector() {
+  local output=""
+
+  bash -n "$acm_collector"
+  require_text "ACM collector documents self-test" "$acm_collector" "--self-test-pty"
+  require_text "ACM collector opens tty read-only" "$acm_collector" "os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK"
+  require_text "ACM collector puts tty in raw mode" "$acm_collector" "tty.setraw(fd, termios.TCSANOW)"
+  require_text "ACM collector clears host echo" "$acm_collector" "attrs[3] &= ~(termios.ECHO"
+  require_text "ACM collector checks echo leak" "$acm_collector" "echo leaked back to master"
+  require_text "ACM collector dispatches self-test" "$acm_collector" "python_tty_reader --self-test-pty"
+  output="$(bash "$acm_collector" --self-test-pty)"
+  grep -q '"pty_self_test": "ok"' <<< "$output" || fail "ACM collector --self-test-pty did not report success"
+  printf 'OK ACM collector no-echo self-test %s\n' "$output"
+}
+
 for file in \
   "$bridge_image" \
   "$bridge_apk" \
@@ -56,7 +134,16 @@ for file in \
   "$mainline_image" \
   "$mainline_dtb" \
   "$kexec_binary" \
-  "$reboot_helper"; do
+  "$reboot_helper" \
+  "$d1_avb_image" \
+  "$d1_raw_image" \
+  "$d1_dir/SHA256SUMS" \
+  "$d1_dir/MANIFEST.md" \
+  "$d1_dir/avb-info.txt" \
+  "$d1_launcher" \
+  "$boot_b_tester" \
+  "$fastboot_boot_tester" \
+  "$acm_collector"; do
   check_file "$file"
 done
 
@@ -72,6 +159,20 @@ check_sha "$mainline_image" "48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e70
 check_sha "$mainline_dtb" "44052506301f7fcad9725c77a98323ec283adf1159b7bee941e7ed2ac3447b49"
 check_sha "$kexec_binary" "0e0524a41579c38a741ce53a2d44b77743135b2ada988d10e2ec3943f54f43f5"
 check_sha "$reboot_helper" "045a3d9d696ddee6922e1ce506aeb82a77c261978ea6a3220fd114751952d711"
+check_sha "$d1_avb_image" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994"
+check_sha "$d1_raw_image" "8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0"
+check_size "$d1_avb_image" "100663296"
+check_size "$d1_raw_image" "50298880"
+require_text "D1 SHA256SUMS raw entry" "$d1_dir/SHA256SUMS" "8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0  boot-mainline617-direct-d1.img"
+require_text "D1 SHA256SUMS AVB entry" "$d1_dir/SHA256SUMS" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994  boot.img"
+require_text "D1 manifest raw output" "$d1_dir/MANIFEST.md" "Raw image: \`images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/boot-mainline617-direct-d1.img\`"
+require_text "D1 manifest AVB output" "$d1_dir/MANIFEST.md" "AVB image: \`images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/boot.img\`"
+require_text "D1 AVB info partition size" "$d1_dir/avb-info.txt" "Image size:               100663296 bytes"
+require_text "D1 AVB info algorithm" "$d1_dir/avb-info.txt" "Algorithm:                NONE"
+require_text "D1 AVB info partition" "$d1_dir/avb-info.txt" "Partition Name:        boot"
+validate_d1_direct_launcher
+validate_kernel_prefix_tester_guards
+validate_acm_collector
 
 cmp -s "$bridge_dtb" "$r4_dtb" || fail "r5 DTB differs from validated r4 DTB"
 cmp -s "$bridge_kernel" "$bridge_dir/components/kernel" || fail "r5 boot image does not contain the verified bridge kernel"
@@ -138,6 +239,10 @@ bash -n \
   "$HOTDOG_ROOT/scripts/test-lineage414-r5-kexec-bridge.sh" \
   "$HOTDOG_ROOT/scripts/test-mainline-via-kexec.sh" \
   "$HOTDOG_ROOT/scripts/test-next-mainline617-psci-entry-reset.sh" \
+  "$HOTDOG_ROOT/scripts/test-mainline617-direct-d1.sh" \
+  "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
+  "$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh" \
+  "$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh" \
   "$HOTDOG_ROOT/scripts/build-hotdog-reboot-mode.sh" \
   "$HOTDOG_ROOT/scripts/reboot-pmos-to-bootloader.sh" \
   "$HOTDOG_ROOT/scripts/fetch-kexec-tools-aarch64.sh" \

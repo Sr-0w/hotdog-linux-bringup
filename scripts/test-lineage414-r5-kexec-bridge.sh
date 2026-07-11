@@ -5,7 +5,7 @@ source "$(dirname "$0")/env.sh"
 
 serial="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 image="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
-restore="$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img"
+restore="$HOTDOG_STABLE_PMOS_BOOT_B"
 from_pmos_ssh="${HOTDOG_FROM_PMOS_SSH:-0}"
 
 args=()

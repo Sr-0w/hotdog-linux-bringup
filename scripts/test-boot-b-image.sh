@@ -21,6 +21,10 @@ PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 PMOS_HOST="${PMOS_HOST:-$HOTDOG_PMOS_HOST}"
 PMOS_TELNET_PORTS="${PMOS_TELNET_PORTS:-23 2323}"
 PMOS_BOOT_ID_BEFORE=""
+PMOS_KERNEL_BEFORE=""
+EXPECT_KERNEL_PREFIX=""
+PMOS_PROBE_BOOT_ID=""
+PMOS_PROBE_KERNEL=""
 START_RESCUE_WATCHER=0
 RESCUE_WATCHER_TIMEOUT_SEC="${RESCUE_WATCHER_TIMEOUT_SEC:-21600}"
 RESCUE_WATCHER_POLL_SEC="${RESCUE_WATCHER_POLL_SEC:-5}"
@@ -47,13 +51,18 @@ Options:
                          boot_b from fastboot/ADB fallback. Default: recovery.
   --from-pmos-ssh        Start from the currently booted pmOS SSH userland:
                          flash boot_b via SSH, reboot, then classify result.
+  --expect-kernel-prefix PREFIX
+                         Require the post-boot pmOS SSH uname -r to start with
+                         PREFIX. A mismatch is classified separately and exits
+                         nonzero, so a restored bridge is not a mainline success.
   --boot-wait SEC        Seconds to watch for fastboot/ADB/pmOS SSH. Default: 240.
   --poll SEC             Poll interval. Default: 2.
   --fastboot-timeout SEC Seconds to allow individual fastboot getvar/reboot
                           commands before treating them as failed. Default: 15.
-  --start-rescue-watcher  Start a companion rescue watcher after rebooting into
-                         the test image. If the test times out without any USB
-                         recovery path, the watcher is left running.
+  --start-rescue-watcher  Start a companion rescue watcher. With --from-pmos-ssh,
+                         it is prearmed after a healthy source probe and before
+                         flashing; otherwise it starts after reboot. If the test
+                         times out without a USB recovery path, it is left running.
   --rescue-watch-timeout SEC
                          Companion rescue watcher timeout. Default: 21600.
   --rescue-watch-poll SEC
@@ -102,6 +111,12 @@ while [ "$#" -gt 0 ]; do
       ;;
     --from-pmos-ssh)
       START_FROM_PMOS_SSH=1
+      ;;
+    --expect-kernel-prefix)
+      [ "$#" -ge 2 ] || { echo "Missing value for --expect-kernel-prefix" >&2; exit 2; }
+      EXPECT_KERNEL_PREFIX="$2"
+      [ -n "$EXPECT_KERNEL_PREFIX" ] || { echo "--expect-kernel-prefix must not be empty" >&2; exit 2; }
+      shift
       ;;
     --boot-wait)
       [ "$#" -ge 2 ] || { echo "Missing value for --boot-wait" >&2; exit 2; }
@@ -390,7 +405,28 @@ ensure_bootloader_fastboot() {
   esac
 }
 
+pmos_probe_field() {
+  local field="$1"
+  local file="$2"
+
+  awk -v field="$field" '
+    index($0, field "=") == 1 {
+      sub("^[^=]*=", "", $0)
+      gsub(/\r/, "", $0)
+      print
+      exit
+    }
+  ' "$file"
+}
+
 pmos_ssh_probe() {
+  local label="${1:-after}"
+  local output="$run_dir/ssh-probe.txt"
+
+  if [ "$label" != "after" ]; then
+    output="$run_dir/ssh-probe-$label.txt"
+  fi
+
   ping -c 1 -W 1 "$PMOS_HOST" > "$run_dir/ping-last-$PMOS_HOST.txt" 2>&1 || return 1
   sshpass -p "$PMOS_PASSWORD" ssh \
     -o StrictHostKeyChecking=no \
@@ -398,19 +434,23 @@ pmos_ssh_probe() {
     -o ConnectTimeout=5 \
     -o PreferredAuthentications=password \
     -o PubkeyAuthentication=no \
-    "$PMOS_USER@$PMOS_HOST" 'printf "PMOS_SSH_OK\n"; uname -a' \
-    > "$run_dir/ssh-probe.txt" 2>&1
-}
+    "$PMOS_USER@$PMOS_HOST" '
+      printf "PMOS_SSH_OK\n"
+      printf "PMOS_BOOT_ID="
+      cat /proc/sys/kernel/random/boot_id 2>/dev/null || true
+      printf "\nPMOS_UNAME_R="
+      uname -r 2>/dev/null || true
+      printf "\n"
+    ' > "$output" 2>&1 || return 1
 
-pmos_read_boot_id() {
-  sshpass -p "$PMOS_PASSWORD" ssh \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile="$run_dir/known_hosts" \
-    -o ConnectTimeout=5 \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    "$PMOS_USER@$PMOS_HOST" 'cat /proc/sys/kernel/random/boot_id 2>/dev/null || true' \
-    2>/dev/null | tr -d '\r' | awk 'NF { print; exit }'
+  grep -qx 'PMOS_SSH_OK' "$output" || return 1
+  PMOS_PROBE_BOOT_ID="$(pmos_probe_field PMOS_BOOT_ID "$output")"
+  PMOS_PROBE_KERNEL="$(pmos_probe_field PMOS_UNAME_R "$output")"
+  [ -n "$PMOS_PROBE_BOOT_ID" ] || return 1
+  [ -n "$PMOS_PROBE_KERNEL" ] || return 1
+
+  printf '%s\n' "$PMOS_PROBE_BOOT_ID" > "$run_dir/pmos-boot-id-$label.txt"
+  printf '%s\n' "$PMOS_PROBE_KERNEL" > "$run_dir/pmos-uname-r-$label.txt"
 }
 
 pmos_ping_probe() {
@@ -583,17 +623,30 @@ main() {
   log "Image: $IMAGE"
   log "Restore boot_b image: ${RESTORE_IMAGE:-none}"
   log "Start from pmOS SSH: $START_FROM_PMOS_SSH"
+  log "Expected kernel prefix: ${EXPECT_KERNEL_PREFIX:-none}"
   log "Restore-after mode: $RESTORE_AFTER_FASTBOOT"
   log "Companion rescue watcher: $START_RESCUE_WATCHER"
   sha256sum "$IMAGE" | tee "$run_dir/image-sha256.txt"
 
   if [ "$START_FROM_PMOS_SSH" -eq 1 ]; then
-    log "Starting from pmOS SSH; flashing boot_b via SSH helper and rebooting"
-    PMOS_BOOT_ID_BEFORE="$(pmos_read_boot_id || true)"
-    if [ -n "$PMOS_BOOT_ID_BEFORE" ]; then
-      printf '%s\n' "$PMOS_BOOT_ID_BEFORE" > "$run_dir/pmos-boot-id-before.txt"
-      log "pmOS boot_id before reboot: $PMOS_BOOT_ID_BEFORE"
+    log "Confirming healthy pmOS SSH source before flashing boot_b"
+    if ! pmos_ssh_probe before; then
+      die "pmOS SSH source probe did not return boot_id and uname -r; refusing to flash" 4
     fi
+    PMOS_BOOT_ID_BEFORE="$PMOS_PROBE_BOOT_ID"
+    PMOS_KERNEL_BEFORE="$PMOS_PROBE_KERNEL"
+    log "pmOS source boot_id: $PMOS_BOOT_ID_BEFORE"
+    log "pmOS source uname -r: $PMOS_KERNEL_BEFORE"
+
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      if fastboot_present; then
+        die "Target is already visible in fastboot; refusing to prearm rescue watcher from pmOS SSH" 3
+      fi
+      log "Prearming companion rescue watcher before pmOS SSH flash"
+      start_rescue_watcher
+    fi
+
+    log "Starting from pmOS SSH; flashing boot_b via SSH helper and rebooting"
     "$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh" \
       --image "$IMAGE" \
       --host "$PMOS_HOST" \
@@ -605,7 +658,13 @@ main() {
         die "pmOS SSH flash/reboot helper failed" 4
       }
     sed 's/^/[flash-ssh] /' "$run_dir/flash-boot-b-from-pmos-ssh-wrapper.log" || true
-    phone_lock_acquire "monitor boot_b image after pmOS SSH flash" 0
+    if ! phone_lock_acquire "monitor boot_b image after pmOS SSH flash" 0; then
+      if [ -n "$RESCUE_WATCHER_PID" ] && kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
+        KEEP_RESCUE_WATCHER=1
+        die "Companion rescue watcher owns or is waiting for recovery; leaving it running" 3
+      fi
+      die "Could not acquire phone operation lock after pmOS SSH flash" 3
+    fi
     start_rescue_watcher
   else
     phone_lock_acquire "test boot_b image" 0
@@ -705,19 +764,33 @@ main() {
     fi
 
     if pmos_ssh_probe; then
-      local pmos_boot_id_after=""
+      local pmos_boot_id_after="$PMOS_PROBE_BOOT_ID"
+      local pmos_kernel_after="$PMOS_PROBE_KERNEL"
       result="pmos-ssh"
       log "pmOS SSH probe OK"
-      if [ "$START_FROM_PMOS_SSH" -eq 1 ] && [ -n "$PMOS_BOOT_ID_BEFORE" ]; then
-        pmos_boot_id_after="$(pmos_read_boot_id || true)"
-        if [ -n "$pmos_boot_id_after" ]; then
-          printf '%s\n' "$pmos_boot_id_after" > "$run_dir/pmos-boot-id-after.txt"
-          if [ "$pmos_boot_id_after" = "$PMOS_BOOT_ID_BEFORE" ]; then
-            log "WARNING: pmOS SSH boot_id did not change after requested reboot"
-          else
-            log "pmOS boot_id changed after reboot: $pmos_boot_id_after"
+      log "pmOS SSH boot_id after boot: $pmos_boot_id_after"
+      log "pmOS SSH uname -r after boot: $pmos_kernel_after"
+      if [ "$START_FROM_PMOS_SSH" -eq 1 ]; then
+        if [ "$pmos_boot_id_after" = "$PMOS_BOOT_ID_BEFORE" ]; then
+          log "WARNING: pmOS SSH boot_id did not change after requested reboot"
+          if [ -n "$EXPECT_KERNEL_PREFIX" ]; then
+            result="pmos-ssh-unchanged-boot-id"
+            log "ERROR: refusing expected-kernel success because boot_id did not change"
           fi
+        else
+          log "pmOS boot_id changed after reboot: $pmos_boot_id_after"
         fi
+      fi
+      if [ -n "$EXPECT_KERNEL_PREFIX" ]; then
+        case "$pmos_kernel_after" in
+          "$EXPECT_KERNEL_PREFIX"*)
+            log "pmOS SSH kernel matches expected prefix: $EXPECT_KERNEL_PREFIX"
+            ;;
+          *)
+            result="pmos-ssh-kernel-mismatch"
+            log "ERROR: expected kernel prefix '$EXPECT_KERNEL_PREFIX', got '$pmos_kernel_after'"
+            ;;
+        esac
       fi
       collect_pmos_logs
       break
@@ -754,6 +827,12 @@ main() {
   hotdog_fastboot_devices > "$run_dir/fastboot-final.txt" 2>&1 || true
   log "Result: $result"
   log "Done: $run_dir"
+
+  case "$result" in
+    pmos-ssh-kernel-mismatch|pmos-ssh-unchanged-boot-id)
+      return 5
+      ;;
+  esac
 }
 
 main "$@"
