@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/env.sh"
 source "$(dirname "$0")/phone-lock.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTORE_IMAGE="$HOTDOG_STABLE_PMOS_BOOT_B"
 AFTER_RESTORE="system"
 FASTBOOT_TIMEOUT_SEC="${FASTBOOT_TIMEOUT_SEC:-20}"
@@ -20,7 +20,7 @@ active, then reboot.
 This script only uses fastboot and only flashes boot_b.
 
 Options:
-  --serial SERIAL        Target fastboot serial. Default: b6bd2252.
+  --serial SERIAL        Target serial. Defaults to ANDROID_SERIAL.
   --restore-boot-b FILE  Boot image to flash to boot_b.
   --after-restore MODE   system, bootloader, or none. Default: system.
   --timeout SEC          Timeout for each fastboot command. Default: 20.
@@ -72,6 +72,7 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
+[ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL"
 case "$AFTER_RESTORE" in
 	system|bootloader|none)
 		;;

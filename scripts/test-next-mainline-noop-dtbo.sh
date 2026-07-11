@@ -4,10 +4,10 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 source "$(dirname "$0")/phone-lock.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
 PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-011200-mainline617-nokaslr-nobtik-nomte-stockentry-v2dtb-rootwatchdog/boot-mainline617-nokaslr-nobtik-nomte-stockentry-v2dtb-rootwatchdog-600s-stockos-avb.img"
 DTBO_IMAGE="$HOTDOG_ROOT/build/experiments/2026-07-09-013000-noop-dtbo-entry5/dtbo_b-entry5-noop-partition-padded.img"
 RESTORE_BOOT_IMAGE="$HOTDOG_STABLE_PMOS_BOOT_B"
@@ -119,7 +119,6 @@ start_rescue_watcher() {
 
 remote_force_reboot() {
   local reboot_cmd='sudo -n sh -c '"'"'sync; echo b > /proc/sysrq-trigger'"'"''
-  local i=""
 
   log "Sending kernel sysrq reboot"
   timeout 10 sshpass -p "$PMOS_PASSWORD" ssh \
@@ -131,7 +130,7 @@ remote_force_reboot() {
     "$PMOS_USER@$PMOS_HOST" "$reboot_cmd" \
     > "$run_dir/reboot-sysrq.txt" 2>&1 || true
 
-  for i in $(seq 1 20); do
+  for _ in {1..20}; do
     if ! ping -c 1 -W 1 "$PMOS_HOST" > "$run_dir/reboot-ping-last.txt" 2>&1; then
       log "USB ping dropped after reboot command"
       return 0

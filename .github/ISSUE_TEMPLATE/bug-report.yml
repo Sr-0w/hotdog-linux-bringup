@@ -1,0 +1,56 @@
+name: Hardware or boot issue
+description: Report a reproducible problem with the hotdog bring-up
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post credentials, proprietary dumps, or unique device identifiers.
+  - type: input
+    id: model
+    attributes:
+      label: Device model
+      description: For example HD1913 and regional variant.
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel source and commit
+    validations:
+      required: true
+  - type: dropdown
+    id: boot_method
+    attributes:
+      label: Boot method
+      options:
+        - Downstream bridge and kexec
+        - Direct fastboot boot
+        - Flashed boot slot
+        - Recovery
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: hashes
+    attributes:
+      label: Artifact hashes
+      description: Include kernel, DTB, initramfs, and boot-image SHA256 values.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Observed result
+      description: Include screen state, USB IDs, available debug channels, and relevant logs.
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery behavior
+      description: Explain whether recovery was automatic or required physical interaction.
+    validations:
+      required: true

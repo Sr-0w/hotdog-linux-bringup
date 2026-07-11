@@ -37,6 +37,10 @@ Options:
   --fb-test
                      Paint /dev/fb0 from initramfs when it appears. This is
                      an opt-in visual diagnostic for simplefb/fbcon bring-up.
+  --fb-test-mode MODE
+                     Framebuffer test behavior: paint or wait. wait preserves
+                     the fb0 wait/timing marker without drawing colors.
+                     Default: paint
   --fbdev-console
                      Start a PSF text console directly on /dev/fb0 from
                      initramfs when fbcon is not taking over the screen.
@@ -56,6 +60,9 @@ Options:
   --visible-tty-autocycle
                      Make the visible tty shell rotate full status pages
                      automatically, for screen-only boots without button input.
+  --visible-tty-printk "A B C D"
+                     Set /proc/sys/kernel/printk when the visible tty shell
+                     starts. Default: "4 4 1 7".
   --drm-console-helper FILE
                      AArch64 hotdog-drm-console binary to inject. Default:
                      $HOTDOG_ROOT/build/hotdog-drm-console-aarch64.
@@ -63,6 +70,8 @@ Options:
                      Remove inherited hotdog DRM console hooks from the source
                      initramfs before adding this candidate's hooks. Useful for
                      fbcon-only isolation tests built from a DRM-console source.
+  --strip-fb-test    Remove inherited hotdog framebuffer paint-test hooks from
+                     the source initramfs. Useful for text-console images.
   --os-version V     Set Android boot image OS version, e.g. 15.0.0.
   --os-patch-level D Set Android boot image patch level, e.g. 2025-08.
   --base HEX         Android boot image base address. Default: 0x00000000
@@ -113,13 +122,16 @@ with_ramoops_cmdline=0
 direct_debug_shell=0
 usb_acm_getty=0
 fb_test=0
+fb_test_mode="paint"
 fbdev_console=0
 drm_console=0
 drm_console_userspace=0
 tty_kmsg_console=0
 visible_tty_shell=0
 visible_tty_autocycle=0
+visible_tty_printk="4 4 1 7"
 strip_drm_console=0
+strip_fb_test=0
 default_drm_console_helper="$HOTDOG_ROOT/build/hotdog-drm-console-aarch64"
 drm_console_helper="$default_drm_console_helper"
 os_version=""
@@ -177,6 +189,11 @@ while [ "$#" -gt 0 ]; do
 		--fb-test)
 			fb_test=1
 			;;
+		--fb-test-mode)
+			[ "$#" -ge 2 ] || die "--fb-test-mode requires a value"
+			fb_test_mode="$2"
+			shift
+			;;
 		--fbdev-console)
 			fbdev_console=1
 			;;
@@ -197,6 +214,11 @@ while [ "$#" -gt 0 ]; do
 			visible_tty_shell=1
 			visible_tty_autocycle=1
 			;;
+		--visible-tty-printk)
+			[ "$#" -ge 2 ] || die "--visible-tty-printk requires a value"
+			visible_tty_printk="$2"
+			shift
+			;;
 		--drm-console-helper)
 			[ "$#" -ge 2 ] || die "--drm-console-helper requires a file"
 			drm_console_helper="$2"
@@ -204,6 +226,9 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--strip-drm-console)
 			strip_drm_console=1
+			;;
+		--strip-fb-test)
+			strip_fb_test=1
 			;;
 		--os-version)
 			[ "$#" -ge 2 ] || die "--os-version requires a value"
@@ -274,6 +299,22 @@ case "$watchdog_success" in
 		die "--watchdog-success must be one of: usb, root"
 		;;
 esac
+case "$fb_test_mode" in
+	paint|wait)
+		;;
+	*)
+		die "--fb-test-mode must be one of: paint, wait"
+		;;
+esac
+set -- $visible_tty_printk
+[ "$#" -eq 4 ] || die "--visible-tty-printk must contain four numeric fields"
+for printk_field in "$@"; do
+	case "$printk_field" in
+		""|*[!0-9]*)
+			die "--visible-tty-printk must contain four numeric fields"
+			;;
+	esac
+done
 for boot_hex in "$boot_base" "$kernel_offset" "$ramdisk_offset" "$second_offset" "$tags_offset" "$dtb_offset"; do
 	case "$boot_hex" in
 		0x[0-9a-fA-F]*)
@@ -879,6 +920,36 @@ EOF
 chmod 0755 /sysroot/etc/local.d/hotdog-ptmx.start 2>/dev/null || true
 log "installed local.d ptmx repair"
 HOTDOG_ROOTFS_POSTMOUNT_SH
+	if [ "$strip_drm_console" -eq 1 ]; then
+		cat >> "$helper" <<'HOTDOG_ROOTFS_STRIP_DRM_CONSOLE_SH'
+
+strip_rootfs_drm_console() {
+	local proc cmd
+
+	rm -f \
+		/sysroot/etc/local.d/hotdog-drm-console.start \
+		/sysroot/usr/local/bin/hotdog-drm-console \
+		/sysroot/tmp/hotdog-drm-console.pid \
+		/sysroot/tmp/hotdog-drm-console.in \
+		/sysroot/tmp/hotdog-drm-console.log \
+		/sysroot/tmp/hotdog-drm-console.transcript \
+		2>/dev/null || true
+
+	for proc in /proc/[0-9]*; do
+		[ -r "$proc/cmdline" ] || continue
+		cmd="$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null || true)"
+		case "$cmd" in
+			*hotdog-drm-console*)
+				kill "${proc##*/}" 2>/dev/null || true
+				;;
+		esac
+	done
+	log "stripped persistent rootfs DRM console hook"
+}
+
+strip_rootfs_drm_console
+HOTDOG_ROOTFS_STRIP_DRM_CONSOLE_SH
+	fi
 	if [ "$usb_acm_getty" -eq 1 ]; then
 		cat >> "$helper" <<'HOTDOG_ROOTFS_USB_ACM_GETTY_SH'
 
@@ -920,7 +991,10 @@ ensure_acm_configfs() {
 		gadget="$root/g1"
 		cfg="$gadget/configs/c.1"
 		active_udc="$(cat "$gadget/UDC" 2>/dev/null || true)"
-		[ -w "$gadget/UDC" ] && echo "" > "$gadget/UDC" 2>/dev/null || true
+		if [ -n "$active_udc" ] && [ -e "$cfg/acm.usb0" ]; then
+			return 0
+		fi
+		[ -w "$gadget/UDC" ] && [ -n "$active_udc" ] && echo "" > "$gadget/UDC" 2>/dev/null || true
 		mkdir "$gadget/functions/acm.usb0" 2>/dev/null || true
 		ln -s "$gadget/functions/acm.usb0" "$cfg/acm.usb0" 2>/dev/null || true
 		if [ -n "$active_udc" ]; then
@@ -1197,18 +1271,29 @@ install_visible_tty_shell() {
 autocycle="__HOTDOG_VISIBLE_TTY_AUTOCYCLE__"
 tty="${1:-tty1}"
 dev="/dev/$tty"
+pause_marker="/tmp/hotdog-visible-tty-autocycle.pause"
 
 if [ ! -e "$dev" ] && [ -e /dev/tty0 ]; then
 	tty="tty0"
 	dev="/dev/tty0"
 fi
 [ -e "$dev" ] || exit 0
+rm -f "$pause_marker" 2>/dev/null || true
 
 exec <"$dev" >"$dev" 2>&1
+
+case "$tty" in
+	tty[0-9]*)
+		chvt "${tty#tty}" 2>/dev/null || true
+		;;
+esac
+stty sane echo icanon isig 2>/dev/null || true
+echo "__HOTDOG_VISIBLE_TTY_PRINTK__" > /proc/sys/kernel/printk 2>/dev/null || true
 
 printf '\033c'
 printf 'hotdog visible rootfs shell\n'
 printf 'tty: %s\n' "$tty"
+printf 'console_loglevel: '; cat /proc/sys/kernel/printk 2>/dev/null || true
 printf 'date: '; date 2>/dev/null || true
 printf 'uname: '; uname -a 2>/dev/null || true
 printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
@@ -1219,9 +1304,9 @@ printf 'cmdline: '; cat /proc/cmdline 2>/dev/null || true
 		ls -la /dev/fb* /dev/dri /sys/class/graphics 2>/dev/null || true
 printf '\n--- initial dmesg tail ---\n'
 dmesg | tail -120 2>/dev/null || true
-printf '\n--- buttons: Vol+ full status, Vol- network/display, Power dmesg tail ---\n'
+printf '\n--- buttons: Vol+ full status, Vol- network/display, Power pause/resume ---\n'
 if [ "$autocycle" = "1" ]; then
-	printf -- '--- auto-cycle every 12s: full / net+display / dmesg; shell prompt below if input exists ---\n'
+	printf -- '--- auto-cycle every 12s: full / net+display / dmesg; Power freezes the current page ---\n'
 else
 	printf -- '--- status follower every 20s; shell prompt below if input exists ---\n'
 fi
@@ -1315,6 +1400,18 @@ print_dmesg_page() {
 	dmesg | tail -180 2>/dev/null || true
 }
 
+toggle_autocycle_pause() {
+	reason="$1"
+	if [ -e "$pause_marker" ]; then
+		rm -f "$pause_marker" 2>/dev/null || true
+		print_short_status "auto-cycle resumed: $reason"
+	else
+		: > "$pause_marker" 2>/dev/null || true
+		printf '\n--- auto-cycle paused: %s ---\n' "$reason"
+		printf 'Press Power again to resume; Vol+/Vol- still print pages.\n'
+	fi
+}
+
 button_action() {
 	code="$1"
 	dev="$2"
@@ -1327,7 +1424,7 @@ button_action() {
 			print_display_network "Vol- from $dev $name"
 			;;
 		116)
-			print_short_status "Power from $dev $name"
+			toggle_autocycle_pause "Power from $dev $name"
 			;;
 	esac
 }
@@ -1352,6 +1449,10 @@ monitor_input_device() {
 (
 	i=0
 	while :; do
+		if [ -e "$pause_marker" ]; then
+			sleep 1
+			continue
+		fi
 		if [ "$autocycle" = "1" ]; then
 			case $((i % 3)) in
 				0) print_full_status "auto full $i" ;;
@@ -1381,10 +1482,31 @@ EOF
 	cat > "$locald" <<'EOF' 2>/dev/null || true
 #!/bin/sh
 bin=/usr/local/bin/hotdog-visible-tty-shell
+pidfile=/run/hotdog-visible-tty-shell.pid
 [ -x "$bin" ] || exit 0
 
 log() {
 	printf '%s\n' "[hotdog-visible-tty-shell] $*" > /dev/kmsg 2>/dev/null || true
+}
+
+pid_is_alive() {
+	local pid="$1"
+
+	[ -n "$pid" ] || return 1
+	case "$pid" in *[!0-9]*) return 1 ;; esac
+	[ -d "/proc/$pid" ] || return 1
+	return 0
+}
+
+already_running() {
+	local pid
+
+	pid="$(cat "$pidfile" 2>/dev/null || true)"
+	if pid_is_alive "$pid"; then
+		return 0
+	fi
+	rm -f "$pidfile" 2>/dev/null || true
+	return 1
 }
 
 pick_tty() {
@@ -1423,6 +1545,10 @@ stop_getty_on_tty() {
 		log "no visible tty found"
 		exit 0
 	}
+	if already_running; then
+		log "already running with pid $(cat "$pidfile" 2>/dev/null || true)"
+		exit 0
+	fi
 
 	stop_getty_on_tty "$tty"
 	for d in /sys/class/backlight/*; do
@@ -1433,11 +1559,17 @@ stop_getty_on_tty() {
 	done
 
 	log "starting $bin on $tty"
+	case "$tty" in
+		tty[0-9]*)
+			chvt "${tty#tty}" 2>/dev/null || true
+			;;
+	esac
 	if command -v setsid >/dev/null 2>&1; then
 		setsid "$bin" "$tty" &
 	else
 		"$bin" "$tty" &
 	fi
+	echo $! > "$pidfile" 2>/dev/null || true
 ) &
 EOF
 	chmod 0755 "$locald" 2>/dev/null || true
@@ -1450,6 +1582,7 @@ EOF
 	install_visible_tty_shell
 HOTDOG_VISIBLE_TTY_SHELL_SH
 			sed -i "s/__HOTDOG_VISIBLE_TTY_AUTOCYCLE__/$visible_tty_autocycle/g" "$helper"
+			sed -i "s/__HOTDOG_VISIBLE_TTY_PRINTK__/$visible_tty_printk/g" "$helper"
 		fi
 		chmod 0755 "$helper"
 	}
@@ -1457,8 +1590,57 @@ HOTDOG_VISIBLE_TTY_SHELL_SH
 write_hotdog_fb_test_helper() {
 	local helper="$initramfs_tree/hotdog_fb_test.sh"
 
+	if [ "$fb_test_mode" = "wait" ]; then
+		cat > "$helper" <<'HOTDOG_FB_WAIT_SH'
+#!/bin/busybox ash
+
+hotdog_fb_test_log() {
+	local msg="$*"
+	if [ -e /dev/kmsg ]; then
+		printf '%s\n' "[hotdog-fb-test] $msg" > /dev/kmsg 2>/dev/null || true
+	fi
+	printf '%s\n' "[hotdog-fb-test] $msg" 2>/dev/null || true
+}
+
+hotdog_fb_test_dev() {
+	local dev
+	for dev in /dev/fb0 /dev/graphics/fb0; do
+		[ -e "$dev" ] || continue
+		printf '%s\n' "$dev"
+		return 0
+	done
+	return 1
+}
+
+hotdog_fb_test_start() {
+	local stage="${1:-unknown}"
+
+	[ -e /tmp/hotdog_fb_test.started ] && return 0
+	: > /tmp/hotdog_fb_test.started 2>/dev/null || true
+
+	(
+		waited=0
+		while [ "$waited" -lt 45 ]; do
+			if hotdog_fb_test_dev >/dev/null 2>&1; then
+				hotdog_fb_test_log "fb0 appeared at stage=$stage after ${waited}s; wait-only mode"
+				: > /tmp/hotdog_fb_test.ok 2>/dev/null || true
+				exit 0
+			fi
+			sleep 1
+			waited=$((waited + 1))
+		done
+		hotdog_fb_test_log "no framebuffer appeared by stage=$stage"
+	) &
+}
+HOTDOG_FB_WAIT_SH
+		chmod 0755 "$helper"
+		return
+	fi
+
 	cat > "$helper" <<'HOTDOG_FB_TEST_SH'
 #!/bin/busybox ash
+
+HOTDOG_FB_TEST_MODE="__HOTDOG_FB_TEST_MODE__"
 
 hotdog_fb_test_log() {
 	local msg="$*"
@@ -1555,6 +1737,11 @@ hotdog_fb_test_start() {
 		waited=0
 		while [ "$waited" -lt 45 ]; do
 			if hotdog_fb_test_dev >/dev/null 2>&1; then
+				if [ "$HOTDOG_FB_TEST_MODE" = "wait" ]; then
+					hotdog_fb_test_log "fb0 appeared at stage=$stage after ${waited}s; wait-only mode"
+					: > /tmp/hotdog_fb_test.ok 2>/dev/null || true
+					exit 0
+				fi
 				hotdog_fb_test_fill red "$stage" || true
 				sleep 1
 				hotdog_fb_test_fill green "$stage" || true
@@ -1572,6 +1759,7 @@ hotdog_fb_test_start() {
 	) &
 }
 HOTDOG_FB_TEST_SH
+	sed -i "s/__HOTDOG_FB_TEST_MODE__/$fb_test_mode/g" "$helper"
 	chmod 0755 "$helper"
 }
 
@@ -1797,6 +1985,18 @@ hotdog_usb_acm_start_getty_loop() {
 	fi
 }
 
+hotdog_usb_acm_bind_udc_if_empty() {
+	local active_udc
+
+	[ -n "${CONFIGFS:-}" ] || return 0
+	[ -r "$CONFIGFS/g1/UDC" ] || return 0
+	active_udc="$(cat "$CONFIGFS/g1/UDC" 2>/dev/null || true)"
+	[ -z "$active_udc" ] || return 0
+	if type setup_usb_configfs_udc >/dev/null 2>&1; then
+		setup_usb_configfs_udc || hotdog_usb_acm_log "setup_usb_configfs_udc failed"
+	fi
+}
+
 hotdog_usb_acm_getty_start() {
 	local stage="$1"
 
@@ -1815,14 +2015,12 @@ hotdog_usb_acm_getty_start() {
 		else
 			hotdog_usb_acm_log "setup_usb_acm_configfs unavailable"
 		fi
-		if type setup_usb_configfs_udc >/dev/null 2>&1; then
-			setup_usb_configfs_udc || hotdog_usb_acm_log "setup_usb_configfs_udc failed before ttyGS0 wait"
-		fi
+		hotdog_usb_acm_bind_udc_if_empty
 
 		while [ "$waited" -lt 120 ] && [ ! -e /dev/ttyGS0 ]; do
 			mdev -s >/tmp/hotdog-usb-acm-mdev.log 2>&1 || true
-			if [ $((waited % 5)) -eq 0 ] && type setup_usb_configfs_udc >/dev/null 2>&1; then
-				setup_usb_configfs_udc >/tmp/hotdog-usb-acm-udc-retry.log 2>&1 || true
+			if [ $((waited % 5)) -eq 0 ]; then
+				hotdog_usb_acm_bind_udc_if_empty >/tmp/hotdog-usb-acm-udc-retry.log 2>&1 || true
 			fi
 			sleep 1
 			waited=$((waited + 1))
@@ -1836,9 +2034,7 @@ hotdog_usb_acm_getty_start() {
 			hotdog_usb_acm_log "ttyGS0 did not appear after ${waited}s"
 		fi
 
-		if type setup_usb_configfs_udc >/dev/null 2>&1; then
-			setup_usb_configfs_udc || hotdog_usb_acm_log "setup_usb_configfs_udc failed"
-		fi
+		hotdog_usb_acm_bind_udc_if_empty
 	) &
 }
 HOTDOG_USB_ACM_GETTY_SH
@@ -1946,7 +2142,7 @@ hotdog_fbdev_console_start() {
 					--font /tmp/hotdog-ter-v32n.psf \
 					--fifo /tmp/hotdog-fbdev-console.in \
 					--transcript /tmp/hotdog-fbdev-console.transcript \
-					--command "export TERM=dumb; PS1='fbdev# '; export PS1; printf '\n--- hotdog initramfs fbdev command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- framebuffer state ---\n'; cat /proc/fb 2>/dev/null || true; ls -la /dev/fb* /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -120; printf '\n--- starting background dmesg follower every 4s ---\n'; (i=0; while :; do sleep 4; printf '\n--- fbdev dmesg follow %s ---\n' \"\$i\"; date 2>/dev/null || true; dmesg | tail -90; i=\$((i + 1)); done) & printf 'follower pid: %s\n' \"\$!\"; printf '\n--- ready: commands are read from /tmp/hotdog-fbdev-console.in ---\n'" \
+					--command "export TERM=dumb; PS1='fbdev# '; export PS1; printf '\n--- hotdog initramfs fbdev command shell ---\n'; printf 'stage: $stage\n'; printf 'cmdline: '; cat /proc/cmdline; printf '\n--- framebuffer state ---\n'; cat /proc/fb 2>/dev/null || true; ls -la /dev/fb* /sys/class/graphics /sys/class/graphics/fb0 2>/dev/null || true; printf '\n--- initial dmesg snapshot ---\n'; dmesg | tail -120; printf '\n--- starting background dmesg follower every 4s ---\n'; (i=0; while :; do sleep 4; printf '\n--- fbdev dmesg follow %s ---\n' \"\$i\"; date 2>/dev/null || true; dmesg | tail -90; i=\$((i + 1)); done) & HOTDOG_FOLLOWER_PID=\$!; export HOTDOG_FOLLOWER_PID; printf 'follower pid: %s\n' \"\$HOTDOG_FOLLOWER_PID\"; printf '\n--- ready: commands are read from /tmp/hotdog-fbdev-console.in; Power stops the follower for a quiet prompt ---\n'" \
 					>/tmp/hotdog-fbdev-console.log 2>&1 &
 				echo $! > /tmp/hotdog_fbdev_console.pid
 				exit 0
@@ -2000,6 +2196,16 @@ strip_inherited_drm_console() {
 		remove_marked_block "$init_file" "hotdog DRM console switch-root stop begin" "hotdog DRM console switch-root stop end"
 		remove_marked_block "$init_file" "hotdog fbdev console begin" "hotdog fbdev console end"
 		remove_marked_block "$init_file" "hotdog fbdev console switch-root stop begin" "hotdog fbdev console switch-root stop end"
+	done
+}
+
+strip_inherited_fb_test() {
+	local init_file
+
+	rm -f "$initramfs_tree/hotdog_fb_test.sh" 2>/dev/null || true
+
+	for init_file in "$initramfs_tree/init" "$initramfs_tree/init_2nd" "$initramfs_tree/init_2nd.sh"; do
+		remove_marked_block "$init_file" "hotdog framebuffer paint test begin" "hotdog framebuffer paint test end"
 	done
 }
 
@@ -2375,6 +2581,9 @@ write_manifest() {
 			printf -- '- Direct debug shell: `%s`\n' "$direct_debug_shell"
 			printf -- '- USB ACM getty: `%s`\n' "$usb_acm_getty"
 			printf -- '- Framebuffer paint test: `%s`\n' "$fb_test"
+			if [ "$fb_test" -eq 1 ]; then
+				printf -- '- Framebuffer test mode: `%s`\n' "$fb_test_mode"
+			fi
 			printf -- '- FBDEV initramfs console: `%s`\n' "$fbdev_console"
 			printf -- '- DRM initramfs console: `%s`\n' "$drm_console"
 			if [ "$drm_console" -eq 1 ] || [ "$fbdev_console" -eq 1 ]; then
@@ -2383,7 +2592,11 @@ write_manifest() {
 			printf -- '- TTY kmsg console: `%s`\n' "$tty_kmsg_console"
 			printf -- '- Visible tty shell: `%s`\n' "$visible_tty_shell"
 			printf -- '- Visible tty auto-cycle: `%s`\n' "$visible_tty_autocycle"
+			if [ "$visible_tty_shell" -eq 1 ]; then
+				printf -- '- Visible tty printk: `%s`\n' "$visible_tty_printk"
+			fi
 			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
+			printf -- '- Strip inherited framebuffer paint test: `%s`\n' "$strip_fb_test"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
 			printf -- '- Boot base: `%s`\n' "$boot_base"
@@ -2425,6 +2638,9 @@ write_manifest() {
 			fi
 			if [ "$fb_test" -eq 1 ]; then
 				printf ' --fb-test'
+				if [ "$fb_test_mode" != "paint" ]; then
+					printf ' --fb-test-mode %q' "$fb_test_mode"
+				fi
 			fi
 			if [ "$fbdev_console" -eq 1 ]; then
 				printf ' --fbdev-console'
@@ -2444,8 +2660,14 @@ write_manifest() {
 			if [ "$visible_tty_autocycle" -eq 1 ]; then
 				printf ' --visible-tty-autocycle'
 			fi
+			if [ "$visible_tty_shell" -eq 1 ] && [ "$visible_tty_printk" != "4 4 1 7" ]; then
+				printf ' --visible-tty-printk %q' "$visible_tty_printk"
+			fi
 			if [ "$strip_drm_console" -eq 1 ]; then
 				printf ' --strip-drm-console'
+			fi
+			if [ "$strip_fb_test" -eq 1 ]; then
+				printf ' --strip-fb-test'
 			fi
 			if [ -n "$extra_cmdline" ]; then
 				printf ' --extra-cmdline %q' "$extra_cmdline"
@@ -2536,6 +2758,9 @@ write_hotdog_super_loop_hook
 write_hotdog_rootfs_postmount_helper
 if [ "$strip_drm_console" -eq 1 ]; then
 	strip_inherited_drm_console
+fi
+if [ "$strip_fb_test" -eq 1 ]; then
+	strip_inherited_fb_test
 fi
 if [ "$fb_test" -eq 1 ]; then
 	write_hotdog_fb_test_helper

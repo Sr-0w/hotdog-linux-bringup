@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOTDOG_PMOS_HOST="${HOTDOG_PMOS_HOST:-172.16.42.1}"
-HOTDOG_PMOS_USER="${HOTDOG_PMOS_USER:-user}"
-HOTDOG_PMOS_PASSWORD="${HOTDOG_PMOS_PASSWORD:-147147}"
-HOTDOG_LOG_ROOT="${HOTDOG_LOG_ROOT:-/home/srobin/dev/hotdog/logs}"
+source "$(dirname "$0")/env.sh"
+
 LOG_DIR="$HOTDOG_LOG_ROOT/readonly-ssh"
 
 usage() {
@@ -25,6 +23,7 @@ die() {
 }
 
 ssh_base() {
+  hotdog_require_pmos_password
   sshpass -p "$HOTDOG_PMOS_PASSWORD" ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \

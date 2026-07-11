@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Extract a ramoops console zone from a raw physical DDR segment."""
+
+from __future__ import annotations
+
+import argparse
+import struct
+import sys
+from pathlib import Path
+
+
+PERSISTENT_RAM_SIG = 0x43474244
+HEADER_SIZE = 12
+
+
+def parse_int(value: str) -> int:
+    return int(value, 0)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ddr", type=Path, help="Raw DDR segment containing the ramoops zone")
+    parser.add_argument("--ddr-phys-base", type=parse_int, default=0x80000000)
+    parser.add_argument("--console-phys", type=parse_int, default=0xA9980000)
+    parser.add_argument("--zone-size", type=parse_int, default=0x40000)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    file_offset = args.console_phys - args.ddr_phys_base
+    if file_offset < 0:
+        raise SystemExit("console physical address is below the DDR segment base")
+
+    with args.ddr.open("rb") as stream:
+        stream.seek(file_offset)
+        zone = stream.read(args.zone_size)
+
+    if len(zone) != args.zone_size:
+        raise SystemExit(
+            f"short ramoops zone: expected {args.zone_size} bytes, got {len(zone)}"
+        )
+
+    signature, start, size = struct.unpack_from("<III", zone)
+    if signature != PERSISTENT_RAM_SIG:
+        raise SystemExit(
+            f"unexpected ramoops signature 0x{signature:08x}; expected 0x{PERSISTENT_RAM_SIG:08x}"
+        )
+
+    data = zone[HEADER_SIZE:]
+    capacity = len(data)
+    if start > capacity or size > capacity:
+        raise SystemExit(
+            f"invalid ramoops cursor: start={start}, size={size}, capacity={capacity}"
+        )
+
+    if size < capacity:
+        payload = data[:size]
+    else:
+        payload = data[start:] + data[:start]
+
+    sys.stdout.buffer.write(payload)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

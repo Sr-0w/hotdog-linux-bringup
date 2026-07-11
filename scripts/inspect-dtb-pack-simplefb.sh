@@ -135,6 +135,31 @@ has_line() {
   fi
 }
 
+node_has_line() {
+  local label="$1"
+  local node="$2"
+  local pattern="$3"
+
+  python3 - "$entry_dts" "$label" "$node" "$pattern" <<'PY'
+import pathlib
+import re
+import sys
+
+dts = pathlib.Path(sys.argv[1])
+label = sys.argv[2]
+node = sys.argv[3]
+pattern = sys.argv[4]
+text = dts.read_text()
+match = re.search(
+    rf"\n\s*{re.escape(node)}\s*\{{\n(.*?)\n\s*\}};",
+    text,
+    flags=re.S,
+)
+ok = bool(match and re.search(pattern, match.group(1), flags=re.M))
+print(f"{label}={'yes' if ok else 'no'}")
+PY
+}
+
 printf 'dtb=%s\n' "$dtb"
 sha256sum "$dtb" | awk '{ print "dtb_sha256=" $1 }'
 cat "$meta"
@@ -146,9 +171,11 @@ has_line linux_stdout_path 'linux,stdout-path = "/chosen/framebuffer@9c000000";'
 has_line simplefb_node 'framebuffer@9c000000'
 has_line simplefb_compatible 'compatible = "simple-framebuffer";'
 has_line display0_alias 'display0 = "/chosen/framebuffer@9c000000";'
+node_has_line cont_splash_nomap cont_splash_region '^\s*no-map;'
+node_has_line disp_rdump_nomap disp_rdump_region '^\s*no-map;'
 
 printf '\n== selected lines ==\n'
-grep -nE 'chosen \{|ranges;|stdout-path|framebuffer@9c000000|compatible = "simple-framebuffer"|display0 = ' "$entry_dts" || true
+grep -nE 'chosen \{|ranges;|stdout-path|framebuffer@9c000000|compatible = "simple-framebuffer"|display0 = |cont_splash_region|disp_rdump_region|no-map;' "$entry_dts" || true
 
 printf '\nentry_dtb=%s\n' "$entry_dtb"
 printf 'entry_dts=%s\n' "$entry_dts"

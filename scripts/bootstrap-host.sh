@@ -40,23 +40,37 @@ else
   printf 'git:  %s\n' "not initialised yet"
 fi
 
-subrepo_count="$(find "$ROOT/src" -maxdepth 3 -name .git 2>/dev/null | wc -l | tr -d ' ')"
+if [ -d "$ROOT/src" ]; then
+  subrepo_count="$(find "$ROOT/src" -maxdepth 3 -name .git | wc -l | tr -d ' ')"
+else
+  subrepo_count=0
+fi
 printf 'subrepos under src: %s\n' "$subrepo_count"
 echo
 
 echo "== key files =="
 for path in \
   README.md \
+  CONTRIBUTING.md \
+  SECURITY.md \
+  LICENSE \
   .gitignore \
   .gitattributes \
-  docs/repo-continuation.md \
-  docs/artifact-manifest.md \
-  docs/source-status.md \
-  docs/host-prep-status.md \
-  docs/current-boot-cycle.md \
+  hotdog.env.example \
+  docs/README.md \
+  docs/status.md \
+  docs/mainline-bringup.md \
+  docs/boot-flow.md \
+  docs/host-setup.md \
+  docs/device-safety.md \
+  docs/artifacts.md \
+  docs/roadmap.md \
   scripts/check-host-tools.sh \
   scripts/env.sh \
   scripts/bootstrap-host.sh \
+  scripts/fetch-kexec-tools-aarch64.sh \
+  scripts/install-gentoo-qemu-aarch64-user.sh \
+  scripts/validate-mainline-go-cycle.sh \
   patches/experimental-android-kernel-header-text-offset.patch \
   pmbootstrap_v3.cfg.example
 do

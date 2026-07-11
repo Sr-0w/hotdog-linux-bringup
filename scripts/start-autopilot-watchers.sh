@@ -12,7 +12,7 @@ FLASH_TIMEOUT_SEC="${FLASH_TIMEOUT_SEC:-900}"
 SSH_TIMEOUT_SEC="${SSH_TIMEOUT_SEC:-1200}"
 HANDOFF_TIMEOUT_SEC="${HANDOFF_TIMEOUT_SEC:-180}"
 SIDELOAD_ZIP="${SIDELOAD_ZIP:-$HOTDOG_ROOT/tools/recovery-zips/build/hotdog-reboot-bootloader.zip}"
-TARGET_SERIAL="${ANDROID_SERIAL:-${HOTDOG_TARGET_SERIAL:-b6bd2252}}"
+TARGET_SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTART=0
 HEALTH=1
 
@@ -37,7 +37,7 @@ Options:
   --health-poll SEC      Health watcher poll interval. Default: 60.
   --health-cooldown SEC  Health watcher restart cooldown. Default: 300.
   --serial SERIAL        Restrict targetable ADB/fastboot watchers to SERIAL.
-                         Default: b6bd2252 for this HD1911 workspace.
+                         Defaults to ANDROID_SERIAL or HOTDOG_TARGET_SERIAL.
   --no-health            Do not start or stop the health watcher.
   --flash-timeout SEC    Fastboot wait inside pmOS flash. Default: 900.
   --ssh-timeout SEC      postmarketOS SSH wait. Default: 1200.
@@ -216,6 +216,7 @@ main() {
   validate_seconds FLASH_TIMEOUT_SEC "$FLASH_TIMEOUT_SEC"
   validate_seconds SSH_TIMEOUT_SEC "$SSH_TIMEOUT_SEC"
   validate_seconds HANDOFF_TIMEOUT_SEC "$HANDOFF_TIMEOUT_SEC"
+  [ -n "$TARGET_SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
 
   [ -r "$SIDELOAD_ZIP" ] || die "Sideload ZIP is not readable: $SIDELOAD_ZIP" 2
   mkdir -p "$HOTDOG_LOG_ROOT"

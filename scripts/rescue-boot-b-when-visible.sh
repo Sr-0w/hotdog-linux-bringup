@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 source "$(dirname "$0")/phone-lock.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 RESTORE_DTBO_IMAGE="${RESTORE_DTBO_IMAGE:-}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-21600}"
@@ -21,7 +21,7 @@ the target phone appears in fastboot or recovery ADB, restores a known boot_b
 image, reboots to recovery, and exits.
 
 Options:
-  --serial SERIAL        Target serial. Default: b6bd2252.
+  --serial SERIAL        Target serial. Defaults to ANDROID_SERIAL.
   --restore-boot-b FILE  Known-good boot_b image to flash.
   --restore-dtbo-b FILE  Optional known-good dtbo_b image to flash before boot_b.
   --after-restore MODE   recovery, system, bootloader, or none. Default: recovery.
@@ -117,7 +117,7 @@ adb_state() {
 }
 
 fastboot_present() {
-  fastboot devices -l > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
   awk -v serial="$SERIAL" 'NF >= 1 && $1 == serial { found=1 } END { exit found ? 0 : 1 }' "$run_dir/fastboot-devices-last.txt"
 }
 
@@ -245,6 +245,7 @@ restore_from_fastboot() {
 main() {
   validate_seconds TIMEOUT_SEC "$TIMEOUT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
+  [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
   case "$AFTER_RESTORE" in
     recovery|system|bootloader|none) ;;
     *) die "--after-restore must be one of: recovery, system, bootloader, none" 2 ;;
