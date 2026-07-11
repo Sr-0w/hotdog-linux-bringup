@@ -1,0 +1,192 @@
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 01bc58670..4357b237c 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -278,6 +278,8 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-xiaomi-cepheus.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-xiaomi-nabu.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-guacamole.dtb
++DTC_FLAGS_sm8150-oneplus-hotdog := -@
++dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdog.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdogb.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+new file mode 100644
+index 000000000..946c1f2d4
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -0,0 +1,173 @@
++// SPDX-License-Identifier: BSD-3-Clause
++/*
++ * Devicetree for the OnePlus 7T Pro (hotdog / HD1911).
++ *
++ * This keeps the proven OnePlus SM8150 common base used by guacamole and
++ * hotdogb, then adds only the HD1911-specific first-boot pieces we can verify
++ * from stock dumps: 1440x3120 simplefb, Samsung S6SY761 touch, and ramoops.
++ */
++
++/dts-v1/;
++
++#include <dt-bindings/regulator/qcom,rpmh-regulator.h>
++#include <dt-bindings/gpio/gpio.h>
++#include "sm8150-oneplus-common.dtsi"
++
++/ {
++	model = "OnePlus 7T Pro";
++	compatible = "oneplus,hotdog", "oneplus,oneplus7", "qcom,sm8150";
++	chassis-type = "handset";
++
++	qcom,msm-id = <339 0x20000>; /* SM8150 v2 */
++	qcom,msm-name = "SM8150 V2";
++	qcom,pmic-name = "PM8150";
++	qcom,board-id = <8 0>;
++
++	/*
++	 * Matches the Android DTBO selected on the test HD1911:
++	 * project 19801, EVT/PVT/DVT hardware range 12..55.
++	 */
++	oplus,dtsi_no = <19801>;
++	oplus,pcb_range = <0 55>;
++
++	aliases {
++		serial0 = &uart2;
++		display0 = &framebuffer0;
++	};
++
++	chosen {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		stdout-path = "display0";
++
++		/*
++		 * Use the framebuffer prepared by the bootloader. This mirrors
++		 * guacamole, but keeps hotdog's 1440x3120 panel geometry.
++		 */
++		framebuffer0: framebuffer@9c000000 {
++			compatible = "simple-framebuffer";
++			reg = <0 0x9c000000 0 (1440 * 3120 * 4)>;
++			width = <1440>;
++			height = <3120>;
++			stride = <(1440 * 4)>;
++			format = "a8r8g8b8";
++			status = "okay";
++		};
++	};
++
++	reserved-memory {
++		/* Bootloader framebuffer memory region. */
++		cont_splash_region: disp_rdump_region: memory@9c000000 {
++			reg = <0 0x9c000000 0 0x2400000>;
++		};
++
++		cdsp_sec_regions: memory@a4c00000 {
++			compatible = "removed-dma-pool";
++			no-map;
++			reg = <0 0xa4c00000 0 0x3c00000>;
++		};
++
++		ramoops: ramoops@a9800000 {
++			compatible = "ramoops";
++			reg = <0 0xa9800000 0 0x400000>;
++			record-size = <0x40000>;
++			console-size = <0x40000>;
++			ftrace-size = <0x40000>;
++			pmsg-size = <0x200000>;
++			devinfo-size = <0x1000>;
++			ecc-size = <0>;
++		};
++
++		param_mem: memory@ac200000 {
++			reg = <0 0xac200000 0 0x100000>;
++			no-map;
++		};
++
++		mtp_mem: memory@ac300000 {
++			reg = <0 0xac300000 0 0xb00000>;
++			no-map;
++		};
++	};
++};
++
++&i2c17 {
++	status = "disabled";
++	clock-frequency = <400000>;
++
++	touchscreen@48 {
++		compatible = "samsung,s6sy761";
++		status = "disabled";
++		reg = <0x48>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <122 0x2008>;
++		vdd-supply = <&vreg_l17a_3p0>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&tp_irq_active &tp_rst_active &tp_1v8_active>;
++	};
++};
++
++&remoteproc_mpss {
++	status = "disabled";
++};
++
++&wifi {
++	status = "disabled";
++};
++
++&rmtfs_mem {
++	reg = <0x0 0x89b00000 0x0 0x200000>;
++};
++
++&adsp_mem {
++	reg = <0x0 0x8be00000 0x0 0x1e00000>;
++};
++
++&mpss_mem {
++	reg = <0x0 0x8dc00000 0x0 0xa000000>;
++};
++
++&venus_mem {
++	reg = <0x0 0x97c00000 0x0 0x500000>;
++};
++
++&slpi_mem {
++	reg = <0x0 0x98100000 0x0 0x1400000>;
++};
++
++&ipa_fw_mem {
++	reg = <0x0 0x99500000 0x0 0x10000>;
++};
++
++&ipa_gsi_mem {
++	reg = <0x0 0x99510000 0x0 0x5000>;
++};
++
++&gpu_mem {
++	reg = <0x0 0x99515000 0x0 0x2000>;
++};
++
++&spss_mem {
++	reg = <0x0 0x99600000 0x0 0x100000>;
++};
++
++&cdsp_mem {
++	reg = <0x0 0x99700000 0x0 0x1400000>;
++};
++
++&usb_1 {
++	qcom,select-utmi-as-pipe-clk;
++	status = "okay";
++};
++
++&usb_1_qmpphy {
++	status = "disabled";
++};
++
++&usb_1_dwc3 {
++	dr_mode = "peripheral";
++	maximum-speed = "high-speed";
++	phys = <&usb_1_hsphy>;
++	phy-names = "usb2-phy";
++};

@@ -25,3 +25,11 @@ single developer workstation or a live debugging session.
 Raw experiment records live in the ignored local `reports/` directory. Promote
 reusable conclusions into the documents above without publishing device serials,
 credentials, proprietary dumps, or workstation-specific paths.
+
+- [evidence/2026-07-11-mainline-k1.md](evidence/2026-07-11-mainline-k1.md):
+  primary public evidence for the hardware-validated K1 Linux 6.17 cycle,
+  including payload hashes, the kexec timeline, and direct-boot controls.
+- [evidence/k1-kernel-package.md](evidence/k1-kernel-package.md): successful K1
+  `pmbootstrap` APK build evidence and pinned payload hashes.
+- [evidence/k1-dtb-source.md](evidence/k1-dtb-source.md): buildable K1 hotdog
+  DTB source baseline and exact source-to-tested-DTB reproduction chain.

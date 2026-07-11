@@ -130,33 +130,47 @@ one pinned D1 image and one pinned recovery bridge:
 |---|---|
 | image under test | D1 AVB image, `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994` |
 | restore image | r5 no-paint bridge, `23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50` |
-| source state | healthy postmarketOS SSH from the bridge |
-| rescue policy | companion watcher prearmed before flashing `boot_b` |
+| source state | `4.14.357-openela-perf` bridge on slot B, with the configured phone serial in `/proc/cmdline` |
+| rescue policy | companion watcher prearmed before flashing `boot_b`; the restore hash is checked at readiness and immediately before flashing |
 | expected kernel | `6.17.0-sm8150` prefix |
+| expected target identity | new boot ID plus `rdinit=/hotdog-mainline-wrapper`, slot B, and the configured phone serial in `/proc/cmdline` |
 | boot observation window | 540 seconds by default; overrides below 480 seconds are rejected |
 | post-restore action | restore `boot_b` and reboot system when the recovery path appears |
 
 The launcher rejects arguments that would change the image, restore image,
 source mode, expected kernel, restore mode, rescue watcher, or boot-wait
-policy. It accepts only narrow operational options such as serial selection,
-polling intervals, and fastboot/rescue timeouts.
+policy. The target serial comes only from `HOTDOG_TARGET_SERIAL` or
+`ANDROID_SERIAL`; command-line serial overrides are rejected. Only polling and
+fastboot/rescue timing options remain adjustable.
 
-The starting bridge must be a healthy postmarketOS SSH boot. The launcher
-checks that source state before flashing, prearms the rescue watcher, writes
-the pinned AVB image to `boot_b`, reboots, and then classifies the result.
+The starting bridge must be a healthy postmarketOS SSH boot from slot B on the
+configured handset. The launcher verifies its kernel, slot and serial markers
+before flashing, prearms the rescue watcher, writes the pinned AVB image to
+`boot_b`, reboots, and then classifies the result.
 
-A success requires a new postmarketOS SSH boot whose kernel release starts
-with `6.17.0-sm8150`. A restored bridge is not success: if SSH returns on the
-downstream 4.14 bridge, or if fastboot returns and the no-paint bridge is
-restored, the run only proves that recovery worked. A timeout without a USB
-recovery path leaves the companion watcher running.
+A success requires a fresh postmarketOS SSH boot ID, a kernel release starting
+with `6.17.0-sm8150`, and all pinned target command-line markers. ADB, ping and
+telnet remain diagnostics and cannot report success. The initramfs rescue
+watchdog is acknowledged only after the SSH identity checks pass. A restored
+bridge is not success: if SSH returns on downstream 4.14, or if fastboot returns
+and the no-paint bridge is restored, the run only proves recovery worked. A
+timeout without a USB recovery path leaves the companion watcher running.
+
+The D1 ramdisk contains two concatenated `newc` archives. The older archive
+still carries the historical framebuffer probe bytes, but the final effective
+`hotdog_fb_test.sh` is the later wait-only replacement. Both offline validators
+resolve the last archive member with
+[`extract-last-newc-member.py`](../scripts/extract-last-newc-member.py) and
+reject any effective RGB fill implementation. The observed RGB frames came
+from an earlier downstream 4.14 bridge, not from mainline.
 
 ## DTB-pack control
 
 Some Qualcomm boot flows use a bare concatenation of FDT blobs and select an
 entry from board identifiers. The builder supports that exact format, not an
 Android `dt_table` container. It can replace one entry while preserving every
-other FDT:
+other FDT. It rejects malformed or non-progressing FDT sizes and records both
+the source pack and replaced original entry in `SHA256SUMS` and the manifest:
 
 ```bash
 ./scripts/build-mainline-direct-bootimg.sh \

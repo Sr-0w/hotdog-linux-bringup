@@ -29,13 +29,17 @@ from this repository, use the reverse direction deliberately:
   --target-pmaports /path/to/pmaports-sm8150
 ```
 
-Only the current bring-up packages are mirrored:
+The mirrored inputs have distinct roles and are not all current kernels:
 
-- `device-oneplus-hotdog`
-- `firmware-oneplus-hotdog` (APKBUILD metadata only)
-- `linux-postmarketos-sm8150-staging`
-- `linux-postmarketos-qcom-sm8150`
-- the boot-proven `linux-oneplus-hotdog-lineage414` snapshot
+- Active mainline package: `linux-oneplus-hotdog-mainline617-k1`, the forensic
+  K1 Linux 6.17 reproduction with the captured config and exact base-DTB source.
+- Device and firmware support: `device-oneplus-hotdog` and
+  `firmware-oneplus-hotdog` (APKBUILD metadata only).
+- Transitional boot bridge: `linux-oneplus-hotdog-lineage414`, the boot-proven
+  downstream 4.14 package retained as a temporary kexec bridge into K1.
+- Historical mainline snapshot: `linux-postmarketos-qcom-sm8150` (Linux 6.4).
+- Historical staging snapshot: `linux-postmarketos-sm8150-staging` (Linux
+  6.8.7).
 
 Snapshots permit only reviewed text package inputs: `APKBUILD`, kernel configs,
 patches, deviceinfo, and device scripts. They intentionally do not contain

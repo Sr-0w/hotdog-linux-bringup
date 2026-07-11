@@ -1,8 +1,9 @@
 # Linux on the OnePlus 7T Pro (`hotdog`)
 
 Experimental Linux and postmarketOS bring-up for the OnePlus 7T Pro. The
-current development target is the European HD1913 model with a Qualcomm
-Snapdragon 855+ (SM8150-AC).
+physical test handset is rear-labelled as a European HD1913 with a Qualcomm
+Snapdragon 855+ (SM8150-AC), while its recovery and vendor software identify
+it as HD1911 and expose the `hotdog` project/codename.
 
 > [!WARNING]
 > This is early hardware enablement, not a daily-driver image. An unlocked
@@ -24,7 +25,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | A late-loaded exact `qcom-wdt.ko` drives a physical reboot, but `RESTART2(bootloader)` falls back to normal boot because boot-mode mapping is still missing. |
-| Direct `fastboot boot` | Blocked | The D1 raw image is accepted with `OKAY` but does not leave the fastboot USB instance; bridge raw/AVB and Lineage raw controls fail with `Load Error`. |
+| Direct `fastboot boot` | Inconclusive | The D1 raw image is accepted with `OKAY` but does not leave the fastboot USB instance; bridge raw/AVB and Lineage raw controls fail with `Load Error`. Persistent `boot_b` is the authoritative next test. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
@@ -101,10 +102,11 @@ cd hotdog-linux-bringup
 Fetch the external source trees:
 
 ```bash
-./scripts/bootstrap-sources.sh --kernel-mainline
+./scripts/bootstrap-sources.sh --sm8150-k1
 cp pmbootstrap_v3.cfg.example pmbootstrap_v3.cfg
 cp hotdog.env.example hotdog.env
 ./scripts/check-host-tools.sh
+./scripts/build-mainline-k1-dtb-chain.sh
 ```
 
 The repository does not distribute ready-to-flash boot images. Generated
@@ -123,9 +125,10 @@ mainline cycle is launched with:
 That launcher hash-checks the kernel, DTB, initramfs, and restore image before
 transferring control to mainline.
 
-This launcher is a reproducible lab replay once its generated inputs exist; it
-is not yet the clean-clone public build entry point. The remaining publication
-work is to produce those inputs entirely from the tracked pmaports packages.
+The complete K1 DTB chain is reproducible from a clean source checkout and
+tracked inputs. The launcher remains a lab replay until the kernel, initramfs,
+and Android boot image are also produced entirely through the tracked pmaports
+packages.
 
 ## Repository layout
 

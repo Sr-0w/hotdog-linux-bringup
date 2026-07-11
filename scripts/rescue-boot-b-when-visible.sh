@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# shellcheck source=/dev/null
 source "$(dirname "$0")/env.sh"
+# shellcheck source=/dev/null
 source "$(dirname "$0")/phone-lock.sh"
 
 SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
+RESTORE_IMAGE_EXPECTED_SHA256="${RESTORE_IMAGE_EXPECTED_SHA256:-}"
 RESTORE_DTBO_IMAGE="${RESTORE_DTBO_IMAGE:-}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-21600}"
 POLL_SEC="${POLL_SEC:-5}"
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
 AFTER_RESTORE="${AFTER_RESTORE:-recovery}"
+READY_FILE=""
 
 usage() {
   cat <<'USAGE'
@@ -23,10 +27,14 @@ image, reboots to recovery, and exits.
 Options:
   --serial SERIAL        Target serial. Defaults to ANDROID_SERIAL.
   --restore-boot-b FILE  Known-good boot_b image to flash.
+  --restore-boot-b-sha256 SHA256
+                         Expected restore image hash. If omitted, the startup
+                         hash is pinned for the lifetime of this watcher.
   --restore-dtbo-b FILE  Optional known-good dtbo_b image to flash before boot_b.
   --after-restore MODE   recovery, system, bootloader, or none. Default: recovery.
   --timeout SEC          Seconds to wait. Default: 21600.
   --poll SEC             Poll interval. Default: 5.
+  --ready-file FILE      Write readiness metadata here after local checks pass.
   -h, --help             Show this help.
 USAGE
 }
@@ -41,6 +49,11 @@ while [ "$#" -gt 0 ]; do
     --restore-boot-b)
       [ "$#" -ge 2 ] || { echo "Missing value for --restore-boot-b" >&2; exit 2; }
       RESTORE_IMAGE="$2"
+      shift
+      ;;
+    --restore-boot-b-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-boot-b-sha256" >&2; exit 2; }
+      RESTORE_IMAGE_EXPECTED_SHA256="${2,,}"
       shift
       ;;
     --restore-dtbo-b)
@@ -61,6 +74,11 @@ while [ "$#" -gt 0 ]; do
     --poll)
       [ "$#" -ge 2 ] || { echo "Missing value for --poll" >&2; exit 2; }
       POLL_SEC="$2"
+      shift
+      ;;
+    --ready-file)
+      [ "$#" -ge 2 ] || { echo "Missing value for --ready-file" >&2; exit 2; }
+      READY_FILE="$2"
       shift
       ;;
     -h|--help)
@@ -96,8 +114,12 @@ die() {
   exit "${2:-1}"
 }
 
+# shellcheck disable=SC2329 # Invoked by the EXIT trap below.
 cleanup() {
   local status=$?
+  if [ -n "$READY_FILE" ]; then
+    rm -f "$READY_FILE"
+  fi
   log "Exiting with status $status"
   phone_lock_release || true
 }
@@ -109,6 +131,22 @@ validate_seconds() {
   if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
     die "$name must be a positive integer, got: $value" 2
   fi
+}
+
+publish_ready() {
+  local tmp=""
+
+  [ -n "$READY_FILE" ] || return 0
+  tmp="$READY_FILE.$$.tmp"
+  umask 077
+  {
+    printf 'pid=%s\n' "$$"
+    printf 'serial=%s\n' "$SERIAL"
+    printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+    printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+  } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+  mv -f "$tmp" "$READY_FILE" || die "Could not publish rescue watcher readiness file: $READY_FILE" 3
+  log "Readiness published: $READY_FILE"
 }
 
 adb_state() {
@@ -202,6 +240,7 @@ restore_from_fastboot() {
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-before.txt" || true
 
+  verify_restore_image_hash
   log "Restoring boot_b"
   sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
   if [ -n "$RESTORE_DTBO_IMAGE" ]; then
@@ -242,6 +281,14 @@ restore_from_fastboot() {
   log "Rescue complete"
 }
 
+verify_restore_image_hash() {
+  local actual=""
+
+  actual="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+  [ "$actual" = "$RESTORE_IMAGE_EXPECTED_SHA256" ] ||
+    die "Restore image hash mismatch: expected $RESTORE_IMAGE_EXPECTED_SHA256, got $actual" 3
+}
+
 main() {
   validate_seconds TIMEOUT_SEC "$TIMEOUT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
@@ -251,6 +298,12 @@ main() {
     *) die "--after-restore must be one of: recovery, system, bootloader, none" 2 ;;
   esac
   [ -s "$RESTORE_IMAGE" ] || die "Missing restore image: $RESTORE_IMAGE" 2
+  if [ -z "$RESTORE_IMAGE_EXPECTED_SHA256" ]; then
+    RESTORE_IMAGE_EXPECTED_SHA256="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+  elif ! [[ "$RESTORE_IMAGE_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    die "--restore-boot-b-sha256 must be exactly 64 hexadecimal characters" 2
+  fi
+  verify_restore_image_hash
   if [ -n "$RESTORE_DTBO_IMAGE" ]; then
     [ -s "$RESTORE_DTBO_IMAGE" ] || die "Missing restore dtbo image: $RESTORE_DTBO_IMAGE" 2
   fi
@@ -261,9 +314,11 @@ main() {
   log "Run directory: $run_dir"
   log "Target serial: $SERIAL"
   log "Restore image: $RESTORE_IMAGE"
+  log "Restore image SHA256: $RESTORE_IMAGE_EXPECTED_SHA256"
   log "Restore dtbo image: ${RESTORE_DTBO_IMAGE:-none}"
   log "After restore: $AFTER_RESTORE"
   log "Timeout: ${TIMEOUT_SEC}s"
+  publish_ready
 
   local deadline=$((SECONDS + TIMEOUT_SEC))
   local last_status=0

@@ -5,13 +5,17 @@ source "$(dirname "$0")/env.sh"
 
 include_kernel_mainline=0
 include_linux_next=0
+include_sm8150_k1=0
 
 usage() {
   cat <<'USAGE'
-Usage: bootstrap-sources.sh [--kernel-mainline] [--linux-next]
+Usage: bootstrap-sources.sh [--kernel-mainline] [--linux-next] [--sm8150-k1]
 
 Clones or updates the useful source trees. Mainline kernel trees are optional
 because they are much larger than the Android/postmarketOS references.
+
+  --sm8150-k1       Fetch the pinned Qualcomm SM8150 kernel repository used to
+                    reproduce the K1 kernel and hotdog DTB.
 USAGE
 }
 
@@ -19,6 +23,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --kernel-mainline) include_kernel_mainline=1 ;;
     --linux-next) include_linux_next=1 ;;
+    --sm8150-k1) include_sm8150_k1=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
@@ -69,6 +74,11 @@ if [ "$include_linux_next" -eq 1 ]; then
     "$HOTDOG_SRC_ROOT/kernel/linux-next" "--filter=blob:none"
 fi
 
+if [ "$include_sm8150_k1" -eq 1 ]; then
+  clone_or_update https://gitlab.postmarketos.org/soc/qualcomm-sm8150/linux.git \
+    "$HOTDOG_SRC_ROOT/kernel/linux-postmarketos-qcom-sm8150-k1" "--filter=blob:none"
+fi
+
 mkdir -p "$HOTDOG_BIN_ROOT"
 pmbootstrap_py="$HOTDOG_SRC_ROOT/postmarketos/pmbootstrap/pmbootstrap.py"
 if [ -f "$pmbootstrap_py" ]; then
@@ -80,4 +90,3 @@ else
 fi
 
 echo "Done."
-

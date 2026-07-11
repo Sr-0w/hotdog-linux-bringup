@@ -4,12 +4,15 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=1
-pkgrel=2
+pkgrel=3
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
 options="!check !archcheck"
-install="$pkgname.post-install"
+install="
+	$pkgname.post-install
+	$pkgname-nonfree-firmware.post-install
+"
 depends="
 	postmarketos-base
 	mkbootimg
@@ -78,7 +81,6 @@ nonfree_firmware() {
 		bootmac
 		alsa-utils
 		"
-	install="$subpkgname.post-install"
 	mkdir "$subpkgdir"
 }
 
@@ -88,7 +90,7 @@ wireplumber() {
 }
 
 sha512sums="
-9e7db28a3e67009705efa00164bed414cc263e260d4e91026a651db2368b2e2c7b484e3fc1547edd8e39f6d3d7a8cb837c74371bb5f410e15adb423a3c373549  deviceinfo
+c453ae8cbd462bcdca7cc0fa10d498bf032b7d6fde7c9cda741c70c84f94bd273945be66a8383202a1e23cf46cb32dbceb3049ff09814998c59c33b201a3d2d0  deviceinfo
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
 b6787934a8993ee209970f9b035bd240d17b95771b0b128015f3a4d52673cbdb1ec002c04f5bc2e221b9348e31ec1cb7ebfc8e1487eb6b3ea3d278e87648a9ac  device-oneplus-hotdog.post-install

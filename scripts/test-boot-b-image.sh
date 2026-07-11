@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# shellcheck source=/dev/null
 source "$(dirname "$0")/env.sh"
+# shellcheck source=/dev/null
 source "$(dirname "$0")/phone-lock.sh"
 
 SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
@@ -22,12 +24,20 @@ PMOS_HOST="${PMOS_HOST:-$HOTDOG_PMOS_HOST}"
 PMOS_TELNET_PORTS="${PMOS_TELNET_PORTS:-23 2323}"
 PMOS_BOOT_ID_BEFORE=""
 PMOS_KERNEL_BEFORE=""
+PMOS_CMDLINE_BEFORE=""
+EXPECT_SOURCE_KERNEL_PREFIX=""
+EXPECT_SOURCE_CMDLINE_TOKENS=()
 EXPECT_KERNEL_PREFIX=""
+EXPECT_CMDLINE_TOKENS=()
 PMOS_PROBE_BOOT_ID=""
 PMOS_PROBE_KERNEL=""
+PMOS_PROBE_CMDLINE=""
+STRICT_SSH_EXPECTATION=0
+RESTORE_IMAGE_SHA256=""
 START_RESCUE_WATCHER=0
 RESCUE_WATCHER_TIMEOUT_SEC="${RESCUE_WATCHER_TIMEOUT_SEC:-21600}"
 RESCUE_WATCHER_POLL_SEC="${RESCUE_WATCHER_POLL_SEC:-5}"
+RESCUE_WATCHER_READY_TIMEOUT_SEC="${RESCUE_WATCHER_READY_TIMEOUT_SEC:-10}"
 RESCUE_WATCHER_PID=""
 KEEP_RESCUE_WATCHER=0
 
@@ -55,6 +65,15 @@ Options:
                          Require the post-boot pmOS SSH uname -r to start with
                          PREFIX. A mismatch is classified separately and exits
                          nonzero, so a restored bridge is not a mainline success.
+  --expect-cmdline-token TOKEN
+                         Require TOKEN as a complete post-boot /proc/cmdline
+                         token. Repeat for multiple target identity markers.
+  --expect-source-kernel-prefix PREFIX
+                         Before flashing from pmOS SSH, require the current
+                         uname -r to start with PREFIX.
+  --expect-source-cmdline-token TOKEN
+                         Before flashing from pmOS SSH, require TOKEN as a
+                         complete /proc/cmdline token. Repeat as needed.
   --boot-wait SEC        Seconds to watch for fastboot/ADB/pmOS SSH. Default: 240.
   --poll SEC             Poll interval. Default: 2.
   --fastboot-timeout SEC Seconds to allow individual fastboot getvar/reboot
@@ -116,6 +135,24 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { echo "Missing value for --expect-kernel-prefix" >&2; exit 2; }
       EXPECT_KERNEL_PREFIX="$2"
       [ -n "$EXPECT_KERNEL_PREFIX" ] || { echo "--expect-kernel-prefix must not be empty" >&2; exit 2; }
+      shift
+      ;;
+    --expect-cmdline-token)
+      [ "$#" -ge 2 ] || { echo "Missing value for --expect-cmdline-token" >&2; exit 2; }
+      [ -n "$2" ] || { echo "--expect-cmdline-token must not be empty" >&2; exit 2; }
+      EXPECT_CMDLINE_TOKENS+=("$2")
+      shift
+      ;;
+    --expect-source-kernel-prefix)
+      [ "$#" -ge 2 ] || { echo "Missing value for --expect-source-kernel-prefix" >&2; exit 2; }
+      EXPECT_SOURCE_KERNEL_PREFIX="$2"
+      [ -n "$EXPECT_SOURCE_KERNEL_PREFIX" ] || { echo "--expect-source-kernel-prefix must not be empty" >&2; exit 2; }
+      shift
+      ;;
+    --expect-source-cmdline-token)
+      [ "$#" -ge 2 ] || { echo "Missing value for --expect-source-cmdline-token" >&2; exit 2; }
+      [ -n "$2" ] || { echo "--expect-source-cmdline-token must not be empty" >&2; exit 2; }
+      EXPECT_SOURCE_CMDLINE_TOKENS+=("$2")
       shift
       ;;
     --boot-wait)
@@ -211,12 +248,14 @@ start_rescue_watcher() {
   local wrapper_log="$run_dir/companion-rescue-watcher.log"
   local wrapper_err="$run_dir/companion-rescue-watcher.err"
   local pidfile="$run_dir/companion-rescue-watcher.pid"
+  local ready_file="$run_dir/companion-rescue-watcher.ready"
 
   [ "$START_RESCUE_WATCHER" -eq 1 ] || return 0
   [ -z "$RESCUE_WATCHER_PID" ] || return 0
   [ -n "$SERIAL" ] || die "--start-rescue-watcher requires --serial or an auto-detected serial" 2
   [ -n "$RESTORE_IMAGE" ] || die "--start-rescue-watcher requires --restore-boot-b FILE" 2
   [ -s "$RESTORE_IMAGE" ] || die "Rescue watcher restore image does not exist or is empty: $RESTORE_IMAGE" 2
+  rm -f "$ready_file"
 
   log "Starting companion rescue watcher for $SERIAL"
   if command -v start-stop-daemon >/dev/null 2>&1; then
@@ -227,22 +266,63 @@ start_rescue_watcher() {
       --exec "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" -- \
       --serial "$SERIAL" \
       --restore-boot-b "$RESTORE_IMAGE" \
+      --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
       --after-restore "$RESTORE_AFTER_FASTBOOT" \
       --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
-      --poll "$RESCUE_WATCHER_POLL_SEC"
-    RESCUE_WATCHER_PID="$(sed -n '1p' "$pidfile")"
+      --poll "$RESCUE_WATCHER_POLL_SEC" \
+      --ready-file "$ready_file"
   else
     setsid env HOTDOG_RESCUE_LOG_TEE=0 "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
       --serial "$SERIAL" \
       --restore-boot-b "$RESTORE_IMAGE" \
+      --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
       --after-restore "$RESTORE_AFTER_FASTBOOT" \
       --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
       --poll "$RESCUE_WATCHER_POLL_SEC" \
+      --ready-file "$ready_file" \
       > "$wrapper_log" 2> "$wrapper_err" < /dev/null &
     RESCUE_WATCHER_PID="$!"
     printf '%s\n' "$RESCUE_WATCHER_PID" > "$pidfile"
   fi
+
+  for _ in {1..50}; do
+    [ -s "$pidfile" ] && break
+    sleep 0.1
+  done
+  [ -s "$pidfile" ] || die "Companion rescue watcher did not publish a PID file" 3
+  RESCUE_WATCHER_PID="$(sed -n '1p' "$pidfile")"
+  case "$RESCUE_WATCHER_PID" in
+    ''|*[!0-9]*) die "Companion rescue watcher published an invalid PID: $RESCUE_WATCHER_PID" 3 ;;
+  esac
   log "Companion rescue watcher PID: $RESCUE_WATCHER_PID"
+  wait_for_rescue_watcher_ready "$ready_file" "$wrapper_log" "$wrapper_err"
+}
+
+wait_for_rescue_watcher_ready() {
+  local ready_file="$1"
+  local wrapper_log="$2"
+  local wrapper_err="$3"
+  local deadline=$((SECONDS + RESCUE_WATCHER_READY_TIMEOUT_SEC))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if ! kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
+      [ -s "$wrapper_err" ] && sed 's/^/[rescue-watcher] /' "$wrapper_err" >&2 || true
+      die "Companion rescue watcher exited before reporting readiness" 3
+    fi
+    if [ -s "$ready_file" ] &&
+      grep -Fxq "pid=$RESCUE_WATCHER_PID" "$ready_file" &&
+      grep -Fxq "serial=$SERIAL" "$ready_file" &&
+      grep -Fxq "restore_image=$RESTORE_IMAGE" "$ready_file" &&
+      grep -Fxq "restore_sha256=$RESTORE_IMAGE_SHA256" "$ready_file"; then
+      log "Companion rescue watcher readiness confirmed"
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  [ -s "$wrapper_log" ] && sed 's/^/[rescue-watcher] /' "$wrapper_log" >&2 || true
+  [ -s "$wrapper_err" ] && sed 's/^/[rescue-watcher] /' "$wrapper_err" >&2 || true
+  die "Timed out waiting for companion rescue watcher readiness" 3
 }
 
 stop_rescue_watcher() {
@@ -440,17 +520,44 @@ pmos_ssh_probe() {
       cat /proc/sys/kernel/random/boot_id 2>/dev/null || true
       printf "\nPMOS_UNAME_R="
       uname -r 2>/dev/null || true
+      printf "\nPMOS_CMDLINE="
+      cat /proc/cmdline 2>/dev/null || true
       printf "\n"
     ' > "$output" 2>&1 || return 1
 
   grep -qx 'PMOS_SSH_OK' "$output" || return 1
   PMOS_PROBE_BOOT_ID="$(pmos_probe_field PMOS_BOOT_ID "$output")"
   PMOS_PROBE_KERNEL="$(pmos_probe_field PMOS_UNAME_R "$output")"
+  PMOS_PROBE_CMDLINE="$(pmos_probe_field PMOS_CMDLINE "$output")"
   [ -n "$PMOS_PROBE_BOOT_ID" ] || return 1
   [ -n "$PMOS_PROBE_KERNEL" ] || return 1
+  [ -n "$PMOS_PROBE_CMDLINE" ] || return 1
 
   printf '%s\n' "$PMOS_PROBE_BOOT_ID" > "$run_dir/pmos-boot-id-$label.txt"
   printf '%s\n' "$PMOS_PROBE_KERNEL" > "$run_dir/pmos-uname-r-$label.txt"
+  printf '%s\n' "$PMOS_PROBE_CMDLINE" > "$run_dir/pmos-cmdline-$label.txt"
+}
+
+cmdline_has_token() {
+  local cmdline="$1"
+  local token="$2"
+
+  case " $cmdline " in
+    *" $token "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+acknowledge_pmos_watchdog() {
+  sshpass -p "$PMOS_PASSWORD" ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile="$run_dir/known_hosts" \
+    -o ConnectTimeout=5 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    "$PMOS_USER@$PMOS_HOST" \
+    ': > /tmp/hotdog_rescue_watchdog.ok' \
+    > "$run_dir/pmos-watchdog-ack.txt" 2>&1
 }
 
 pmos_ping_probe() {
@@ -473,7 +580,6 @@ collect_pmos_telnet_logs() {
     fi
     {
       sleep 1
-      printf ': > /tmp/hotdog_rescue_watchdog.ok 2>/dev/null || true\n'
       printf 'echo HOTDOG_TELNET_CONNECTED port=%s\n' "$port"
       printf 'cat /README 2>&1 || true\n'
       printf 'cat /README.hotdog-debug 2>&1 || true\n'
@@ -558,6 +664,8 @@ restore_boot_b_if_configured() {
   [ -n "$RESTORE_IMAGE" ] || return 0
   [ -s "$RESTORE_IMAGE" ] || die "Restore image does not exist or is empty: $RESTORE_IMAGE" 2
 
+  verify_restore_image_hash
+
   log "Restoring boot_b from $RESTORE_IMAGE"
   sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
   fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-restore-boot-b.txt"
@@ -565,6 +673,15 @@ restore_boot_b_if_configured() {
   fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b-after-restore.txt"
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-after-restore.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-after-restore.txt" || true
+}
+
+verify_restore_image_hash() {
+  local actual=""
+
+  [ -n "$RESTORE_IMAGE_SHA256" ] || die "Internal error: restore image SHA256 is unset" 2
+  actual="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+  [ "$actual" = "$RESTORE_IMAGE_SHA256" ] ||
+    die "Restore image changed after validation: expected $RESTORE_IMAGE_SHA256, got $actual" 3
 }
 
 collect_recovery_crash_artifacts() {
@@ -601,6 +718,7 @@ main() {
   validate_seconds FASTBOOT_CMD_TIMEOUT_SEC "$FASTBOOT_CMD_TIMEOUT_SEC"
   validate_seconds RESCUE_WATCHER_TIMEOUT_SEC "$RESCUE_WATCHER_TIMEOUT_SEC"
   validate_seconds RESCUE_WATCHER_POLL_SEC "$RESCUE_WATCHER_POLL_SEC"
+  validate_seconds RESCUE_WATCHER_READY_TIMEOUT_SEC "$RESCUE_WATCHER_READY_TIMEOUT_SEC"
   case "$RESTORE_AFTER_FASTBOOT" in
     recovery|system|bootloader|none) ;;
     *) die "--restore-after must be one of: recovery, system, bootloader, none" 2 ;;
@@ -618,12 +736,24 @@ main() {
   command -v sshpass >/dev/null 2>&1 || die "Missing sshpass" 127
   command -v ssh >/dev/null 2>&1 || die "Missing ssh" 127
 
+  if [ -n "$RESTORE_IMAGE" ]; then
+    [ -s "$RESTORE_IMAGE" ] || die "Restore image does not exist or is empty: $RESTORE_IMAGE" 2
+    RESTORE_IMAGE_SHA256="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+  fi
+  if [ -n "$EXPECT_KERNEL_PREFIX" ] || [ "${#EXPECT_CMDLINE_TOKENS[@]}" -gt 0 ]; then
+    STRICT_SSH_EXPECTATION=1
+  fi
+
   log "Run directory: $run_dir"
   log "Target serial: ${SERIAL:-auto-detect}"
   log "Image: $IMAGE"
   log "Restore boot_b image: ${RESTORE_IMAGE:-none}"
   log "Start from pmOS SSH: $START_FROM_PMOS_SSH"
   log "Expected kernel prefix: ${EXPECT_KERNEL_PREFIX:-none}"
+  log "Expected target cmdline tokens: ${EXPECT_CMDLINE_TOKENS[*]:-none}"
+  log "Expected source kernel prefix: ${EXPECT_SOURCE_KERNEL_PREFIX:-none}"
+  log "Expected source cmdline tokens: ${EXPECT_SOURCE_CMDLINE_TOKENS[*]:-none}"
+  log "Restore image SHA256: ${RESTORE_IMAGE_SHA256:-none}"
   log "Restore-after mode: $RESTORE_AFTER_FASTBOOT"
   log "Companion rescue watcher: $START_RESCUE_WATCHER"
   sha256sum "$IMAGE" | tee "$run_dir/image-sha256.txt"
@@ -635,8 +765,19 @@ main() {
     fi
     PMOS_BOOT_ID_BEFORE="$PMOS_PROBE_BOOT_ID"
     PMOS_KERNEL_BEFORE="$PMOS_PROBE_KERNEL"
+    PMOS_CMDLINE_BEFORE="$PMOS_PROBE_CMDLINE"
     log "pmOS source boot_id: $PMOS_BOOT_ID_BEFORE"
     log "pmOS source uname -r: $PMOS_KERNEL_BEFORE"
+    if [ -n "$EXPECT_SOURCE_KERNEL_PREFIX" ]; then
+      case "$PMOS_KERNEL_BEFORE" in
+        "$EXPECT_SOURCE_KERNEL_PREFIX"*) ;;
+        *) die "pmOS source kernel mismatch: expected '$EXPECT_SOURCE_KERNEL_PREFIX', got '$PMOS_KERNEL_BEFORE'; refusing to flash" 4 ;;
+      esac
+    fi
+    for token in "${EXPECT_SOURCE_CMDLINE_TOKENS[@]}"; do
+      cmdline_has_token "$PMOS_CMDLINE_BEFORE" "$token" ||
+        die "pmOS source cmdline lacks '$token'; refusing to flash" 4
+    done
 
     if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
       if fastboot_present; then
@@ -649,6 +790,7 @@ main() {
     log "Starting from pmOS SSH; flashing boot_b via SSH helper and rebooting"
     "$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh" \
       --image "$IMAGE" \
+      --serial "$SERIAL" \
       --host "$PMOS_HOST" \
       --user "$PMOS_USER" \
       --password "$PMOS_PASSWORD" \
@@ -727,7 +869,10 @@ main() {
         adb devices -l > "$run_dir/adb-visible-after-boot.txt" 2>&1 || true
         result="adb-$state"
         log "ADB visible after boot: $state"
-        break
+        if [ "$STRICT_SSH_EXPECTATION" -eq 0 ]; then
+          break
+        fi
+        log "ADB is diagnostic only while strict SSH identity is required"
         ;;
     esac
 
@@ -759,17 +904,22 @@ main() {
       if collect_pmos_telnet_logs; then
         result="pmos-telnet"
         log "pmOS telnet/debug shell collection OK"
-        break
+        if [ "$STRICT_SSH_EXPECTATION" -eq 0 ]; then
+          break
+        fi
+        log "pmOS telnet is diagnostic only while strict SSH identity is required"
       fi
     fi
 
     if pmos_ssh_probe; then
       local pmos_boot_id_after="$PMOS_PROBE_BOOT_ID"
       local pmos_kernel_after="$PMOS_PROBE_KERNEL"
+      local pmos_cmdline_after="$PMOS_PROBE_CMDLINE"
       result="pmos-ssh"
       log "pmOS SSH probe OK"
       log "pmOS SSH boot_id after boot: $pmos_boot_id_after"
       log "pmOS SSH uname -r after boot: $pmos_kernel_after"
+      printf '%s\n' "$pmos_cmdline_after" > "$run_dir/pmos-cmdline-after-verified.txt"
       if [ "$START_FROM_PMOS_SSH" -eq 1 ]; then
         if [ "$pmos_boot_id_after" = "$PMOS_BOOT_ID_BEFORE" ]; then
           log "WARNING: pmOS SSH boot_id did not change after requested reboot"
@@ -791,6 +941,22 @@ main() {
             log "ERROR: expected kernel prefix '$EXPECT_KERNEL_PREFIX', got '$pmos_kernel_after'"
             ;;
         esac
+      fi
+      for token in "${EXPECT_CMDLINE_TOKENS[@]}"; do
+        if cmdline_has_token "$pmos_cmdline_after" "$token"; then
+          log "pmOS SSH cmdline contains expected token: $token"
+        else
+          result="pmos-ssh-cmdline-mismatch"
+          log "ERROR: expected cmdline token '$token' is absent"
+        fi
+      done
+      if [ "$result" = "pmos-ssh" ]; then
+        if acknowledge_pmos_watchdog; then
+          log "pmOS rescue watchdog acknowledged after SSH identity validation"
+        else
+          result="pmos-ssh-watchdog-ack-failed"
+          log "ERROR: could not acknowledge pmOS rescue watchdog after validation"
+        fi
       fi
       collect_pmos_logs
       break
@@ -828,8 +994,17 @@ main() {
   log "Result: $result"
   log "Done: $run_dir"
 
+  if [ "$STRICT_SSH_EXPECTATION" -eq 1 ] && [ "$result" != "pmos-ssh" ]; then
+    log "ERROR: expected kernel/cmdline identity was not verified by a fresh pmOS SSH probe (result: $result)"
+    if [ "$START_RESCUE_WATCHER" -eq 1 ] && [ -n "$RESCUE_WATCHER_PID" ] && kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
+      KEEP_RESCUE_WATCHER=1
+      log "Leaving companion rescue watcher running until a recovery path appears"
+    fi
+    return 5
+  fi
+
   case "$result" in
-    pmos-ssh-kernel-mismatch|pmos-ssh-unchanged-boot-id)
+    pmos-ssh-kernel-mismatch|pmos-ssh-cmdline-mismatch|pmos-ssh-watchdog-ack-failed|pmos-ssh-unchanged-boot-id)
       return 5
       ;;
   esac

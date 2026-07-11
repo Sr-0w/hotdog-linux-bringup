@@ -52,7 +52,37 @@ Secondary local run IDs:
 `direct-d1-acm-2026-07-11-164835`, and
 `test-fastboot-boot-image-2026-07-11-164847/165222/165329/165412`.
 
-## 1. Firmware-owned memory gap
+## 1. Kexec low-bank RAM window
+
+The source-reproduced base hotdog DTB used for the K1 line starts with an
+open-ended RAM placeholder:
+
+```dts
+memory@80000000 {
+    reg = <0x0 0x80000000 0x0 0x0>;
+};
+```
+
+K1 constrains this to the low-bank window that the downstream kexec bridge can
+hand over reliably:
+
+```dts
+memory@80000000 {
+    reg = <0x0 0x80000000 0x0 0x3bb00000>;
+};
+```
+
+Builders: `scripts/build-mainline-k1-base-dtb.sh` and
+`scripts/build-mainline-kexec-lowbank-dtb.sh`
+
+The complete orchestrator pins the source-built base DTB hash
+`44052506301f7fcad9725c77a98323ec283adf1159b7bee941e7ed2ac3447b49` and
+reproduces the lowbank DTB hash
+`e58d41e039e782f34b5cc1ec6406da833a2e30a54414058cd3e37a60fe10e19d`.
+This is a temporary K1/kexec constraint; the direct-boot path still needs the
+complete RAM map restored.
+
+## 2. Firmware-owned memory gap
 
 The runtime firmware map reserves `0x86200000-0x8b700000`. The initial
 mainline tree left `0x89d00000-0x8b700000` available to Linux, allowing normal
@@ -69,7 +99,7 @@ hotdog-removed-gap@89d00000 {
 
 Builder: `scripts/build-mainline-lowbank-firmware-gap-dtb.sh`
 
-## 2. Apps SMMU failure
+## 3. Apps SMMU failure
 
 The Apps SMMU at `15000000.iommu` fails to register with `-EINVAL`. UFS, QUP,
 and DWC3 then remain deferred behind an unavailable IOMMU provider.
@@ -94,7 +124,7 @@ Builders:
 This is a temporary bypass. The correct fix is to repair the SMMU description
 and client stream IDs.
 
-## 3. UFS ICE dependency
+## 4. UFS ICE dependency
 
 The Qualcomm ICE block fails because `gcc_ufs_phy_ice_core_clk` never reaches
 the expected state. The UFS driver can operate without ICE, so the bring-up DTB
@@ -105,7 +135,7 @@ Builder: `scripts/build-mainline-ufs-no-ice-dtb.sh`
 The long-term fix must restore the correct clock and ICE integration rather
 than permanently dropping inline crypto.
 
-## 4. UFS and nested postmarketOS partitions
+## 5. UFS and nested postmarketOS partitions
 
 Once UFS probes, the Android partition table appears normally. The
 postmarketOS disk image is nested inside the `super` partition rather than
@@ -121,7 +151,7 @@ The initramfs creates loop devices for the nested partitions:
 The root filesystem then mounts read-write and the normal postmarketOS
 `switch_root` path completes.
 
-## 5. Probe ordering and timing
+## 6. Probe ordering and timing
 
 Two timing constraints are currently hardware-validated:
 
@@ -133,6 +163,10 @@ caused mainline to reset to the persistent bridge. The earlier RGB test frames
 were written by the downstream 4.14 initramfs userspace helper
 `/hotdog_fb_test.sh`, not by the Linux 6.17/mainline kernel. The current helper
 contains no framebuffer fill code and never emits RGB test frames.
+The D1 ramdisk retains the old helper bytes in its first concatenated archive,
+but its second archive replaces that path with the wait-only implementation.
+The offline validators resolve the final effective member with
+`scripts/extract-last-newc-member.py` and reject RGB fill code there.
 
 The stable bridge pointer defaults to the r5 no-paint relay
 `2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog`
@@ -146,7 +180,7 @@ Builder: `scripts/build-mainline-pmos-wrapper-initramfs.sh`
 These waits should eventually be replaced by deterministic device readiness
 checks and corrected probe dependencies.
 
-## 6. USB gadget
+## 7. USB gadget
 
 Removing the DWC3 IOMMU dependency allows the USB controller to probe before
 the initramfs performs its one-shot gadget setup. The result exposes:

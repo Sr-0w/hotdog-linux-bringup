@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# shellcheck source=/dev/null
 source "$(dirname "$0")/env.sh"
+# shellcheck source=/dev/null
 source "$(dirname "$0")/phone-lock.sh"
 
 PMOS_HOST="${PMOS_HOST:-$HOTDOG_PMOS_HOST}"
 PMOS_USER="${PMOS_USER:-$HOTDOG_PMOS_USER}"
 PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 IMAGE=""
 REMOTE_DIR=""
 PARTITION_LABEL="boot_b"
@@ -30,6 +33,7 @@ Options:
   --host HOST        postmarketOS SSH host. Default: 172.16.42.1.
   --user USER        SSH user. Default: user.
   --password PASS    SSH password. Defaults to PMOS_PASSWORD.
+  --serial SERIAL    Require androidboot.serialno to match this serial.
   --remote-dir DIR   Remote temp directory. Default: /tmp/hotdog-flash-<stamp>.
   --partition-path P Explicit block node, normally auto-detected from boot_b.
   --reboot           Reboot the phone with "sudo -n reboot -f" after verify.
@@ -59,6 +63,11 @@ while [ "$#" -gt 0 ]; do
     --password)
       [ "$#" -ge 2 ] || { echo "Missing value for --password" >&2; exit 2; }
       PMOS_PASSWORD="$2"
+      shift
+      ;;
+    --serial)
+      [ "$#" -ge 2 ] || { echo "Missing value for --serial" >&2; exit 2; }
+      SERIAL="$2"
       shift
       ;;
     --remote-dir)
@@ -151,6 +160,41 @@ remote_sudo_sh() {
   remote_run "sudo -n sh -c $(remote_quote "$script")"
 }
 
+remote_assert_peer_identity() {
+  log "Verifying pmOS SSH peer serial and hotdog codename"
+  remote_run "EXPECTED_SERIAL=$(remote_quote "$SERIAL") sh -s" <<'REMOTE_IDENTITY'
+set -eu
+
+expected_serial="${EXPECTED_SERIAL:?}"
+cmdline="$(cat /proc/cmdline 2>/dev/null || true)"
+
+case " $cmdline " in
+  *" androidboot.serialno=$expected_serial "*) ;;
+  *)
+    printf '%s\n' "ERROR: androidboot.serialno does not match expected serial $expected_serial" >&2
+    exit 1
+    ;;
+esac
+
+for identity_token in \
+  androidboot.project_codename=hotdog \
+  androidboot.prjname=19801 \
+  androidboot.platform_name=SM8150 \
+  androidboot.oplus.brand=OnePlus
+do
+  case " $cmdline " in
+    *" $identity_token "*) ;;
+    *)
+      printf 'ERROR: %s is missing from /proc/cmdline\n' "$identity_token" >&2
+      exit 1
+      ;;
+  esac
+done
+
+printf 'peer-identity-ok serial=%s codename=hotdog project=19801 platform=SM8150 brand=OnePlus\n' "$expected_serial"
+REMOTE_IDENTITY
+}
+
 remote_force_reboot() {
   local reboot_cmd='sudo -n sh -c '"'"'sync; echo b > /proc/sysrq-trigger'"'"''
   local saw_ping_drop=0
@@ -191,6 +235,7 @@ main() {
   [ -s "$IMAGE" ] || die "Missing or empty image: $IMAGE" 2
   [ "$PARTITION_LABEL" = "boot_b" ] || die "Refusing to flash anything except boot_b" 2
   [ -n "$PMOS_PASSWORD" ] || die "Set PMOS_PASSWORD or use --password" 2
+  [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL, HOTDOG_TARGET_SERIAL, or use --serial" 2
 
   require_cmd ssh
   require_cmd sshpass
@@ -220,6 +265,7 @@ main() {
   log "Image: $image_abs"
   log "Image sha256: $image_sha"
   log "Image size: $image_size bytes"
+  log "Expected serial: $SERIAL"
   log "Target: $PMOS_USER@$PMOS_HOST:$PARTITION_LABEL"
   log "Reboot after verify: $REBOOT"
 
@@ -228,6 +274,7 @@ main() {
 
   log "Probing SSH and noninteractive root"
   remote_run 'printf "ssh-ok "; uname -n; sudo -n id; test -x /etc/local.d/hotdog-devnodes.start || true'
+  remote_assert_peer_identity || die "pmOS SSH peer identity check failed; refusing to write boot_b" 4
 
   log "Creating remote work directory: $REMOTE_DIR"
   remote_run "mkdir -p $(remote_quote "$REMOTE_DIR")"
@@ -252,11 +299,59 @@ die() {
 img="${REMOTE_IMAGE:?}"
 expected_sha="${EXPECTED_SHA:?}"
 expected_size="${EXPECTED_SIZE:?}"
+expected_serial="${EXPECTED_SERIAL:?}"
 partition_label="${PARTITION_LABEL:-boot_b}"
 partition_path="${PARTITION_PATH:-}"
 
+assert_peer_identity() {
+  local cmdline=""
+  local identity_token=""
+
+  cmdline="$(cat /proc/cmdline 2>/dev/null || true)"
+  case " $cmdline " in
+    *" androidboot.serialno=$expected_serial "*) ;;
+    *) die "androidboot.serialno does not match expected serial $expected_serial" 7 ;;
+  esac
+  for identity_token in \
+    androidboot.project_codename=hotdog \
+    androidboot.prjname=19801 \
+    androidboot.platform_name=SM8150 \
+    androidboot.oplus.brand=OnePlus
+  do
+    case " $cmdline " in
+      *" $identity_token "*) ;;
+      *) die "$identity_token is missing from /proc/cmdline" 7 ;;
+    esac
+  done
+}
+
+validate_boot_b_block_device() {
+  local block_name=""
+  local sys_block=""
+  local partname=""
+  local sectors=""
+  local bytes=""
+
+  block_name="${part_real##*/}"
+  sys_block="/sys/class/block/$block_name"
+  [ -r "$sys_block/uevent" ] || die "missing sysfs uevent for resolved block device: $part_real" 5
+  partname="$(awk -F= '$1 == "PARTNAME" { print $2; exit }' "$sys_block/uevent")"
+  [ "$partname" = "boot_b" ] || die "resolved block device is not PARTNAME=boot_b: $part_real (PARTNAME=${partname:-missing})" 5
+  [ -r "$sys_block/size" ] || die "missing sysfs size for resolved block device: $part_real" 5
+  sectors="$(cat "$sys_block/size")"
+  case "$sectors" in
+    ''|*[!0-9]*) die "invalid sysfs sector count for $part_real: $sectors" 5 ;;
+  esac
+  bytes=$((sectors * 512))
+  [ "$bytes" -ge "$expected_size" ] || die "boot_b is too small: $bytes bytes < image $expected_size bytes" 5
+  log "Validated PARTNAME=boot_b and capacity=${bytes} bytes for $part_real"
+}
+
 [ "$partition_label" = "boot_b" ] || die "Refusing to flash anything except boot_b" 2
 [ -s "$img" ] || die "Missing remote image: $img" 2
+
+# Revalidate identity in the privileged writer immediately before block access.
+assert_peer_identity
 
 actual_sha="$(sha256sum "$img" | awk '{ print $1 }')"
 [ "$actual_sha" = "$expected_sha" ] || die "Remote image sha256 mismatch: $actual_sha != $expected_sha" 4
@@ -288,14 +383,10 @@ fi
 [ -b "$part" ] || die "Target is not a block device: $part" 5
 
 part_real="$(readlink -f "$part" 2>/dev/null || printf '%s\n' "$part")"
-case "$part_real" in
-  /dev/sde38|/dev/block/*|/dev/disk/*)
-    ;;
-  *)
-    log "Resolved boot_b block path: $part_real"
-    ;;
-esac
+validate_boot_b_block_device
 
+# Nothing between this final peer check and dd may write to the target block device.
+assert_peer_identity
 log "Writing $img to $part"
 dd if="$img" of="$part" bs=4M conv=fsync
 sync
@@ -313,6 +404,7 @@ REMOTE_SCRIPT
   remote_env="REMOTE_IMAGE=$(remote_quote "$remote_image")"
   remote_env="$remote_env EXPECTED_SHA=$(remote_quote "$image_sha")"
   remote_env="$remote_env EXPECTED_SIZE=$(remote_quote "$image_size")"
+  remote_env="$remote_env EXPECTED_SERIAL=$(remote_quote "$SERIAL")"
   remote_env="$remote_env PARTITION_LABEL=$(remote_quote "$PARTITION_LABEL")"
   remote_env="$remote_env PARTITION_PATH=$(remote_quote "$PARTITION_PATH")"
 

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 
 INPUT_DTB="$HOTDOG_ROOT/build/experiments/2026-07-11-100000-mainline617-kexec-lowbank-dtb/sm8150-oneplus-hotdog-kexec-lowbank.dtb"
-STOCK_DTB="$HOTDOG_ROOT/build/experiments/2026-07-09-091600-stockdtb12-dtbo5-simplefb/stockdtb12-dtbo5-simplefb-1440x3120-x8r8g8b8.dtb"
+STOCK_DTB=""
 OUTDIR=""
 
 usage() {
@@ -16,7 +16,8 @@ the stock hotdog removed_regions reservation but absent from the mainline DTB.
 
 Options:
   --input-dtb FILE  Mainline low-bank DTB to patch.
-  --stock-dtb FILE  Stock merged DTB used to verify the expected upper bound.
+  --stock-dtb FILE  Optional stock merged DTB evidence check. It is not needed
+                    to produce the output.
   --outdir DIR      Output directory below build/experiments by default.
   -h, --help        Show this help.
 USAGE
@@ -43,13 +44,11 @@ for command_name in cmp dtc fdtget fdtput sha256sum; do
 		exit 127
 	}
 done
-for input in "$INPUT_DTB" "$STOCK_DTB"; do
-	[ -s "$input" ] || { printf 'Missing input DTB: %s\n' "$input" >&2; exit 2; }
-done
+[ -s "$INPUT_DTB" ] || { printf 'Missing input DTB: %s\n' "$INPUT_DTB" >&2; exit 2; }
 
 main_removed="$(fdtget -t x "$INPUT_DTB" /reserved-memory/memory@86200000 reg)"
 main_rmtfs="$(fdtget -t x "$INPUT_DTB" /reserved-memory/memory@f2901000 reg)"
-stock_removed="$(fdtget -t x "$STOCK_DTB" /reserved-memory/removed_regions reg)"
+stock_removed="not-checked"
 [ "$main_removed" = "0 86200000 0 3900000" ] || {
 	printf 'Unexpected mainline removed range: %s\n' "$main_removed" >&2
 	exit 2
@@ -58,10 +57,14 @@ stock_removed="$(fdtget -t x "$STOCK_DTB" /reserved-memory/removed_regions reg)"
 	printf 'Unexpected mainline RMTFS range: %s\n' "$main_rmtfs" >&2
 	exit 2
 }
-[ "$stock_removed" = "0 86200000 0 5500000" ] || {
-	printf 'Unexpected stock removed range: %s\n' "$stock_removed" >&2
-	exit 2
-}
+if [ -n "$STOCK_DTB" ]; then
+	[ -s "$STOCK_DTB" ] || { printf 'Missing stock evidence DTB: %s\n' "$STOCK_DTB" >&2; exit 2; }
+	stock_removed="$(fdtget -t x "$STOCK_DTB" /reserved-memory/removed_regions reg)"
+	[ "$stock_removed" = "0 86200000 0 5500000" ] || {
+		printf 'Unexpected stock removed range: %s\n' "$stock_removed" >&2
+		exit 2
+	}
+fi
 
 mkdir -p "$OUTDIR"
 cp "$INPUT_DTB" "$OUTPUT_DTB"
@@ -84,7 +87,10 @@ cmp "$OUTPUT_DTB" "$OUTDIR/roundtrip.dtb" || true
 	printf 'added_gap=%s\n' "$(fdtget -t x "$OUTPUT_DTB" "$GAP_NODE" reg)"
 	printf 'stock_removed=%s\n' "$stock_removed"
 } > "$OUTDIR/ranges.txt"
-sha256sum "$INPUT_DTB" "$STOCK_DTB" "$OUTPUT_DTB" > "$OUTDIR/SHA256SUMS"
+sha256sum "$INPUT_DTB" "$OUTPUT_DTB" > "$OUTDIR/SHA256SUMS"
+if [ -n "$STOCK_DTB" ]; then
+	sha256sum "$STOCK_DTB" >> "$OUTDIR/SHA256SUMS"
+fi
 
 printf 'Output DTB: %s\n' "$OUTPUT_DTB"
 cat "$OUTDIR/ranges.txt"

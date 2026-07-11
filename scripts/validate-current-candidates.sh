@@ -208,12 +208,17 @@ validate_r5_no_paint_framebuffer_helper() {
 }
 
 validate_kernel_prefix_tester_guards() {
+  local telnet_body=""
   local boot_b_tester="$HOTDOG_ROOT/scripts/test-boot-b-image.sh"
   local fastboot_tester="$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh"
+  local ssh_flasher="$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh"
+  local rescue_watcher="$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
 
   require_file "$boot_b_tester"
   require_file "$fastboot_tester"
-  bash -n "$boot_b_tester" "$fastboot_tester"
+  require_file "$ssh_flasher"
+  require_file "$rescue_watcher"
+  bash -n "$boot_b_tester" "$fastboot_tester" "$ssh_flasher" "$rescue_watcher"
 
   require_text "boot_b tester documents kernel-prefix guard" "$boot_b_tester" "--expect-kernel-prefix PREFIX"
   require_text "boot_b tester parses kernel-prefix guard" "$boot_b_tester" "--expect-kernel-prefix)"
@@ -222,6 +227,25 @@ validate_kernel_prefix_tester_guards() {
   require_text "boot_b tester reports kernel mismatch" "$boot_b_tester" "pmos-ssh-kernel-mismatch"
   require_text "boot_b tester rejects unchanged boot_id under guard" "$boot_b_tester" "pmos-ssh-unchanged-boot-id"
   require_text "boot_b tester returns nonzero for kernel guard failures" "$boot_b_tester" "return 5"
+  require_text "boot_b tester treats telnet as diagnostic" "$boot_b_tester" "pmOS telnet is diagnostic only while strict SSH identity is required"
+  require_text "boot_b tester requires SSH for guarded success" "$boot_b_tester" "was not verified by a fresh pmOS SSH probe"
+  require_text "boot_b tester waits for rescue readiness" "$boot_b_tester" "wait_for_rescue_watcher_ready"
+  require_text "boot_b tester captures target cmdline" "$boot_b_tester" "PMOS_CMDLINE="
+  require_text "boot_b tester checks complete cmdline tokens" "$boot_b_tester" "cmdline_has_token"
+  require_text "boot_b tester checks source kernel" "$boot_b_tester" "EXPECT_SOURCE_KERNEL_PREFIX"
+  require_text "boot_b tester checks source cmdline" "$boot_b_tester" "EXPECT_SOURCE_CMDLINE_TOKENS"
+  require_text "boot_b tester passes pinned restore hash" "$boot_b_tester" "--restore-boot-b-sha256"
+  require_text "boot_b tester delays watchdog acknowledgement" "$boot_b_tester" "acknowledge_pmos_watchdog"
+  telnet_body="$(sed -n '/^collect_pmos_telnet_logs()/,/^}/p' "$boot_b_tester")"
+  if grep -Fq 'hotdog_rescue_watchdog.ok' <<< "$telnet_body"; then
+    fail "telnet diagnostics still acknowledge the rescue watchdog"
+  fi
+  require_text "rescue watcher publishes readiness" "$rescue_watcher" "publish_ready"
+  require_text "rescue watcher publishes restore hash" "$rescue_watcher" "restore_sha256="
+  require_text "rescue watcher revalidates restore hash" "$rescue_watcher" "verify_restore_image_hash"
+  require_text "SSH flasher pins device serial" "$ssh_flasher" "androidboot.serialno=\$expected_serial"
+  require_text "SSH flasher pins hotdog project" "$ssh_flasher" "androidboot.prjname=19801"
+  require_text "SSH flasher validates boot_b PARTNAME" "$ssh_flasher" 'partname" = "boot_b'
 
   require_text "fastboot tester documents kernel-prefix guard" "$fastboot_tester" "--expect-kernel-prefix PREFIX"
   require_text "fastboot tester parses kernel-prefix guard" "$fastboot_tester" "--expect-kernel-prefix)"
@@ -254,6 +278,23 @@ validate_acm_collector() {
   log "ACM no-echo collector self-test OK"
 }
 
+validate_reproducible_builder_guards() {
+  local direct_builder="$HOTDOG_ROOT/scripts/build-mainline-direct-bootimg.sh"
+  local dtb_chain="$HOTDOG_ROOT/scripts/build-mainline-k1-dtb-chain.sh"
+
+  require_file "$direct_builder"
+  require_file "$dtb_chain"
+  bash -n "$direct_builder" "$dtb_chain"
+  require_text "direct builder rejects undersized FDT entries" "$direct_builder" "invalid FDT totalsize"
+  require_text "direct builder bounds FDT entry size" "$direct_builder" "entry_size > remaining"
+  require_text "direct builder pins source DTB pack" "$direct_builder" "components/source-dtb-pack"
+  require_text "direct builder pins original DTB entry" "$direct_builder" "components/original-entry.dtb"
+  require_text "K1 chain documents unpinned opt-in" "$dtb_chain" "--allow-unpinned-base"
+  require_text "K1 chain rejects unpinned base by default" "$dtb_chain" "K1 base DTB hash mismatch"
+  require_text "K1 chain normalizes relative output paths" "$dtb_chain" 'OUTDIR="$(readlink -m "$OUTDIR")"'
+  log "direct-boot and K1 DTB builder guards validated"
+}
+
 validate_direct_d1_artifacts_and_launcher() {
   local d1_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c"
   local d1_avb="$d1_dir/boot.img"
@@ -263,6 +304,8 @@ validate_direct_d1_artifacts_and_launcher() {
   local d1_avb_info="$d1_dir/avb-info.txt"
   local stable_restore="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
   local launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1.sh"
+  local newc_extractor="$HOTDOG_ROOT/scripts/extract-last-newc-member.py"
+  local effective_fb_probe=""
 
   check_sha "stable no-paint restore image" "$stable_restore" "23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50"
   check_sha "D1 exact full AVB image" "$d1_avb" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994"
@@ -286,12 +329,25 @@ validate_direct_d1_artifacts_and_launcher() {
   require_text "D1 launcher hash-checks AVB image" "$launcher" 'f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994'
   require_text "D1 launcher hash-checks restore image" "$launcher" '23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50'
   require_text "D1 launcher requires pmOS password" "$launcher" "hotdog_require_pmos_password"
+  require_text "D1 launcher requires target serial" "$launcher" "hotdog_require_target_serial"
   require_text "D1 launcher rejects unsupported options" "$launcher" "Unsupported option for pinned D1 test"
   require_text "D1 launcher uses boot_b tester" "$launcher" 'exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh"'
   require_text "D1 launcher starts from pmOS SSH" "$launcher" "--from-pmos-ssh"
   require_text "D1 launcher prearms rescue watcher" "$launcher" "--start-rescue-watcher"
+  require_text "D1 launcher pins expected products" "$launcher" '--expected-product "msmnile hotdog"'
+  require_text "D1 launcher pins configured serial" "$launcher" '--serial "$HOTDOG_TARGET_SERIAL"'
+  require_text "D1 launcher requires bridge source kernel" "$launcher" "--expect-source-kernel-prefix 4.14.357-openela-perf"
+  require_text "D1 launcher requires source slot b" "$launcher" "--expect-source-cmdline-token androidboot.slot_suffix=_b"
   require_text "D1 launcher enforces mainline kernel prefix" "$launcher" "--expect-kernel-prefix 6.17.0-sm8150"
+  require_text "D1 launcher requires unique wrapper marker" "$launcher" "--expect-cmdline-token rdinit=/hotdog-mainline-wrapper"
+  require_text "D1 launcher requires target slot b" "$launcher" "--expect-cmdline-token androidboot.slot_suffix=_b"
   require_text "D1 launcher restores to system" "$launcher" "--restore-after system"
+  require_file "$newc_extractor"
+  effective_fb_probe="$(python3 "$newc_extractor" "$d1_dir/components/ramdisk" hotdog_fb_test.sh)"
+  grep -Fq 'wait-only mode' <<< "$effective_fb_probe" || fail "D1 effective framebuffer probe is not wait-only"
+  if grep -Eq 'hotdog_fb_test_fill|color=(red|green|blue|white)' <<< "$effective_fb_probe"; then
+    fail "D1 effective framebuffer probe still contains RGB paint code"
+  fi
   log "D1 direct artifacts and launcher validated"
 }
 
@@ -515,6 +571,7 @@ main() {
   validate_direct_d1_artifacts_and_launcher
   validate_kernel_prefix_tester_guards
   validate_acm_collector
+  validate_reproducible_builder_guards
 
   log "all current candidates validated"
 }

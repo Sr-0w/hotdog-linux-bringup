@@ -41,6 +41,7 @@ snapshot_rels=(
 	"device/testing/linux-postmarketos-sm8150-staging"
 	"device/testing/linux-postmarketos-qcom-sm8150"
 	"device/testing/linux-oneplus-hotdog-lineage414"
+	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 )
 
 while [ "$#" -gt 0 ]; do
@@ -98,7 +99,14 @@ allowed_snapshot_file() {
 		device/testing/linux-postmarketos-qcom-sm8150:config-postmarketos-qcom-sm8150.aarch64 | \
 		device/testing/linux-oneplus-hotdog-lineage414:APKBUILD | \
 		device/testing/linux-oneplus-hotdog-lineage414:config-oneplus-hotdog-lineage414.aarch64 | \
-		device/testing/linux-oneplus-hotdog-lineage414:stock-hotdog-dtbpack.dtb)
+		device/testing/linux-oneplus-hotdog-lineage414:stock-hotdog-dtbpack.dtb | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:APKBUILD | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:README.md | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:config-oneplus-hotdog-mainline617-k1.aarch64 | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:0001-arm64-hotdog-use-android-entry-layout.patch | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:0002-input-fts-fix-strict-prototypes.patch | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:0003-power-supply-idtp9418-include-gpio-consumer.patch | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:0004-arm64-dts-qcom-add-oneplus-hotdog.patch)
 			return 0
 			;;
 		*)
@@ -132,7 +140,7 @@ validate_snapshot_tree() {
 		fi
 		mime="$(file -b --mime-type "$path")"
 		case "$mime" in
-			text/*)
+			text/*|application/mbox)
 				;;
 			*)
 				die "snapshot file is not text: $rel/$snapshot_path ($mime)"
