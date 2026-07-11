@@ -22,6 +22,9 @@ BOOT_WAIT_SEC="${BOOT_WAIT_SEC:-420}"
 LOCK_WAIT_SEC="${LOCK_WAIT_SEC:-0}"
 DISABLE_BRIDGE_WATCHDOG=1
 BRIDGE_WATCHDOG_DISABLE_PATH="${BRIDGE_WATCHDOG_DISABLE_PATH:-/sys/devices/platform/soc/17c10000.qcom,wdt/disable}"
+CAPTURE_MAINLINE_ACM=0
+ACM_COLLECTOR="$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh"
+ACM_COLLECTOR_PID=""
 
 DEFAULT_KEXEC_SHA="0e0524a41579c38a741ce53a2d44b77743135b2ada988d10e2ec3943f54f43f5"
 DEFAULT_KERNEL_SHA="48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83"
@@ -61,6 +64,8 @@ Options:
   --lock-wait SEC    Wait for the local phone-operation lock. Default: 0.
   --keep-bridge-watchdog
                       Do not disable the downstream Qualcomm watchdog before kexec.
+  --capture-mainline-acm
+                      Start a passive host USB ACM+dmesg collector before kexec.
   --allow-unpinned   Allow overridden artifacts not matching pinned defaults.
   -h, --help         Show this help.
 
@@ -90,6 +95,7 @@ while [ "$#" -gt 0 ]; do
     --boot-wait) BOOT_WAIT_SEC="$2"; shift ;;
     --lock-wait) LOCK_WAIT_SEC="$2"; shift ;;
     --keep-bridge-watchdog) DISABLE_BRIDGE_WATCHDOG=0 ;;
+    --capture-mainline-acm) CAPTURE_MAINLINE_ACM=1 ;;
     --allow-unpinned) ALLOW_UNPINNED=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -116,6 +122,10 @@ die() {
 }
 
 cleanup() {
+  if [ -n "$ACM_COLLECTOR_PID" ] && kill -0 "$ACM_COLLECTOR_PID" 2>/dev/null; then
+    kill "$ACM_COLLECTOR_PID" 2>/dev/null || true
+    wait "$ACM_COLLECTOR_PID" 2>/dev/null || true
+  fi
   phone_lock_release || true
 }
 trap cleanup EXIT
@@ -220,6 +230,44 @@ load_kernel() {
   log "kexec load completed"
 }
 
+start_mainline_acm_collector() {
+  local collector_dir="$run_dir/mainline-acm"
+  local ready_file="$collector_dir/ready"
+  local deadline=$((SECONDS + 5))
+
+  [ "$CAPTURE_MAINLINE_ACM" -eq 1 ] || return 0
+  [ -s "$ACM_COLLECTOR" ] || die "Missing ACM collector: $ACM_COLLECTOR" 2
+  require_cmd udevadm
+  require_cmd dmesg
+  require_cmd lsusb
+
+  mkdir -p "$collector_dir"
+  log "Starting passive mainline ACM collector before kexec"
+  bash "$ACM_COLLECTOR" \
+    --out "$collector_dir" \
+    --ready-file "$ready_file" \
+    --vendor 18d1 \
+    --bcd-device 0617 \
+    --timeout "$BOOT_WAIT_SEC" \
+    > "$collector_dir/launcher.log" 2>&1 &
+  ACM_COLLECTOR_PID=$!
+  printf '%s\n' "$ACM_COLLECTOR_PID" > "$collector_dir/pid"
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ -e "$ready_file" ] && kill -0 "$ACM_COLLECTOR_PID" 2>/dev/null; then
+      log "Passive mainline ACM collector ready: PID $ACM_COLLECTOR_PID"
+      return 0
+    fi
+    if ! kill -0 "$ACM_COLLECTOR_PID" 2>/dev/null; then
+      wait "$ACM_COLLECTOR_PID" 2>/dev/null || true
+      die "Passive mainline ACM collector exited before ready; see $collector_dir/launcher.log" 3
+    fi
+    sleep 0.05
+  done
+
+  die "Passive mainline ACM collector did not become ready before kexec" 3
+}
+
 start_rescue_watcher() {
   local pidfile="$run_dir/rescue-watcher.pid"
   local watcher_log="$run_dir/rescue-watcher.log"
@@ -300,6 +348,7 @@ execute_kernel() {
 
   boot_before="$(remote_run 'cat /proc/sys/kernel/random/boot_id')"
   printf '%s\n' "$boot_before" > "$run_dir/boot-id-before.txt"
+  start_mainline_acm_collector
   start_rescue_watcher
   disable_bridge_watchdog
 

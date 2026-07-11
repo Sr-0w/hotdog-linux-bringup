@@ -11,6 +11,7 @@ POLL_SEC="${POLL_SEC:-2}"
 PMOS_USER="${PMOS_USER:-user}"
 PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
+EXPECTED_KERNEL_PREFIX="${EXPECTED_KERNEL_PREFIX:-}"
 
 usage() {
   cat <<'USAGE'
@@ -24,6 +25,9 @@ Options:
   --serial SERIAL    Restrict adb/fastboot commands to SERIAL.
   --boot-wait SEC    Seconds to watch for a result. Default: 240.
   --poll SEC         Poll interval. Default: 2.
+  --expect-kernel-prefix PREFIX
+                     Require pmOS SSH to report a kernel release beginning
+                     with PREFIX (for example: 6.17.0-sm8150).
   -h, --help         Show this help.
 USAGE
 }
@@ -49,6 +53,11 @@ while [ "$#" -gt 0 ]; do
     --poll)
       [ "$#" -ge 2 ] || { echo "Missing value for --poll" >&2; exit 2; }
       POLL_SEC="$2"
+      shift
+      ;;
+    --expect-kernel-prefix)
+      [ "$#" -ge 2 ] || { echo "Missing value for --expect-kernel-prefix" >&2; exit 2; }
+      EXPECTED_KERNEL_PREFIX="$2"
       shift
       ;;
     -h|--help)
@@ -152,7 +161,8 @@ pmos_ssh_probe() {
     -o ConnectTimeout=5 \
     -o PreferredAuthentications=password \
     -o PubkeyAuthentication=no \
-    "$PMOS_USER@$PMOS_HOST" 'printf "PMOS_SSH_OK\n"; uname -a' \
+    "$PMOS_USER@$PMOS_HOST" \
+    'printf "PMOS_SSH_OK\nPMOS_BOOT_ID="; cat /proc/sys/kernel/random/boot_id; printf "PMOS_UNAME_R="; uname -r; uname -a' \
     > "$run_dir/ssh-probe.txt" 2>&1
 }
 
@@ -208,6 +218,7 @@ main() {
   local deadline=$((SECONDS + BOOT_WAIT_SEC))
   local last_status=0
   local result="timeout"
+  local ssh_kernel=""
   while [ "$SECONDS" -lt "$deadline" ]; do
     state="$(adb_state)"
     case "$state" in
@@ -233,8 +244,18 @@ main() {
     fi
 
     if pmos_ssh_probe; then
-      result="pmos-ssh"
-      log "pmOS SSH probe OK"
+      ssh_kernel="$(sed -n 's/^PMOS_UNAME_R=//p' "$run_dir/ssh-probe.txt" | tail -n 1)"
+      printf '%s\n' "$ssh_kernel" > "$run_dir/ssh-kernel-release.txt"
+      if [ -n "$EXPECTED_KERNEL_PREFIX" ] && [[ "$ssh_kernel" != "$EXPECTED_KERNEL_PREFIX"* ]]; then
+        case "$ssh_kernel" in
+          4.14.357-openela-perf*) result="pmos-bridge-recovery" ;;
+          *) result="pmos-unexpected-kernel" ;;
+        esac
+        log "pmOS SSH returned kernel ${ssh_kernel:-unknown}; expected prefix $EXPECTED_KERNEL_PREFIX"
+      else
+        result="pmos-ssh"
+        log "pmOS SSH probe OK (kernel ${ssh_kernel:-unknown})"
+      fi
       break
     fi
 
@@ -250,6 +271,12 @@ main() {
   hotdog_fastboot_devices > "$run_dir/fastboot-final.txt" 2>&1 || true
   log "Result: $result"
   log "Done: $run_dir"
+
+  case "$result" in
+    pmos-bridge-recovery|pmos-unexpected-kernel)
+      return 5
+      ;;
+  esac
 }
 
 main "$@"

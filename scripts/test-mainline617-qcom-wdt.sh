@@ -4,6 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 
 KERNEL="$HOTDOG_ROOT/build/experiments/2026-07-11-143000-mainline617-qcom-wdt-builtin/Image"
+KERNEL_CONFIG="$HOTDOG_ROOT/build/experiments/2026-07-11-143000-mainline617-qcom-wdt-builtin/config"
 DTB="$HOTDOG_ROOT/build/experiments/2026-07-11-122000-mainline617-pmos-boot-dtb/sm8150-oneplus-hotdog-mainline-pmos-boot.dtb"
 INITRAMFS="$HOTDOG_ROOT/build/experiments/2026-07-11-130000-mainline617-pmos-r5-wrapped-settle-nofbpaint/initramfs-pmos-wrapped.cpio"
 RESTORE_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-130500-lineage414-r5-kexec-fbwait-nopaint-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -18,7 +19,8 @@ Usage: test-mainline617-qcom-wdt.sh [options passed to test-mainline-via-kexec.s
 Run the mainline candidate with the Qualcomm APSS watchdog built in through
 the downstream kexec bridge. Its Android-style ARM64 entry layout matches the
 validated K1 Image; the relevant config delta is the built-in watchdog and its
-sysfs support. No partition is written by this launcher.
+sysfs support. Both the Image and its exact build config are hash-checked. No
+partition is written by this launcher.
 USAGE
 }
 
@@ -42,9 +44,23 @@ check_sha() {
 }
 
 check_sha kernel "$KERNEL" c1d19855e75dd1cfa7ab8e6dd21c0751b6c6f79b5bc588b6c4f5fa7d8d42941e
+check_sha kernel-config "$KERNEL_CONFIG" 91cabe19bc7dbf19ca57ee572cbd46f22f941171e1e732568033d7fb4be903df
 check_sha dtb "$DTB" cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440
 check_sha initramfs "$INITRAMFS" b7e939614b7cb34ecdd8639613d76b8adba39b069b6591e35c39bc4c57a37622
 check_sha restore-image "$RESTORE_IMAGE" 23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50
+
+grep -qx 'CONFIG_WATCHDOG=y' "$KERNEL_CONFIG" || {
+	printf 'Kernel config does not contain CONFIG_WATCHDOG=y\n' >&2
+	exit 3
+}
+grep -qx 'CONFIG_WATCHDOG_SYSFS=y' "$KERNEL_CONFIG" || {
+	printf 'Kernel config does not contain CONFIG_WATCHDOG_SYSFS=y\n' >&2
+	exit 3
+}
+grep -qx 'CONFIG_QCOM_WDT=y' "$KERNEL_CONFIG" || {
+	printf 'Kernel config does not contain CONFIG_QCOM_WDT=y\n' >&2
+	exit 3
+}
 
 cmdline="initcall_blacklist=disp_cc_sm8250_driver_init,gpu_cc_sm8150_driver_init,video_cc_sm8150_driver_init,armv8_pmu_driver_init,qcom_cpufreq_hw_init initramfs_async=0 iommu.passthrough=1 arm-smmu.disable_bypass=0 rdinit=/hotdog-mainline-wrapper hotdog_wrapper_settle_sec=$SETTLE_SEC"
 

@@ -13,7 +13,7 @@ Snapdragon 855+ (SM8150-AC).
 
 Linux 6.17 now reaches the installed postmarketOS root filesystem on real
 hardware. The validated path boots a downstream 4.14 kernel first and uses it
-as a kexec bridge into mainline.
+as a kexec bridge into the exact K1 Linux 6.17 payload.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -23,6 +23,8 @@ as a kexec bridge into mainline.
 | USB networking | Working | NCM gadget, host address `172.16.42.2`, device address `172.16.42.1`. |
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
+| Mainline reboot | Partial | A late-loaded exact `qcom-wdt.ko` drives a physical reboot, but `RESTART2(bootloader)` falls back to normal boot because boot-mode mapping is still missing. |
+| Direct `fastboot boot` | Blocked | The D1 raw image is accepted with `OKAY` but does not leave the fastboot USB instance; bridge raw/AVB and Lineage raw controls fail with `Load Error`. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
@@ -45,9 +47,15 @@ flowchart LR
 The bridge is a temporary engineering tool. The long-term target is a normal
 postmarketOS/pmaports boot that does not depend on the downstream kernel.
 
-The current milestone is to place the exact kexec-validated payload in the
-Android header-v2 contract used by the working downstream image and isolate
-the remaining bootloader handoff difference.
+The current milestone is a persistent `boot_b` test with the exact
+kexec-validated payload. The temporary `fastboot boot` path is not a positive
+direct-boot signal on this bootloader: the D1 raw header-v2 image
+`8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0`
+returns `OKAY` and then remains visible in fastboot, while bridge raw/AVB and
+Lineage raw controls fail explicitly with `Load Error`.
+The public evidence summary for this cycle is
+[docs/evidence/2026-07-11-mainline-k1.md](docs/evidence/2026-07-11-mainline-k1.md).
+The pinned persistent D1 launcher is `scripts/test-mainline617-direct-d1.sh`.
 See [docs/direct-boot.md](docs/direct-boot.md) for the controlled test matrix.
 
 ## Mainline fixes validated so far
@@ -66,9 +74,14 @@ the following bring-up changes:
 6. Wait 120 seconds before the normal postmarketOS initramfs path. A 15-second
    delay was tested and is insufficient.
 7. Keep the framebuffer probe in wait-only mode for its timing effect while
-   removing all red/green/blue framebuffer writes.
+   removing all red/green/blue framebuffer writes from the downstream 4.14
+   userspace probe; those RGB frames were not emitted by mainline.
 8. Discover the postmarketOS GPT nested inside the Android `super` partition
    and expose its boot and root filesystems through loop devices.
+9. Capture the short-lived USB ACM console with host echo disabled so the
+   collector does not feed bytes back into the target during early boot.
+10. Load the K1-matching `qcom-wdt.ko` module after userspace comes up when a
+    restart-handler probe is required.
 
 These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
 ICE removal, reduced memory map, and timing waits all need proper replacements.

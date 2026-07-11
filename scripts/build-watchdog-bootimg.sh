@@ -35,12 +35,12 @@ Options:
                      and again after switch_root. This is a fallback for cases
                      where the USB network gadget never becomes usable.
   --fb-test
-                     Paint /dev/fb0 from initramfs when it appears. This is
-                     an opt-in visual diagnostic for simplefb/fbcon bring-up.
+                     Wait for /dev/fb0 from initramfs when it appears. This is
+                     an opt-in timing marker for simplefb/fbcon bring-up.
   --fb-test-mode MODE
                      Framebuffer test behavior: paint or wait. wait preserves
                      the fb0 wait/timing marker without drawing colors.
-                     Default: paint
+                     Default: wait. paint must be requested explicitly.
   --fbdev-console
                      Start a PSF text console directly on /dev/fb0 from
                      initramfs when fbcon is not taking over the screen.
@@ -70,7 +70,7 @@ Options:
                      Remove inherited hotdog DRM console hooks from the source
                      initramfs before adding this candidate's hooks. Useful for
                      fbcon-only isolation tests built from a DRM-console source.
-  --strip-fb-test    Remove inherited hotdog framebuffer paint-test hooks from
+  --strip-fb-test    Remove inherited hotdog framebuffer test hooks from
                      the source initramfs. Useful for text-console images.
   --os-version V     Set Android boot image OS version, e.g. 15.0.0.
   --os-patch-level D Set Android boot image patch level, e.g. 2025-08.
@@ -122,7 +122,7 @@ with_ramoops_cmdline=0
 direct_debug_shell=0
 usb_acm_getty=0
 fb_test=0
-fb_test_mode="paint"
+fb_test_mode="wait"
 fbdev_console=0
 drm_console=0
 drm_console_userspace=0
@@ -306,9 +306,9 @@ case "$fb_test_mode" in
 		die "--fb-test-mode must be one of: paint, wait"
 		;;
 esac
-set -- $visible_tty_printk
-[ "$#" -eq 4 ] || die "--visible-tty-printk must contain four numeric fields"
-for printk_field in "$@"; do
+read -r -a visible_tty_printk_fields <<< "$visible_tty_printk"
+[ "${#visible_tty_printk_fields[@]}" -eq 4 ] || die "--visible-tty-printk must contain four numeric fields"
+for printk_field in "${visible_tty_printk_fields[@]}"; do
 	case "$printk_field" in
 		""|*[!0-9]*)
 			die "--visible-tty-printk must contain four numeric fields"
@@ -2580,7 +2580,7 @@ write_manifest() {
 			fi
 			printf -- '- Direct debug shell: `%s`\n' "$direct_debug_shell"
 			printf -- '- USB ACM getty: `%s`\n' "$usb_acm_getty"
-			printf -- '- Framebuffer paint test: `%s`\n' "$fb_test"
+			printf -- '- Framebuffer test: `%s`\n' "$fb_test"
 			if [ "$fb_test" -eq 1 ]; then
 				printf -- '- Framebuffer test mode: `%s`\n' "$fb_test_mode"
 			fi
@@ -2596,7 +2596,7 @@ write_manifest() {
 				printf -- '- Visible tty printk: `%s`\n' "$visible_tty_printk"
 			fi
 			printf -- '- Strip inherited DRM console: `%s`\n' "$strip_drm_console"
-			printf -- '- Strip inherited framebuffer paint test: `%s`\n' "$strip_fb_test"
+			printf -- '- Strip inherited framebuffer test: `%s`\n' "$strip_fb_test"
 			printf -- '- OS version: `%s`\n' "${os_version:-default}"
 			printf -- '- OS patch level: `%s`\n' "${os_patch_level:-default}"
 			printf -- '- Boot base: `%s`\n' "$boot_base"
@@ -2638,7 +2638,7 @@ write_manifest() {
 			fi
 			if [ "$fb_test" -eq 1 ]; then
 				printf ' --fb-test'
-				if [ "$fb_test_mode" != "paint" ]; then
+				if [ "$fb_test_mode" != "wait" ]; then
 					printf ' --fb-test-mode %q' "$fb_test_mode"
 				fi
 			fi
