@@ -32,6 +32,18 @@ Run the repository check to identify missing commands:
 This populates the ignored `src/` directory. Add `--linux-next` only when
 linux-next comparison is required; it is not needed for the validated cycle.
 
+For a fresh checkout, apply the reviewed public aport snapshots to the local
+pmaports checkout only after a check-only comparison:
+
+```bash
+./scripts/sync-aport-snapshots.sh --to-pmaports
+./scripts/sync-aport-snapshots.sh --to-pmaports --apply
+```
+
+The script copies the tracked `aports/` snapshots into the configured
+`$HOTDOG_PMAPORTS_SM8150` checkout. Use `--target-pmaports PATH` if that
+checkout lives elsewhere.
+
 ## pmbootstrap configuration
 
 Create a machine-local configuration:
@@ -58,6 +70,11 @@ cp hotdog.env.example hotdog.env
 
 Set the device serial and postmarketOS password in `hotdog.env`. The real file
 is ignored and loaded automatically by `scripts/env.sh`.
+
+The normal `device-oneplus-hotdog` package does not grant passwordless `doas`.
+`device-oneplus-hotdog-bringup` is a strictly optional subpackage for a
+dedicated bring-up phone; install it explicitly only when unattended
+development cycles need passwordless `doas` for members of `wheel`.
 
 ## Gentoo notes
 

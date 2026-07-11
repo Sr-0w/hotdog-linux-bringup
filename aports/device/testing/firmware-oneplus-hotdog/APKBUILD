@@ -1,0 +1,87 @@
+# Maintainer: srobin <srobin@example.org>
+
+pkgname=firmware-oneplus-hotdog
+pkgver=20241212
+pkgrel=0
+pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
+url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
+arch="aarch64"
+license="proprietary"
+options="!check !strip !archcheck !tracedeps pmb:cross-native"
+
+subpackages="
+	$pkgname-adreno:adreno
+	$pkgname-adsp:adsp
+	$pkgname-bluetooth:bluetooth
+	$pkgname-cdsp:cdsp
+	$pkgname-modem:modem
+	$pkgname-venus:venus
+	$pkgname-wlan:wlan
+"
+
+_commit="5e5c534784a848bc39a02c421cc5273d79678fb3"
+source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+builddir="$srcdir/$pkgname-$_commit"
+_fwdir="/lib/firmware/qcom/sm8150/oneplus/hotdog"
+
+package() {
+	mkdir -p "$pkgdir"
+}
+
+adreno() {
+	pkgdesc="OnePlus hotdog adreno firmware"
+
+	install -Dm644 "$builddir"/a630_sqe.fw -t \
+		"$subpkgdir/lib/firmware/qcom/"
+	install -Dm644 "$builddir"/a640_gmu.bin -t \
+		"$subpkgdir/lib/firmware/qcom/"
+	install -Dm644 "$builddir"/a640_zap.mbn -t \
+		"$subpkgdir/$_fwdir/"
+}
+
+adsp() {
+	pkgdesc="OnePlus hotdog ADSP firmware"
+
+	install -Dm644 "$builddir"/adsp.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+bluetooth() {
+	pkgdesc="OnePlus hotdog Bluetooth firmware"
+
+	install -Dm644 "$builddir"/crbtfw*.tlv -t \
+		"$subpkgdir/lib/firmware/qca/"
+	install -Dm644 "$builddir"/crnv*.bin -t \
+		"$subpkgdir/lib/firmware/qca/"
+}
+
+cdsp() {
+	pkgdesc="OnePlus hotdog CDSP firmware"
+
+	install -Dm644 "$builddir"/cdsp.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+modem() {
+	pkgdesc="OnePlus hotdog modem firmware"
+
+	install -Dm644 "$builddir"/modem.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+venus() {
+	pkgdesc="OnePlus hotdog Venus firmware"
+
+	install -Dm644 "$builddir"/venus.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+wlan() {
+	pkgdesc="OnePlus hotdog WLAN firmware"
+
+	install -Dm644 "$builddir"/firmware-5.bin -t \
+		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
+	install -Dm644 "$builddir"/board-2.bin -t \
+		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
+	install -Dm644 "$builddir"/wlanmdsp.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+sha512sums="
+e4db4f210d04588cf66a86f3b45d06c5afedc7eb41cbd69954d7a8140b7e0b39c34eff91368c02c687f65291b45696955a3be39794401193abd76f473640a98d  firmware-oneplus-hotdog-5e5c534784a848bc39a02c421cc5273d79678fb3.tar.gz
+"

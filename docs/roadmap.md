@@ -3,6 +3,9 @@
 ## Priority 0: reproducible mainline boot
 
 - validate a built-in Qualcomm APSS watchdog and reliable software reboot
+- hardware-test the hotdog-only PON reboot-mode pmaports patch after D1; the
+  patch adds `mode-bootloader = <2>` and `mode-recovery = <1>` and has only
+  been validated offline so far
 - test the exact kexec-validated payload in the working header-v2 boot contract
 - move the validated device changes into the pmaports package flow
 - remove the downstream kexec bridge from the normal boot path

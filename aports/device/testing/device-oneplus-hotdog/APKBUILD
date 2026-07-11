@@ -1,0 +1,98 @@
+# Reference: <https://postmarketos.org/devicepkg>
+# Maintainer: Igor Belwon <igor.belwon@mentallysanemainliners.org>
+
+pkgname=device-oneplus-hotdog
+pkgdesc="OnePlus 7T Pro"
+pkgver=1
+pkgrel=2
+url="https://postmarketos.org"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck"
+install="$pkgname.post-install"
+depends="
+	postmarketos-base
+	mkbootimg
+	linux-oneplus-hotdog-lineage414
+	mesa-vulkan-freedreno
+	swclock-offset
+"
+makedepends="devicepkg-dev"
+source="
+	deviceinfo
+	30-initramfs-firmware.files
+	51-qcom-sm8150.lua
+	$pkgname.post-install
+	90-hotdog-bringup-doas.conf
+	$pkgname-nonfree-firmware.post-install
+	modules-initfs
+"
+
+subpackages="
+	$pkgname-nonfree-firmware:nonfree_firmware
+	$pkgname-mainline-firmware:mainline_firmware
+	$pkgname-wireplumber:wireplumber
+	$pkgname-bringup:bringup
+"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+}
+
+bringup() {
+	pkgdesc="Development-only doas policy for dedicated bring-up phones"
+	depends="doas"
+	install -Dm0440 "$srcdir/90-hotdog-bringup-doas.conf" \
+		"$subpkgdir/etc/doas.d/90-hotdog-bringup.conf"
+}
+
+mainline_firmware() {
+	pkgdesc="Firmware support packages for mainline kernel"
+	depends="firmware-oneplus-hotdog-adreno"
+	install_if="linux-oneplus-hotdog-lineage414 $pkgname-nonfree-firmware"
+	mkdir "$subpkgdir"
+
+	install -Dm644 "$srcdir/30-initramfs-firmware.files" \
+		"$subpkgdir/etc/postmarketos-mkinitfs/files/30-initramfs-firmware.files"
+}
+
+nonfree_firmware() {
+	pkgdesc="Firmware for GPU, Touchscreen, Audio, Bluetooth, WiFi, etc."
+	depends="
+		firmware-oneplus-hotdog-adreno
+		firmware-oneplus-hotdog-adsp
+		firmware-oneplus-hotdog-cdsp
+		firmware-oneplus-hotdog-modem
+		firmware-oneplus-hotdog-wlan
+		firmware-oneplus-hotdog-bluetooth
+		firmware-oneplus-hotdog-venus
+		msm-modem
+		pd-mapper
+		pd-mapper-openrc
+		tqftpserv
+		tqftpserv-openrc
+		bootmac
+		alsa-utils
+		"
+	install="$subpkgname.post-install"
+	mkdir "$subpkgdir"
+}
+
+wireplumber() {
+	install -Dm644 "$srcdir"/51-qcom-sm8150.lua \
+		-t "$subpkgdir"/usr/share/wireplumber/main.lua.d
+}
+
+sha512sums="
+9e7db28a3e67009705efa00164bed414cc263e260d4e91026a651db2368b2e2c7b484e3fc1547edd8e39f6d3d7a8cb837c74371bb5f410e15adb423a3c373549  deviceinfo
+01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
+d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
+b6787934a8993ee209970f9b035bd240d17b95771b0b128015f3a4d52673cbdb1ec002c04f5bc2e221b9348e31ec1cb7ebfc8e1487eb6b3ea3d278e87648a9ac  device-oneplus-hotdog.post-install
+7743ff21c39fc4991cec30ba61edf5b261d44d33a0693cd6f3021da7374c430a8c6bf4bd3619bb5ff48fe5fa41fd01eb8c40ad2a162ddc4869ef8d37901779b5  90-hotdog-bringup-doas.conf
+5abdf51e4c7ce188f0bd7ccd9741dbd472ec1469e2f7b5074dde97a8f4171c3bb117cf838615c0f1870f5d89708aa6541fde097e47020c8bbacde5e00f1cca97  device-oneplus-hotdog-nonfree-firmware.post-install
+f627d473ccfc01f39ed7b1345c2795af0cd358b4738d202e53fbae07c605d239f9139b034c5a29411bafe368b92a44c756e2bd029246b385d6397f519af8ff7c  modules-initfs
+"
