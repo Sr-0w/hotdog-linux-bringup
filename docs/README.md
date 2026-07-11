@@ -17,6 +17,8 @@ single developer workstation or a live debugging session.
 - [artifacts.md](artifacts.md): generated artifact contract and hash validation
 - [sources.md](sources.md): upstream and reference source trees
 - [roadmap.md](roadmap.md): remaining work, ordered by dependency
+- [hardware-roadmap.md](hardware-roadmap.md): staged subsystem experiments after
+  direct boot is validated
 - [repository-layout.md](repository-layout.md): tracked versus local-only state
 - [android-reference.md](android-reference.md): Android-side facts worth capturing
 

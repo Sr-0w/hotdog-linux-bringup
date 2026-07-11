@@ -16,6 +16,10 @@ d1_avb_image="$d1_dir/boot.img"
 d1_raw_image="$d1_dir/boot-mainline617-direct-d1.img"
 d1_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1.sh"
 d1_newc_extractor="$HOTDOG_ROOT/scripts/extract-last-newc-member.py"
+d1_pack_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean"
+d1_pack_avb_image="$d1_pack_dir/boot.img"
+d1_pack_raw_image="$d1_pack_dir/boot-mainline617-direct-d1-pack.img"
+d1_pack_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1-pack.sh"
 boot_b_tester="$HOTDOG_ROOT/scripts/test-boot-b-image.sh"
 fastboot_boot_tester="$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh"
 acm_collector="$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh"
@@ -156,6 +160,19 @@ validate_acm_collector() {
   printf 'OK ACM collector no-echo self-test %s\n' "$output"
 }
 
+validate_d1_pack_launcher() {
+  bash -n "$d1_pack_launcher"
+  require_text "D1-pack launcher pins AVB image" "$d1_pack_launcher" 'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean/boot.img"'
+  require_text "D1-pack launcher pins raw validation image" "$d1_pack_launcher" 'RAW_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean/boot-mainline617-direct-d1-pack.img"'
+  require_text "D1-pack launcher hashes AVB image" "$d1_pack_launcher" "2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754"
+  require_text "D1-pack launcher hashes raw image" "$d1_pack_launcher" "f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac"
+  require_text "D1-pack launcher requires configured serial" "$d1_pack_launcher" "hotdog_require_target_serial"
+  require_text "D1-pack launcher requires bridge source" "$d1_pack_launcher" "--expect-source-kernel-prefix 4.14.357-openela-perf"
+  require_text "D1-pack launcher requires target wrapper" "$d1_pack_launcher" "--expect-cmdline-token rdinit=/hotdog-mainline-wrapper"
+  require_text "D1-pack launcher uses AVB image only" "$d1_pack_launcher" '--image "$BOOT_IMAGE"'
+  printf 'OK D1-pack launcher format\n'
+}
+
 for file in \
   "$bridge_image" \
   "$bridge_apk" \
@@ -178,6 +195,10 @@ for file in \
   "$d1_dir/MANIFEST.md" \
   "$d1_dir/avb-info.txt" \
   "$d1_launcher" \
+  "$d1_pack_avb_image" \
+  "$d1_pack_raw_image" \
+  "$d1_pack_dir/MANIFEST.md" \
+  "$d1_pack_launcher" \
   "$boot_b_tester" \
   "$fastboot_boot_tester" \
   "$acm_collector"; do
@@ -200,6 +221,11 @@ check_sha "$d1_avb_image" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a
 check_sha "$d1_raw_image" "8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0"
 check_size "$d1_avb_image" "100663296"
 check_size "$d1_raw_image" "50298880"
+check_sha "$d1_pack_avb_image" "2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754"
+check_sha "$d1_pack_raw_image" "f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac"
+check_size "$d1_pack_avb_image" "100663296"
+check_size "$d1_pack_raw_image" "59924480"
+require_text "D1-pack manifest mode" "$d1_pack_dir/MANIFEST.md" 'DTB mode: `pack-entry-12`'
 require_text "D1 SHA256SUMS raw entry" "$d1_dir/SHA256SUMS" "8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0  boot-mainline617-direct-d1.img"
 require_text "D1 SHA256SUMS AVB entry" "$d1_dir/SHA256SUMS" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994  boot.img"
 require_text "D1 manifest raw output" "$d1_dir/MANIFEST.md" "Raw image: \`images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/boot-mainline617-direct-d1.img\`"
@@ -208,6 +234,7 @@ require_text "D1 AVB info partition size" "$d1_dir/avb-info.txt" "Image size:   
 require_text "D1 AVB info algorithm" "$d1_dir/avb-info.txt" "Algorithm:                NONE"
 require_text "D1 AVB info partition" "$d1_dir/avb-info.txt" "Partition Name:        boot"
 validate_d1_direct_launcher
+validate_d1_pack_launcher
 validate_kernel_prefix_tester_guards
 validate_acm_collector
 

@@ -22,8 +22,8 @@ same payload to Linux correctly.
 
 The kernel tree is based on commit
 `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`. The payload hashes are the
-experiment identity; a package-only reproduction from pmaports remains a
-completion criterion rather than a current claim.
+historical experiment identity. A separate package-built kernel now exists as
+an offline reproducibility control, but it has not been tested on hardware.
 
 The source and generation path is:
 
@@ -164,6 +164,26 @@ resolve the last archive member with
 reject any effective RGB fill implementation. The observed RGB frames came
 from an earlier downstream 4.14 bridge, not from mainline.
 
+## Package-built reproducibility control
+
+The offline candidate
+`images/pmos-experiments/2026-07-11-224500-mainline617-pmaports-k1-direct`
+keeps the historical D1 single-DTB layout, final transformed DTB, wrapped
+initramfs, and command line. It changes the kernel input to the `vmlinuz`
+actually emitted by the `linux-oneplus-hotdog-mainline617-k1` APK:
+
+| Item | SHA256 |
+|---|---|
+| package-built kernel | `e9e2249b4ea8a749ceef7fb481a214fb0ac049f17a0a78ba8699e41d1535af5b` |
+| raw header-v2 image | `63badda8d95b291248c91a8864dfa23f5e1f14a9d6346b9a036d08fd0273a0cd` |
+| AVB `NONE` image | `94df0da7f7067f6769aa86b0da091ccdd0252e17420bb464830119e71641a06e` |
+
+This candidate is a package-reproducibility test after the historical D1
+baseline has been validated on hardware. It must not replace or precede D1,
+because doing so would mix bootloader-handoff validation with the change from
+the historical K1 Image to the package-built kernel. It has not been tested on
+hardware.
+
 ## DTB-pack control
 
 Some Qualcomm boot flows use a bare concatenation of FDT blobs and select an
@@ -187,6 +207,17 @@ The single-DTB form remains the primary D1 experiment because it changes the
 fewest payload variables relative to kexec. The pack form is a control for
 bootloader DTB selection.
 
+[test-mainline617-direct-d1-pack.sh](../scripts/test-mainline617-direct-d1-pack.sh)
+is the pinned D1-pack launcher. It is a single-variable fallback relative to the
+historical D1 candidate: the final K1 DTB replaces entry 12 in the concatenated
+Android DTB pack, while the historical kernel, ramdisk, command line, header,
+and offsets remain unchanged. It pins raw image SHA256
+`f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac`
+and AVB image SHA256
+`2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754`.
+Run it only after the historical single-DTB D1 test has a recorded result.
+The D1-pack image has not been tested on hardware.
+
 ## Follow-up matrix
 
 | ID | Change from the validated baseline | Question answered |
@@ -194,13 +225,15 @@ bootloader DTB selection.
 | K0 | Boot the downstream bridge directly | Is the bootloader and recovery baseline intact? |
 | K1 | Load the pinned mainline payload by kexec | Does the payload itself still work? |
 | D1 | Flash the pinned AVB header-v2 image to `boot_b` with `test-mainline617-direct-d1.sh` | Does the exact K1 payload survive the persistent bootloader handoff? |
-| D1-pack | Replace DTB-pack entry 12 with the K1 DTB | Does the bootloader require Android DTB selection? |
+| D1-pack | After D1 has a recorded result, run the pinned DTB-pack launcher with entry 12 replaced | Does the bootloader require Android DTB selection? |
+| D1-pkg | After D1 is validated, use the package-built kernel in the otherwise identical single-DTB image | Does the pmaports-built kernel reproduce the D1 result? |
 | D2 | Append the K1 DTB to Image in header v0 | Is separate-DTB handoff the failure? |
 | D3 | Compare minimal and full command lines | Are injected Android bootargs involved? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-Do not start D2-D4 until D1 has a recorded result. Each candidate must change
-one handoff variable and retain the known-good payload hashes.
+Do not start D1-pack or D2-D4 until D1 has a recorded result. Do not start the
+package-built control until D1 itself is validated. Each candidate must change
+one handoff variable and retain the other known-good payload hashes.
 
 ## pmaports integration target
 
