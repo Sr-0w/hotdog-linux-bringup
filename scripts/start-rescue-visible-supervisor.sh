@@ -3,7 +3,7 @@ set -euo pipefail
 
 source "$(dirname "$0")/env.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 AFTER_RESTORE="${AFTER_RESTORE:-system}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-604800}"
@@ -20,7 +20,7 @@ rescue-boot-b-when-visible.sh watcher exists; it does not itself touch the
 phone.
 
 Options:
-  --serial SERIAL             Target serial. Default: b6bd2252.
+  --serial SERIAL             Target serial. Defaults to ANDROID_SERIAL.
   --restore-boot-b FILE       Known-good boot_b image. Default: HOTDOG_STABLE_PMOS_BOOT_B.
   --after-restore MODE        recovery, system, bootloader, or none. Default: system.
   --timeout SEC               Supervisor lifetime. Default: 604800.
@@ -74,6 +74,10 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+[ -n "$SERIAL" ] || {
+  echo "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" >&2
+  exit 2
+}
 [ -s "$RESTORE_IMAGE" ] || {
   echo "Missing restore image: $RESTORE_IMAGE" >&2
   exit 2

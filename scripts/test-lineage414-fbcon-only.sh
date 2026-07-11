@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 source "$(dirname "$0")/env.sh"
 
-serial="${ANDROID_SERIAL:-b6bd2252}"
+serial="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 image="$HOTDOG_ROOT/images/pmos-experiments/2026-07-10-025400-lineage414-pmaports-kernel-fbcon-only-fbtest-stripdrm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 restore="$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-215005-lineage414-drmconsole-initramfs-rootwatchdog-v2/boot-noefi-pmosdtb-watchdog-300s.img"
 

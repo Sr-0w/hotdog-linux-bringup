@@ -15,7 +15,7 @@ log() {
 
 host="${PMOS_HOST:-auto}"
 user="${PMOS_USER:-user}"
-password="${PMOS_PASSWORD:-147147}"
+password="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 timeout_sec="${PMOS_WAIT_TIMEOUT_SEC:-86400}"
 poll_sec="${PMOS_WAIT_POLL_SEC:-5}"
 

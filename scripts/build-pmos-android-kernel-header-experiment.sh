@@ -217,8 +217,13 @@ install_image() {
 	stamp="$(date +%Y-%m-%d-%H%M%S)"
 	local outdir="$experiment_images/$stamp"
 	local summary="$experiment_logs/install-summary-$stamp.txt"
+	local install_password="${PMOS_INSTALL_PASSWORD:-}"
 
-	"${pmb[@]}" --details-to-stdout install --zap --password 147147
+	[ -n "$install_password" ] || {
+		printf 'Set PMOS_INSTALL_PASSWORD before using --install.\n' >&2
+		return 2
+	}
+	"${pmb[@]}" --details-to-stdout install --zap --password "$install_password"
 	"${pmb[@]}" export
 
 	mkdir -p "$outdir"

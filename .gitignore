@@ -9,6 +9,7 @@ pmbootstrap-work/
 reports/
 rootfs/
 pmbootstrap_v3.cfg
+hotdog.env
 
 # External checkouts and cached tool trees
 src/
