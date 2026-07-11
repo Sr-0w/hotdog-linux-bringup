@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 11 Jul 2026 00:00:00 +0000
+Subject: [PATCH] power: supply: idtp9418: include gpio consumer API
+
+idtp9418 uses descriptor-based GPIO helpers and enum gpiod_flags, but does not
+include the GPIO consumer header that declares them. Clang rejects the implicit
+function declarations while building the K1 module set.
+---
+ drivers/power/supply/idtp9418.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/power/supply/idtp9418.c b/drivers/power/supply/idtp9418.c
+index 3d6ebd4d0..c03a6019c 100644
+--- a/drivers/power/supply/idtp9418.c
++++ b/drivers/power/supply/idtp9418.c
+@@ -13,5 +13,6 @@
+ #include <linux/sched.h>
+ #include <linux/i2c.h>
+ #include <linux/regmap.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/power_supply.h>
+ #include "idtp9418.h"

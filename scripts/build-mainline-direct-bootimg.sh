@@ -188,7 +188,8 @@ dtb_mode="single"
 if [ -n "$source_dtb_pack" ]; then
 	dtb_mode="pack-entry-$dtb_entry"
 	note "replacing DTB pack entry $dtb_entry"
-	python3 - "$source_dtb_pack" "$components_dir/replacement.dtb" "$components_dir/dtb" "$components_dir/original-entry.dtb" "$dtb_entry" > "$outdir/dtb-pack.txt" <<'PY'
+	cp "$source_dtb_pack" "$components_dir/source-dtb-pack"
+	python3 - "$components_dir/source-dtb-pack" "$components_dir/replacement.dtb" "$components_dir/dtb" "$components_dir/original-entry.dtb" "$dtb_entry" > "$outdir/dtb-pack.txt" <<'PY'
 import pathlib
 import struct
 import sys
@@ -217,9 +218,14 @@ while offset < len(source):
     entry_magic, entry_size = struct.unpack(">II", source[offset:offset + 8])
     if entry_magic != magic:
         raise SystemExit(f"bad FDT magic at offset {offset:#x}: {entry_magic:#x}")
-    end = offset + entry_size
-    if end > len(source):
+    if entry_size < 8:
+        raise SystemExit(f"invalid FDT totalsize {entry_size} at offset {offset:#x}; minimum is 8")
+    remaining = len(source) - offset
+    if entry_size > remaining:
         raise SystemExit(f"FDT at offset {offset:#x} exceeds source pack")
+    end = offset + entry_size
+    if end <= offset:
+        raise SystemExit(f"FDT at offset {offset:#x} does not advance parser")
     entries.append(source[offset:end])
     offset = end
 
@@ -313,16 +319,22 @@ avbtool info_image --image "$avb_image" > "$outdir/avb-info.txt"
 	avbtool verify_image --image boot.img > avb-verify.txt
 )
 
+hash_files=(
+	components/kernel
+	components/ramdisk
+	components/replacement.dtb
+	components/dtb
+)
+if [ -n "$source_dtb_pack" ]; then
+	hash_files+=(
+		components/source-dtb-pack
+		components/original-entry.dtb
+	)
+fi
+hash_files+=("$name.img" boot.img)
 (
 	cd "$outdir"
-	sha256sum \
-		components/kernel \
-		components/ramdisk \
-		components/replacement.dtb \
-		components/dtb \
-		"$name.img" \
-		boot.img \
-		> SHA256SUMS
+	sha256sum "${hash_files[@]}" > SHA256SUMS
 	file "$name.img" boot.img > file-summary.txt
 )
 kernel_manifest="$(manifest_path "$kernel")"
@@ -332,8 +344,12 @@ cmdline_manifest="$(manifest_path "$cmdline_file")"
 outdir_manifest="$(manifest_path "$outdir")"
 if [ -n "$source_dtb_pack" ]; then
 	source_dtb_pack_manifest="$(manifest_path "$source_dtb_pack")"
+	source_dtb_pack_sha="$(sha256sum "$components_dir/source-dtb-pack" | awk '{ print $1 }')"
+	original_entry_sha="$(sha256sum "$components_dir/original-entry.dtb" | awk '{ print $1 }')"
 else
 	source_dtb_pack_manifest=""
+	source_dtb_pack_sha=""
+	original_entry_sha=""
 fi
 {
 	printf '# Mainline direct-boot candidate\n\n'
@@ -355,6 +371,8 @@ fi
 	printf -- '- Cmdline: `%s`\n' "$cmdline_manifest"
 	if [ -n "$source_dtb_pack" ]; then
 		printf -- '- Source DTB pack: `%s`\n' "$source_dtb_pack_manifest"
+		printf -- '- Source DTB pack SHA256: `%s`\n' "$source_dtb_pack_sha"
+		printf -- '- Original DTB entry SHA256: `%s`\n' "$original_entry_sha"
 	fi
 	printf '\n## Outputs\n\n'
 	printf -- '- Raw image: `%s/%s.img`\n' "$outdir_manifest" "$name"

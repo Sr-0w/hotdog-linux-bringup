@@ -1,0 +1,89 @@
+# Maintainer: Sr-0w <Sr-0w@users.noreply.github.com>
+# Forensic build-input reproduction of the historical K1 mainline 6.17 Image:
+#   48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83
+#
+# This package intentionally does not promise a byte-identical Image. The
+# historical artifact encoded local build metadata such as timestamp, toolchain
+# versions, build counter, and a dirty git release suffix.
+
+pkgname=linux-oneplus-hotdog-mainline617-k1
+pkgver=6.17.0
+pkgrel=0
+pkgdesc="Forensic mainline 6.17 K1 kernel reproduction for OnePlus 7T Pro"
+arch="aarch64"
+_carch="arm64"
+_flavor="oneplus-hotdog-mainline617-k1"
+url="https://gitlab.postmarketos.org/soc/qualcomm-sm8150/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	findutils
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	python3
+	zstd
+"
+
+_repo="linux"
+_commit="379d8fe35c7ca685a650bd82fd023af0ea3f0de0"
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_commit.tar.bz2::$url/-/archive/$_commit/$_repo-$_commit.tar.bz2
+	$_config
+	0001-arm64-hotdog-use-android-entry-layout.patch
+	0002-input-fts-fix-strict-prototypes.patch
+	0003-power-supply-idtp9418-include-gpio-consumer.patch
+	0004-arm64-dts-qcom-add-oneplus-hotdog.patch
+"
+builddir="$srcdir/$_repo-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/$_config" .config
+	make ARCH="$_carch" LLVM=1 olddefconfig
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
+		Image modules dtbs
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir/usr" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+40b88b7be6a6df22cb6a58e2488053ef9ac174f4d12ab4a1e0743f34eee8537e424cb4e7a43ca605d0696b45d3ac99a8c206296bdb93800988ac7379cd37d5d8  linux-oneplus-hotdog-mainline617-k1-379d8fe35c7ca685a650bd82fd023af0ea3f0de0.tar.bz2
+7583138f21d6d136e93b001fff63d26fd1877f92e5cb00d4cda518517e9a870b0f88c0196ba7b682dddc28f97ffac8c825c3e564dee5ac1527f071c5d8685d03  config-oneplus-hotdog-mainline617-k1.aarch64
+50d56111bb52428fe99b65b024668e5dc00e0373d318ba4f7a173b5529c481316dca3d164b4117bc4901adf0df6ec476c559d85a5ee804c69bc72e842be402be  0001-arm64-hotdog-use-android-entry-layout.patch
+85afc4d230c41ee68687d9232196cf51c2862fccc4b88e4cdd4764b582fb0667e70d1145ebbe94b9c540c5ca34080bb088e3858da5e3168f2174ce64a4b0c0b8  0002-input-fts-fix-strict-prototypes.patch
+62a0aa996932850929ae8d71a06cddd33ffcc7cd675b4f3a9f702289e64db99cdef4c7e459a3c689f4297f8aa0293c31067317b87cd9a50c8cefee548004538d  0003-power-supply-idtp9418-include-gpio-consumer.patch
+70785fdc84bdc4011c2ccac3df6d30b869cf869cdcd8a3cb16f3be1779a05ac82390f84b782dfa89be0156cd45110ce906b2008949320150189d3669529db922  0004-arm64-dts-qcom-add-oneplus-hotdog.patch
+	"

@@ -27,9 +27,8 @@ Pinned defaults:
   restore-after:         system
   boot wait:             HOTDOG_D1_BOOT_WAIT_SEC, default 540, minimum 480
 
-Only these safe options are accepted and passed through:
-  --serial SERIAL
-  --expected-product "msmnile hotdog"
+The target serial is pinned by `HOTDOG_TARGET_SERIAL`/`ANDROID_SERIAL`.
+Only these safe timing options are accepted and passed through:
   --poll SEC
   --fastboot-timeout SEC
   --rescue-watch-timeout SEC
@@ -80,22 +79,7 @@ validate_positive_arg() {
 	[ "$value" -ge 1 ] || die "$name must be a positive integer, got: $value" 2
 }
 
-validate_nonempty_arg() {
-	local name="$1"
-	local value="$2"
-
-	[ -n "$value" ] || die "$name must not be empty" 2
-}
-
 FORWARDED_ARGS=()
-
-append_value_arg() {
-	local name="$1"
-	local value="$2"
-
-	validate_nonempty_arg "$name" "$value"
-	FORWARDED_ARGS+=("$name" "$value")
-}
 
 append_positive_arg() {
 	local name="$1"
@@ -110,17 +94,7 @@ parse_safe_options() {
 
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
-			--serial|--expected-product)
-				[ "$#" -ge 2 ] || die "Missing value for $1" 2
-				append_value_arg "$1" "$2"
-				shift 2
-				;;
-			--serial=*|--expected-product=*)
-				value="${1#*=}"
-				append_value_arg "${1%%=*}" "$value"
-				shift
-				;;
-			--poll|--fastboot-timeout|--rescue-watch-timeout|--rescue-watch-poll)
+				--poll|--fastboot-timeout|--rescue-watch-timeout|--rescue-watch-poll)
 				[ "$#" -ge 2 ] || die "Missing value for $1" 2
 				append_positive_arg "$1" "$2"
 				shift 2
@@ -149,6 +123,7 @@ validate_boot_wait
 parse_safe_options "$@"
 
 hotdog_require_pmos_password
+hotdog_require_target_serial
 
 check_sha "D1 direct clean-c boot image" "$BOOT_IMAGE" f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994
 check_sha "stable no-paint restore image" "$RESTORE_IMAGE" 23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50
@@ -156,9 +131,17 @@ check_sha "stable no-paint restore image" "$RESTORE_IMAGE" 23fa53d382425e9414a2e
 exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
 	--image "$BOOT_IMAGE" \
 	--restore-boot-b "$RESTORE_IMAGE" \
+	--serial "$HOTDOG_TARGET_SERIAL" \
+	--expected-product "msmnile hotdog" \
 	--from-pmos-ssh \
 	--start-rescue-watcher \
+	--expect-source-kernel-prefix 4.14.357-openela-perf \
+	--expect-source-cmdline-token androidboot.slot_suffix=_b \
+	--expect-source-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL" \
 	--expect-kernel-prefix 6.17.0-sm8150 \
+	--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
+	--expect-cmdline-token androidboot.slot_suffix=_b \
+	--expect-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL" \
 	--restore-after system \
 	--boot-wait "$BOOT_WAIT_SEC" \
 	"${FORWARDED_ARGS[@]}"

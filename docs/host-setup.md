@@ -26,11 +26,12 @@ Run the repository check to identify missing commands:
 ## Source bootstrap
 
 ```bash
-./scripts/bootstrap-sources.sh --kernel-mainline
+./scripts/bootstrap-sources.sh --sm8150-k1
 ```
 
-This populates the ignored `src/` directory. Add `--linux-next` only when
-linux-next comparison is required; it is not needed for the validated cycle.
+This populates the ignored `src/` directory and fetches the pinned Qualcomm
+SM8150 kernel used by the reproducible K1 build. Add `--kernel-mainline` or
+`--linux-next` only when those comparison trees are required.
 
 For a fresh checkout, apply the reviewed public aport snapshots to the local
 pmaports checkout only after a check-only comparison:

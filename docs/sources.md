@@ -10,6 +10,7 @@ not vendored into this repository.
 | [postmarketOS pmbootstrap](https://gitlab.postmarketos.org/postmarketOS/pmbootstrap) | Build and image tooling. |
 | [postmarketOS pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) | Official packages and Qualcomm SM8150 kernel packaging. |
 | [sm8150-linux-mainline pmaports](https://github.com/sm8150-linux-mainline/pmaports) | Existing SM8150 device ports and hotdog packaging reference. |
+| [postmarketOS Qualcomm SM8150 Linux](https://gitlab.postmarketos.org/soc/qualcomm-sm8150/linux) | Pinned Linux 6.17 K1 source and exact hotdog DTB reproduction. |
 | [OnePlus SM8150 kernel](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150) | Vendor kernel and hardware descriptions. |
 | [LineageOS hotdog device tree](https://github.com/LineageOS/android_device_oneplus_hotdog) | Android partition, firmware, and device configuration reference. |
 | [LineageOS SM8150 kernel](https://github.com/LineageOS/android_kernel_oneplus_sm8150) | Working downstream kernel reference. |
@@ -33,7 +34,7 @@ Halium or vendor-kernel distribution.
 does not reset local branches or discard local changes.
 
 ```bash
-./scripts/bootstrap-sources.sh --kernel-mainline
+./scripts/bootstrap-sources.sh --sm8150-k1
 ```
 
 Record source commits whenever publishing a hardware result. A branch name

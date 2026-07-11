@@ -34,9 +34,26 @@ image directories.
 
 ## Rebuilding the mainline DTB
 
-The current transformation chain is:
+The recommended offline rebuild path is the complete K1 orchestrator:
 
 ```bash
+./scripts/bootstrap-sources.sh --sm8150-k1
+./scripts/build-mainline-k1-dtb-chain.sh
+```
+
+By default, the orchestrator checks out pinned kernel commit `379d8fe...` in a
+temporary worktree, applies the tracked hotdog DTS patch, and reproduces base
+DTB `44052506301f7fcad9725c77a98323ec283adf1159b7bee941e7ed2ac3447b49`.
+The ordered transforms must then reproduce final K1 DTB
+`cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`.
+It writes ordered stage directories, `final.dtb`, `SHA256SUMS`, and a manifest
+under a timestamped `build/experiments/` directory.
+
+For targeted debugging, the individual stages are:
+
+```bash
+./scripts/build-mainline-k1-base-dtb.sh
+./scripts/build-mainline-kexec-lowbank-dtb.sh
 ./scripts/build-mainline-lowbank-firmware-gap-dtb.sh
 ./scripts/build-mainline-ufs-smmu-bypass-dtb.sh
 ./scripts/build-mainline-ufs-no-ice-dtb.sh
@@ -45,6 +62,11 @@ The current transformation chain is:
 
 Each stage writes a timestamped directory under `build/experiments/` and emits
 hashes. Pass explicit input paths when reproducing a stage on another host.
+The optional stock-DTB check in the firmware-gap stage is evidence-only and is
+not required to build the hash-pinned output.
+These steps intentionally include temporary bring-up hacks: the low-bank RAM
+constraint, firmware gap reservation, UFS/QUP/DWC3 Apps SMMU bypasses, and the
+UFS ICE removal.
 
 ## Rebuilding the initramfs wrapper
 

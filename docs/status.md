@@ -7,7 +7,7 @@ Last updated: 2026-07-11
 | Item | Value |
 |---|---|
 | Device | OnePlus 7T Pro |
-| Tested model | HD1913 |
+| Tested model | HD1913 rear label; recovery reports HD1911 |
 | Codename | `hotdog` |
 | SoC | Qualcomm SM8150-AC / Snapdragon 855+ |
 | Architecture | AArch64 |
@@ -18,12 +18,15 @@ Last updated: 2026-07-11
 
 Other `hotdog` variants may differ in modem, panel, firmware, and bootloader
 behavior. Do not assume that an HD1913 result applies unchanged to every model.
+The model mismatch above is reported explicitly because the vendor/recovery
+identity is HD1911 even though the physical handset is labelled HD1913.
 
 ## Mainline support matrix
 
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
+| K1 kernel package | Buildable | The tracked `linux-oneplus-hotdog-mainline617-k1` aport passes checksum verification, `apkbuild-lint`, pmbootstrap build, usrmerge postcheck, and emits the exact `440525...` base DTB. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -38,7 +41,7 @@ behavior. Do not assume that an HD1913 result applies unchanged to every model.
 | Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
-| Reboot | Not working in the validated build | The kexec-booted kernel shuts userspace down but lacks a built-in APSS watchdog restart handler. A `CONFIG_QCOM_WDT=y` candidate is prepared but not hardware-validated. |
+| Reboot | Working with late-loaded watchdog module | The exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. Built-in watchdog behavior on the direct-boot image remains unvalidated. |
 | Reboot mode | Packaged, not hardware-validated | The previously hardware-validated DTB still lacks the PON reboot-mode properties. The hotdog-only pmaports patch now adds `mode-bootloader = <2>` and `mode-recovery = <1>`, applies, compiles, and was verified with `fdtget`; hardware validation is still pending. This does not prove RESTART2 fastboot works yet. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
 | Wi-Fi/Bluetooth | Not validated | Firmware packaging exists, runtime support is pending. |
@@ -67,12 +70,15 @@ Display support can then be developed without losing the remote debug channel.
 
 ## Current validation queue
 
-1. Boot a single-variable Linux 6.17 control with `CONFIG_QCOM_WDT=y` through
-   kexec, verify the driver probes, and confirm a software reboot returns to
-   fastboot.
-2. Revalidate the exact known-good K1 payload and userspace path.
-3. Test D1: the exact K1 payload in an Android header v2 image with stock
-   offsets, first as a temporary boot and without flashing a partition.
+1. Boot D1 persistently from `boot_b`: the exact K1 payload in an Android
+   header v2 image with stock offsets, with the no-paint bridge rescue watcher
+   confirmed ready with the pinned restore hash before the write.
+2. Accept D1 only after a fresh postmarketOS SSH boot ID reports kernel
+   `6.17.0-sm8150` and the expected wrapper, slot-B, and serial command-line
+   markers; ADB, telnet, ping, or a returned 4.14 bridge are diagnostics, not
+   success.
+3. Treat `fastboot boot` as non-authoritative on this ABL: valid controls return
+   `Load Error`, while one D1 transfer reported `OKAY` without leaving fastboot.
 4. After D1, boot a DTB containing the hotdog-only PON reboot-mode properties
    and verify whether Linux reboot-to-bootloader and reboot-to-recovery select
    the expected RESTART2 modes.
