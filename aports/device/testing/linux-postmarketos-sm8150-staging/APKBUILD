@@ -1,0 +1,65 @@
+# Maintainer: Patriot-06 <mbmc172@gmail.com>
+# Kernel config based on: arch/arm/configs/sm8150.config
+
+pkgname=linux-postmarketos-sm8150-staging
+pkgver=6.8.7
+pkgrel=1
+pkgdesc="Mainline Kernel fork for SM8150 devices (Staging fork)"
+arch="aarch64"
+_carch="arm64"
+_flavor="postmarketos-sm8150-staging"
+url="https://github.com/sm8150-linux-mainline/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+		pmb:cross-native
+		pmb:kconfigcheck-nftables
+		"
+makedepends="bash bc bison findutils flex installkernel openssl-dev perl zstd"
+
+# Source
+_repository="linux"
+_commit="55916b64f2a19734f58bab0f3a698bec0074f217"
+_config="config-sm8150.$arch"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/sm8150-linux-mainline/$_repository/archive/$_commit.tar.gz
+	$_config
+	0001-arm64-dts-qcom-add-oneplus-hotdog.patch
+"
+builddir="$srcdir/$_repository-$_commit"
+_outdir="out"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/config-sm8150.$arch" .config
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" CC="${CC:-gcc}" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+
+sha512sums="
+1f253dcee9ab2d73581965b23aec09f56e8485c3efef03cbe4fab45bbb4f7f7586d7d90e5baacb6f5816ef9c0f2a5115772f6b55b81391c828feec7f4c8e3955  linux-postmarketos-sm8150-staging-55916b64f2a19734f58bab0f3a698bec0074f217.tar.gz
+200f9ad0d18f4928a01345603b651233aebeb3fa908e55de3424fe8dc3b4f78484695d925582ed5f6f61c81aab4309598c0172bbfb637dbb5eb0fdd4fc1101b8  config-sm8150.aarch64
+fbee0d5d0adf07a3019b9ba33ec0cf4cf38e313b12feceea39dd3e0b918109b0072ce33f9101b8efe049ce614b585b18907393e4e5882db8429afa7ae0200347  0001-arm64-dts-qcom-add-oneplus-hotdog.patch
+"

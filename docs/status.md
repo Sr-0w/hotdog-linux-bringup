@@ -39,6 +39,7 @@ behavior. Do not assume that an HD1913 result applies unchanged to every model.
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
 | Reboot | Not working in the validated build | The kexec-booted kernel shuts userspace down but lacks a built-in APSS watchdog restart handler. A `CONFIG_QCOM_WDT=y` candidate is prepared but not hardware-validated. |
+| Reboot mode | Packaged, not hardware-validated | The previously hardware-validated DTB still lacks the PON reboot-mode properties. The hotdog-only pmaports patch now adds `mode-bootloader = <2>` and `mode-recovery = <1>`, applies, compiles, and was verified with `fdtget`; hardware validation is still pending. This does not prove RESTART2 fastboot works yet. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
 | Wi-Fi/Bluetooth | Not validated | Firmware packaging exists, runtime support is pending. |
 | Audio | Not validated | Codec, routing, and userspace configuration remain open. |
@@ -72,3 +73,6 @@ Display support can then be developed without losing the remote debug channel.
 2. Revalidate the exact known-good K1 payload and userspace path.
 3. Test D1: the exact K1 payload in an Android header v2 image with stock
    offsets, first as a temporary boot and without flashing a partition.
+4. After D1, boot a DTB containing the hotdog-only PON reboot-mode properties
+   and verify whether Linux reboot-to-bootloader and reboot-to-recovery select
+   the expected RESTART2 modes.
