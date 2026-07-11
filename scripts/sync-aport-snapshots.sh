@@ -64,12 +64,14 @@ sync_dir() {
 	local src="$snapshot_root/$rel"
 	local dst="$target_pmaports/$rel"
 	local parent
+	local backup_root
 	local backup
 	local tmp
 
 	[ -d "$src" ] || die "missing snapshot directory: $src"
 	parent="$(dirname -- "$dst")"
-	backup="$dst.backup-$(date +%Y%m%d-%H%M%S)"
+	backup_root="$HOTDOG_ROOT/build/aport-backups"
+	backup="$backup_root/$(basename -- "$dst").backup-$(date +%Y%m%d-%H%M%S)"
 	tmp="$dst.tmp.$$"
 
 	if [ -d "$dst" ]; then
@@ -93,6 +95,7 @@ sync_dir() {
 	fi
 
 	mkdir -p "$parent"
+	mkdir -p "$backup_root"
 	rm -rf "$tmp"
 	cp -a "$src" "$tmp"
 	if [ -d "$dst" ]; then

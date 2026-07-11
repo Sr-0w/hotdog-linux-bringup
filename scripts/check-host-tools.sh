@@ -115,7 +115,7 @@ printf "HOTDOG_PMBOOTSTRAP_WORK=%s\n" "$HOTDOG_PMBOOTSTRAP_WORK"
 echo
 
 echo "== Required host tools =="
-for cmd in git adb fastboot dtc make bc bison flex openssl rsync cpio xz python3 losetup kpartx; do
+for cmd in git adb fastboot dtc make bc bison flex openssl rsync cpio xz python3 losetup kpartx curl; do
   check_cmd "$cmd"
 done
 echo
@@ -127,7 +127,7 @@ done
 echo
 
 echo "== Kernel/upstream helpers =="
-for cmd in clang b4; do
+for cmd in clang b4 zig qemu-aarch64; do
   check_cmd "$cmd"
 done
 check_git_send_email

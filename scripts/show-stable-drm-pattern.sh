@@ -5,7 +5,7 @@ source "$(dirname "$0")/env.sh"
 
 PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
 PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 CONNECTOR="${CONNECTOR:-28}"
 CRTC="${CRTC:-136}"
 MODE="${MODE:-#0}"
@@ -22,7 +22,7 @@ block devices.
 Environment:
   PMOS_HOST       SSH host. Default: 172.16.42.1
   PMOS_USER       SSH user. Default: user
-  PMOS_PASSWORD   SSH password. Default: 147147
+  PMOS_PASSWORD   Required SSH password
   CONNECTOR       modetest connector id. Default: 28 (DSI-1)
   CRTC            modetest CRTC id. Default: 136
   MODE            modetest mode selector. Default: #0

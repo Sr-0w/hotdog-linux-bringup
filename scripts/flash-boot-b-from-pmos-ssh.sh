@@ -4,9 +4,9 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 source "$(dirname "$0")/phone-lock.sh"
 
-PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
-PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_HOST="${PMOS_HOST:-$HOTDOG_PMOS_HOST}"
+PMOS_USER="${PMOS_USER:-$HOTDOG_PMOS_USER}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 IMAGE=""
 REMOTE_DIR=""
 PARTITION_LABEL="boot_b"
@@ -29,7 +29,7 @@ Options:
   --image FILE       Boot image to flash to boot_b.
   --host HOST        postmarketOS SSH host. Default: 172.16.42.1.
   --user USER        SSH user. Default: user.
-  --password PASS    SSH password. Default: 147147.
+  --password PASS    SSH password. Defaults to PMOS_PASSWORD.
   --remote-dir DIR   Remote temp directory. Default: /tmp/hotdog-flash-<stamp>.
   --partition-path P Explicit block node, normally auto-detected from boot_b.
   --reboot           Reboot the phone with "sudo -n reboot -f" after verify.
@@ -154,7 +154,6 @@ remote_sudo_sh() {
 remote_force_reboot() {
   local reboot_cmd='sudo -n sh -c '"'"'sync; echo b > /proc/sysrq-trigger'"'"''
   local saw_ping_drop=0
-  local i=""
 
   log "Sending kernel sysrq reboot"
   if command -v timeout >/dev/null 2>&1; then
@@ -171,7 +170,7 @@ remote_force_reboot() {
   fi
 
   if command -v ping >/dev/null 2>&1; then
-    for i in $(seq 1 20); do
+    for _ in {1..20}; do
       if ! ping -c 1 -W 1 "$PMOS_HOST" > "$run_dir/reboot-ping-last.txt" 2>&1; then
         saw_ping_drop=1
         break
@@ -191,6 +190,7 @@ main() {
   [ -n "$IMAGE" ] || die "Missing --image" 2
   [ -s "$IMAGE" ] || die "Missing or empty image: $IMAGE" 2
   [ "$PARTITION_LABEL" = "boot_b" ] || die "Refusing to flash anything except boot_b" 2
+  [ -n "$PMOS_PASSWORD" ] || die "Set PMOS_PASSWORD or use --password" 2
 
   require_cmd ssh
   require_cmd sshpass

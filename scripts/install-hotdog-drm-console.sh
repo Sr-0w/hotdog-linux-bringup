@@ -5,7 +5,7 @@ source "$(dirname "$0")/env.sh"
 
 PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
 PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 REMOTE_SRC="/tmp/hotdog-drm-console.c"
 REMOTE_BIN="/usr/local/bin/hotdog-drm-console"
 REMOTE_FONT="/tmp/hotdog-ter-v32n.psf"

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 source "$(dirname "$0")/env.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-600}"
 POLL_SEC="${POLL_SEC:-2}"
 AFTER_FASTBOOT_RESTORE="${AFTER_FASTBOOT_RESTORE:-system}"
@@ -28,7 +28,7 @@ Actions:
   - Qualcomm 05c6:900e: do not flash; optionally collect a tiny ramdump
 
 Options:
-  --serial SERIAL         Target fastboot serial. Default: b6bd2252.
+  --serial SERIAL         Target serial. Defaults to ANDROID_SERIAL.
   --timeout SEC           Total wait timeout. Default: 600.
   --poll SEC              Poll interval. Default: 2.
   --after-fastboot MODE   system, bootloader, or none. Default: system.
@@ -96,6 +96,7 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
+[ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL"
 case "$AFTER_FASTBOOT_RESTORE" in
 	system|bootloader|none)
 		;;
@@ -208,7 +209,7 @@ last_state=""
 
 while [ "$SECONDS" -lt "$deadline" ]; do
 	lsusb > "$run_dir/lsusb-last.txt" 2>&1 || true
-	fastboot devices -l > "$run_dir/fastboot-last.txt" 2>&1 || true
+	hotdog_fastboot_devices > "$run_dir/fastboot-last.txt" 2>&1 || true
 
 	state="none"
 	if grep -q "^${SERIAL}[[:space:]]" "$run_dir/fastboot-last.txt"; then

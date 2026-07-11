@@ -3,7 +3,7 @@
 
 pkgname=linux-oneplus-hotdog-lineage414
 pkgver=4.14.357_git20260703
-pkgrel=3
+pkgrel=5
 pkgdesc="LineageOS downstream kernel for OnePlus 7T Pro"
 arch="aarch64"
 _carch="arm64"
@@ -66,7 +66,7 @@ package() {
 		"$pkgdir/boot/vmlinuz"
 
 	# Boot-proven stock DTB pack with dtb_idx=12 instrumented for
-	# simplefb and an explicit /chosen ranges mapping.
+	# simplefb: explicit /chosen ranges and no-map splash memory.
 	install -Dm644 "$srcdir/stock-hotdog-dtbpack.dtb" \
 		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
 
@@ -82,6 +82,6 @@ package() {
 
 sha512sums="
 db3a83b6cc8ebca496b49ddac82a81c05d488808129bd51b0348dd411ceef7449fb293f77ae5a290fae8d2dde081e5cf35ec7617cb9aea98eb0ce72b85af9cc6  linux-oneplus-hotdog-lineage414-6ecfabed032b68a8f0a0fd003cf5fbfb6d672acb.tar.gz
-f9a54da9bbdbc75fa58297b38c0f912acae2b9916e0d5d1fdab8add68c92f5828dec45ab11da95f7621be971f13ff7b45f8f04fca86e00b8ffd863cc305526d4  config-oneplus-hotdog-lineage414.aarch64
-5d4bee9d38662642ef96cfefc0def0b427dca3ea71e7bd24c04d2ab16661e39d4cb61d2ef42d58a9008018ddb021d6ae15a116b8fa0e642c3a2790456c3dbc94  stock-hotdog-dtbpack.dtb
+112f51a0601414698fc8b033bf7d1256aededfe2d6518353b68cafd4f0294764bea21654104a3752d6d1ea0199400b27792d27d008c0cfef880f19ab08d9cfaf  config-oneplus-hotdog-lineage414.aarch64
+02abe0a57020cf4a5ef6b8b8dd11be584ab7d4ceb7f1b010ce67728bd5675d9a2b3edc0e76ae2ac6f23c4ccdff77a6e02d94f3ce3560cf58cb7e47e30b0a138c  stock-hotdog-dtbpack.dtb
 "

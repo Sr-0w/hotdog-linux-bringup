@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$script_dir/env.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 IMAGE="${IMAGE:-$HOTDOG_ROOT/images/pmos-experiments/2026-07-08-235800-stockkernel-pmosramdisk-direct-telnet-dualport-rootwatchdog/boot-stockkernel-pmosramdisk-direct-telnet-dualport-rootwatchdog-600s-stockos-avb.img}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 BOOT_WAIT_SEC="${BOOT_WAIT_SEC:-720}"
