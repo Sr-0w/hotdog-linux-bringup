@@ -1,0 +1,4 @@
+# Keep the APSS watchdog restart handler available before rootfs modules load.
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_QCOM_WDT=y

@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hotdog Linux bring-up contributors <hotdog-linux@example.invalid>
+Date: Sat, 11 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: experiment with the hotdog Android entry layout
+
+The stock hotdog boot chain normally enters a non-EFI arm64 Image whose first
+instruction branches directly to the kernel entry and whose advertised load
+offset is 0x80000. Keep the standard EFI-compatible header when CONFIG_EFI is
+enabled, but reproduce the downstream non-EFI code0/code1 layout otherwise.
+
+This is an experimental bootloader-handoff patch, not a proposed generic arm64
+change. A direct-boot result must be recorded before drawing conclusions from
+it.
+---
+ arch/arm64/kernel/head.S | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index ca04b338c..fe6ebf655 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -58,9 +58,20 @@
+ 	/*
+ 	 * DO NOT MODIFY. Image header expected by Linux boot-loaders.
+ 	 */
++#ifdef CONFIG_EFI
+ 	efi_signature_nop			// special NOP to identity as PE/COFF executable
+ 	b	primary_entry			// branch to kernel start, magic
+-	.quad	0				// Image load offset from start of RAM, little-endian
++#else
++	/*
++	 * The hotdog stock boot chain accepts an arm64 Image whose first word is
++	 * the branch to the kernel entry and whose second word is zero. Keep the
++	 * standard EFI-compatible order above, but make the non-EFI Image match
++	 * the stock entry layout for this bring-up path.
++	 */
++	b	primary_entry			// branch to kernel start, magic
++	.long	0				// reserved / stock-compatible code1
++#endif
++	.quad	0x00080000			// Image load offset from start of RAM, little-endian
+ 	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
+ 	le64sym	_kernel_flags_le		// Informative flags, little-endian
+ 	.quad	0				// reserved

@@ -11,7 +11,7 @@ SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 MODE="bootloader"
 WAIT_SEC="${WAIT_SEC:-120}"
-REBOOT_COMMAND_TIMEOUT_SEC="${REBOOT_COMMAND_TIMEOUT_SEC:-3}"
+REBOOT_COMMAND_TIMEOUT_SEC="${REBOOT_COMMAND_TIMEOUT_SEC:-20}"
 
 usage() {
   cat <<'USAGE'
@@ -29,7 +29,7 @@ Options:
   --serial SERIAL   Expected fastboot/ADB serial. Defaults to ANDROID_SERIAL.
   --wait SEC        Visibility timeout. Default: 120.
   --command-timeout SEC
-                    Seconds to wait for SSH to close after RESTART2. Default: 3.
+                    Seconds to wait for SSH to close after RESTART2. Default: 20.
   -h, --help        Show this help.
 USAGE
 }

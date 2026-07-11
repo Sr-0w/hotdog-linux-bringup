@@ -60,6 +60,7 @@ for path in \
   docs/README.md \
   docs/status.md \
   docs/mainline-bringup.md \
+  docs/direct-boot.md \
   docs/boot-flow.md \
   docs/host-setup.md \
   docs/device-safety.md \
@@ -70,8 +71,11 @@ for path in \
   scripts/bootstrap-host.sh \
   scripts/fetch-kexec-tools-aarch64.sh \
   scripts/install-gentoo-qemu-aarch64-user.sh \
+  scripts/build-mainline-direct-bootimg.sh \
   scripts/validate-mainline-go-cycle.sh \
-  patches/experimental-android-kernel-header-text-offset.patch \
+  configs/mainline-direct-debug.fragment \
+  patches/experimental-android-kernel-entry-layout.patch \
+  patches/mainline-fts-strict-prototypes.patch \
   pmbootstrap_v3.cfg.example
 do
   if [ -e "$ROOT/$path" ]; then

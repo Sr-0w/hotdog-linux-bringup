@@ -38,6 +38,7 @@ behavior. Do not assume that an HD1913 result applies unchanged to every model.
 | Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
+| Reboot | Not working in the validated build | The kexec-booted kernel shuts userspace down but lacks a built-in APSS watchdog restart handler. A `CONFIG_QCOM_WDT=y` candidate is prepared but not hardware-validated. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
 | Wi-Fi/Bluetooth | Not validated | Firmware packaging exists, runtime support is pending. |
 | Audio | Not validated | Codec, routing, and userspace configuration remain open. |
@@ -50,7 +51,8 @@ behavior. Do not assume that an HD1913 result applies unchanged to every model.
 
 The downstream 4.14 kernel remains useful as a bridge and rescue environment.
 It provides UFS, USB networking, SSH, USB ACM, simplefb/fbcon, and a working
-MSM DRM path capable of showing a test pattern and text console.
+downstream-only MSM DRM path capable of showing a test pattern and text
+console. That path is a diagnostic reference, not a publication target.
 
 Downstream support is not the project endpoint. New functionality should be
 implemented in pmaports and the mainline-oriented kernel path whenever
@@ -61,3 +63,12 @@ possible.
 The next milestone is a reproducible pmaports build that boots mainline without
 the downstream kexec bridge, exposes the complete RAM map, and retains USB SSH.
 Display support can then be developed without losing the remote debug channel.
+
+## Current validation queue
+
+1. Boot a single-variable Linux 6.17 control with `CONFIG_QCOM_WDT=y` through
+   kexec, verify the driver probes, and confirm a software reboot returns to
+   fastboot.
+2. Revalidate the exact known-good K1 payload and userspace path.
+3. Test D1: the exact K1 payload in an Android header v2 image with stock
+   offsets, first as a temporary boot and without flashing a partition.

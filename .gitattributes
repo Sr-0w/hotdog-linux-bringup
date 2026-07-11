@@ -1,4 +1,5 @@
 * text=auto eol=lf
+*.patch text eol=lf whitespace=-space-before-tab
 
 # Light Git LFS readiness for future binary drops.
 *.img filter=lfs diff=lfs merge=lfs -text
@@ -8,4 +9,3 @@
 *.dtb filter=lfs diff=lfs merge=lfs -text
 *.tar.gz filter=lfs diff=lfs merge=lfs -text
 *.tar.xz filter=lfs diff=lfs merge=lfs -text
-

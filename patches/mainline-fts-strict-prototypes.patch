@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: hotdog Linux bring-up contributors <hotdog-linux@example.invalid>
+Date: Sat, 11 Jul 2026 00:00:00 +0000
+Subject: [PATCH] input: fts: declare getClient with a strict prototype
+
+Clang treats an empty parameter list as a deprecated non-prototype declaration
+and the SM8150 tree promotes that diagnostic to an error. Both bus variants
+take no arguments, so declare them explicitly with void.
+---
+ drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
+index ef6d66229..18211a047 100644
+--- a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
++++ b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
+@@ -112,7 +112,7 @@ struct device *getDev(void)
+   * slave
+   * @return client if it was previously set or NULL in all the other cases
+   */
+-struct i2c_client *getClient()
++struct i2c_client *getClient(void)
+ {
+ 	if (client != NULL)
+ 		return (struct i2c_client *)client;
+@@ -125,7 +125,7 @@ struct i2c_client *getClient()
+   * slave
+   * @return client if it was previously set or NULL in all the other cases
+   */
+-struct spi_device *getClient()
++struct spi_device *getClient(void)
+ {
+ 	if (client != NULL)
+ 		return (struct spi_device *)client;

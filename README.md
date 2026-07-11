@@ -45,6 +45,11 @@ flowchart LR
 The bridge is a temporary engineering tool. The long-term target is a normal
 postmarketOS/pmaports boot that does not depend on the downstream kernel.
 
+The current milestone is to place the exact kexec-validated payload in the
+Android header-v2 contract used by the working downstream image and isolate
+the remaining bootloader handoff difference.
+See [docs/direct-boot.md](docs/direct-boot.md) for the controlled test matrix.
+
 ## Mainline fixes validated so far
 
 The successful boot is not a stock mainline device tree. It currently applies
@@ -105,6 +110,10 @@ mainline cycle is launched with:
 That launcher hash-checks the kernel, DTB, initramfs, and restore image before
 transferring control to mainline.
 
+This launcher is a reproducible lab replay once its generated inputs exist; it
+is not yet the clean-clone public build entry point. The remaining publication
+work is to produce those inputs entirely from the tracked pmaports packages.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -127,6 +136,7 @@ runtime data and must remain local.
 - [Documentation index](docs/README.md)
 - [Support status](docs/status.md)
 - [Mainline bring-up fixes](docs/mainline-bringup.md)
+- [Direct mainline boot](docs/direct-boot.md)
 - [Boot architecture](docs/boot-flow.md)
 - [Host setup](docs/host-setup.md)
 - [Device safety](docs/device-safety.md)
