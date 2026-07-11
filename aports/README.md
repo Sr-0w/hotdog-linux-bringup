@@ -7,7 +7,7 @@ needed to reproduce the current hotdog bring-up state without copying the full
 The canonical working tree during local development is still:
 
 ```text
-/home/srobin/dev/hotdog/src/postmarketos/pmaports-sm8150
+src/postmarketos/pmaports-sm8150
 ```
 
 Snapshot contents are updated only when a local aport becomes important enough

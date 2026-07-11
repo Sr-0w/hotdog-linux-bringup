@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 source "$(dirname "$0")/env.sh"
 
-serial="${ANDROID_SERIAL:-b6bd2252}"
+serial="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 image="$HOTDOG_ROOT/images/pmos-experiments/2026-07-09-014500-mainline617-external-appenddtb-header0-watchdog60/boot-mainline617-external-appenddtb-header0-watchdog60-stockos-avb.img"
 restore="$HOTDOG_STABLE_PMOS_BOOT_B"
 

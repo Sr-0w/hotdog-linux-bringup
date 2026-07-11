@@ -63,6 +63,7 @@ check_cmdline_word() {
 validate_dtb_entry12() {
   local label="$1"
   local dtb="$2"
+  local require_nomap="${3:-no}"
   local out
 
   require_file "$dtb"
@@ -74,6 +75,14 @@ validate_dtb_entry12() {
       fail "$label DTB entry12 missing ${key}=yes"
     fi
   done
+  if [ "$require_nomap" = "yes" ]; then
+    for key in cont_splash_nomap disp_rdump_nomap; do
+      if ! grep -q "^${key}=yes$" "$tmpdir/${label}-dtb-entry12.txt"; then
+        sed -n '1,140p' "$tmpdir/${label}-dtb-entry12.txt" >&2
+        fail "$label DTB entry12 missing ${key}=yes"
+      fi
+    done
+  fi
   log "$label DTB entry12 simplefb wiring OK"
 }
 
@@ -105,6 +114,8 @@ validate_candidate_dir() {
   local expected_autocycle="${6:-}"
   local expected_acm="${7:-no}"
   local expected_fbdev="${8:-no}"
+  local expected_nomap="${9:-no}"
+  local expected_strip_drm="${10:-no}"
   local cmdline="$dir/cmdline-watchdog.txt"
   local dtb="$dir/components/dtb"
   local postmount="$dir/initramfs-tree/hotdog_rootfs_postmount.sh"
@@ -121,7 +132,7 @@ validate_candidate_dir() {
   sha256sum "$image" "$dir/components/kernel" "$dtb" "$dir/components/initramfs-watchdog.gz" \
     | sed "s/^/[validate-current-candidates] ${label} sha256 /"
 
-  validate_dtb_entry12 "$label" "$dtb"
+  validate_dtb_entry12 "$label" "$dtb" "$expected_nomap"
 
   if [ -f "$postmount" ]; then
     /bin/sh -n "$postmount"
@@ -155,11 +166,20 @@ validate_candidate_dir() {
     fi
     if [ "$expected_autocycle" = "1" ]; then
       grep -q 'auto-cycle every 12s' "$visible_shell" || fail "$label visible shell missing auto-cycle status text"
+      grep -q 'pause_marker="/tmp/hotdog-visible-tty-autocycle.pause"' "$visible_shell" || fail "$label visible shell missing auto-cycle pause marker"
+      grep -q 'toggle_autocycle_pause' "$visible_shell" || fail "$label visible shell missing Power pause/resume action"
     else
       grep -q 'status follower every 20s' "$visible_shell" || fail "$label visible shell missing prompt-first status follower"
     fi
     grep -q "PS1='screen# '" "$visible_shell" || fail "$label visible shell missing screen prompt"
+    grep -q 'chvt "${tty#tty}"' "$visible_shell" || fail "$label visible shell does not switch to its tty"
+    grep -q 'stty sane echo icanon isig' "$visible_shell" || fail "$label visible shell does not reset tty line discipline"
     grep -q 'usb/watchdog' "$visible_shell" || fail "$label visible shell missing USB/watchdog status block"
+    if [ "$expected_strip_drm" = "yes" ]; then
+      grep -q 'strip_rootfs_drm_console' "$postmount" || fail "$label rootfs postmount does not strip persistent DRM console"
+      grep -q 'hotdog-drm-console.start' "$postmount" || fail "$label strip hook does not remove hotdog-drm-console.start"
+      grep -q 'pidfile=/run/hotdog-visible-tty-shell.pid' "$postmount" || fail "$label visible shell local.d hook lacks pidfile guard"
+    fi
     if [ "$expected_acm" = "yes" ]; then
       require_file "$acm_helper"
       /bin/sh -n "$acm_helper"
@@ -174,6 +194,8 @@ validate_candidate_dir() {
       /bin/sh -n "$fbdev_helper"
       grep -q -- '--fbdev /dev/fb0' "$fbdev_helper" || fail "$label fbdev helper does not use /dev/fb0"
       grep -q 'hotdog-fbdev-console.in' "$fbdev_helper" || fail "$label fbdev helper missing fbdev command FIFO"
+      grep -q 'HOTDOG_FOLLOWER_PID' "$fbdev_helper" || fail "$label fbdev helper missing follower pid export"
+      grep -q 'Power stops the follower' "$fbdev_helper" || fail "$label fbdev helper missing Power quiet prompt hint"
       grep -q 'hotdog_fbdev_console_start initramfs' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not start fbdev console"
       grep -q 'hotdog_fbdev_console_stop' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not stop fbdev console before switch_root"
       grep -q '^usr/bin/hotdog-drm-console$' "$dir/initramfs-watchdog-contents.txt" || fail "$label initramfs missing console helper binary"
@@ -186,13 +208,18 @@ validate_candidate_dir() {
     if [ -f "$tty_kmsg" ]; then
       grep -q 'hotdog_tty_kmsg_console_stop' "$tty_kmsg" || fail "$label tty-kmsg helper cannot stop before switch_root"
       grep -q 'hotdog_tty_kmsg_console_stop' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not stop tty-kmsg before switch_root"
-    elif [ "$expected_fbdev" != "yes" ]; then
+    elif [ "$expected_fbdev" != "yes" ] && [ "$expected_nomap" != "yes" ]; then
       fail "$label requires tty-kmsg helper or expected fbdev console"
+    elif [ "$expected_nomap" = "yes" ]; then
+      log "$label uses direct simplefb/fbcon output; no tty-kmsg or fbdev helper required"
     fi
     grep -q 'hotdog_rescue_watchdog_start switch-root' "$dir/initramfs-tree/init_2nd.sh" || fail "$label init_2nd does not rearm watchdog after killall sh"
     grep -q 'fbcon=vc:1-1' "$cmdline" || fail "$label cmdline missing fbcon=vc:1-1"
     require_file "$watchdog"
     /bin/sh -n "$watchdog"
+    if [ "$label" = "next" ]; then
+      grep -q 'HOTDOG_RESCUE_DIRECT_DEBUG_SHELL="0"' "$watchdog" || fail "$label still enables direct debug shell"
+    fi
     if [ -n "$expected_watchdog" ]; then
       grep -q "HOTDOG_RESCUE_WATCHDOG_SUCCESS_MODE=\"$expected_watchdog\"" "$watchdog" || fail "$label watchdog is not $expected_watchdog-success mode"
     fi
@@ -242,7 +269,7 @@ main() {
   check_cmdline_word "$(cat "$cmdline")" "fbcon=font:VGA8x16"
   check_cmdline_word "$(cat "$cmdline")" "fbcon=vc:1-1"
   check_cmdline_word "$(cat "$cmdline")" "printk.devkmsg=on"
-  validate_candidate_dir next "$image" yes "$dir" root 1 yes yes
+  validate_candidate_dir next "$image" yes "$dir" root 1 yes no yes yes
 
   for entry in \
     "secondary_splash:$splash_wrapper:no" \

@@ -9,7 +9,7 @@ IMAGE=""
 BOOT_WAIT_SEC="${BOOT_WAIT_SEC:-240}"
 POLL_SEC="${POLL_SEC:-2}"
 PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
 
 usage() {
@@ -117,7 +117,7 @@ adb_state() {
 }
 
 fastboot_present() {
-  fastboot devices -l > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
   if [ -n "$SERIAL" ]; then
     awk -v serial="$SERIAL" 'NF >= 1 && $1 == serial { found=1 } END { exit found ? 0 : 1 }' "$run_dir/fastboot-devices-last.txt"
   else
@@ -156,6 +156,10 @@ pmos_ssh_probe() {
     > "$run_dir/ssh-probe.txt" 2>&1
 }
 
+qualcomm_900e_present() {
+  lsusb -d 05c6:900e 2>/dev/null | grep -q .
+}
+
 main() {
   validate_seconds BOOT_WAIT_SEC "$BOOT_WAIT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
@@ -190,9 +194,16 @@ main() {
   log "Booting image through fastboot boot"
   if ! fastboot_do boot "$IMAGE" 2>&1 | tee "$run_dir/fastboot-boot.txt"; then
     log "fastboot boot command failed"
-    fastboot devices -l > "$run_dir/fastboot-final.txt" 2>&1 || true
+    hotdog_fastboot_devices > "$run_dir/fastboot-final.txt" 2>&1 || true
     exit 4
   fi
+
+  log "Waiting for the original fastboot USB instance to depart"
+  local departure_deadline=$((SECONDS + 10))
+  while hotdog_fastboot_usb_visible && [ "$SECONDS" -lt "$departure_deadline" ]; do
+    sleep 0.2
+  done
+  phone_lock_release || true
 
   local deadline=$((SECONDS + BOOT_WAIT_SEC))
   local last_status=0
@@ -207,6 +218,13 @@ main() {
         break
         ;;
     esac
+
+    if qualcomm_900e_present; then
+      result="qualcomm-900e"
+      lsusb -d 05c6:900e > "$run_dir/qualcomm-900e.txt" 2>&1 || true
+      log "Qualcomm Sahara crashdump 900e visible after fastboot boot"
+      break
+    fi
 
     if fastboot_present; then
       result="fastboot"
@@ -229,7 +247,7 @@ main() {
   done
 
   adb devices -l > "$run_dir/adb-final.txt" 2>&1 || true
-  fastboot devices -l > "$run_dir/fastboot-final.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$run_dir/fastboot-final.txt" 2>&1 || true
   log "Result: $result"
   log "Done: $run_dir"
 }

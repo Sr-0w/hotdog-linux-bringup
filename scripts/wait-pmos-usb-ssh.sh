@@ -5,8 +5,8 @@ source "$(dirname "$0")/env.sh"
 
 PMOS_HOST="${PMOS_HOST:-auto}"
 PMOS_DEFAULT_HOST="${PMOS_DEFAULT_HOST:-172.16.42.1}"
-PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
+PMOS_USER="${PMOS_USER:-$HOTDOG_PMOS_USER}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-900}"
 POLL_SEC="${POLL_SEC:-3}"
 stamp="$(date +%F-%H%M%S)"
@@ -22,7 +22,7 @@ Wait for postmarketOS USB networking, SSH in, and collect first-boot logs.
 Options:
   --host HOST       SSH host or "auto". Default: auto.
   --user USER       SSH user. Default: user.
-  --password PASS   SSH password. Default: 147147.
+  --password PASS   SSH password. Defaults to PMOS_PASSWORD.
   --timeout SEC     Seconds to wait. Default: 900.
   --poll SEC        Poll interval. Default: 3.
   -h, --help        Show this help.
@@ -147,6 +147,7 @@ collect_logs() {
 main() {
   validate_seconds TIMEOUT_SEC "$TIMEOUT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
+  [ -n "$PMOS_PASSWORD" ] || die "Set PMOS_PASSWORD or use --password" 2
   command -v ssh >/dev/null 2>&1 || die "Missing ssh" 127
   command -v sshpass >/dev/null 2>&1 || die "Missing sshpass" 127
   command -v ping >/dev/null 2>&1 || die "Missing ping" 127

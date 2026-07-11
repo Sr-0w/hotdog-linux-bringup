@@ -13,6 +13,7 @@ Options:
   --source-pack FILE  Source concatenated DTB pack.
   --outdir DIR        Output directory. Default: timestamped build/experiments dir.
   --entry N           Entry index to patch. Default: 12.
+  --reserved-nomap    Also add no-map; to the splash reserved-memory nodes.
   -h, --help          Show this help.
 USAGE
 }
@@ -36,6 +37,7 @@ source "$script_dir/env.sh"
 source_pack="$HOTDOG_ROOT/build/experiments/2026-07-09-142300-stock-dtb-pack-entry12-simplefb/stock-dtb-pack-entry12-simplefb-x8-stdout.dtbpack"
 entry_index=12
 outdir=""
+reserved_nomap=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -53,6 +55,9 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || die "--entry requires a value"
       entry_index="$2"
       shift
+      ;;
+    --reserved-nomap)
+      reserved_nomap=1
       ;;
     -h|--help)
       usage
@@ -79,7 +84,11 @@ fi
 
 entries_dir="$outdir/entries"
 work_dir="$outdir/work"
-output_pack="$outdir/stock-dtb-pack-entry${entry_index}-simplefb-ranges-stdout.dtbpack"
+output_suffix="ranges-stdout"
+if [ "$reserved_nomap" -eq 1 ]; then
+  output_suffix="ranges-nomap-stdout"
+fi
+output_pack="$outdir/stock-dtb-pack-entry${entry_index}-simplefb-${output_suffix}.dtbpack"
 mkdir -p "$entries_dir" "$work_dir"
 
 note "splitting source pack"
@@ -114,15 +123,16 @@ entry_file="$entries_dir/entry-$(printf '%02d' "$entry_index").dtb"
 
 note "patching entry $entry_index"
 orig_dts="$work_dir/entry-${entry_index}-orig.dts"
-fixed_dts="$work_dir/entry-${entry_index}-ranges.dts"
+fixed_dts="$work_dir/entry-${entry_index}-${output_suffix}.dts"
 dtc -I dtb -O dts "$entry_file" > "$orig_dts" 2> "$work_dir/entry-${entry_index}-orig-dtc.err" || true
-python3 - "$orig_dts" "$fixed_dts" <<'PY'
+python3 - "$orig_dts" "$fixed_dts" "$reserved_nomap" <<'PY'
 import pathlib
 import re
 import sys
 
 source = pathlib.Path(sys.argv[1])
 dest = pathlib.Path(sys.argv[2])
+reserved_nomap = sys.argv[3] == "1"
 text = source.read_text()
 
 def patch_chosen(match: re.Match[str]) -> str:
@@ -154,10 +164,33 @@ if count != 1:
     raise SystemExit("could not find /chosen node")
 if "framebuffer@9c000000" not in patched:
     raise SystemExit("patched DTS does not contain expected framebuffer node")
+
+if reserved_nomap:
+    def add_nomap_to_node(blob: str, node_name: str) -> str:
+        def patch_node(match: re.Match[str]) -> str:
+            body = match.group(2)
+            if not re.search(r"^\s*no-map;", body, flags=re.M):
+                body = "\t\t\tno-map;\n" + body
+            return match.group(1) + body + match.group(3)
+
+        fixed, fixed_count = re.subn(
+            rf"(\n\t\t{re.escape(node_name)} \{{\n)(.*?)(\n\t\t\}};)",
+            patch_node,
+            blob,
+            count=1,
+            flags=re.S,
+        )
+        if fixed_count != 1:
+            raise SystemExit(f"could not find /reserved-memory/{node_name}")
+        return fixed
+
+    for name in ("cont_splash_region", "disp_rdump_region"):
+        patched = add_nomap_to_node(patched, name)
+
 dest.write_text(patched)
 PY
 
-dtc -I dts -O dtb -o "$entry_file" "$fixed_dts" > "$work_dir/entry-${entry_index}-ranges-dtc.out" 2> "$work_dir/entry-${entry_index}-ranges-dtc.err"
+dtc -I dts -O dtb -o "$entry_file" "$fixed_dts" > "$work_dir/entry-${entry_index}-${output_suffix}-dtc.out" 2> "$work_dir/entry-${entry_index}-${output_suffix}-dtc.err"
 
 note "repacking DTB pack"
 : > "$output_pack"
@@ -173,6 +206,9 @@ entry_sha="$(sha256sum "$entry_file")"
   printf 'fixed pack: %s\n' "$output_sha"
   printf 'fixed entry%s: %s\n' "$entry_index" "$entry_sha"
   printf 'change: add ranges; under /chosen and use absolute stdout-path strings; keep framebuffer reg size from source entry\n'
+  if [ "$reserved_nomap" -eq 1 ]; then
+    printf 'change: add no-map; to /reserved-memory/cont_splash_region and /reserved-memory/disp_rdump_region\n'
+  fi
 } > "$outdir/properties.txt"
 sha256sum "$output_pack" "$entry_file" > "$outdir/SHA256SUMS"
 

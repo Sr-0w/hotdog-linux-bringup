@@ -652,6 +652,16 @@ static const char *button_command(unsigned int code, const char **name)
 		       "ls -la /dev/disk/by-partlabel /dev/disk/by-name /dev/disk/by-uuid 2>/dev/null || true; "
 		       "printf '\\n--- display dmesg ---\\n'; "
 		       "dmesg | grep -i -E 'drm|dsi|fb|console|simple|input|touch|pon' | tail -120\n";
+	case KEY_POWER:
+		*name = "power";
+		return "printf '\\n--- button diag: quiet prompt ---\\n'; "
+		       "if [ -n \"$HOTDOG_FOLLOWER_PID\" ]; then "
+		       "kill \"$HOTDOG_FOLLOWER_PID\" 2>/dev/null || true; "
+		       "printf 'stopped follower pid: %s\\n' \"$HOTDOG_FOLLOWER_PID\"; "
+		       "unset HOTDOG_FOLLOWER_PID; "
+		       "else printf 'no follower pid in shell env\\n'; fi; "
+		       "printf 'prompt ready; host FIFO: /tmp/hotdog-drm-console.in or /tmp/hotdog-fbdev-console.in\\n'; "
+		       "printf '\\n--- shell jobs ---\\n'; jobs -l 2>/dev/null || true\n";
 	default:
 		*name = NULL;
 		return NULL;
@@ -715,7 +725,8 @@ int main(int argc, char **argv)
 		"printf '\\n--- recent display messages ---\\n'; dmesg | grep -i -E 'drm|dsi|fb|console|simple' | tail -40; "
 		"printf '\\n--- starting pmOS status follower every 10s ---\\n'; "
 		"(i=0; while :; do sleep 10; printf '\\n--- pmOS status %s ---\\n' \"$i\"; date; uptime 2>/dev/null || true; ip -br addr 2>/dev/null || true; dmesg | tail -50; i=$((i + 1)); done) & "
-		"printf 'follower pid: %s\\n' \"$!\"; "
+		"HOTDOG_FOLLOWER_PID=$!; export HOTDOG_FOLLOWER_PID; "
+		"printf 'follower pid: %s\\n' \"$HOTDOG_FOLLOWER_PID\"; "
 		"printf '\\n--- ready: commands are read from /tmp/hotdog-drm-console.in ---\\n'\n";
 
 	for (int i = 1; i < argc; i++) {
@@ -810,7 +821,7 @@ int main(int argc, char **argv)
 	if (input_count > 0) {
 		char line[160];
 
-		snprintf(line, sizeof(line), "local buttons: Vol+ status, Vol- devices (%zu input event nodes)\n\n",
+		snprintf(line, sizeof(line), "local buttons: Vol+ status, Vol- devices, Power quiet (%zu input event nodes)\n\n",
 			 input_count);
 		term_write_cstr(&term, line);
 	} else {

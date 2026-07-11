@@ -4,7 +4,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 source "$(dirname "$0")/phone-lock.sh"
 
-SERIAL="${ANDROID_SERIAL:-b6bd2252}"
+SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 IMAGE=""
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
@@ -16,9 +16,9 @@ RESTORE_AFTER_FASTBOOT="${RESTORE_AFTER_FASTBOOT:-recovery}"
 SET_ACTIVE_B=1
 START_FROM_PMOS_SSH=0
 FASTBOOT_CMD_TIMEOUT_SEC="${FASTBOOT_CMD_TIMEOUT_SEC:-15}"
-PMOS_USER="${PMOS_USER:-user}"
-PMOS_PASSWORD="${PMOS_PASSWORD:-147147}"
-PMOS_HOST="${PMOS_HOST:-172.16.42.1}"
+PMOS_USER="${PMOS_USER:-$HOTDOG_PMOS_USER}"
+PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
+PMOS_HOST="${PMOS_HOST:-$HOTDOG_PMOS_HOST}"
 PMOS_TELNET_PORTS="${PMOS_TELNET_PORTS:-23 2323}"
 PMOS_BOOT_ID_BEFORE=""
 START_RESCUE_WATCHER=0
@@ -278,7 +278,7 @@ adb_state() {
 }
 
 fastboot_present() {
-  fastboot devices -l > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$run_dir/fastboot-devices-last.txt" 2>&1 || true
   if [ -n "$SERIAL" ]; then
     awk -v serial="$SERIAL" 'NF >= 1 && $1 == serial { found=1 } END { exit found ? 0 : 1 }' "$run_dir/fastboot-devices-last.txt"
   else
@@ -751,7 +751,7 @@ main() {
   fi
 
   adb devices -l > "$run_dir/adb-final.txt" 2>&1 || true
-  fastboot devices -l > "$run_dir/fastboot-final.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$run_dir/fastboot-final.txt" 2>&1 || true
   log "Result: $result"
   log "Done: $run_dir"
 }

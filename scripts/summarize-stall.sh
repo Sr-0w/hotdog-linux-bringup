@@ -157,7 +157,7 @@ summarize() {
 
   printf '## Live state\n'
   adb devices -l 2>&1 | sed 's/^/adb: /' || true
-  fastboot devices -l 2>&1 | sed 's/^/fastboot: /' || true
+  hotdog_fastboot_devices 2>&1 | sed 's/^/fastboot: /' || true
   lsusb 2>/dev/null | grep -Ei '18d1|2a70|05c6' | sed 's/^/usb: /' || true
   if [ -d "$HOTDOG_LOG_ROOT/phone-operation.lock" ]; then
     printf 'phone_lock=present\n'
@@ -211,7 +211,7 @@ summarize() {
   if adb devices -l 2>/dev/null | awk 'NF >= 2 && $2 == "unauthorized" { found=1 } END { exit found ? 0 : 1 }'; then
     printf 'blocked_reason=ADB_UNAUTHORIZED\n'
     printf 'blocked_explanation=The host sees the phone as an ADB interface, but adbd has not authorized this host. Host-side adb reboot/shell/sideload are unavailable in this state.\n'
-  elif fastboot devices -l 2>/dev/null | awk 'NF >= 2 { found=1 } END { exit found ? 0 : 1 }'; then
+  elif hotdog_fastboot_devices 2>/dev/null | awk 'NF >= 2 { found=1 } END { exit found ? 0 : 1 }'; then
     printf 'blocked_reason=FASTBOOT_AVAILABLE_AUTOPILOT_SHOULD_ACT\n'
   elif lsusb 2>/dev/null | grep -qi '05c6:9008'; then
     printf 'blocked_reason=EDL_AVAILABLE_AUTOPILOT_SHOULD_ACT\n'

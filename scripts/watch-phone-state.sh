@@ -104,7 +104,7 @@ write_snapshot() {
 
   mkdir -p "$snapshot_dir"
   adb devices -l > "$snapshot_dir/adb-devices.txt" 2>&1 || true
-  fastboot devices -l > "$snapshot_dir/fastboot-devices.txt" 2>&1 || true
+  hotdog_fastboot_devices > "$snapshot_dir/fastboot-devices.txt" 2>&1 || true
   lsusb > "$snapshot_dir/lsusb.txt" 2>&1 || true
   read_dmesg | tail -260 > "$snapshot_dir/dmesg-usb-tail.txt"
   grep -Ei 'usb|dwc3|xhci|cdc|ncm|rndis|android|qualcomm|05c6|18d1|2a70|descriptor|enumerat|disconnect|reset' \
