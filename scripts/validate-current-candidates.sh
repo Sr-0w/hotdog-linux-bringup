@@ -16,7 +16,7 @@ Checks:
   - current r5 initramfs framebuffer helper is wait-only and has no RGB fill
   - selected Android DTB pack entry 12 contains the hotdog simplefb wiring
   - generated initramfs/rootfs helper scripts pass shell syntax checks
-  - pinned D1 direct artifacts, launcher, kernel-prefix guards, and ACM collector
+  - pinned D1/D1-pack artifacts, launchers, SSH identity guards, and ACM collector
 
 Optional historical RGB controls, validated only when explicitly named:
   fbcon-only, r4-fbwait, r4-ttykmsg, splash-ttykmsg, fbtest-pstore,
@@ -351,6 +351,29 @@ validate_direct_d1_artifacts_and_launcher() {
   log "D1 direct artifacts and launcher validated"
 }
 
+validate_direct_d1_pack_artifacts_and_launcher() {
+  local pack_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean"
+  local pack_avb="$pack_dir/boot.img"
+  local pack_raw="$pack_dir/boot-mainline617-direct-d1-pack.img"
+  local launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1-pack.sh"
+
+  check_sha "D1-pack full AVB image" "$pack_avb" "2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754"
+  check_sha "D1-pack raw validation image" "$pack_raw" "f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac"
+  check_size "D1-pack full AVB image" "$pack_avb" "100663296"
+  check_size "D1-pack raw validation image" "$pack_raw" "59924480"
+  require_text "D1-pack manifest mode" "$pack_dir/MANIFEST.md" 'DTB mode: `pack-entry-12`'
+  require_file "$launcher"
+  bash -n "$launcher"
+  require_text "D1-pack launcher pins AVB image" "$launcher" 'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean/boot.img"'
+  require_text "D1-pack launcher pins raw image" "$launcher" 'RAW_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-direct-pack-clean/boot-mainline617-direct-d1-pack.img"'
+  require_text "D1-pack launcher rejects overrides" "$launcher" "Unsupported option for pinned D1-pack test"
+  require_text "D1-pack launcher pins configured serial" "$launcher" '--serial "$HOTDOG_TARGET_SERIAL"'
+  require_text "D1-pack launcher requires bridge source" "$launcher" "--expect-source-kernel-prefix 4.14.357-openela-perf"
+  require_text "D1-pack launcher requires target wrapper" "$launcher" "--expect-cmdline-token rdinit=/hotdog-mainline-wrapper"
+  require_text "D1-pack launcher uses AVB image only" "$launcher" '--image "$BOOT_IMAGE"'
+  log "D1-pack artifacts and launcher validated"
+}
+
 validate_dtb_entry12() {
   local label="$1"
   local dtb="$2"
@@ -569,6 +592,7 @@ main() {
   validate_historical_rgb_control "$historical_rgb_control"
 
   validate_direct_d1_artifacts_and_launcher
+  validate_direct_d1_pack_artifacts_and_launcher
   validate_kernel_prefix_tester_guards
   validate_acm_collector
   validate_reproducible_builder_guards

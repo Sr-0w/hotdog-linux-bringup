@@ -27,6 +27,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 |---|---|---|
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Buildable | The tracked `linux-oneplus-hotdog-mainline617-k1` aport passes checksum verification, `apkbuild-lint`, pmbootstrap build, usrmerge postcheck, and emits the exact `440525...` base DTB. |
+| Direct-boot candidates | Prepared, not hardware-tested | Historical single-DTB D1 remains first. D1-pack is a single-variable DTB-selection fallback only after a recorded D1 result; the package-built candidate is a reproducibility control only after D1 validation. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -79,6 +80,13 @@ Display support can then be developed without losing the remote debug channel.
    success.
 3. Treat `fastboot boot` as non-authoritative on this ABL: valid controls return
    `Load Error`, while one D1 transfer reported `OKAY` without leaving fastboot.
-4. After D1, boot a DTB containing the hotdog-only PON reboot-mode properties
+4. Only after D1 has a recorded result, use
+   `test-mainline617-direct-d1-pack.sh` as the single-variable DTB-pack fallback.
+   This prepared image has not been tested on hardware.
+5. Only after D1 is validated, test the package-built single-DTB candidate
+   `2026-07-11-224500-mainline617-pmaports-k1-direct` as a reproducibility
+   control. Its kernel/raw/AVB SHA256 values are recorded in
+   [direct-boot.md](direct-boot.md); it has not been tested on hardware.
+6. After D1, boot a DTB containing the hotdog-only PON reboot-mode properties
    and verify whether Linux reboot-to-bootloader and reboot-to-recovery select
    the expected RESTART2 modes.

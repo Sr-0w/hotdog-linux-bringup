@@ -1,5 +1,8 @@
 # Roadmap
 
+The subsystem-by-subsystem experiments, acceptance criteria, and fallback
+conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md).
+
 ## Priority 0: reproducible mainline boot
 
 - validate a built-in Qualcomm APSS watchdog and reliable software reboot

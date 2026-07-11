@@ -159,6 +159,7 @@ runtime data and must remain local.
 - [Artifacts and reproducibility](docs/artifacts.md)
 - [Source trees](docs/sources.md)
 - [Roadmap](docs/roadmap.md)
+- [Hardware enablement roadmap](docs/hardware-roadmap.md)
 
 ## Contributing
 

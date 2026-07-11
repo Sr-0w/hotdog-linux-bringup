@@ -156,7 +156,8 @@ scrcpy_running_for_serial() {
 
 launch_scrcpy() {
   local serial="$1"
-  local log_file="$run_dir/scrcpy-$serial-$(date +%F-%H%M%S).log"
+  local log_file
+  log_file="$run_dir/scrcpy-$serial-$(date +%F-%H%M%S).log"
 
   if ! import_kde_env; then
     log "No KDE/Wayland/X11 session environment available yet; cannot launch scrcpy"
