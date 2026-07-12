@@ -337,7 +337,9 @@ case "${1:-}" in
       current-slot) value="b" ;;
       has-slot:boot) value="${MOCK_HAS_SLOT_BOOT:-yes}" ;;
       has-slot:dtbo) value="${MOCK_HAS_SLOT_DTBO:-yes}" ;;
+      partition-type:dtbo_a|partition-type:dtbo_b) value="${MOCK_DTBO_PARTITION_TYPE:-raw}" ;;
       partition-size:boot_b) value="0x6000000" ;;
+      partition-size:dtbo_a) value="${MOCK_DTBO_PARTITION_SIZE:-0x1800000}" ;;
       partition-size:dtbo_b)
         value="${MOCK_DTBO_PARTITION_SIZE:-0x1800000}"
         if [ -n "${MUTATE_DTBO_PATH:-}" ] && [ ! -e "$MOCK_STATE_DIR/dtbo-mutated" ]; then
@@ -2357,12 +2359,12 @@ test_dual_restore_dtbo_mutation_refused() {
 
 test_dual_dtbo_context_refused() {
   local variant="" case_dir="" status=0
-  for variant in slot size; do
+  for variant in type size; do
     case_dir="$(new_case "dual-context-$variant")"
     printf 'fastboot\n' > "$case_dir/state"
     set +e
-    if [ "$variant" = slot ]; then
-      run_dual_case "$case_dir" MOCK_HAS_SLOT_DTBO=no > "$case_dir/output.log" 2>&1
+    if [ "$variant" = type ]; then
+      run_dual_case "$case_dir" MOCK_DTBO_PARTITION_TYPE=unknown > "$case_dir/output.log" 2>&1
     else
       run_dual_case "$case_dir" MOCK_DTBO_PARTITION_SIZE=0x10 > "$case_dir/output.log" 2>&1
     fi
@@ -2372,7 +2374,7 @@ test_dual_dtbo_context_refused() {
     [ ! -s "$case_dir/fastboot-writes.log" ] || fail "bad dtbo $variant context reached a partition write"
     kill_case_watchers "$case_dir"
   done
-  pass "dtbo_b has-slot and capacity failures are refused before writes"
+  pass "dtbo_a/dtbo_b type and capacity failures are refused before writes"
 }
 
 test_dual_quorum_loss_each_candidate_transport() {
@@ -2453,6 +2455,11 @@ test_dual_source_handoff_runtime_lock() {
 if [ -n "${HOTDOG_OFFLINE_TEST_FILTER:-}" ]; then
   case "$HOTDOG_OFFLINE_TEST_FILTER" in
     dual-source-runtime-lock) test_dual_source_handoff_runtime_lock ;;
+    dual-dtbo-context) test_dual_dtbo_context_refused ;;
+    dual-candidate) test_dual_candidate_order_and_contract ;;
+    dual-rollback) test_dual_rollback_order_and_single_acceptance ;;
+    dual-restore-mutation) test_dual_restore_dtbo_mutation_refused ;;
+    dual-quorum) test_dual_quorum_loss_each_candidate_transport ;;
     *) fail "unknown HOTDOG_OFFLINE_TEST_FILTER: $HOTDOG_OFFLINE_TEST_FILTER" ;;
   esac
   log "All $PASS_COUNT filtered offline D1 safety tests passed"

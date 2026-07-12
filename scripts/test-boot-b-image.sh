@@ -994,6 +994,10 @@ validate_fastboot_restore_context() {
   local slot_base=""
   local current_slot=""
   local has_slot=""
+  local partition_type=""
+  local peer_partition_type=""
+  local peer_partition_size_raw=""
+  local peer_partition_size=""
   local is_userspace=""
   local partition_size_raw=""
   local partition_size=""
@@ -1026,11 +1030,22 @@ validate_fastboot_restore_context() {
     *) die "Invalid or missing current-slot before boot_b restore: ${current_slot:-missing}" 2 ;;
   esac
 
-  has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
-  case "$has_slot" in
-    yes|true|1) ;;
-    *) die "Fastboot does not attest that $slot_base is slotted (has-slot:$slot_base=${has_slot:-missing})" 2 ;;
-  esac
+  if [ "$partition_label" = "dtbo_b" ]; then
+    partition_type="$(normalize_value "$(get_fastboot_var partition-type:dtbo_b)")"
+    peer_partition_type="$(normalize_value "$(get_fastboot_var partition-type:dtbo_a)")"
+    [ "$partition_type" = raw ] && [ "$peer_partition_type" = raw ] ||
+      die "Fastboot does not attest raw dtbo_a/dtbo_b partitions (a=${peer_partition_type:-missing}, b=${partition_type:-missing})" 2
+    peer_partition_size_raw="$(get_fastboot_var partition-size:dtbo_a)"
+    peer_partition_size="$(parse_fastboot_size "$peer_partition_size_raw")" ||
+      die "Invalid or missing partition-size:dtbo_a: ${peer_partition_size_raw:-missing}" 2
+    [ "$peer_partition_size" -gt 0 ] || die "dtbo_a partition size is zero" 2
+  else
+    has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
+    case "$has_slot" in
+      yes|true|1) ;;
+      *) die "Fastboot does not attest that $slot_base is slotted (has-slot:$slot_base=${has_slot:-missing})" 2 ;;
+    esac
+  fi
 
   partition_size_raw="$(get_fastboot_var "partition-size:$partition_label")"
   partition_size="$(parse_fastboot_size "$partition_size_raw")" ||
