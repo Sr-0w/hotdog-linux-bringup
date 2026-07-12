@@ -159,8 +159,13 @@ continue unless both pinned postmarketOS filesystem UUIDs are visible.
 
 A repeat D6 cycle reached the downstream framebuffer console and then entered
 Qualcomm crashdump mode (`05c6:900e`) before ACM. A complete 8 GiB Sahara RAM
-capture was collected read-only. This makes D6 a timing-sensitive negative
-control rather than a stable downstream baseline.
+capture was collected read-only. Scanning the full 4 MiB ramoops reservation
+recovered the downstream console: `msm_watchdog` barked at 103.22 seconds,
+reported its last pet at 92.08 seconds, and then forced a watchdog bite. This
+makes D6 a timing-sensitive negative control rather than a stable downstream
+baseline. The scanner is implemented by
+[`extract-ramoops-console.py`](../../scripts/extract-ramoops-console.py) and is
+used automatically by the full Sahara capture helper.
 
 D7 retains the missing `vdd-hba-supply` fixup. Its K1
 bridge adds an always-on fixed-regulator provider for the downstream-only
