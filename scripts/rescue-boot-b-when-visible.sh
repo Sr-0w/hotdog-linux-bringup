@@ -424,6 +424,10 @@ validate_fastboot_restore_context() {
   local slot_base=""
   local current_slot=""
   local has_slot=""
+  local partition_type=""
+  local peer_partition_type=""
+  local peer_partition_size_raw=""
+  local peer_partition_size=""
   local is_userspace=""
   local partition_size_raw=""
   local partition_size=""
@@ -449,11 +453,29 @@ validate_fastboot_restore_context() {
     a|b) ;;
     *) log "REFUSING restore: current-slot is ${current_slot:-missing}"; return 1 ;;
   esac
-  has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
-  case "$has_slot" in
-    yes|true|1) ;;
-    *) log "REFUSING restore: has-slot:$slot_base is ${has_slot:-missing}"; return 1 ;;
-  esac
+  if [ "$partition_label" = "dtbo_b" ]; then
+    partition_type="$(normalize_value "$(get_fastboot_var partition-type:dtbo_b)")"
+    peer_partition_type="$(normalize_value "$(get_fastboot_var partition-type:dtbo_a)")"
+    if [ "$partition_type" != raw ] || [ "$peer_partition_type" != raw ]; then
+      log "REFUSING restore: raw dtbo_a/dtbo_b partitions are not attested"
+      return 1
+    fi
+    peer_partition_size_raw="$(get_fastboot_var partition-size:dtbo_a)"
+    peer_partition_size="$(parse_fastboot_size "$peer_partition_size_raw")" || {
+      log "REFUSING restore: invalid partition-size:dtbo_a"
+      return 1
+    }
+    [ "$peer_partition_size" -gt 0 ] || {
+      log "REFUSING restore: dtbo_a partition size is zero"
+      return 1
+    }
+  else
+    has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
+    case "$has_slot" in
+      yes|true|1) ;;
+      *) log "REFUSING restore: has-slot:$slot_base is ${has_slot:-missing}"; return 1 ;;
+    esac
+  fi
   partition_size_raw="$(get_fastboot_var "partition-size:$partition_label")"
   partition_size="$(parse_fastboot_size "$partition_size_raw")" || {
     log "REFUSING restore: invalid partition-size:$partition_label ${partition_size_raw:-missing}"
