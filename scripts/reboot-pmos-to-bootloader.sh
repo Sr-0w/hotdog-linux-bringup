@@ -12,6 +12,11 @@ HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 MODE="bootloader"
 WAIT_SEC="${WAIT_SEC:-120}"
 REBOOT_COMMAND_TIMEOUT_SEC="${REBOOT_COMMAND_TIMEOUT_SEC:-20}"
+EXPECTED_SOURCE_BOOT_ID=""
+EXPECTED_SOURCE_KERNEL=""
+EXPECTED_SOURCE_CMDLINE_TOKENS=()
+HELPER_EXPECTED_SHA256=""
+INHERITED_PHONE_LOCK_FD=""
 
 usage() {
   cat <<'USAGE'
@@ -30,6 +35,13 @@ Options:
   --wait SEC        Visibility timeout. Default: 120.
   --command-timeout SEC
                     Seconds to wait for SSH to close after RESTART2. Default: 20.
+  --expected-source-boot-id ID
+  --expected-source-kernel RELEASE
+  --expected-source-cmdline-token TOKEN
+  --helper-sha256 SHA256
+                    Pin and atomically revalidate the source identity/helper.
+  --phone-lock-fd FD
+                    Adopt an already-held phone-operation lock from the caller.
   -h, --help        Show this help.
 USAGE
 }
@@ -44,6 +56,11 @@ while [ "$#" -gt 0 ]; do
     --serial) SERIAL="$2"; shift ;;
     --wait) WAIT_SEC="$2"; shift ;;
     --command-timeout) REBOOT_COMMAND_TIMEOUT_SEC="$2"; shift ;;
+    --expected-source-boot-id) EXPECTED_SOURCE_BOOT_ID="$2"; shift ;;
+    --expected-source-kernel) EXPECTED_SOURCE_KERNEL="$2"; shift ;;
+    --expected-source-cmdline-token) EXPECTED_SOURCE_CMDLINE_TOKENS+=("$2"); shift ;;
+    --helper-sha256) HELPER_EXPECTED_SHA256="${2,,}"; shift ;;
+    --phone-lock-fd) INHERITED_PHONE_LOCK_FD="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -99,6 +116,8 @@ main() {
   local remote_helper="/tmp/hotdog-reboot-mode"
   local remote_command=""
   local deadline=0
+  local token=""
+  local checks=""
 
   [ -n "$PMOS_PASSWORD" ] || die "Set PMOS_PASSWORD or use --password" 2
   [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
@@ -116,13 +135,28 @@ main() {
   file "$HELPER" | grep -q 'ARM aarch64' || die "Helper is not an aarch64 executable" 2
 
   helper_sha="$(sha256sum "$HELPER" | awk '{ print $1 }')"
+  if [ -n "$HELPER_EXPECTED_SHA256" ]; then
+    [ "$helper_sha" = "$HELPER_EXPECTED_SHA256" ] || die "Helper SHA256 mismatch" 3
+  fi
+  [ -n "$EXPECTED_SOURCE_BOOT_ID" ] || die "--expected-source-boot-id is required" 2
+  [ -n "$EXPECTED_SOURCE_KERNEL" ] || die "--expected-source-kernel is required" 2
+  [ "${#EXPECTED_SOURCE_CMDLINE_TOKENS[@]}" -gt 0 ] || die "At least one --expected-source-cmdline-token is required" 2
   log "Run directory: $run_dir"
   log "Mode: $MODE"
   log "Helper sha256: $helper_sha"
 
-  phone_lock_acquire "reboot pmOS to $MODE" 0 || die "Could not acquire phone-operation lock" 3
+  if [ -n "$INHERITED_PHONE_LOCK_FD" ]; then
+    phone_lock_adopt_fd "$INHERITED_PHONE_LOCK_FD" ||
+      die "Could not adopt inherited phone-operation lock" 3
+  else
+    phone_lock_acquire "reboot pmOS to $MODE" 0 || die "Could not acquire phone-operation lock" 3
+  fi
   log "Requesting RESTART2($MODE)"
-  remote_command="set -e; cat > $(remote_quote "$remote_helper"); chmod 700 $(remote_quote "$remote_helper"); test \"\$(sha256sum $(remote_quote "$remote_helper") | awk '{ print \$1 }')\" = $(remote_quote "$helper_sha"); uname -r; sudo -n id; cat /proc/sys/kernel/random/boot_id; sudo -n $(remote_quote "$remote_helper") $(remote_quote "$MODE")"
+  checks="test \"\$(cat /proc/sys/kernel/random/boot_id)\" = $(remote_quote "$EXPECTED_SOURCE_BOOT_ID"); test \"\$(uname -r)\" = $(remote_quote "$EXPECTED_SOURCE_KERNEL"); cmdline=\$(cat /proc/cmdline);"
+  for token in "${EXPECTED_SOURCE_CMDLINE_TOKENS[@]}"; do
+    checks+=" case \" \$cmdline \" in *$(remote_quote " $token ")*) ;; *) exit 7 ;; esac;"
+  done
+  remote_command="set -e; cat > $(remote_quote "$remote_helper"); chmod 700 $(remote_quote "$remote_helper"); test \"\$(sha256sum $(remote_quote "$remote_helper") | awk '{ print \$1 }')\" = $(remote_quote "$helper_sha"); $checks sudo -n id; printf 'HOTDOG_BOOTLOADER_DISPATCH=%s\\n' $(remote_quote "$EXPECTED_SOURCE_BOOT_ID"); sudo -n $(remote_quote "$remote_helper") $(remote_quote "$MODE")"
   timeout "$REBOOT_COMMAND_TIMEOUT_SEC" sshpass -p "$PMOS_PASSWORD" ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile="$run_dir/known_hosts" \

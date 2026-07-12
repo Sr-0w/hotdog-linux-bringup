@@ -20,6 +20,9 @@ d1_pack_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150010-mainline617-
 d1_pack_avb_image="$d1_pack_dir/boot.img"
 d1_pack_raw_image="$d1_pack_dir/boot-mainline617-direct-d1-pack.img"
 d1_pack_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1-pack.sh"
+d3_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d3-dtbo-noop.sh"
+d3_candidate_dtbo="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"
+d3_restore_dtbo="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 boot_b_tester="$HOTDOG_ROOT/scripts/test-boot-b-image.sh"
 fastboot_boot_tester="$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh"
 acm_collector="$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh"
@@ -173,6 +176,16 @@ validate_d1_pack_launcher() {
   printf 'OK D1-pack launcher format\n'
 }
 
+validate_d3_launcher() {
+  bash -n "$d3_launcher"
+  require_text "D3 launcher pins dual transaction" "$d3_launcher" "--dual-partition-transaction"
+  require_text "D3 launcher rejects options" "$d3_launcher" "accepts no options"
+  require_text "D3 launcher pins source R5" "$d3_launcher" "--expect-source-kernel-prefix 4.14.357-openela-perf"
+  require_text "D3 launcher pins target mainline" "$d3_launcher" "--expect-kernel-prefix 6.17.0-sm8150"
+  require_text "D3 launcher pins both watchers" "$d3_launcher" "--start-rescue-watcher"
+  printf 'OK D3 dual-partition launcher format\n'
+}
+
 for file in \
   "$bridge_image" \
   "$bridge_apk" \
@@ -199,6 +212,9 @@ for file in \
   "$d1_pack_raw_image" \
   "$d1_pack_dir/MANIFEST.md" \
   "$d1_pack_launcher" \
+  "$d3_launcher" \
+  "$d3_candidate_dtbo" \
+  "$d3_restore_dtbo" \
   "$boot_b_tester" \
   "$fastboot_boot_tester" \
   "$acm_collector"; do
@@ -225,6 +241,10 @@ check_sha "$d1_pack_avb_image" "2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b124950
 check_sha "$d1_pack_raw_image" "f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac"
 check_size "$d1_pack_avb_image" "100663296"
 check_size "$d1_pack_raw_image" "59924480"
+check_sha "$d3_candidate_dtbo" "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+check_size "$d3_candidate_dtbo" "25165824"
+check_sha "$d3_restore_dtbo" "95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672"
+check_size "$d3_restore_dtbo" "25165824"
 require_text "D1-pack manifest mode" "$d1_pack_dir/MANIFEST.md" 'DTB mode: `pack-entry-12`'
 require_text "D1 SHA256SUMS raw entry" "$d1_dir/SHA256SUMS" "8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0  boot-mainline617-direct-d1.img"
 require_text "D1 SHA256SUMS AVB entry" "$d1_dir/SHA256SUMS" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994  boot.img"
@@ -235,6 +255,7 @@ require_text "D1 AVB info algorithm" "$d1_dir/avb-info.txt" "Algorithm:         
 require_text "D1 AVB info partition" "$d1_dir/avb-info.txt" "Partition Name:        boot"
 validate_d1_direct_launcher
 validate_d1_pack_launcher
+validate_d3_launcher
 validate_kernel_prefix_tester_guards
 validate_acm_collector
 
@@ -304,6 +325,7 @@ bash -n \
   "$HOTDOG_ROOT/scripts/test-mainline-via-kexec.sh" \
   "$HOTDOG_ROOT/scripts/test-next-mainline617-psci-entry-reset.sh" \
   "$HOTDOG_ROOT/scripts/test-mainline617-direct-d1.sh" \
+  "$HOTDOG_ROOT/scripts/test-mainline617-direct-d3-dtbo-noop.sh" \
   "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
   "$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh" \
   "$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh" \

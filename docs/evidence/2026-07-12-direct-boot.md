@@ -36,9 +36,9 @@ These observations do not identify the exact failure boundary. In particular,
 they do not prove whether control stopped in the bootloader handoff or during
 the earliest kernel execution.
 
-## Prepared D2 control
+## D2 result
 
-D2 is the next prepared hardware control. It retains the exact D1 kernel, DTB,
+D2 retained the exact D1 kernel, DTB,
 ramdisk, and command line while changing only the Android boot-image handoff
 from header version 2 with a separate DTB section to header version 0 with the
 DTB appended to the kernel payload.
@@ -54,7 +54,37 @@ DTB appended to the kernel payload.
 
 The pinned launcher is
 [`test-mainline617-direct-d2-header0.sh`](../../scripts/test-mainline617-direct-d2-header0.sh).
-D2 is prepared and validated offline; no D2 hardware result is claimed.
+D2 was written to `boot_b` and read back exactly before reboot. It returned to
+fastboot without an accepted mainline USB identity, matching the D1 result
+class. R5 was then restored and verified by fresh downstream SSH and exact
+`boot_b` readback. The tested Android header version and appended-DTB handoff
+therefore do not explain the direct-boot failure.
+
+## Prepared D3 DTBO control
+
+The stock DTBO image contains ten entries. Entry 5 applies successfully to the
+downstream DTB used by R5, but applying it to the K1 DTB fails with
+`FDT_ERR_NOTFOUND`. D3 preserves the DTBO table, entry identifiers, offsets,
+padding, and image size while replacing only entry 5 with a valid no-op
+overlay. Applying the replacement to K1 produces a byte-identical K1 DTB.
+
+| D3 item | SHA256 |
+|---|---|
+| No-op candidate `dtbo_b` | `339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb` |
+| Original restore `dtbo_b` | `95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672` |
+| Unchanged D1 `boot_b` | `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994` |
+| R5 restore `boot_b` | `23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50` |
+
+The pinned launcher is
+[`test-mainline617-direct-d3-dtbo-noop.sh`](../../scripts/test-mainline617-direct-d3-dtbo-noop.sh).
+The public
+[`build-d3-noop-dtbo.sh`](../../scripts/build-d3-noop-dtbo.sh) builder
+reconstructs the candidate from the exact stock dump and K1 DTB and refuses
+inputs or output that differ from the recorded hashes.
+It holds one phone-operation lock across the R5-to-fastboot handoff and writes
+candidate `dtbo_b` before D1 `boot_b`. Two independently attested rescue
+watchers restore original `dtbo_b` before R5 `boot_b`. D3 is offline-validated;
+no D3 hardware result is claimed here.
 
 ## Prepared watchdog control
 
@@ -79,13 +109,13 @@ fastboot USB within only three to four seconds.
 
 ## Offline validation
 
-The pinned D2 and D1-wdt launchers retain the attested-source checks, fail-closed
+The pinned D2, D3, and D1-wdt launchers retain the attested-source checks, fail-closed
 hash checks, prearmed R5 rescue watcher, minimum observation window, mainline
 kernel and command-line acceptance criteria, and non-success classification for
 a restored 4.14 bridge.
 
 The offline safety suite
 [`test-d1-safety-offline.sh`](../../scripts/test-d1-safety-offline.sh) passes
-all 30 checks. The current-candidate validator
+all 39 checks. The current-candidate validator
 [`validate-current-candidates.sh`](../../scripts/validate-current-candidates.sh)
-also passes with D2 and D1-wdt included.
+also passes with D2, D3, and D1-wdt included.
