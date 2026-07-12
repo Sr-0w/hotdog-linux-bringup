@@ -60,7 +60,7 @@ class. R5 was then restored and verified by fresh downstream SSH and exact
 `boot_b` readback. The tested Android header version and appended-DTB handoff
 therefore do not explain the direct-boot failure.
 
-## Prepared D3 DTBO control
+## D3 DTBO result
 
 The stock DTBO image contains ten entries. Entry 5 applies successfully to the
 downstream DTB used by R5, but applying it to the K1 DTB fails with
@@ -83,14 +83,21 @@ reconstructs the candidate from the exact stock dump and K1 DTB and refuses
 inputs or output that differ from the recorded hashes.
 It holds one phone-operation lock across the R5-to-fastboot handoff and writes
 candidate `dtbo_b` before D1 `boot_b`. Two independently attested rescue
-watchers restore original `dtbo_b` before R5 `boot_b`. D3 is offline-validated;
-no D3 hardware result is claimed here.
+watchers restore original `dtbo_b` before R5 `boot_b`.
 
-## Prepared watchdog control
+D3 was run on hardware. Fastboot accepted both candidate writes and returned
+about 32 seconds after reboot, without an accepted mainline SSH, ACM, NCM, or
+USB identity. This is materially later than the 3-4 second D1/D2 returns, so
+the no-op overlay changed the execution path but did not complete direct boot.
+Rollback restored original `dtbo_b` first and R5 `boot_b` second. A fresh R5
+boot produced `4.14.357-openela-perf`; full `dtbo_b` readback matched
+`95a111...`, and the exact 61,808,640-byte R5 `boot_b` prefix matched
+`23fa53...`. No pstore record was present after rollback.
 
-D1-wdt is ordered after D2. It keeps the D1 header-v2 layout, transformed DTB,
-ramdisk, command line, AVB policy, and rollback image, but substitutes the
-watchdog debug kernel.
+## Prepared D3-wdt control
+
+D3-wdt keeps the D3 no-op DTBO, transformed DTB, ramdisk, command line, AVB
+policy, and rollback images, but substitutes the watchdog debug kernel.
 
 | D1-wdt item | SHA256 |
 |---|---|
@@ -102,14 +109,14 @@ watchdog debug kernel.
 
 The debug kernel uses `CONFIG_QCOM_WDT=y` and
 `CONFIG_WATCHDOG_SYSFS=y`. The pinned launcher is
-[`test-mainline617-direct-d1-wdt.sh`](../../scripts/test-mainline617-direct-d1-wdt.sh).
-No D1-wdt hardware result is claimed. Watchdog initialization remains a
-secondary hypothesis, not an established cause: D1 and D1-pack returned to
-fastboot USB within only three to four seconds.
+[`test-mainline617-direct-d3-wdt.sh`](../../scripts/test-mainline617-direct-d3-wdt.sh).
+No D3-wdt hardware result is claimed yet. The 32-second D3 interval makes
+watchdog initialization a more useful single-variable control than running the
+same kernel with the known-incompatible stock overlay.
 
 ## Offline validation
 
-The pinned D2, D3, and D1-wdt launchers retain the attested-source checks, fail-closed
+The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed
 hash checks, prearmed R5 rescue watcher, minimum observation window, mainline
 kernel and command-line acceptance criteria, and non-success classification for
 a restored 4.14 bridge.

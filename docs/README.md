@@ -35,7 +35,7 @@ credentials, proprietary dumps, or workstation-specific paths.
   and the validated `20241212-r0` APK set.
 - [evidence/2026-07-12-direct-boot.md](evidence/2026-07-12-direct-boot.md):
   persistent D1 and D1-pack results, verified R5 rollback, and the exact
-  prepared D2 and D1-wdt controls.
+  D2 and D3 results, verified rollback, and the prepared D3-wdt control.
 - [evidence/2026-07-11-mainline-k1.md](evidence/2026-07-11-mainline-k1.md):
   primary public evidence for the hardware-observed K1 kexec cycle,
   including payload hashes, the kexec timeline, and direct-boot controls.

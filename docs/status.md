@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Mainline not observed | The R5 downstream bridge direct-boots and restores reliably. Exact D1, D1-pack, and D2 AVB writes returned to fastboot without mainline `bcdDevice=0617`, ACM, NCM, or a `900e` state. Header v2 versus v0, separate versus appended DTB, and DTB-pack entry 12 did not change the result. D3 is prepared to test the stock DTBO overlay mismatch. |
+| Persistent direct boot | Mainline not observed | D1, D1-pack, and D2 returned to fastboot in 3-4 seconds. D3 used a no-op for incompatible stock DTBO entry 5 and returned in about 32 seconds without a mainline identity. The timing change is progress but not a complete boot; D3-wdt is next. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -79,13 +79,11 @@ Display support can then be developed without losing the remote debug channel.
 2. Keep D1, D1-pack, and D2 classified as observed negative handoff results.
    All exact AVB writes returned to fastboot USB without an accepted mainline
    identity; the tested header and DTB placement variants did not change it.
-3. Run D3 with `test-mainline617-direct-d3-dtbo-noop.sh`. Stock DTBO entry 5
-   applies to the downstream DTB but fails against K1 with `FDT_ERR_NOTFOUND`.
-   D3 changes that entry to a no-op and uses a versioned two-partition rescue
-   contract that restores original `dtbo_b` before R5 `boot_b`.
-4. After D3, consider the prepared D1-wdt control. Its built-in Qualcomm
-   watchdog is a secondary hypothesis, not a proven cause of the three-to-four
-   second return to fastboot.
+3. Keep D3 classified as an observed negative result with a materially changed
+   handoff: it returned after about 32 seconds, restored both partitions, and
+   left no pstore record.
+4. Run D3-wdt next. It keeps the D3 no-op DTBO and changes only to the built-in
+   Qualcomm watchdog kernel; stock-DTBO D1-wdt is superseded.
 5. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.

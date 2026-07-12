@@ -7,12 +7,9 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- run D3 next: prevent stock DTBO entry 5 from failing against the K1 DTB while
-  keeping the D1 boot payload unchanged; D1, D1-pack, and D2 all returned to
-  fastboot without an observed mainline USB identity
-- run D1-wdt only after D3; the built-in watchdog remains a secondary
-  hypothesis because the observed return to fastboot took only three to four
-  seconds
+- run D3-wdt next: D3's no-op overlay changed the return-to-fastboot interval
+  from 3-4 seconds to about 32 seconds; keep that DTBO and change only to the
+  built-in Qualcomm watchdog kernel
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,

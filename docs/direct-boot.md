@@ -300,8 +300,10 @@ The D3 launcher pins candidate and restore hashes for both `dtbo_b` and
 `boot_b`, requires two version-3 rescue watcher contracts, and holds one
 inherited phone lock across the R5 reboot-to-bootloader transition and all
 candidate writes. Rollback order is original `dtbo_b`, R5 `boot_b`, slot B,
-then reboot. D3 has passed offline validation but has not yet been run on
-hardware.
+then reboot. On hardware, D3 returned to fastboot after about 32 seconds with
+no accepted mainline identity. The later return relative to D1/D2 proves that
+the no-op overlay changes the handoff, but it is not sufficient. Both restored
+partitions were verified from a fresh R5 boot and pstore was empty.
 
 ## D1 watchdog control
 
@@ -328,13 +330,14 @@ seconds.
 | D1 | Observed: exact K1 payload in persistent header v2 | Returned to fastboot in about three seconds without an accepted mainline USB identity. |
 | D1-pack | Observed: replace DTB-pack entry 12 | Returned to fastboot in about four seconds; the pack replacement is not sufficient. |
 | D2 | Observed: append the exact K1 DTB to Image in header v0 | Returned to fastboot; the alternate header and DTB placement are not sufficient. |
-| D3 | Prepared: replace incompatible stock DTBO entry 5 with a no-op | Does preventing the bootloader overlay failure allow the unchanged D1 payload to enter mainline? |
-| D1-wdt | Prepared after D3: substitute the built-in-watchdog kernel | Does watchdog initialization affect the early return, despite the short observed interval? |
+| D3 | Observed: replace incompatible stock DTBO entry 5 with a no-op | Returned to fastboot after about 32 seconds; later than D1/D2 but still no accepted mainline identity. |
+| D3-wdt | Prepared: keep D3 DTBO and substitute the built-in-watchdog kernel | Does watchdog initialization turn the longer D3 handoff into a complete boot? |
+| D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-D1, D1-pack, and D2 now have recorded negative results. D3 is next, followed
-by D1-wdt if needed. Keep the package-built control deferred until a direct handoff baseline
+D1, D1-pack, D2, and D3 now have recorded negative results. D3-wdt is next.
+Keep the package-built control deferred until a direct handoff baseline
 exists. Each candidate must change one handoff variable and retain the other
 known-good payload hashes.
 
