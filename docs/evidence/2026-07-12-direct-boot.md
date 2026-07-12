@@ -162,11 +162,21 @@ Qualcomm crashdump mode (`05c6:900e`) before ACM. A complete 8 GiB Sahara RAM
 capture was collected read-only. This makes D6 a timing-sensitive negative
 control rather than a stable downstream baseline.
 
-D7 is prepared offline to retain the missing `vdd-hba-supply` fixup. Its K1
+D7 retains the missing `vdd-hba-supply` fixup. Its K1
 bridge adds an always-on fixed-regulator provider for the downstream-only
 `ufs_phy_gdsc` symbol. The filtered D7 fragments 59 and 60 are structurally
 identical to the stock overlay fragments, and the result applies successfully
-to both downstream and bridged K1 base DTBs. D7 remains hardware-untested.
+to both downstream and bridged K1 base DTBs.
+
+The D7 hardware control booted unchanged R5 through to fresh SSH. The accepted
+identity was boot ID `fe700727-e7c3-4605-9881-b65e3b4d6daf`, kernel
+`4.14.357-openela-perf`, and slot B. A strict read-only partition check then
+matched R5 `boot_b` SHA256
+`23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50`
+and D7 `dtbo_b` SHA256
+`c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978`.
+This promotes D7 from an offline candidate to the validated downstream DTBO
+control for the next direct-mainline pairing.
 
 ## Offline validation
 
