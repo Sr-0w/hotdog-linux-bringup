@@ -7,9 +7,9 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- run D4-entry next: D3 and D3-wdt both returned after about 32 seconds, so use
-  a PSCI reset in the first `primary_entry` instructions to distinguish kernel
-  entry from a pre-entry bootloader timeout
+- run the downstream R5 + no-op DTBO control next; D3, D3-wdt, and D4-entry
+  all returned to fastboot in the same approximately 3.84-second raw USB
+  interval, so the replacement overlay itself must be validated independently
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,

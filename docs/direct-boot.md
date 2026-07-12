@@ -300,9 +300,8 @@ The D3 launcher pins candidate and restore hashes for both `dtbo_b` and
 `boot_b`, requires two version-3 rescue watcher contracts, and holds one
 inherited phone lock across the R5 reboot-to-bootloader transition and all
 candidate writes. Rollback order is original `dtbo_b`, R5 `boot_b`, slot B,
-then reboot. On hardware, D3 returned to fastboot after about 32 seconds with
-no accepted mainline identity. The later return relative to D1/D2 proves that
-the no-op overlay changes the handoff, but it is not sufficient. Both restored
+then reboot. On hardware, raw host USB showed D3 returning to fastboot after
+about 3.84 seconds with no accepted mainline identity. Both restored
 partitions were verified from a fresh R5 boot and pstore was empty.
 
 ## D1 watchdog control
@@ -330,14 +329,14 @@ seconds.
 | D1 | Observed: exact K1 payload in persistent header v2 | Returned to fastboot in about three seconds without an accepted mainline USB identity. |
 | D1-pack | Observed: replace DTB-pack entry 12 | Returned to fastboot in about four seconds; the pack replacement is not sufficient. |
 | D2 | Observed: append the exact K1 DTB to Image in header v0 | Returned to fastboot; the alternate header and DTB placement are not sufficient. |
-| D3 | Observed: replace incompatible stock DTBO entry 5 with a no-op | Returned to fastboot after about 32 seconds; later than D1/D2 but still no accepted mainline identity. |
-| D3-wdt | Observed: keep D3 DTBO and substitute the built-in-watchdog kernel | Returned after the same about 32 seconds; built-in watchdog does not change the boundary. |
-| D4-entry | Prepared: PSCI reset at the first `primary_entry` instructions | Does ABL actually enter the arm64 kernel? |
+| D3 | Observed: replace incompatible stock DTBO entry 5 with a no-op | Returned to fastboot after about 3.84 seconds without an accepted mainline identity. |
+| D3-wdt | Observed: keep D3 DTBO and substitute the built-in-watchdog kernel | Same approximately 3.84-second result. |
+| D4-entry | Observed: PSCI reset at the first `primary_entry` instructions | Same approximately 3.84-second result; no positive proof of kernel entry. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-D1, D1-pack, D2, D3, and D3-wdt now have recorded negative results. D4-entry is next.
+D1 through D4-entry have recorded negative results. The R5 + no-op DTBO control is next.
 Keep the package-built control deferred until a direct handoff baseline
 exists. Each candidate must change one handoff variable and retain the other
 known-good payload hashes.

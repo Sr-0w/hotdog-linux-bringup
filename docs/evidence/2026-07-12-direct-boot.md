@@ -86,9 +86,9 @@ candidate `dtbo_b` before D1 `boot_b`. Two independently attested rescue
 watchers restore original `dtbo_b` before R5 `boot_b`.
 
 D3 was run on hardware. Fastboot accepted both candidate writes and returned
-about 32 seconds after reboot, without an accepted mainline SSH, ACM, NCM, or
-USB identity. This is materially later than the 3-4 second D1/D2 returns, so
-the no-op overlay changed the execution path but did not complete direct boot.
+3.84 seconds after the raw host USB disconnect, without an accepted mainline
+SSH, ACM, NCM, or USB identity. The script reported the state later because it
+first re-attested both rescue watchers; that delay is not target boot time.
 Rollback restored original `dtbo_b` first and R5 `boot_b` second. A fresh R5
 boot produced `4.14.357-openela-perf`; full `dtbo_b` readback matched
 `95a111...`, and the exact 61,808,640-byte R5 `boot_b` prefix matched
@@ -110,8 +110,8 @@ policy, and rollback images, but substitutes the watchdog debug kernel.
 The debug kernel uses `CONFIG_QCOM_WDT=y` and
 `CONFIG_WATCHDOG_SYSFS=y`. The pinned launcher is
 [`test-mainline617-direct-d3-wdt.sh`](../../scripts/test-mainline617-direct-d3-wdt.sh).
-D3-wdt was run and returned to fastboot after the same approximately 32-second
-interval as D3. Original `dtbo_b` and R5 `boot_b` were restored and read back
+D3-wdt was run and returned to fastboot after the same approximately 3.84-second
+raw USB interval as D3. Original `dtbo_b` and R5 `boot_b` were restored and read back
 exactly; pstore remained empty. Built-in watchdog initialization therefore did
 not change the observed failure boundary.
 
@@ -119,9 +119,10 @@ not change the observed failure boundary.
 
 D4 keeps the D3 no-op DTBO and exact D1 ramdisk, DTB, command line, header, and
 AVB policy. Its kernel calls PSCI `SYSTEM_RESET` as the first operation in
-`primary_entry`. An immediate reset proves that the bootloader entered the
-kernel; another approximately 32-second return indicates failure before that
-entry point. The pinned AVB image is `06fe64e230f3b09f693d81500bd92a207badda8309e71375f77695a95b094607`.
+`primary_entry`. D4 produced the same 3.84-second raw USB interval and one slot
+retry decrement as D3. It therefore supplied no positive proof that
+`primary_entry` was reached. The pinned AVB image is
+`06fe64e230f3b09f693d81500bd92a207badda8309e71375f77695a95b094607`.
 
 ## Offline validation
 
