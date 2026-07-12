@@ -335,6 +335,7 @@ seconds.
 | D5 | Observed: filter stock entry 5 against K1 fixups | Applies to both DTBs and reaches the R5 telnet initramfs, but the rootfs mount does not complete. |
 | D6 | Observed: add K1 aliases for vendor UFS symbols before filtering | R5 exposes all UFS LUNs, NCM, and ACM; `pmos_continue_boot` does not reach SSH. |
 | D7 | Observed: retain the complete vendor UFS fragments with a K1 fixed-regulator GDSC bridge | Unchanged R5 reaches fresh SSH; exact readback confirms R5 `boot_b` and D7 `dtbo_b`. |
+| D8 | Prepared: pair D7 with the exact K1 payload validated through kexec | Changes only `boot_b` relative to the working R5+D7 control; rollback retains D7 and restores R5. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
