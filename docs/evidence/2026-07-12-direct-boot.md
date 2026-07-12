@@ -178,6 +178,12 @@ and D7 `dtbo_b` SHA256
 This promotes D7 from an offline candidate to the validated downstream DTBO
 control for the next direct-mainline pairing.
 
+The pinned next-step launcher is
+[`test-mainline617-direct-d8-d7-dtbo.sh`](../../scripts/test-mainline617-direct-d8-d7-dtbo.sh).
+It pairs D7 with the exact K1 boot payload already validated through kexec and
+restores R5+D7 on every non-success path. Relative to the accepted D7 hardware
+control, only `boot_b` changes.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed
