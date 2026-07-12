@@ -157,6 +157,17 @@ verified `RESTART2(bootloader)` fallback without requiring physical input. It
 also reruns the `super` loop hook after late UFS discovery and refuses to
 continue unless both pinned postmarketOS filesystem UUIDs are visible.
 
+A repeat D6 cycle reached the downstream framebuffer console and then entered
+Qualcomm crashdump mode (`05c6:900e`) before ACM. A complete 8 GiB Sahara RAM
+capture was collected read-only. This makes D6 a timing-sensitive negative
+control rather than a stable downstream baseline.
+
+D7 is prepared offline to retain the missing `vdd-hba-supply` fixup. Its K1
+bridge adds an always-on fixed-regulator provider for the downstream-only
+`ufs_phy_gdsc` symbol. The filtered D7 fragments 59 and 60 are structurally
+identical to the stock overlay fragments, and the result applies successfully
+to both downstream and bridged K1 base DTBs. D7 remains hardware-untested.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed

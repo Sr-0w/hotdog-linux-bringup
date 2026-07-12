@@ -6,6 +6,7 @@ STOCK_BASE_DTB=""
 K1_DTB=""
 OUT=""
 UFS_SYMBOL_BRIDGE=0
+UFS_GDSC_BRIDGE=0
 
 STOCK_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
 STOCK_BASE_DTB_SHA=44a22657c1dd751ba062060941af02758a7ae8a656e5cd4e8ac1f2a164c04ee9
@@ -18,14 +19,15 @@ SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 usage() {
   cat <<'USAGE'
 Usage: build-d5-filtered-dtbo.sh --stock-dtbo FILE --stock-base-dtb FILE \
-  --k1-dtb FILE --out DIR [--ufs-symbol-bridge]
+  --k1-dtb FILE --out DIR [--ufs-symbol-bridge | --ufs-gdsc-bridge]
 
 Build a stock-derived DTBO partition whose selected entry retains only overlay
 fragments and references that resolve against the pinned K1 mainline DTB. The
 filtered overlay must apply successfully to both downstream and mainline base
 DTBs. With --ufs-symbol-bridge, the K1 DTB receives vendor-compatible aliases
-for the UFS controller, PHY, and their regulators before filtering. No phone
-command is executed.
+for the UFS controller, PHY, and their regulators before filtering. With
+--ufs-gdsc-bridge, it also receives an always-on fixed regulator for the vendor
+UFS PHY GDSC supply. No phone command is executed.
 USAGE
 }
 
@@ -49,6 +51,7 @@ while [ "$#" -gt 0 ]; do
     --k1-dtb) K1_DTB="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --ufs-symbol-bridge) UFS_SYMBOL_BRIDGE=1; shift ;;
+    --ufs-gdsc-bridge) UFS_SYMBOL_BRIDGE=1; UFS_GDSC_BRIDGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1" 2 ;;
   esac
@@ -91,6 +94,19 @@ pm8150_l9 vreg_l9a_1p2
 pm8150_s4 vreg_s4a_1p8
 pm8150l_s8 vreg_s8c_1p3
 EOF
+  if [ "$UFS_GDSC_BRIDGE" -eq 1 ]; then
+    VARIANT="d7-ufs-gdsc-bridge-filtered"
+    fdtput -c "$FILTER_BASE" /ufs-phy-gdsc-supply
+    fdtput -t s "$FILTER_BASE" /ufs-phy-gdsc-supply compatible regulator-fixed
+    fdtput -t s "$FILTER_BASE" /ufs-phy-gdsc-supply regulator-name ufs-phy-gdsc-bridge
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply regulator-min-microvolt 1
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply regulator-max-microvolt 1
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply regulator-always-on
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply regulator-boot-on
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply phandle 1000
+    fdtput -t x "$FILTER_BASE" /ufs-phy-gdsc-supply linux,phandle 1000
+    fdtput -t s "$FILTER_BASE" /__symbols__ ufs_phy_gdsc /ufs-phy-gdsc-supply
+  fi
 fi
 python3 "$SCRIPT_DIR/filter-dtbo-overlay.py" \
   --overlay "$OUT/components/filtered-entry5.dtbo" --base "$FILTER_BASE" \

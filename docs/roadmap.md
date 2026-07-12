@@ -13,6 +13,8 @@ The packaging and submission gates are tracked separately in the
   continuation so a failed rootfs transition remains remotely recoverable
 - rerun the `super` loop hook after late UFS discovery and require both pinned
   postmarketOS filesystem UUIDs before leaving the ACM shell
+- validate D7 first with R5; its complete vendor UFS fragments must produce a
+  fresh downstream SSH identity before the same DTBO is paired with mainline
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,

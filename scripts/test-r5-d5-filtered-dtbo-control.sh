@@ -30,8 +30,14 @@ case "${1:-}" in
     VARIANT_LABEL="D6 UFS-symbol-bridge filtered"
     shift
     ;;
+  --d7-ufs-gdsc-bridge)
+    CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
+    CANDIDATE_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
+    VARIANT_LABEL="D7 UFS-GDSC-symbol-bridge filtered"
+    shift
+    ;;
   -h|--help)
-  printf '%s\n' 'Usage: test-r5-d5-filtered-dtbo-control.sh [--d6-ufs-bridge]'
+  printf '%s\n' 'Usage: test-r5-d5-filtered-dtbo-control.sh [--d6-ufs-bridge | --d7-ufs-gdsc-bridge]'
   printf '%s\n' 'Pinned control: known-good R5 boot_b with a stock-derived filtered dtbo_b.'
   exit 0
     ;;
