@@ -7,9 +7,9 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- run the downstream R5 + no-op DTBO control next; D3, D3-wdt, and D4-entry
-  all returned to fastboot in the same approximately 3.84-second raw USB
-  interval, so the replacement overlay itself must be validated independently
+- build a stock-preserving filtered overlay next; the downstream R5 + no-op
+  DTBO control also returned to fastboot, proving that a zero-fragment baseline
+  is invalid. Require offline application to both downstream and K1 base DTBs
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
