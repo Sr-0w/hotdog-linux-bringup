@@ -65,7 +65,8 @@ printf '\n' >> command.txt
 
 find memory -maxdepth 1 -type f -printf '%f\t%s\n' | sort > memory-files.tsv
 stat -c '%n %s bytes' memory/DDRCS*.BIN 2>/dev/null | tee ddr-files.txt
-if python3 "$HOTDOG_ROOT/scripts/extract-ramoops-console.py" memory/DDRCS0_0.BIN > ramoops-console.txt; then
+if python3 "$HOTDOG_ROOT/scripts/extract-ramoops-console.py" \
+  --scan-reservation memory/DDRCS0_0.BIN > ramoops-console.txt; then
   log "ramoops console extracted: $run_dir/ramoops-console.txt"
   tail -n 80 ramoops-console.txt | tee ramoops-console-tail.txt
 else
