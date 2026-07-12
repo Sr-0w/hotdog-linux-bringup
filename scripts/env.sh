@@ -30,6 +30,11 @@ export HOTDOG_STABLE_PMOS_BOOT_B HOTDOG_FASTBOOT_USB_IDS
 export HOTDOG_TARGET_SERIAL HOTDOG_PMOS_HOST HOTDOG_PMOS_USER HOTDOG_PMOS_PASSWORD
 
 hotdog_require_target_serial() {
+	if [ "${ANDROID_SERIAL+x}" = x ] && [ "$ANDROID_SERIAL" != "$HOTDOG_TARGET_SERIAL" ]; then
+		printf 'ANDROID_SERIAL (%s) differs from HOTDOG_TARGET_SERIAL (%s); refusing ambiguous target identity.\n' \
+			"${ANDROID_SERIAL:-<empty>}" "${HOTDOG_TARGET_SERIAL:-<empty>}" >&2
+		return 2
+	fi
 	[ -n "$HOTDOG_TARGET_SERIAL" ] || {
 		printf 'Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL before this operation.\n' >&2
 		return 2

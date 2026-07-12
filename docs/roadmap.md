@@ -2,6 +2,8 @@
 
 The subsystem-by-subsystem experiments, acceptance criteria, and fallback
 conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md).
+The packaging and submission gates are tracked separately in the
+[pmaports upstreaming plan](pmaports-upstreaming.md).
 
 ## Priority 0: reproducible mainline boot
 
@@ -10,7 +12,9 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
   patch adds `mode-bootloader = <2>` and `mode-recovery = <1>` and has only
   been validated offline so far
 - test the exact kexec-validated payload in the working header-v2 boot contract
-- move the validated device changes into the pmaports package flow
+- validate a direct image generated from the exact r4 package payload; r4 is
+  byte-reproducible in the tested pmbootstrap environment, but its direct image
+  and hardware behavior remain unvalidated
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
 - restore the complete RAM map
@@ -26,7 +30,7 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 
 ## Priority 2: connectivity
 
-- package and validate Wi-Fi firmware
+- runtime-validate the packaged Wi-Fi firmware
 - enable Bluetooth
 - validate USB host mode and common docks
 - bring up QRTR/QMI and modem services without compromising recovery access

@@ -22,8 +22,11 @@ same payload to Linux correctly.
 
 The kernel tree is based on commit
 `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`. The payload hashes are the
-historical experiment identity. A separate package-built kernel now exists as
-an offline reproducibility control, but it has not been tested on hardware.
+historical experiment identity. The current r4 package builds offline with a
+built-in Qualcomm watchdog and installs the transformed `cf63ae...` DTB. Two
+builds are byte-identical in the tested pmbootstrap environment, but the r4
+payload has not been tested on hardware and no cross-toolchain reproducibility
+claim is made.
 
 The source and generation path is:
 
@@ -73,6 +76,11 @@ image SHA256 is
 its AVB copy SHA256 is
 `74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d`.
 It is not the pinned D1 persistent test.
+
+This standalone debug payload is distinct from the package path. The debug
+payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the current r4 package keeps
+that option disabled and changes only `CONFIG_QCOM_WDT=m` to
+`CONFIG_QCOM_WDT=y` relative to the historical K1 config.
 
 An additional control uses the same watchdog config with the unmodified
 upstream EFI-compatible ARM64 header. Its Image SHA256 is
@@ -164,7 +172,7 @@ resolve the last archive member with
 reject any effective RGB fill implementation. The observed RGB frames came
 from an earlier downstream 4.14 bridge, not from mainline.
 
-## Package-built reproducibility control
+## Historical r0 package-built reproducibility control
 
 The offline candidate
 `images/pmos-experiments/2026-07-11-224500-mainline617-pmaports-k1-direct`
@@ -183,6 +191,27 @@ baseline has been validated on hardware. It must not replace or precede D1,
 because doing so would mix bootloader-handoff validation with the change from
 the historical K1 Image to the package-built kernel. It has not been tested on
 hardware.
+
+The r3 package supersedes r0 as an intermediate package result. It builds
+`qcom-wdt` into the kernel and replaces the installed hotdog DTB with
+`cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`.
+Across two r3 builds, the DTB, modules, and `modules.builtin` are identical,
+while the APK metadata varies and `vmlinuz` differs by 29 bytes from the GNU
+build ID and three initramfs CPIO mtimes. r3 is therefore not byte-reproducible.
+
+The current r4 fixes the archive epoch at `1761609785`. Two builds in the
+tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs,
+SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`.
+Their `28,901,384`-byte `boot/vmlinuz` has SHA256
+`7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`,
+and their installed hotdog DTB has SHA256
+`cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`.
+The exact payload inventory is recorded in
+[the K1 package evidence](evidence/k1-kernel-package.md). This proves
+same-environment package reproducibility only, not hardware behavior or
+cross-toolchain reproducibility. A distinct r4 direct-boot candidate and its
+raw-image and AVB hashes remain to be recorded; none of the r0 hashes above
+identify r3 or r4.
 
 ## DTB-pack control
 
@@ -226,7 +255,7 @@ The D1-pack image has not been tested on hardware.
 | K1 | Load the pinned mainline payload by kexec | Does the payload itself still work? |
 | D1 | Flash the pinned AVB header-v2 image to `boot_b` with `test-mainline617-direct-d1.sh` | Does the exact K1 payload survive the persistent bootloader handoff? |
 | D1-pack | After D1 has a recorded result, run the pinned DTB-pack launcher with entry 12 replaced | Does the bootloader require Android DTB selection? |
-| D1-pkg | After D1 is validated, use the package-built kernel in the otherwise identical single-DTB image | Does the pmaports-built kernel reproduce the D1 result? |
+| D1-pkg | After D1 has a recorded result, use the hash-recorded r4 package kernel and installed DTB in the otherwise identical single-DTB image | Does the pmaports-built payload reproduce the D1 result? |
 | D2 | Append the K1 DTB to Image in header v0 | Is separate-DTB handoff the failure? |
 | D3 | Compare minimal and full command lines | Are injected Android bootargs involved? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -237,11 +266,17 @@ one handoff variable and retain the other known-good payload hashes.
 
 ## pmaports integration target
 
-The D1 contract maps to `deviceinfo_header_version="2"`,
-`deviceinfo_append_dtb="false"`, a 4096-byte page, and the base, kernel,
-ramdisk, tags, and DTB offsets listed above. The final device package must use
+The D1 contract maps to `deviceinfo_header_version="2"`, a 4096-byte page, and
+the base, kernel, ramdisk, tags, and DTB offsets listed above. Kernel arguments
+are supplied by `kernel-cmdline.conf`, currently containing
+`clk_ignore_unused`, rather than the deprecated `deviceinfo_kernel_cmdline`
+field. The final device package must use
 `deviceinfo_flash_fastboot_partition_rootfs="super"` rather than the legacy
 `deviceinfo_flash_fastboot_partition_system` spelling.
+
+The migrated metadata passes `dint` as a structural check. That result does
+not establish display support: `deviceinfo_drm` must remain absent until the
+mainline DRM, DSI, panel, and userspace path is validated at runtime.
 
 The downstream 4.14 bridge belongs only in the downstream/rescue package path.
 The publishable testing package must consume the maintained SM8150 mainline
@@ -254,11 +289,12 @@ control. The raw D1 artifact is not the persistent test image and must not be
 flashed. The persistent downstream no-paint bridge remains the recovery image
 and the pinned launcher restores it whenever the recovery path appears.
 
-The K1-compatible Qualcomm watchdog module has been validated after mainline
-userspace, but `RESTART2(bootloader)` still falls back to normal boot without
-the missing boot-mode mapping. The D1 persistent test therefore depends on the
-prearmed rescue watcher and restore image rather than on mainline rebooting
-itself cleanly into fastboot.
+The historical K1-compatible Qualcomm watchdog module was validated after
+mainline userspace, but that result does not validate the r4 built-in driver.
+`RESTART2(bootloader)` still falls back to normal boot with the observed
+`cf63ae...` DTB, which lacks the PON boot-mode mapping. The D1 persistent test
+therefore depends on the prearmed rescue watcher and restore image rather than
+on mainline rebooting itself cleanly into fastboot.
 
 ## Completion criteria
 

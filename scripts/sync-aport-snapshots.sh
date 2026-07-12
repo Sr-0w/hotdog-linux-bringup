@@ -85,9 +85,9 @@ allowed_snapshot_file() {
 	case "$rel:$path" in
 		device/testing/device-oneplus-hotdog:APKBUILD | \
 		device/testing/device-oneplus-hotdog:deviceinfo | \
+		device/testing/device-oneplus-hotdog:kernel-cmdline.conf | \
 		device/testing/device-oneplus-hotdog:30-initramfs-firmware.files | \
 		device/testing/device-oneplus-hotdog:51-qcom-sm8150.lua | \
-		device/testing/device-oneplus-hotdog:modules-initfs | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
@@ -106,7 +106,8 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0001-arm64-hotdog-use-android-entry-layout.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0002-input-fts-fix-strict-prototypes.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0003-power-supply-idtp9418-include-gpio-consumer.patch | \
-		device/testing/linux-oneplus-hotdog-mainline617-k1:0004-arm64-dts-qcom-add-oneplus-hotdog.patch)
+		device/testing/linux-oneplus-hotdog-mainline617-k1:0004-arm64-dts-qcom-add-oneplus-hotdog.patch | \
+		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh)
 			return 0
 			;;
 		*)

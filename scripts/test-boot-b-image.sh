@@ -8,7 +8,9 @@ source "$(dirname "$0")/phone-lock.sh"
 
 SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 IMAGE=""
+IMAGE_EXPECTED_SHA256=""
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
+RESTORE_IMAGE_EXPECTED_SHA256=""
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
 REQUIRE_FASTBOOT_UNLOCKED=1
 BOOT_WAIT_SEC="${BOOT_WAIT_SEC:-240}"
@@ -32,14 +34,29 @@ EXPECT_CMDLINE_TOKENS=()
 PMOS_PROBE_BOOT_ID=""
 PMOS_PROBE_KERNEL=""
 PMOS_PROBE_CMDLINE=""
+PMOS_PROBE_ATOMIC_ACKED=0
 STRICT_SSH_EXPECTATION=0
 RESTORE_IMAGE_SHA256=""
 START_RESCUE_WATCHER=0
 RESCUE_WATCHER_TIMEOUT_SEC="${RESCUE_WATCHER_TIMEOUT_SEC:-21600}"
 RESCUE_WATCHER_POLL_SEC="${RESCUE_WATCHER_POLL_SEC:-5}"
 RESCUE_WATCHER_READY_TIMEOUT_SEC="${RESCUE_WATCHER_READY_TIMEOUT_SEC:-10}"
-RESCUE_WATCHER_PID=""
+declare -a RESCUE_WATCHER_PIDS=("" "")
+declare -a RESCUE_WATCHER_STARTTIMES=("" "")
+declare -a RESCUE_WATCHER_NONCES=("" "")
+declare -a RESCUE_WATCHER_READY_FILES=("" "")
+declare -a RESCUE_WATCHER_CHALLENGE_FILES=("" "")
+declare -a RESCUE_WATCHER_ACK_FILES=("" "")
+declare -a RESCUE_WATCHER_SCRIPT_PATHS=("" "")
 KEEP_RESCUE_WATCHER=0
+BOOT_B_MAY_BE_DIRTY=0
+RESTORE_READBACK_VERIFIED=0
+STRICT_MAINLINE_SUCCESS_ACKED=0
+REQUIRE_DIRTY_SURVIVAL=0
+CLEANUP_RUNNING=0
+ACTIVE_TRANSPORT_PID=""
+FLASH_BOOT_B_SSH_HELPER="${HOTDOG_FLASH_BOOT_B_SSH_HELPER:-$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh}"
+RESCUE_WATCHER_HELPER="${HOTDOG_RESCUE_WATCHER_HELPER:-$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh}"
 
 usage() {
   cat <<'USAGE'
@@ -51,7 +68,10 @@ This script does not flash super, dtbo, vbmeta, recovery, or any other partition
 
 Options:
   --image FILE           Boot image to flash to boot_b.
+  --image-sha256 SHA256  Require this exact image hash through the final writer.
   --restore-boot-b FILE  Restore boot_b to FILE if fastboot returns.
+  --restore-boot-b-sha256 SHA256
+                         Require this exact restore hash through every fallback.
   --serial SERIAL        Restrict adb/fastboot commands to SERIAL.
   --expected-product STR Space-separated fastboot products. Default: "msmnile hotdog".
   --allow-locked         Do not fail early if fastboot reports locked.
@@ -78,16 +98,27 @@ Options:
   --poll SEC             Poll interval. Default: 2.
   --fastboot-timeout SEC Seconds to allow individual fastboot getvar/reboot
                           commands before treating them as failed. Default: 15.
-  --start-rescue-watcher  Start a companion rescue watcher. With --from-pmos-ssh,
-                         it is prearmed after a healthy source probe and before
-                         flashing; otherwise it starts after reboot. If the test
-                         times out without a USB recovery path, it is left running.
+  --start-rescue-watcher  Start two independent companion rescue watchers. Both
+                         are prearmed and attested before any boot_b write.
+                         If the test times out without a USB recovery path, it is
+                         left running.
+                         A strict mainline success intentionally keeps D1 in
+                         boot_b and stops the watcher only after watchdog ACK.
+  --require-dirty-survival
+                         Pin fail-closed dirty handling even if future caller
+                         options change. Requires --start-rescue-watcher.
+                         D1 launchers always set both options.
   --rescue-watch-timeout SEC
                          Companion rescue watcher timeout. Default: 21600.
   --rescue-watch-poll SEC
                          Companion rescue watcher poll interval. Default: 5.
   -h, --help             Show this help.
 USAGE
+
+  printf '%s\n' \
+    'Legacy generic calls without a watcher, strict SSH expectations, or' \
+    '--require-dirty-survival retain their historical result status. Such a' \
+    'success classifies the observed boot only; it never claims boot_b is clean.'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -95,6 +126,11 @@ while [ "$#" -gt 0 ]; do
     --image)
       [ "$#" -ge 2 ] || { echo "Missing value for --image" >&2; exit 2; }
       IMAGE="$2"
+      shift
+      ;;
+    --image-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --image-sha256" >&2; exit 2; }
+      IMAGE_EXPECTED_SHA256="${2,,}"
       shift
       ;;
     --serial)
@@ -106,6 +142,11 @@ while [ "$#" -gt 0 ]; do
     --restore-boot-b)
       [ "$#" -ge 2 ] || { echo "Missing value for --restore-boot-b" >&2; exit 2; }
       RESTORE_IMAGE="$2"
+      shift
+      ;;
+    --restore-boot-b-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-boot-b-sha256" >&2; exit 2; }
+      RESTORE_IMAGE_EXPECTED_SHA256="${2,,}"
       shift
       ;;
     --expected-product)
@@ -173,6 +214,9 @@ while [ "$#" -gt 0 ]; do
     --start-rescue-watcher)
       START_RESCUE_WATCHER=1
       ;;
+    --require-dirty-survival)
+      REQUIRE_DIRTY_SURVIVAL=1
+      ;;
     --rescue-watch-timeout)
       [ "$#" -ge 2 ] || { echo "Missing value for --rescue-watch-timeout" >&2; exit 2; }
       RESCUE_WATCHER_TIMEOUT_SEC="$2"
@@ -211,14 +255,62 @@ die() {
 }
 
 cleanup() {
+  local status=$?
+
+  [ "${CLEANUP_RUNNING:-0}" -eq 0 ] || return "$status"
+  CLEANUP_RUNNING=1
+  trap - ERR INT TERM EXIT
+
+  if [[ "${ACTIVE_TRANSPORT_PID:-}" =~ ^[0-9]+$ ]]; then
+    log "Terminating active transport group during cleanup: $ACTIVE_TRANSPORT_PID"
+    terminate_transport_group "$ACTIVE_TRANSPORT_PID"
+  fi
+
+  if rescue_watcher_must_survive; then
+    KEEP_RESCUE_WATCHER=1
+    if ! ensure_rescue_watcher_alive "cleanup after possible boot_b write"; then
+      log "CRITICAL: boot_b may be dirty and the rescue watcher could not be rearmed"
+    fi
+  fi
+
   if [ "${KEEP_RESCUE_WATCHER:-0}" -eq 0 ]; then
     stop_rescue_watcher || true
-  elif [ -n "${RESCUE_WATCHER_PID:-}" ]; then
-    log "Leaving companion rescue watcher running: PID $RESCUE_WATCHER_PID"
+  elif rescue_watcher_alive; then
+    log "Leaving companion rescue watcher pair running: PIDs ${RESCUE_WATCHER_PIDS[*]}"
+  else
+    log "CRITICAL: requested rescue watcher preservation, but no live watcher is available"
   fi
   phone_lock_release || true
+  return "$status"
 }
 trap cleanup EXIT
+
+on_signal() {
+  local signal_name="$1"
+  local status="$2"
+
+  if rescue_watcher_must_survive; then
+    KEEP_RESCUE_WATCHER=1
+  fi
+  log "Interrupted by $signal_name"
+  exit "$status"
+}
+
+on_err() {
+  local status=$?
+  local line="$1"
+  local command="$2"
+
+  if rescue_watcher_must_survive; then
+    KEEP_RESCUE_WATCHER=1
+  fi
+  log "ERROR: command failed near line $line: $command (exit $status)"
+  return "$status"
+}
+
+trap 'on_signal INT 130' INT
+trap 'on_signal TERM 143' TERM
+trap 'on_err "$LINENO" "$BASH_COMMAND"' ERR
 
 validate_seconds() {
   local name="$1"
@@ -244,95 +336,403 @@ fastboot_do() {
   fi
 }
 
-start_rescue_watcher() {
-  local wrapper_log="$run_dir/companion-rescue-watcher.log"
-  local wrapper_err="$run_dir/companion-rescue-watcher.err"
-  local pidfile="$run_dir/companion-rescue-watcher.pid"
-  local ready_file="$run_dir/companion-rescue-watcher.ready"
+random_hex_256() {
+  od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]'
+}
+
+process_starttime() {
+  local pid="$1"
+  local stat_line=""
+  local remainder=""
+  local -a fields=()
+
+  [ -r "/proc/$pid/stat" ] || return 1
+  stat_line="$(< "/proc/$pid/stat")"
+  remainder="${stat_line##*) }"
+  read -r -a fields <<< "$remainder"
+  [ "${#fields[@]}" -ge 20 ] || return 1
+  printf '%s\n' "${fields[19]}"
+}
+
+process_cmdline_has_token() {
+  local pid="$1"
+  local expected="$2"
+  local token=""
+
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  while IFS= read -r -d '' token; do
+    [ "$token" = "$expected" ] && return 0
+  done < "/proc/$pid/cmdline"
+  return 1
+}
+
+watcher_ready_expected() {
+  local index="$1"
+
+  printf 'contract_version=2\n'
+  printf 'pid=%s\n' "${RESCUE_WATCHER_PIDS[$index]}"
+  printf 'starttime=%s\n' "${RESCUE_WATCHER_STARTTIMES[$index]}"
+  printf 'serial=%s\n' "$SERIAL"
+  printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+  printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_SHA256"
+  printf 'boot_b_only=1\n'
+  printf 'restore_dtbo_image=none\n'
+  printf 'restore_dtbo_sha256=none\n'
+  printf 'nonce=%s\n' "${RESCUE_WATCHER_NONCES[$index]}"
+  printf 'watcher_script=%s\n' "${RESCUE_WATCHER_SCRIPT_PATHS[$index]}"
+  printf 'challenge_file=%s\n' "${RESCUE_WATCHER_CHALLENGE_FILES[$index]}"
+  printf 'ack_file=%s\n' "${RESCUE_WATCHER_ACK_FILES[$index]}"
+}
+
+rescue_watcher_process_identity_valid() {
+  local index="$1"
+  local actual_starttime=""
+  local pid="${RESCUE_WATCHER_PIDS[$index]:-}"
+
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  [[ "${RESCUE_WATCHER_STARTTIMES[$index]}" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  actual_starttime="$(process_starttime "$pid")" || return 1
+  [ "$actual_starttime" = "${RESCUE_WATCHER_STARTTIMES[$index]}" ] || return 1
+  process_cmdline_has_token "$pid" "${RESCUE_WATCHER_SCRIPT_PATHS[$index]}" || return 1
+  process_cmdline_has_token "$pid" --contract-nonce || return 1
+  process_cmdline_has_token "$pid" "${RESCUE_WATCHER_NONCES[$index]}" || return 1
+  process_cmdline_has_token "$pid" --serial || return 1
+  process_cmdline_has_token "$pid" "$SERIAL" || return 1
+  process_cmdline_has_token "$pid" --restore-boot-b || return 1
+  process_cmdline_has_token "$pid" "$RESTORE_IMAGE" || return 1
+  process_cmdline_has_token "$pid" --restore-boot-b-sha256 || return 1
+  process_cmdline_has_token "$pid" "$RESTORE_IMAGE_SHA256" || return 1
+  process_cmdline_has_token "$pid" --boot-b-only || return 1
+  ! process_cmdline_has_token "$pid" --restore-dtbo-b || return 1
+  process_cmdline_has_token "$pid" --ready-file || return 1
+  process_cmdline_has_token "$pid" "${RESCUE_WATCHER_READY_FILES[$index]}" || return 1
+  process_cmdline_has_token "$pid" --contract-challenge-file || return 1
+  process_cmdline_has_token "$pid" "${RESCUE_WATCHER_CHALLENGE_FILES[$index]}" || return 1
+  process_cmdline_has_token "$pid" --contract-ack-file || return 1
+  process_cmdline_has_token "$pid" "${RESCUE_WATCHER_ACK_FILES[$index]}" || return 1
+}
+
+rescue_watcher_contract_static_valid() {
+  local index="$1"
+  local actual=""
+  local expected=""
+  local ready_file="${RESCUE_WATCHER_READY_FILES[$index]}"
+
+  [ -r "$ready_file" ] || return 1
+  rescue_watcher_process_identity_valid "$index" || return 1
+  actual="$(< "$ready_file")"
+  expected="$(watcher_ready_expected "$index")"
+  [ "$actual" = "$expected" ]
+}
+
+challenge_rescue_watcher() {
+  local index="$1"
+  local challenge=""
+  local challenge_tmp=""
+  local expected_ack=""
+  local actual_ack=""
+  local deadline=0
+  local pid="${RESCUE_WATCHER_PIDS[$index]}"
+  local starttime="${RESCUE_WATCHER_STARTTIMES[$index]}"
+  local nonce="${RESCUE_WATCHER_NONCES[$index]}"
+  local challenge_file="${RESCUE_WATCHER_CHALLENGE_FILES[$index]}"
+  local ack_file="${RESCUE_WATCHER_ACK_FILES[$index]}"
+
+  rescue_watcher_contract_static_valid "$index" || return 1
+  challenge="$(random_hex_256)"
+  [[ "$challenge" =~ ^[0-9a-f]{64}$ ]] || return 1
+  challenge_tmp="$challenge_file.$$.tmp"
+  rm -f "$ack_file"
+  umask 077
+  {
+    printf 'contract_version=2\n'
+    printf 'nonce=%s\n' "$nonce"
+    printf 'challenge=%s\n' "$challenge"
+  } > "$challenge_tmp" || return 1
+  mv -f "$challenge_tmp" "$challenge_file" || return 1
+  kill -USR1 "$pid" 2>/dev/null || return 1
+
+  expected_ack="$(printf 'contract_version=2\npid=%s\nstarttime=%s\nnonce=%s\nchallenge=%s\n' \
+    "$pid" "$starttime" "$nonce" "$challenge")"
+  deadline=$((SECONDS + 20))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    rescue_watcher_contract_static_valid "$index" || return 1
+    if [ -r "$ack_file" ]; then
+      actual_ack="$(< "$ack_file")"
+      if [ "$actual_ack" = "$expected_ack" ]; then
+        rescue_watcher_contract_static_valid "$index"
+        return
+      fi
+    fi
+    sleep 0.01
+  done
+  return 1
+}
+
+rescue_watcher_pair_static_valid() {
+  [ "${RESCUE_WATCHER_PIDS[0]}" != "${RESCUE_WATCHER_PIDS[1]}" ] &&
+    [ "${RESCUE_WATCHER_NONCES[0]}" != "${RESCUE_WATCHER_NONCES[1]}" ] &&
+    [ "${RESCUE_WATCHER_READY_FILES[0]}" != "${RESCUE_WATCHER_READY_FILES[1]}" ] &&
+    [ "${RESCUE_WATCHER_CHALLENGE_FILES[0]}" != "${RESCUE_WATCHER_CHALLENGE_FILES[1]}" ] &&
+    [ "${RESCUE_WATCHER_ACK_FILES[0]}" != "${RESCUE_WATCHER_ACK_FILES[1]}" ] &&
+    rescue_watcher_contract_static_valid 0 && rescue_watcher_contract_static_valid 1
+}
+
+challenge_rescue_watcher_pair() {
+  challenge_rescue_watcher 0 || return
+  challenge_rescue_watcher 1 || return
+  rescue_watcher_pair_static_valid
+}
+
+start_rescue_watcher_instance() {
+  local index="$1"
+  local number=$((index + 1))
+  local wrapper_log="$run_dir/companion-rescue-watcher-$number.log"
+  local wrapper_err="$run_dir/companion-rescue-watcher-$number.err"
+  local pidfile="$run_dir/companion-rescue-watcher-$number.pid"
+  local ready_file="$run_dir/companion-rescue-watcher-$number.ready"
+  local challenge_file="$run_dir/companion-rescue-watcher-$number.challenge"
+  local ack_file="$run_dir/companion-rescue-watcher-$number.ack"
+  local nonce=""
+  local script_path=""
+  local pid=""
 
   [ "$START_RESCUE_WATCHER" -eq 1 ] || return 0
-  [ -z "$RESCUE_WATCHER_PID" ] || return 0
-  [ -n "$SERIAL" ] || die "--start-rescue-watcher requires --serial or an auto-detected serial" 2
-  [ -n "$RESTORE_IMAGE" ] || die "--start-rescue-watcher requires --restore-boot-b FILE" 2
-  [ -s "$RESTORE_IMAGE" ] || die "Rescue watcher restore image does not exist or is empty: $RESTORE_IMAGE" 2
-  rm -f "$ready_file"
+  rescue_watcher_contract_static_valid "$index" && return 0
+  RESCUE_WATCHER_PIDS[$index]=""
+  RESCUE_WATCHER_STARTTIMES[$index]=""
+  [ -n "$SERIAL" ] || { log "ERROR: rescue watcher requires a serial"; return 2; }
+  [ -n "$RESTORE_IMAGE" ] || { log "ERROR: rescue watcher requires a restore image"; return 2; }
+  [ -s "$RESTORE_IMAGE" ] || { log "ERROR: rescue watcher restore image is missing: $RESTORE_IMAGE"; return 2; }
+  [ -x "$RESCUE_WATCHER_HELPER" ] || { log "ERROR: rescue watcher helper is not executable: $RESCUE_WATCHER_HELPER"; return 2; }
+  nonce="$(random_hex_256)"
+  script_path="$(readlink -f "$RESCUE_WATCHER_HELPER")"
+  [[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { log "ERROR: could not generate watcher nonce"; return 3; }
+  [ -n "$script_path" ] || { log "ERROR: could not resolve watcher script"; return 3; }
+  RESCUE_WATCHER_READY_FILES[$index]="$ready_file"
+  RESCUE_WATCHER_CHALLENGE_FILES[$index]="$challenge_file"
+  RESCUE_WATCHER_ACK_FILES[$index]="$ack_file"
+  RESCUE_WATCHER_NONCES[$index]="$nonce"
+  RESCUE_WATCHER_SCRIPT_PATHS[$index]="$script_path"
+  rm -f "$pidfile" "$ready_file" "$challenge_file" "$ack_file"
 
-  log "Starting companion rescue watcher for $SERIAL"
-  if command -v start-stop-daemon >/dev/null 2>&1; then
-    start-stop-daemon --start --background --make-pidfile --pidfile "$pidfile" \
-      --chdir "$HOTDOG_ROOT" \
-      --env HOTDOG_RESCUE_LOG_TEE=0 \
-      --stdout "$wrapper_log" --stderr "$wrapper_err" \
-      --exec "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" -- \
-      --serial "$SERIAL" \
-      --restore-boot-b "$RESTORE_IMAGE" \
-      --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
-      --after-restore "$RESTORE_AFTER_FASTBOOT" \
-      --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
-      --poll "$RESCUE_WATCHER_POLL_SEC" \
-      --ready-file "$ready_file"
+  log "Starting companion rescue watcher $number/2 for $SERIAL"
+  if [ "${HOTDOG_FORCE_RESCUE_FALLBACK:-0}" -ne 1 ] && command -v start-stop-daemon >/dev/null 2>&1; then
+    (
+      phone_lock_prepare_detached_child
+      exec start-stop-daemon --start --background --make-pidfile --pidfile "$pidfile" \
+        --chdir "$HOTDOG_ROOT" \
+        --env HOTDOG_RESCUE_LOG_TEE=0 \
+        --stdout "$wrapper_log" --stderr "$wrapper_err" \
+        --exec "$RESCUE_WATCHER_HELPER" -- \
+        --serial "$SERIAL" \
+        --restore-boot-b "$RESTORE_IMAGE" \
+        --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
+        --boot-b-only \
+        --after-restore "$RESTORE_AFTER_FASTBOOT" \
+        --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
+        --poll "$RESCUE_WATCHER_POLL_SEC" \
+        --ready-file "$ready_file" \
+        --contract-nonce "$nonce" \
+        --contract-challenge-file "$challenge_file" \
+        --contract-ack-file "$ack_file"
+    ) || return 3
   else
-    setsid env HOTDOG_RESCUE_LOG_TEE=0 "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" \
-      --serial "$SERIAL" \
-      --restore-boot-b "$RESTORE_IMAGE" \
-      --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
-      --after-restore "$RESTORE_AFTER_FASTBOOT" \
-      --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
-      --poll "$RESCUE_WATCHER_POLL_SEC" \
-      --ready-file "$ready_file" \
-      > "$wrapper_log" 2> "$wrapper_err" < /dev/null &
-    RESCUE_WATCHER_PID="$!"
-    printf '%s\n' "$RESCUE_WATCHER_PID" > "$pidfile"
+    (
+      phone_lock_prepare_detached_child
+      exec setsid env HOTDOG_RESCUE_LOG_TEE=0 "$RESCUE_WATCHER_HELPER" \
+        --serial "$SERIAL" \
+        --restore-boot-b "$RESTORE_IMAGE" \
+        --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
+        --boot-b-only \
+        --after-restore "$RESTORE_AFTER_FASTBOOT" \
+        --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
+        --poll "$RESCUE_WATCHER_POLL_SEC" \
+        --ready-file "$ready_file" \
+        --contract-nonce "$nonce" \
+        --contract-challenge-file "$challenge_file" \
+        --contract-ack-file "$ack_file"
+    ) > "$wrapper_log" 2> "$wrapper_err" < /dev/null &
+    pid="$!"
+    RESCUE_WATCHER_PIDS[$index]="$pid"
+    printf '%s\n' "$pid" > "$pidfile"
   fi
 
   for _ in {1..50}; do
     [ -s "$pidfile" ] && break
     sleep 0.1
   done
-  [ -s "$pidfile" ] || die "Companion rescue watcher did not publish a PID file" 3
-  RESCUE_WATCHER_PID="$(sed -n '1p' "$pidfile")"
-  case "$RESCUE_WATCHER_PID" in
-    ''|*[!0-9]*) die "Companion rescue watcher published an invalid PID: $RESCUE_WATCHER_PID" 3 ;;
+  [ -s "$pidfile" ] || { log "ERROR: companion rescue watcher did not publish a PID file"; return 3; }
+  pid="$(sed -n '1p' "$pidfile")"
+  case "$pid" in
+    ''|*[!0-9]*) log "ERROR: companion rescue watcher $number published an invalid PID: $pid"; return 3 ;;
   esac
-  log "Companion rescue watcher PID: $RESCUE_WATCHER_PID"
-  wait_for_rescue_watcher_ready "$ready_file" "$wrapper_log" "$wrapper_err"
+  RESCUE_WATCHER_PIDS[$index]="$pid"
+  log "Companion rescue watcher $number PID: $pid"
+  wait_for_rescue_watcher_ready "$index" "$ready_file" "$wrapper_log" "$wrapper_err"
+}
+
+start_rescue_watcher() {
+  local index=0
+
+  [ "$START_RESCUE_WATCHER" -eq 1 ] || return 0
+  for index in 0 1; do
+    if ! start_rescue_watcher_instance "$index"; then
+      stop_rescue_watcher || true
+      return 3
+    fi
+  done
+  challenge_rescue_watcher_pair
+}
+
+rescue_watcher_alive() {
+  rescue_watcher_pair_static_valid
+}
+
+rescue_watcher_must_survive() {
+  [ "${REQUIRE_DIRTY_SURVIVAL:-0}" -eq 1 ] &&
+    [ "${BOOT_B_MAY_BE_DIRTY:-0}" -eq 1 ] &&
+    [ "${RESTORE_READBACK_VERIFIED:-0}" -eq 0 ] &&
+    [ "${STRICT_MAINLINE_SUCCESS_ACKED:-0}" -eq 0 ]
+}
+
+ensure_rescue_watcher_alive() {
+  local context="$1"
+  local index=0
+
+  if [ "$START_RESCUE_WATCHER" -ne 1 ]; then
+    if rescue_watcher_must_survive; then
+      log "ERROR: rescue watcher is required but disabled: $context"
+      return 3
+    fi
+    return 0
+  fi
+  for index in 0 1; do
+    if rescue_watcher_contract_static_valid "$index"; then
+      if challenge_rescue_watcher "$index"; then
+        continue
+      fi
+      if rescue_watcher_contract_static_valid "$index"; then
+        log "ERROR: rescue watcher $((index + 1)) exists but did not ACK during $context"
+        return 3
+      fi
+      log "Rescue watcher $((index + 1)) died during contract challenge in $context; rearming"
+    fi
+    log "Rescue watcher $((index + 1)) is not alive during $context; rearming"
+    RESCUE_WATCHER_PIDS[$index]=""
+    start_rescue_watcher_instance "$index" || return
+  done
+  challenge_rescue_watcher_pair || {
+    log "ERROR: rescue watcher pair failed its final attestation during $context"
+    return 3
+  }
 }
 
 wait_for_rescue_watcher_ready() {
-  local ready_file="$1"
-  local wrapper_log="$2"
-  local wrapper_err="$3"
+  local index="$1"
+  local ready_file="$2"
+  local wrapper_log="$3"
+  local wrapper_err="$4"
   local deadline=$((SECONDS + RESCUE_WATCHER_READY_TIMEOUT_SEC))
+  local starttime=""
+  local pid="${RESCUE_WATCHER_PIDS[$index]}"
 
   while [ "$SECONDS" -lt "$deadline" ]; do
-    if ! kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
+    if ! kill -0 "$pid" 2>/dev/null; then
       [ -s "$wrapper_err" ] && sed 's/^/[rescue-watcher] /' "$wrapper_err" >&2 || true
-      die "Companion rescue watcher exited before reporting readiness" 3
+      log "ERROR: companion rescue watcher exited before reporting readiness"
+      return 3
     fi
-    if [ -s "$ready_file" ] &&
-      grep -Fxq "pid=$RESCUE_WATCHER_PID" "$ready_file" &&
-      grep -Fxq "serial=$SERIAL" "$ready_file" &&
-      grep -Fxq "restore_image=$RESTORE_IMAGE" "$ready_file" &&
-      grep -Fxq "restore_sha256=$RESTORE_IMAGE_SHA256" "$ready_file"; then
-      log "Companion rescue watcher readiness confirmed"
-      return 0
+    if [ -s "$ready_file" ]; then
+      starttime="$(sed -n '3s/^starttime=//p' "$ready_file")"
+      if [[ "$starttime" =~ ^[0-9]+$ ]]; then
+        RESCUE_WATCHER_STARTTIMES[$index]="$starttime"
+        if rescue_watcher_contract_static_valid "$index" && challenge_rescue_watcher "$index"; then
+          log "Companion rescue watcher $((index + 1)) readiness and challenge ACK confirmed"
+          return 0
+        fi
+      fi
     fi
     sleep 0.1
   done
 
   [ -s "$wrapper_log" ] && sed 's/^/[rescue-watcher] /' "$wrapper_log" >&2 || true
   [ -s "$wrapper_err" ] && sed 's/^/[rescue-watcher] /' "$wrapper_err" >&2 || true
-  die "Timed out waiting for companion rescue watcher readiness" 3
+  log "ERROR: timed out waiting for companion rescue watcher readiness"
+  return 3
 }
 
 stop_rescue_watcher() {
-  [ -n "${RESCUE_WATCHER_PID:-}" ] || return 0
-  if kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
-    log "Stopping companion rescue watcher: PID $RESCUE_WATCHER_PID"
-    kill "$RESCUE_WATCHER_PID" 2>/dev/null || true
-    wait "$RESCUE_WATCHER_PID" 2>/dev/null || true
+  local index=0
+  local pid=""
+
+  for index in 0 1; do
+    pid="${RESCUE_WATCHER_PIDS[$index]:-}"
+    if [ -n "$pid" ] && rescue_watcher_process_identity_valid "$index"; then
+      log "Stopping companion rescue watcher $((index + 1)): PID $pid"
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+    fi
+    RESCUE_WATCHER_PIDS[$index]=""
+    RESCUE_WATCHER_STARTTIMES[$index]=""
+    RESCUE_WATCHER_NONCES[$index]=""
+  done
+}
+
+transport_process_running() {
+  local pid="$1"
+  local stat_line=""
+  local remainder=""
+  local state=""
+
+  [ -r "/proc/$pid/stat" ] || return 1
+  stat_line="$(< "/proc/$pid/stat")"
+  remainder="${stat_line##*) }"
+  state="${remainder%% *}"
+  [ "$state" != "Z" ]
+}
+
+terminate_transport_group() {
+  local pid="$1"
+
+  kill -TERM -- "-$pid" 2>/dev/null || true
+  sleep 0.05
+  kill -KILL -- "-$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  [ "${ACTIVE_TRANSPORT_PID:-}" != "$pid" ] || ACTIVE_TRANSPORT_PID=""
+}
+
+run_guarded_fastboot_transport() {
+  local label="$1"
+  local output="$2"
+  local transport_pid=""
+  local status=0
+  shift 2
+
+  ensure_rescue_watcher_alive "before $label" || return 3
+  setsid --wait fastboot -s "$SERIAL" "$@" > "$output" 2>&1 &
+  transport_pid="$!"
+  ACTIVE_TRANSPORT_PID="$transport_pid"
+  while transport_process_running "$transport_pid"; do
+    if ! rescue_watcher_pair_static_valid; then
+      log "ERROR: rescue pair degraded during $label; terminating fastboot transport"
+      terminate_transport_group "$transport_pid"
+      ensure_rescue_watcher_alive "rearm after interrupted $label" || true
+      [ -s "$output" ] && sed 's/^/[fastboot] /' "$output" >&2 || true
+      return 3
+    fi
+    sleep 0.01
+  done
+  if wait "$transport_pid"; then
+    status=0
+  else
+    status=$?
   fi
-  RESCUE_WATCHER_PID=""
+  ACTIVE_TRANSPORT_PID=""
+  [ -s "$output" ] && sed 's/^/[fastboot] /' "$output" || true
+  ensure_rescue_watcher_alive "after $label" || return 3
+  return "$status"
 }
 
 normalize_value() {
@@ -340,6 +740,13 @@ normalize_value() {
   value="${value,,}"
   value="${value//[[:space:]]/}"
   value="${value#_}"
+  printf '%s\n' "$value"
+}
+
+normalize_serial_value() {
+  local value="$1"
+
+  value="${value//[[:space:]]/}"
   printf '%s\n' "$value"
 }
 
@@ -430,20 +837,21 @@ wait_for_recovery_adb() {
 validate_fastboot_identity() {
   local product=""
   local serialno=""
+  local selected_serial=""
   local unlocked=""
   local expected_product=""
   local product_ok=1
 
-  serialno="$(normalize_value "$(get_fastboot_var serialno)")"
+  serialno="$(normalize_serial_value "$(get_fastboot_var serialno)")"
+  selected_serial="$(normalize_serial_value "$SERIAL")"
   product="$(normalize_value "$(get_fastboot_var product)")"
   unlocked="$(normalize_value "$(get_fastboot_var unlocked)")"
 
   [ -n "$SERIAL" ] || die "Internal error: SERIAL is empty after wait_for_fastboot" 2
 
-  case "$serialno" in
-    "$SERIAL"|"") ;;
-    *) die "Fastboot serial mismatch: selected $SERIAL but getvar serialno reports $serialno" 2 ;;
-  esac
+  [ -n "$serialno" ] || die "Fastboot getvar serialno is empty; refusing write-capable operation" 2
+  [ "$serialno" = "$selected_serial" ] ||
+    die "Fastboot serial mismatch: selected $SERIAL but getvar serialno reports $serialno" 2
 
   if [ -n "$EXPECTED_FASTBOOT_PRODUCTS" ]; then
     for expected_product in $EXPECTED_FASTBOOT_PRODUCTS; do
@@ -468,16 +876,108 @@ validate_fastboot_identity() {
   esac
 }
 
+parse_fastboot_size() {
+  local value="$1"
+  local hex=""
+
+  value="${value,,}"
+  value="${value//[[:space:]]/}"
+  case "$value" in
+    0x[0-9a-f]*)
+      hex="${value#0x}"
+      [[ "$hex" =~ ^[0-9a-f]+$ ]] || return 1
+      printf '%s\n' "$((16#$hex))"
+      ;;
+    [0-9]*)
+      [[ "$value" =~ ^[0-9]+$ ]] || return 1
+      printf '%s\n' "$((10#$value))"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_fastboot_restore_context() {
+  local restore_file="$1"
+  local current_slot=""
+  local has_slot=""
+  local is_userspace=""
+  local partition_size_raw=""
+  local partition_size=""
+  local restore_size=""
+  local unlocked=""
+
+  [ -n "$EXPECTED_FASTBOOT_PRODUCTS" ] ||
+    die "Expected fastboot product list is empty; refusing boot_b restore" 2
+  validate_fastboot_identity
+  unlocked="$(normalize_value "$(get_fastboot_var unlocked)")"
+  case "$unlocked" in
+    yes|true|1|unlocked) ;;
+    *) die "boot_b restore requires an unlocked bootloader (got ${unlocked:-missing})" 2 ;;
+  esac
+
+  is_userspace="$(normalize_value "$(get_fastboot_var is-userspace)")"
+  case "$is_userspace" in
+    no|false|0) ;;
+    yes|true|1) die "fastbootd/userspace detected; refusing boot_b restore" 2 ;;
+    *) die "Could not prove bootloader fastboot context (is-userspace=${is_userspace:-missing})" 2 ;;
+  esac
+
+  current_slot="$(normalize_value "$(get_fastboot_var current-slot)")"
+  case "$current_slot" in
+    a|b) ;;
+    *) die "Invalid or missing current-slot before boot_b restore: ${current_slot:-missing}" 2 ;;
+  esac
+
+  has_slot="$(normalize_value "$(get_fastboot_var has-slot:boot)")"
+  case "$has_slot" in
+    yes|true|1) ;;
+    *) die "Fastboot does not attest that boot is slotted (has-slot:boot=${has_slot:-missing})" 2 ;;
+  esac
+
+  partition_size_raw="$(get_fastboot_var partition-size:boot_b)"
+  partition_size="$(parse_fastboot_size "$partition_size_raw")" ||
+    die "Invalid or missing partition-size:boot_b: ${partition_size_raw:-missing}" 2
+  restore_size="$(stat -c '%s' "$restore_file")"
+  [ "$partition_size" -ge "$restore_size" ] ||
+    die "boot_b partition is too small: $partition_size bytes < restore $restore_size bytes" 2
+
+  log "Fastboot restore context OK: serial=$SERIAL slot=$current_slot boot_b_size=$partition_size"
+}
+
 ensure_bootloader_fastboot() {
   local is_userspace=""
+  local watcher_guard=0
+
+  if [ "$START_RESCUE_WATCHER" -eq 1 ] || [ "$REQUIRE_DIRTY_SURVIVAL" -eq 1 ]; then
+    watcher_guard=1
+  fi
 
   is_userspace="$(normalize_value "$(get_fastboot_var is-userspace)")"
   case "$is_userspace" in
     yes|true|1)
       log "fastbootd detected; rebooting to bootloader"
-      fastboot_do reboot bootloader > "$run_dir/fastboot-reboot-bootloader.txt" 2>&1 || die "Failed to reboot bootloader from fastbootd" 3
+      if [ "$watcher_guard" -eq 1 ]; then
+        ensure_rescue_watcher_alive "before fastbootd bootloader handoff" ||
+          die "Companion rescue watcher is unavailable before fastbootd handoff" 3
+        KEEP_RESCUE_WATCHER=1
+        if ! run_guarded_fastboot_transport "fastbootd bootloader reboot" \
+          "$run_dir/fastboot-reboot-bootloader.txt" reboot bootloader; then
+          ensure_rescue_watcher_alive "after interrupted fastbootd bootloader handoff" || true
+          die "Fastbootd bootloader handoff lost its rescue quorum or failed" 3
+        fi
+        ensure_rescue_watcher_alive "after fastbootd bootloader reboot dispatch" ||
+          die "Companion rescue watcher could not be reattested after fastbootd handoff" 3
+      else
+        fastboot_do reboot bootloader > "$run_dir/fastboot-reboot-bootloader.txt" 2>&1 ||
+          die "Failed to reboot bootloader from fastbootd" 3
+      fi
       sleep 5
       wait_for_fastboot 60
+      if [ "$watcher_guard" -eq 1 ]; then
+        ensure_rescue_watcher_alive "after bootloader fastboot returned" ||
+          die "Companion rescue watcher could not be reattested in bootloader fastboot" 3
+        KEEP_RESCUE_WATCHER=0
+      fi
       ;;
     *)
       log "Bootloader fastboot confirmed"
@@ -538,6 +1038,123 @@ pmos_ssh_probe() {
   printf '%s\n' "$PMOS_PROBE_CMDLINE" > "$run_dir/pmos-cmdline-$label.txt"
 }
 
+pmos_remote_quote() {
+  local value="$1"
+
+  printf "'%s'" "${value//\'/\'\\\'\'}"
+}
+
+pmos_ssh_probe_and_ack_strict() {
+  local output="$run_dir/ssh-probe.txt"
+  local expected_tokens=""
+  local ack_nonce=""
+  local ack_value=""
+  local ssh_status=0
+  local identity_ok=1
+  local token=""
+
+  PMOS_PROBE_ATOMIC_ACKED=0
+  [ "$STRICT_SSH_EXPECTATION" -eq 1 ] || return 1
+  if [ "${#EXPECT_CMDLINE_TOKENS[@]}" -gt 0 ]; then
+    printf -v expected_tokens '%s\n' "${EXPECT_CMDLINE_TOKENS[@]}"
+    expected_tokens="${expected_tokens%$'\n'}"
+  fi
+  ack_nonce="$(random_hex_256)"
+  [[ "$ack_nonce" =~ ^[0-9a-f]{64}$ ]] || return 1
+
+  ping -c 1 -W 1 "$PMOS_HOST" > "$run_dir/ping-last-$PMOS_HOST.txt" 2>&1 || return 1
+  sshpass -p "$PMOS_PASSWORD" ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile="$run_dir/known_hosts" \
+    -o ConnectTimeout=5 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    "$PMOS_USER@$PMOS_HOST" \
+    "HOTDOG_ATOMIC_IDENTITY_ACK=1 EXPECTED_OLD_BOOT_ID=$(pmos_remote_quote "$PMOS_BOOT_ID_BEFORE") EXPECTED_KERNEL_PREFIX=$(pmos_remote_quote "$EXPECT_KERNEL_PREFIX") EXPECTED_CMDLINE_TOKENS=$(pmos_remote_quote "$expected_tokens") ACK_NONCE=$(pmos_remote_quote "$ack_nonce") sh -s" \
+    > "$output" 2>&1 <<'REMOTE_STRICT_ACK' || ssh_status=$?
+set -eu
+
+old_boot_id="${EXPECTED_OLD_BOOT_ID:-}"
+expected_kernel_prefix="${EXPECTED_KERNEL_PREFIX:-}"
+expected_cmdline_tokens="${EXPECTED_CMDLINE_TOKENS:-}"
+ack_nonce="${ACK_NONCE:?}"
+ack_file=/tmp/hotdog_rescue_watchdog.ok
+ack_tmp="$ack_file.$$.tmp"
+boot_id="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
+kernel="$(uname -r 2>/dev/null || true)"
+cmdline="$(cat /proc/cmdline 2>/dev/null || true)"
+
+printf 'PMOS_SSH_OK\n'
+printf 'PMOS_BOOT_ID=%s\n' "$boot_id"
+printf 'PMOS_UNAME_R=%s\n' "$kernel"
+printf 'PMOS_CMDLINE=%s\n' "$cmdline"
+
+[ -n "$boot_id" ] || exit 10
+[ -n "$kernel" ] || exit 10
+[ -n "$cmdline" ] || exit 10
+if [ -n "$old_boot_id" ]; then
+  [ "$boot_id" != "$old_boot_id" ] || exit 11
+fi
+if [ -n "$expected_kernel_prefix" ]; then
+  case "$kernel" in
+    "$expected_kernel_prefix"*) ;;
+    *) exit 12 ;;
+  esac
+fi
+
+old_ifs=$IFS
+IFS='
+'
+for identity_token in $expected_cmdline_tokens; do
+  [ -n "$identity_token" ] || continue
+  case " $cmdline " in
+    *" $identity_token "*) ;;
+    *) exit 13 ;;
+  esac
+done
+IFS=$old_ifs
+
+umask 077
+printf '%s\n' "$ack_nonce" > "$ack_tmp"
+mv -f "$ack_tmp" "$ack_file"
+ack_readback="$(cat "$ack_file" 2>/dev/null || true)"
+[ "$ack_readback" = "$ack_nonce" ] || exit 14
+printf 'PMOS_WATCHDOG_ACK=%s\n' "$ack_readback"
+printf 'HOTDOG_ATOMIC_IDENTITY_ACK=ok\n'
+REMOTE_STRICT_ACK
+
+  grep -qx 'PMOS_SSH_OK' "$output" || return 1
+  PMOS_PROBE_BOOT_ID="$(pmos_probe_field PMOS_BOOT_ID "$output")"
+  PMOS_PROBE_KERNEL="$(pmos_probe_field PMOS_UNAME_R "$output")"
+  PMOS_PROBE_CMDLINE="$(pmos_probe_field PMOS_CMDLINE "$output")"
+  [ -n "$PMOS_PROBE_BOOT_ID" ] || return 1
+  [ -n "$PMOS_PROBE_KERNEL" ] || return 1
+  [ -n "$PMOS_PROBE_CMDLINE" ] || return 1
+
+  printf '%s\n' "$PMOS_PROBE_BOOT_ID" > "$run_dir/pmos-boot-id-after.txt"
+  printf '%s\n' "$PMOS_PROBE_KERNEL" > "$run_dir/pmos-uname-r-after.txt"
+  printf '%s\n' "$PMOS_PROBE_CMDLINE" > "$run_dir/pmos-cmdline-after.txt"
+
+  if [ -n "$PMOS_BOOT_ID_BEFORE" ] && [ "$PMOS_PROBE_BOOT_ID" = "$PMOS_BOOT_ID_BEFORE" ]; then
+    identity_ok=0
+  fi
+  if [ -n "$EXPECT_KERNEL_PREFIX" ]; then
+    case "$PMOS_PROBE_KERNEL" in
+      "$EXPECT_KERNEL_PREFIX"*) ;;
+      *) identity_ok=0 ;;
+    esac
+  fi
+  for token in "${EXPECT_CMDLINE_TOKENS[@]}"; do
+    cmdline_has_token "$PMOS_PROBE_CMDLINE" "$token" || identity_ok=0
+  done
+  ack_value="$(pmos_probe_field PMOS_WATCHDOG_ACK "$output")"
+  if [ "$ssh_status" -eq 0 ] && [ "$identity_ok" -eq 1 ] &&
+    [ "$ack_value" = "$ack_nonce" ] && grep -qx 'HOTDOG_ATOMIC_IDENTITY_ACK=ok' "$output"; then
+    PMOS_PROBE_ATOMIC_ACKED=1
+  fi
+  return 0
+}
+
 cmdline_has_token() {
   local cmdline="$1"
   local token="$2"
@@ -548,7 +1165,135 @@ cmdline_has_token() {
   esac
 }
 
+run_source_ssh_writer() {
+  local label="$1"
+  local image="$2"
+  local expected_sha="$3"
+  local expected_boot_id="$4"
+  local expected_kernel="$5"
+  local reboot_after="$6"
+  local output="$run_dir/flash-boot-b-from-pmos-ssh-$label.log"
+  local token=""
+  local -a args=(
+    --image "$image"
+    --image-sha256 "$expected_sha"
+    --serial "$SERIAL"
+    --host "$PMOS_HOST"
+    --user "$PMOS_USER"
+    --password "$PMOS_PASSWORD"
+    --expected-source-boot-id "$expected_boot_id"
+    --expected-source-kernel "$expected_kernel"
+  )
+
+  [ -x "$FLASH_BOOT_B_SSH_HELPER" ] || {
+    log "ERROR: SSH boot_b writer is not executable: $FLASH_BOOT_B_SSH_HELPER"
+    return 127
+  }
+  for token in "${EXPECT_SOURCE_CMDLINE_TOKENS[@]}"; do
+    args+=(--expected-source-cmdline-token "$token")
+  done
+  if [ "${PHONE_LOCK_HELD:-0}" -eq 1 ] && [[ "${PHONE_LOCK_FD:-}" =~ ^[0-9]+$ ]]; then
+    args+=(--phone-lock-fd "$PHONE_LOCK_FD")
+  fi
+  if [ "$REQUIRE_DIRTY_SURVIVAL" -eq 1 ]; then
+    args+=(
+      --require-watcher-contract
+      --required-watcher-pid "${RESCUE_WATCHER_PIDS[0]}"
+      --required-watcher-starttime "${RESCUE_WATCHER_STARTTIMES[0]}"
+      --required-watcher-ready-file "${RESCUE_WATCHER_READY_FILES[0]}"
+      --required-watcher-nonce "${RESCUE_WATCHER_NONCES[0]}"
+      --required-watcher-script "${RESCUE_WATCHER_SCRIPT_PATHS[0]}"
+      --required-watcher-restore-image "$RESTORE_IMAGE"
+      --required-watcher-restore-sha256 "$RESTORE_IMAGE_SHA256"
+      --required-watcher-challenge-file "${RESCUE_WATCHER_CHALLENGE_FILES[0]}"
+      --required-watcher-ack-file "${RESCUE_WATCHER_ACK_FILES[0]}"
+      --required-watcher2-pid "${RESCUE_WATCHER_PIDS[1]}"
+      --required-watcher2-starttime "${RESCUE_WATCHER_STARTTIMES[1]}"
+      --required-watcher2-ready-file "${RESCUE_WATCHER_READY_FILES[1]}"
+      --required-watcher2-nonce "${RESCUE_WATCHER_NONCES[1]}"
+      --required-watcher2-script "${RESCUE_WATCHER_SCRIPT_PATHS[1]}"
+      --required-watcher2-restore-image "$RESTORE_IMAGE"
+      --required-watcher2-restore-sha256 "$RESTORE_IMAGE_SHA256"
+      --required-watcher2-challenge-file "${RESCUE_WATCHER_CHALLENGE_FILES[1]}"
+      --required-watcher2-ack-file "${RESCUE_WATCHER_ACK_FILES[1]}"
+    )
+  fi
+  if [ "$reboot_after" -eq 1 ]; then
+    args+=(--reboot)
+  fi
+
+  if "$FLASH_BOOT_B_SSH_HELPER" "${args[@]}" > "$output" 2>&1; then
+    sed 's/^/[flash-ssh] /' "$output" || true
+    return 0
+  fi
+  sed 's/^/[flash-ssh] /' "$output" >&2 || true
+  return 1
+}
+
+rollback_via_source_ssh_if_safe() {
+  local reason="$1"
+  local rollback_boot_id=""
+  local rollback_kernel=""
+  local rollback_cmdline=""
+  local token=""
+
+  [ "$START_FROM_PMOS_SSH" -eq 1 ] || return 1
+  [ "$BOOT_B_MAY_BE_DIRTY" -eq 1 ] || return 0
+  [ -n "$RESTORE_IMAGE" ] || return 1
+  [ -n "$EXPECT_SOURCE_KERNEL_PREFIX" ] || {
+    log "Rollback via SSH refused: no pinned source kernel prefix"
+    return 1
+  }
+  [ "${#EXPECT_SOURCE_CMDLINE_TOKENS[@]}" -gt 0 ] || {
+    log "Rollback via SSH refused: no pinned source cmdline identity"
+    return 1
+  }
+
+  log "Attempting strict source-SSH rollback: $reason"
+  if ! pmos_ssh_probe rollback; then
+    log "Source-SSH rollback unavailable: probe failed"
+    return 1
+  fi
+  rollback_boot_id="$PMOS_PROBE_BOOT_ID"
+  rollback_kernel="$PMOS_PROBE_KERNEL"
+  rollback_cmdline="$PMOS_PROBE_CMDLINE"
+  case "$rollback_kernel" in
+    "$EXPECT_SOURCE_KERNEL_PREFIX"*) ;;
+    *)
+      log "Source-SSH rollback refused: kernel '$rollback_kernel' is not '$EXPECT_SOURCE_KERNEL_PREFIX*'"
+      return 1
+      ;;
+  esac
+  for token in "${EXPECT_SOURCE_CMDLINE_TOKENS[@]}"; do
+    if ! cmdline_has_token "$rollback_cmdline" "$token"; then
+      log "Source-SSH rollback refused: cmdline token '$token' is absent"
+      return 1
+    fi
+  done
+
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    ensure_rescue_watcher_alive "before source-SSH rollback" || return 1
+  fi
+  if ! verify_restore_image_hash; then
+    log "Source-SSH rollback refused: restore image hash changed"
+    return 1
+  fi
+  if run_source_ssh_writer rollback "$RESTORE_IMAGE" "$RESTORE_IMAGE_SHA256" \
+    "$rollback_boot_id" "$rollback_kernel" 0; then
+    RESTORE_READBACK_VERIFIED=1
+    BOOT_B_MAY_BE_DIRTY=0
+    KEEP_RESCUE_WATCHER=0
+    log "Strict source-SSH rollback readback verified; boot_b is clean"
+    return 0
+  fi
+
+  KEEP_RESCUE_WATCHER=1
+  log "Source-SSH rollback failed; boot_b remains dirty"
+  return 1
+}
+
 acknowledge_pmos_watchdog() {
+  # Legacy generic mode only. Strict success uses one atomic identity+ACK session.
   sshpass -p "$PMOS_PASSWORD" ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile="$run_dir/known_hosts" \
@@ -633,10 +1378,21 @@ collect_pmos_logs() {
 return_after_restore_from_fastboot() {
   [ "$RETURN_RECOVERY" -eq 1 ] || RESTORE_AFTER_FASTBOOT=none
 
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    ensure_rescue_watcher_alive "before leaving restored fastboot state" ||
+      die "Companion rescue watcher is unavailable after fastboot restore" 3
+  fi
+
   case "$RESTORE_AFTER_FASTBOOT" in
     recovery)
       log "Returning to recovery from fastboot"
-      fastboot_do reboot recovery > "$run_dir/fastboot-reboot-recovery.txt" 2>&1 || true
+      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+        run_guarded_fastboot_transport "restored fastboot recovery reboot" \
+          "$run_dir/fastboot-reboot-recovery.txt" reboot recovery ||
+          die "Recovery reboot after restore lost its rescue quorum or failed" 3
+      else
+        fastboot_do reboot recovery > "$run_dir/fastboot-reboot-recovery.txt" 2>&1 || true
+      fi
       if wait_for_recovery_adb 120; then
         collect_recovery_crash_artifacts "after-fastboot-return"
       else
@@ -645,11 +1401,23 @@ return_after_restore_from_fastboot() {
       ;;
     system)
       log "Rebooting system after boot_b restore"
-      fastboot_do reboot > "$run_dir/fastboot-reboot-system-after-restore.txt" 2>&1 || true
+      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+        run_guarded_fastboot_transport "restored fastboot system reboot" \
+          "$run_dir/fastboot-reboot-system-after-restore.txt" reboot ||
+          die "System reboot after restore lost its rescue quorum or failed" 3
+      else
+        fastboot_do reboot > "$run_dir/fastboot-reboot-system-after-restore.txt" 2>&1 || true
+      fi
       ;;
     bootloader)
       log "Rebooting bootloader after boot_b restore"
-      fastboot_do reboot bootloader > "$run_dir/fastboot-reboot-bootloader-after-restore.txt" 2>&1 || true
+      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+        run_guarded_fastboot_transport "restored fastboot bootloader reboot" \
+          "$run_dir/fastboot-reboot-bootloader-after-restore.txt" reboot bootloader ||
+          die "Bootloader reboot after restore lost its rescue quorum or failed" 3
+      else
+        fastboot_do reboot bootloader > "$run_dir/fastboot-reboot-bootloader-after-restore.txt" 2>&1 || true
+      fi
       ;;
     none)
       log "Leaving target in fastboot after boot_b restore"
@@ -664,24 +1432,68 @@ restore_boot_b_if_configured() {
   [ -n "$RESTORE_IMAGE" ] || return 0
   [ -s "$RESTORE_IMAGE" ] || die "Restore image does not exist or is empty: $RESTORE_IMAGE" 2
 
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    ensure_rescue_watcher_alive "immediately before fastboot restore" ||
+      die "Cannot restore boot_b without a live companion watcher" 3
+  fi
+  validate_fastboot_restore_context "$RESTORE_IMAGE"
+  verify_restore_image_hash
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    ensure_rescue_watcher_alive "final fastboot restore write boundary" ||
+      die "Companion rescue watcher died before fastboot restore" 3
+  fi
+  validate_fastboot_restore_context "$RESTORE_IMAGE"
   verify_restore_image_hash
 
   log "Restoring boot_b from $RESTORE_IMAGE"
   sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
-  fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-restore-boot-b.txt"
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    run_guarded_fastboot_transport "restore boot_b flash" \
+      "$run_dir/fastboot-restore-boot-b.txt" flash boot_b "$RESTORE_IMAGE" ||
+      die "boot_b restore flash lost its rescue quorum or failed" 3
+  else
+    fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-restore-boot-b.txt"
+  fi
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    ensure_rescue_watcher_alive "before restored slot activation" ||
+      die "Companion rescue watcher died after fastboot restore" 3
+  fi
+  validate_fastboot_restore_context "$RESTORE_IMAGE"
+  verify_restore_image_hash
   log "Rearming active slot b after boot_b restore"
-  fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b-after-restore.txt"
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    run_guarded_fastboot_transport "restored slot-b activation" \
+      "$run_dir/fastboot-set-active-b-after-restore.txt" set_active b ||
+      die "Restored slot-b activation lost its rescue quorum or failed" 3
+  else
+    fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b-after-restore.txt"
+  fi
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-after-restore.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-after-restore.txt" || true
+  log "Fastboot accepted the restore, but no cryptographic readback is available; boot_b remains conservatively dirty"
 }
 
 verify_restore_image_hash() {
   local actual=""
 
-  [ -n "$RESTORE_IMAGE_SHA256" ] || die "Internal error: restore image SHA256 is unset" 2
+  if [ -z "$RESTORE_IMAGE_SHA256" ]; then
+    log "ERROR: internal restore image SHA256 is unset"
+    return 2
+  fi
   actual="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
-  [ "$actual" = "$RESTORE_IMAGE_SHA256" ] ||
-    die "Restore image changed after validation: expected $RESTORE_IMAGE_SHA256, got $actual" 3
+  if [ "$actual" != "$RESTORE_IMAGE_SHA256" ]; then
+    log "ERROR: restore image changed after validation: expected $RESTORE_IMAGE_SHA256, got $actual"
+    return 3
+  fi
+}
+
+verify_test_image_hash() {
+  local actual=""
+
+  [ -n "$IMAGE_EXPECTED_SHA256" ] || die "Internal error: test image SHA256 is unset" 2
+  actual="$(sha256sum "$IMAGE" | awk '{ print $1 }')"
+  [ "$actual" = "$IMAGE_EXPECTED_SHA256" ] ||
+    die "Test image changed after validation: expected $IMAGE_EXPECTED_SHA256, got $actual" 3
 }
 
 collect_recovery_crash_artifacts() {
@@ -713,6 +1525,9 @@ restore_boot_b_from_adb_mode_if_configured() {
 }
 
 main() {
+  local initial_image_sha=""
+  local initial_restore_sha=""
+
   validate_seconds BOOT_WAIT_SEC "$BOOT_WAIT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
   validate_seconds FASTBOOT_CMD_TIMEOUT_SEC "$FASTBOOT_CMD_TIMEOUT_SEC"
@@ -726,6 +1541,22 @@ main() {
 
   [ -n "$IMAGE" ] || die "Missing --image FILE" 2
   [ -s "$IMAGE" ] || die "Image does not exist or is empty: $IMAGE" 2
+  if [ -n "$IMAGE_EXPECTED_SHA256" ] && ! [[ "$IMAGE_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    die "--image-sha256 must be exactly 64 hexadecimal characters" 2
+  fi
+  if [ -n "$RESTORE_IMAGE_EXPECTED_SHA256" ] && ! [[ "$RESTORE_IMAGE_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    die "--restore-boot-b-sha256 must be exactly 64 hexadecimal characters" 2
+  fi
+
+  if [ -n "$EXPECT_KERNEL_PREFIX" ] || [ "${#EXPECT_CMDLINE_TOKENS[@]}" -gt 0 ]; then
+    STRICT_SSH_EXPECTATION=1
+  fi
+  if [ "$START_RESCUE_WATCHER" -eq 1 ] || [ "$STRICT_SSH_EXPECTATION" -eq 1 ]; then
+    REQUIRE_DIRTY_SURVIVAL=1
+  fi
+  if [ "$REQUIRE_DIRTY_SURVIVAL" -eq 1 ] && [ "$START_RESCUE_WATCHER" -ne 1 ]; then
+    die "Dirty-survival policy requires --start-rescue-watcher before any phone access" 2
+  fi
 
   command -v adb >/dev/null 2>&1 || die "Missing adb" 127
   command -v fastboot >/dev/null 2>&1 || die "Missing fastboot" 127
@@ -735,15 +1566,31 @@ main() {
   command -v socat >/dev/null 2>&1 || die "Missing socat" 127
   command -v sshpass >/dev/null 2>&1 || die "Missing sshpass" 127
   command -v ssh >/dev/null 2>&1 || die "Missing ssh" 127
+  command -v stat >/dev/null 2>&1 || die "Missing stat" 127
+  command -v flock >/dev/null 2>&1 || die "Missing flock" 127
+  command -v od >/dev/null 2>&1 || die "Missing od" 127
+  command -v readlink >/dev/null 2>&1 || die "Missing readlink" 127
+  command -v tr >/dev/null 2>&1 || die "Missing tr" 127
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    command -v setsid >/dev/null 2>&1 || die "Missing setsid" 127
+  fi
 
+  initial_image_sha="$(sha256sum "$IMAGE" | awk '{ print $1 }')"
+  if [ -z "$IMAGE_EXPECTED_SHA256" ]; then
+    IMAGE_EXPECTED_SHA256="$initial_image_sha"
+  fi
+  [ "$initial_image_sha" = "$IMAGE_EXPECTED_SHA256" ] ||
+    die "Image SHA256 mismatch: expected $IMAGE_EXPECTED_SHA256, got $initial_image_sha" 3
   if [ -n "$RESTORE_IMAGE" ]; then
     [ -s "$RESTORE_IMAGE" ] || die "Restore image does not exist or is empty: $RESTORE_IMAGE" 2
-    RESTORE_IMAGE_SHA256="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+    initial_restore_sha="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
+    if [ -z "$RESTORE_IMAGE_EXPECTED_SHA256" ]; then
+      RESTORE_IMAGE_EXPECTED_SHA256="$initial_restore_sha"
+    fi
+    [ "$initial_restore_sha" = "$RESTORE_IMAGE_EXPECTED_SHA256" ] ||
+      die "Restore image SHA256 mismatch: expected $RESTORE_IMAGE_EXPECTED_SHA256, got $initial_restore_sha" 3
+    RESTORE_IMAGE_SHA256="$RESTORE_IMAGE_EXPECTED_SHA256"
   fi
-  if [ -n "$EXPECT_KERNEL_PREFIX" ] || [ "${#EXPECT_CMDLINE_TOKENS[@]}" -gt 0 ]; then
-    STRICT_SSH_EXPECTATION=1
-  fi
-
   log "Run directory: $run_dir"
   log "Target serial: ${SERIAL:-auto-detect}"
   log "Image: $IMAGE"
@@ -754,9 +1601,11 @@ main() {
   log "Expected source kernel prefix: ${EXPECT_SOURCE_KERNEL_PREFIX:-none}"
   log "Expected source cmdline tokens: ${EXPECT_SOURCE_CMDLINE_TOKENS[*]:-none}"
   log "Restore image SHA256: ${RESTORE_IMAGE_SHA256:-none}"
+  log "Expected test image SHA256: $IMAGE_EXPECTED_SHA256"
   log "Restore-after mode: $RESTORE_AFTER_FASTBOOT"
   log "Companion rescue watcher: $START_RESCUE_WATCHER"
-  sha256sum "$IMAGE" | tee "$run_dir/image-sha256.txt"
+  log "Require dirty survival: $REQUIRE_DIRTY_SURVIVAL"
+  printf '%s  %s\n' "$IMAGE_EXPECTED_SHA256" "$IMAGE" | tee "$run_dir/image-sha256.txt"
 
   if [ "$START_FROM_PMOS_SSH" -eq 1 ]; then
     log "Confirming healthy pmOS SSH source before flashing boot_b"
@@ -784,41 +1633,50 @@ main() {
         die "Target is already visible in fastboot; refusing to prearm rescue watcher from pmOS SSH" 3
       fi
       log "Prearming companion rescue watcher before pmOS SSH flash"
-      start_rescue_watcher
+      start_rescue_watcher || die "Could not prearm companion rescue watcher" 3
+      ensure_rescue_watcher_alive "before acquiring the D1 transaction lock" ||
+        die "Companion rescue watcher failed its pre-write liveness check" 3
     fi
 
-    log "Starting from pmOS SSH; flashing boot_b via SSH helper and rebooting"
-    "$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh" \
-      --image "$IMAGE" \
-      --serial "$SERIAL" \
-      --host "$PMOS_HOST" \
-      --user "$PMOS_USER" \
-      --password "$PMOS_PASSWORD" \
-      --reboot \
-      > "$run_dir/flash-boot-b-from-pmos-ssh-wrapper.log" 2>&1 || {
-        sed 's/^/[flash-ssh] /' "$run_dir/flash-boot-b-from-pmos-ssh-wrapper.log" >&2 || true
-        die "pmOS SSH flash/reboot helper failed" 4
-      }
-    sed 's/^/[flash-ssh] /' "$run_dir/flash-boot-b-from-pmos-ssh-wrapper.log" || true
-    if ! phone_lock_acquire "monitor boot_b image after pmOS SSH flash" 0; then
-      if [ -n "$RESCUE_WATCHER_PID" ] && kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
-        KEEP_RESCUE_WATCHER=1
-        die "Companion rescue watcher owns or is waiting for recovery; leaving it running" 3
-      fi
-      die "Could not acquire phone operation lock after pmOS SSH flash" 3
+    phone_lock_acquire "D1 boot_b write, observation and rollback transaction" 0 ||
+      die "Could not acquire phone operation lock before pmOS SSH flash" 3
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      ensure_rescue_watcher_alive "immediately before D1 SSH writer" ||
+        die "Companion rescue watcher is not alive at the D1 write boundary" 3
     fi
-    start_rescue_watcher
+    verify_test_image_hash
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      ensure_rescue_watcher_alive "final D1 SSH writer boundary" ||
+        die "Companion rescue watcher died before D1 SSH writer" 3
+    fi
+    BOOT_B_MAY_BE_DIRTY=1
+    log "Starting from pmOS SSH; flashing boot_b via SSH helper and rebooting"
+    if ! run_source_ssh_writer candidate "$IMAGE" "$IMAGE_EXPECTED_SHA256" \
+      "$PMOS_BOOT_ID_BEFORE" "$PMOS_KERNEL_BEFORE" 1; then
+      rollback_via_source_ssh_if_safe "D1 writer or reboot verification failed" || true
+      die "pmOS SSH flash/reboot helper failed; rollback status recorded above" 4
+    fi
+    if [ "$START_RESCUE_WATCHER" -eq 1 ] &&
+      ! ensure_rescue_watcher_alive "after D1 SSH writer"; then
+      rollback_via_source_ssh_if_safe "rescue watcher died immediately after D1 write" || true
+      die "Companion rescue watcher could not be rearmed after D1 write" 3
+    fi
   else
     phone_lock_acquire "test boot_b image" 0
 
     local state=""
+    local fastboot_count=""
     state="$(adb_state)"
     if [ "$state" = "recovery" ]; then
       log "Starting from recovery ADB; rebooting to bootloader"
       adb_do reboot bootloader
       wait_for_fastboot 90
     elif fastboot_present; then
-      [ -n "$SERIAL" ] || SERIAL="$(awk 'NF >= 1 { print $1; exit }' "$run_dir/fastboot-devices-last.txt")"
+      if [ -z "$SERIAL" ]; then
+        fastboot_count="$(awk 'NF >= 1 { count++ } END { print count + 0 }' "$run_dir/fastboot-devices-last.txt")"
+        [ "$fastboot_count" = "1" ] || die "Multiple fastboot devices found; rerun with --serial SERIAL" 2
+        SERIAL="$(awk 'NF >= 1 { print $1; exit }' "$run_dir/fastboot-devices-last.txt")"
+      fi
       export ANDROID_SERIAL="$SERIAL"
       log "Starting from fastboot"
     else
@@ -827,27 +1685,65 @@ main() {
 
     validate_fastboot_identity
     ensure_bootloader_fastboot
-    validate_fastboot_identity
+    validate_fastboot_restore_context "$IMAGE"
 
     get_fastboot_var current-slot | tee "$run_dir/current-slot-before.txt" || true
     get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
     get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-before.txt" || true
 
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      start_rescue_watcher || die "Could not prearm companion rescue watcher before fastboot flash" 3
+      ensure_rescue_watcher_alive "immediately before direct fastboot D1 write" ||
+        die "Companion rescue watcher is not alive at the direct write boundary" 3
+    fi
+    verify_test_image_hash
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      ensure_rescue_watcher_alive "final direct fastboot D1 write boundary" ||
+        die "Companion rescue watcher died before direct fastboot D1 write" 3
+    fi
+    BOOT_B_MAY_BE_DIRTY=1
     log "Flashing boot_b"
-    fastboot_do flash boot_b "$IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b.txt"
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      run_guarded_fastboot_transport "candidate boot_b flash" \
+        "$run_dir/fastboot-flash-boot-b.txt" flash boot_b "$IMAGE" ||
+        die "Candidate boot_b flash lost its rescue quorum or failed" 3
+    else
+      fastboot_do flash boot_b "$IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b.txt"
+    fi
 
     if [ "$SET_ACTIVE_B" -eq 1 ]; then
+      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+        ensure_rescue_watcher_alive "before activating candidate slot b" ||
+          die "Companion rescue watcher died before candidate slot activation" 3
+      fi
+      validate_fastboot_restore_context "$IMAGE"
+      verify_test_image_hash
       log "Setting active slot b"
-      fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"
+      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+        run_guarded_fastboot_transport "candidate slot-b activation" \
+          "$run_dir/fastboot-set-active-b.txt" set_active b ||
+          die "Slot-b activation lost its rescue quorum or failed" 3
+      else
+        fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"
+      fi
     fi
 
     get_fastboot_var current-slot | tee "$run_dir/current-slot-after-flash.txt" || true
     get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-after-flash.txt" || true
     get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-after-flash.txt" || true
 
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      ensure_rescue_watcher_alive "before rebooting into candidate boot_b" ||
+        die "Companion rescue watcher died before candidate reboot" 3
+    fi
     log "Rebooting into flashed boot_b"
-    fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot.txt"
-    start_rescue_watcher
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      run_guarded_fastboot_transport "candidate fastboot reboot" \
+        "$run_dir/fastboot-reboot.txt" reboot ||
+        die "Candidate reboot lost its rescue quorum or failed" 3
+    else
+      fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot.txt"
+    fi
   fi
 
   local deadline=$((SECONDS + BOOT_WAIT_SEC))
@@ -856,6 +1752,13 @@ main() {
   local qualcomm_900e_seen=0
   local result="timeout"
   while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ "$START_RESCUE_WATCHER" -eq 1 ] &&
+      ! ensure_rescue_watcher_alive "boot result observation"; then
+      result="rescue-watcher-unavailable"
+      rollback_via_source_ssh_if_safe "rescue watcher unavailable during observation" || true
+      break
+    fi
+
     state="$(adb_state)"
     case "$state" in
       recovery|sideload)
@@ -911,7 +1814,13 @@ main() {
       fi
     fi
 
-    if pmos_ssh_probe; then
+    local ssh_probe_seen=0
+    if [ "$STRICT_SSH_EXPECTATION" -eq 1 ]; then
+      pmos_ssh_probe_and_ack_strict && ssh_probe_seen=1
+    else
+      pmos_ssh_probe && ssh_probe_seen=1
+    fi
+    if [ "$ssh_probe_seen" -eq 1 ]; then
       local pmos_boot_id_after="$PMOS_PROBE_BOOT_ID"
       local pmos_kernel_after="$PMOS_PROBE_KERNEL"
       local pmos_cmdline_after="$PMOS_PROBE_CMDLINE"
@@ -951,12 +1860,21 @@ main() {
         fi
       done
       if [ "$result" = "pmos-ssh" ]; then
-        if acknowledge_pmos_watchdog; then
-          log "pmOS rescue watchdog acknowledged after SSH identity validation"
+        if [ "$STRICT_SSH_EXPECTATION" -eq 1 ] && [ "$PMOS_PROBE_ATOMIC_ACKED" -eq 1 ]; then
+          STRICT_MAINLINE_SUCCESS_ACKED=1
+          log "pmOS rescue watchdog atomically acknowledged in the strict SSH identity session"
+        elif [ "$STRICT_SSH_EXPECTATION" -eq 1 ]; then
+          result="pmos-ssh-watchdog-ack-failed"
+          log "ERROR: strict SSH identity response lacked its atomic watchdog ACK proof"
+        elif acknowledge_pmos_watchdog; then
+          log "pmOS rescue watchdog acknowledged for legacy generic SSH result"
         else
           result="pmos-ssh-watchdog-ack-failed"
-          log "ERROR: could not acknowledge pmOS rescue watchdog after validation"
+          log "ERROR: could not acknowledge pmOS rescue watchdog"
         fi
+      fi
+      if [ "$result" != "pmos-ssh" ]; then
+        rollback_via_source_ssh_if_safe "post-boot SSH identity was not the strict mainline target" || true
       fi
       collect_pmos_logs
       break
@@ -983,9 +1901,13 @@ main() {
     if fastboot_present; then
       restore_boot_b_if_configured
       return_after_restore_from_fastboot
-    elif [ "$START_RESCUE_WATCHER" -eq 1 ] && [ -n "$RESCUE_WATCHER_PID" ]; then
-      KEEP_RESCUE_WATCHER=1
-      log "No USB recovery path at timeout; companion rescue watcher will keep waiting"
+    elif [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      if ensure_rescue_watcher_alive "main observation timeout"; then
+        KEEP_RESCUE_WATCHER=1
+        log "No USB recovery path at timeout; companion rescue watcher will keep waiting"
+      else
+        log "ERROR: no USB recovery path and rescue watcher rearm failed at timeout"
+      fi
     fi
   fi
 
@@ -996,11 +1918,24 @@ main() {
 
   if [ "$STRICT_SSH_EXPECTATION" -eq 1 ] && [ "$result" != "pmos-ssh" ]; then
     log "ERROR: expected kernel/cmdline identity was not verified by a fresh pmOS SSH probe (result: $result)"
-    if [ "$START_RESCUE_WATCHER" -eq 1 ] && [ -n "$RESCUE_WATCHER_PID" ] && kill -0 "$RESCUE_WATCHER_PID" 2>/dev/null; then
-      KEEP_RESCUE_WATCHER=1
-      log "Leaving companion rescue watcher running until a recovery path appears"
+    if rescue_watcher_must_survive && [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      if ensure_rescue_watcher_alive "strict non-success exit"; then
+        KEEP_RESCUE_WATCHER=1
+        log "Leaving companion rescue watcher running until a recovery path appears"
+      else
+        log "CRITICAL: strict non-success with dirty boot_b and no live rescue watcher"
+      fi
     fi
     return 5
+  fi
+
+  if rescue_watcher_must_survive; then
+    log "ERROR: boot_b may still contain the test image and no strict readback restore was obtained"
+    return 6
+  fi
+
+  if [ "$BOOT_B_MAY_BE_DIRTY" -eq 1 ] && [ "$REQUIRE_DIRTY_SURVIVAL" -eq 0 ]; then
+    log "Legacy generic result contract: candidate remains in boot_b; no clean-state claim is made"
   fi
 
   case "$result" in

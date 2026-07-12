@@ -226,15 +226,31 @@ verify_sha512() {
 validate_k1_aport_inputs() {
 	local aport_dir="aports/device/testing/linux-oneplus-hotdog-mainline617-k1"
 	local apkbuild="$aport_dir/APKBUILD"
+	local transform="$aport_dir/transform-k1-dtb.sh"
 	local line
 	local expected
 	local filename
 	local checksum_count=0
 	local local_count=0
+	local source_count=0
 	local tar_count=0
+	local in_source=0
 
 	[ -f "$apkbuild" ] || die "missing K1 APKBUILD: $apkbuild"
 	log "K1 aport SHA512 inputs"
+	[ -x "$transform" ] || die "missing executable K1 DTB transform: $transform"
+	sh -n "$transform"
+	shellcheck --severity=warning --shell=sh -- "$transform"
+
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [ "$in_source" -eq 0 ]; then
+			[[ "$line" =~ ^source=\"[[:space:]]*$ ]] && in_source=1
+			continue
+		fi
+		[[ "$line" =~ ^[[:space:]]*\"[[:space:]]*$ ]] && break
+		[[ "$line" =~ ^[[:space:]]*$ ]] || ((source_count += 1))
+	done < "$apkbuild"
+	[ "$source_count" -gt 0 ] || die "could not parse K1 source entries from $apkbuild"
 
 	while IFS= read -r line || [ -n "$line" ]; do
 		if [[ "$line" =~ ^([0-9a-f]{128})[[:space:]]+([^[:space:]]+)$ ]]; then
@@ -258,9 +274,11 @@ validate_k1_aport_inputs() {
 		fi
 	done < "$apkbuild"
 
-	[ "$checksum_count" -eq 6 ] || die "expected 6 K1 SHA512 entries, found $checksum_count"
+	[ "$checksum_count" -eq "$source_count" ] || die \
+		"expected one K1 SHA512 entry per source ($source_count), found $checksum_count"
 	[ "$tar_count" -eq 1 ] || die "expected one K1 remote source tarball entry, found $tar_count"
-	[ "$local_count" -eq 5 ] || die "expected 5 K1 local inputs, found $local_count"
+	[ "$local_count" -eq $((source_count - tar_count)) ] || die \
+		"expected $((source_count - tar_count)) K1 local inputs, found $local_count"
 }
 
 main() {

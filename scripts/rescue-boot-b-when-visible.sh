@@ -10,19 +10,29 @@ SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 RESTORE_IMAGE_EXPECTED_SHA256="${RESTORE_IMAGE_EXPECTED_SHA256:-}"
 RESTORE_DTBO_IMAGE="${RESTORE_DTBO_IMAGE:-}"
+RESTORE_DTBO_SHA256="${RESTORE_DTBO_SHA256:-}"
+BOOT_B_ONLY=0
 TIMEOUT_SEC="${TIMEOUT_SEC:-21600}"
 POLL_SEC="${POLL_SEC:-5}"
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
 AFTER_RESTORE="${AFTER_RESTORE:-recovery}"
 READY_FILE=""
+FASTBOOT_CMD_TIMEOUT_SEC="${FASTBOOT_CMD_TIMEOUT_SEC:-15}"
+CONTRACT_NONCE=""
+CONTRACT_CHALLENGE_FILE=""
+CONTRACT_ACK_FILE=""
+CONTRACT_ACTIVE=0
+WATCHER_SCRIPT_PATH=""
+WATCHER_STARTTIME=""
 
 usage() {
   cat <<'USAGE'
 Usage: rescue-boot-b-when-visible.sh [options]
 
-One-shot rescue watcher for the current hotdog bring-up state. It waits until
+Persistent rescue watcher for the current hotdog bring-up state. It waits until
 the target phone appears in fastboot or recovery ADB, restores a known boot_b
-image, reboots to recovery, and exits.
+image, performs the configured handoff, and remains armed because fastboot has
+no strict cryptographic readback path.
 
 Options:
   --serial SERIAL        Target serial. Defaults to ANDROID_SERIAL.
@@ -31,10 +41,18 @@ Options:
                          Expected restore image hash. If omitted, the startup
                          hash is pinned for the lifetime of this watcher.
   --restore-dtbo-b FILE  Optional known-good dtbo_b image to flash before boot_b.
+  --restore-dtbo-b-sha256 SHA256
+                         Required exact hash whenever --restore-dtbo-b is used.
+  --boot-b-only          Explicitly clear and forbid every dtbo restore input.
   --after-restore MODE   recovery, system, bootloader, or none. Default: recovery.
   --timeout SEC          Seconds to wait. Default: 21600.
   --poll SEC             Poll interval. Default: 5.
   --ready-file FILE      Write readiness metadata here after local checks pass.
+  --contract-nonce HEX   Enable the versioned watcher contract with this nonce.
+  --contract-challenge-file FILE
+                         Read fresh liveness challenges from FILE.
+  --contract-ack-file FILE
+                         Atomically publish challenge acknowledgements to FILE.
   -h, --help             Show this help.
 USAGE
 }
@@ -61,6 +79,14 @@ while [ "$#" -gt 0 ]; do
       RESTORE_DTBO_IMAGE="$2"
       shift
       ;;
+    --restore-dtbo-b-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-dtbo-b-sha256" >&2; exit 2; }
+      RESTORE_DTBO_SHA256="${2,,}"
+      shift
+      ;;
+    --boot-b-only)
+      BOOT_B_ONLY=1
+      ;;
     --after-restore)
       [ "$#" -ge 2 ] || { echo "Missing value for --after-restore" >&2; exit 2; }
       AFTER_RESTORE="$2"
@@ -81,6 +107,21 @@ while [ "$#" -gt 0 ]; do
       READY_FILE="$2"
       shift
       ;;
+    --contract-nonce)
+      [ "$#" -ge 2 ] || { echo "Missing value for --contract-nonce" >&2; exit 2; }
+      CONTRACT_NONCE="${2,,}"
+      shift
+      ;;
+    --contract-challenge-file)
+      [ "$#" -ge 2 ] || { echo "Missing value for --contract-challenge-file" >&2; exit 2; }
+      CONTRACT_CHALLENGE_FILE="$2"
+      shift
+      ;;
+    --contract-ack-file)
+      [ "$#" -ge 2 ] || { echo "Missing value for --contract-ack-file" >&2; exit 2; }
+      CONTRACT_ACK_FILE="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -93,6 +134,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$BOOT_B_ONLY" -eq 1 ]; then
+  RESTORE_DTBO_IMAGE=""
+  RESTORE_DTBO_SHA256=""
+fi
 
 export ANDROID_SERIAL="$SERIAL"
 
@@ -120,6 +166,9 @@ cleanup() {
   if [ -n "$READY_FILE" ]; then
     rm -f "$READY_FILE"
   fi
+  if [ "$CONTRACT_ACTIVE" -eq 1 ]; then
+    rm -f "$CONTRACT_CHALLENGE_FILE" "$CONTRACT_ACK_FILE"
+  fi
   log "Exiting with status $status"
   phone_lock_release || true
 }
@@ -139,15 +188,78 @@ publish_ready() {
   [ -n "$READY_FILE" ] || return 0
   tmp="$READY_FILE.$$.tmp"
   umask 077
-  {
-    printf 'pid=%s\n' "$$"
-    printf 'serial=%s\n' "$SERIAL"
-    printf 'restore_image=%s\n' "$RESTORE_IMAGE"
-    printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
-  } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+  if [ "$CONTRACT_ACTIVE" -eq 1 ]; then
+    {
+      printf 'contract_version=2\n'
+      printf 'pid=%s\n' "$$"
+      printf 'starttime=%s\n' "$WATCHER_STARTTIME"
+      printf 'serial=%s\n' "$SERIAL"
+      printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+      printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+      printf 'boot_b_only=1\n'
+      printf 'restore_dtbo_image=none\n'
+      printf 'restore_dtbo_sha256=none\n'
+      printf 'nonce=%s\n' "$CONTRACT_NONCE"
+      printf 'watcher_script=%s\n' "$WATCHER_SCRIPT_PATH"
+      printf 'challenge_file=%s\n' "$CONTRACT_CHALLENGE_FILE"
+      printf 'ack_file=%s\n' "$CONTRACT_ACK_FILE"
+    } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+  else
+    {
+      printf 'pid=%s\n' "$$"
+      printf 'serial=%s\n' "$SERIAL"
+      printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+      printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+    } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+  fi
   mv -f "$tmp" "$READY_FILE" || die "Could not publish rescue watcher readiness file: $READY_FILE" 3
   log "Readiness published: $READY_FILE"
 }
+
+process_starttime() {
+  local pid="$1"
+  local stat_line=""
+  local remainder=""
+  local -a fields=()
+
+  [ -r "/proc/$pid/stat" ] || return 1
+  stat_line="$(< "/proc/$pid/stat")"
+  remainder="${stat_line##*) }"
+  read -r -a fields <<< "$remainder"
+  [ "${#fields[@]}" -ge 20 ] || return 1
+  printf '%s\n' "${fields[19]}"
+}
+
+publish_contract_ack() {
+  local actual=""
+  local expected_prefix=""
+  local challenge=""
+  local tmp=""
+
+  [ "$CONTRACT_ACTIVE" -eq 1 ] || return 0
+  [ -r "$CONTRACT_CHALLENGE_FILE" ] || return 0
+  actual="$(< "$CONTRACT_CHALLENGE_FILE")" || return 0
+  expected_prefix="contract_version=2"$'\n'"nonce=$CONTRACT_NONCE"$'\n'
+  case "$actual" in
+    "$expected_prefix"challenge=*) ;;
+    *) return 0 ;;
+  esac
+  [ "$(printf '%s\n' "$actual" | wc -l)" -eq 3 ] || return 0
+  challenge="${actual##*$'\n'challenge=}"
+  [[ "$challenge" =~ ^[0-9a-f]{64}$ ]] || return 0
+
+  tmp="$CONTRACT_ACK_FILE.$$.tmp"
+  umask 077
+  {
+    printf 'contract_version=2\n'
+    printf 'pid=%s\n' "$$"
+    printf 'starttime=%s\n' "$WATCHER_STARTTIME"
+    printf 'nonce=%s\n' "$CONTRACT_NONCE"
+    printf 'challenge=%s\n' "$challenge"
+  } > "$tmp" || { rm -f "$tmp"; return 0; }
+  mv -f "$tmp" "$CONTRACT_ACK_FILE" || { rm -f "$tmp"; return 0; }
+}
+trap 'publish_contract_ack || true' USR1
 
 adb_state() {
   adb devices > "$run_dir/adb-devices-last.txt" 2>&1 || true
@@ -187,12 +299,19 @@ normalize_value() {
   printf '%s\n' "$value"
 }
 
+normalize_serial_value() {
+  local value="$1"
+
+  value="${value//[[:space:]]/}"
+  printf '%s\n' "$value"
+}
+
 get_fastboot_var() {
   local var="$1"
   local safe_name="${var//[:\/]/_}"
   local file="$run_dir/getvar-${safe_name}.txt"
 
-  fastboot_do getvar "$var" > "$file" 2>&1 || true
+  timeout "$FASTBOOT_CMD_TIMEOUT_SEC" fastboot -s "$SERIAL" getvar "$var" > "$file" 2>&1 || true
   awk -v var="$var" '
     index($0, var ":") {
       sub(".*" var ":[[:space:]]*", "", $0)
@@ -205,10 +324,21 @@ get_fastboot_var() {
 
 validate_fastboot_identity() {
   local product=""
+  local serialno=""
+  local selected_serial=""
+  local unlocked=""
   local expected=""
   local product_ok=1
 
+  serialno="$(normalize_serial_value "$(get_fastboot_var serialno)")"
+  selected_serial="$(normalize_serial_value "$SERIAL")"
   product="$(normalize_value "$(get_fastboot_var product)")"
+  unlocked="$(normalize_value "$(get_fastboot_var unlocked)")"
+  [ -n "$serialno" ] || { log "REFUSING restore: fastboot serialno is missing"; return 1; }
+  [ "$serialno" = "$selected_serial" ] || {
+    log "REFUSING restore: selected serial $SERIAL but getvar serialno reports $serialno"
+    return 1
+  }
   for expected in $EXPECTED_FASTBOOT_PRODUCTS; do
     expected="$(normalize_value "$expected")"
     [ -n "$expected" ] || continue
@@ -217,8 +347,84 @@ validate_fastboot_identity() {
       break
     fi
   done
-  [ "$product_ok" -eq 0 ] || die "Fastboot product mismatch: expected [$EXPECTED_FASTBOOT_PRODUCTS], got ${product:-missing}" 2
-  log "Fastboot identity OK: serial=$SERIAL product=$product"
+  [ "$product_ok" -eq 0 ] || {
+    log "REFUSING restore: expected product [$EXPECTED_FASTBOOT_PRODUCTS], got ${product:-missing}"
+    return 1
+  }
+  case "$unlocked" in
+    yes|true|1|unlocked) ;;
+    *) log "REFUSING restore: fastboot unlocked state is ${unlocked:-missing}"; return 1 ;;
+  esac
+  log "Fastboot identity OK: serial=$SERIAL product=$product unlocked=$unlocked"
+}
+
+parse_fastboot_size() {
+  local value="$1"
+  local hex=""
+
+  value="${value,,}"
+  value="${value//[[:space:]]/}"
+  case "$value" in
+    0x[0-9a-f]*)
+      hex="${value#0x}"
+      [[ "$hex" =~ ^[0-9a-f]+$ ]] || return 1
+      printf '%s\n' "$((16#$hex))"
+      ;;
+    [0-9]*)
+      [[ "$value" =~ ^[0-9]+$ ]] || return 1
+      printf '%s\n' "$((10#$value))"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_fastboot_restore_context() {
+  local partition_label="${1:-boot_b}"
+  local restore_file="${2:-$RESTORE_IMAGE}"
+  local slot_base=""
+  local current_slot=""
+  local has_slot=""
+  local is_userspace=""
+  local partition_size_raw=""
+  local partition_size=""
+  local restore_size=""
+
+  case "$partition_label" in
+    boot_b|dtbo_b) slot_base="${partition_label%_b}" ;;
+    *) log "REFUSING restore: unsupported partition label $partition_label"; return 1 ;;
+  esac
+  [ -s "$restore_file" ] || {
+    log "REFUSING restore: missing image for $partition_label: $restore_file"
+    return 1
+  }
+
+  validate_fastboot_identity || return
+  is_userspace="$(normalize_value "$(get_fastboot_var is-userspace)")"
+  case "$is_userspace" in
+    no|false|0) ;;
+    *) log "REFUSING restore: bootloader context not proven (is-userspace=${is_userspace:-missing})"; return 1 ;;
+  esac
+  current_slot="$(normalize_value "$(get_fastboot_var current-slot)")"
+  case "$current_slot" in
+    a|b) ;;
+    *) log "REFUSING restore: current-slot is ${current_slot:-missing}"; return 1 ;;
+  esac
+  has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
+  case "$has_slot" in
+    yes|true|1) ;;
+    *) log "REFUSING restore: has-slot:$slot_base is ${has_slot:-missing}"; return 1 ;;
+  esac
+  partition_size_raw="$(get_fastboot_var "partition-size:$partition_label")"
+  partition_size="$(parse_fastboot_size "$partition_size_raw")" || {
+    log "REFUSING restore: invalid partition-size:$partition_label ${partition_size_raw:-missing}"
+    return 1
+  }
+  restore_size="$(stat -c '%s' "$restore_file")"
+  [ "$partition_size" -ge "$restore_size" ] || {
+    log "REFUSING restore: $partition_label size $partition_size is below restore size $restore_size"
+    return 1
+  }
+  log "Fastboot restore context OK: slot=$current_slot partition=$partition_label size=$partition_size"
 }
 
 wait_recovery_adb() {
@@ -235,21 +441,39 @@ wait_recovery_adb() {
 }
 
 restore_from_fastboot() {
-  validate_fastboot_identity
+  validate_fastboot_restore_context boot_b "$RESTORE_IMAGE" || return 1
   get_fastboot_var current-slot | tee "$run_dir/current-slot-before.txt" || true
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-before.txt" || true
 
-  verify_restore_image_hash
+  verify_restore_image_hash || return 1
   log "Restoring boot_b"
   sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
   if [ -n "$RESTORE_DTBO_IMAGE" ]; then
+    verify_restore_dtbo_hash || return 1
+    validate_fastboot_restore_context dtbo_b "$RESTORE_DTBO_IMAGE" || return 1
+    verify_restore_dtbo_hash || return 1
     log "Restoring dtbo_b"
-    sha256sum "$RESTORE_DTBO_IMAGE" | tee "$run_dir/restore-dtbo-image-sha256.txt"
-    fastboot_do flash dtbo_b "$RESTORE_DTBO_IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-dtbo-b-restore.txt"
+    printf '%s  %s\n' "$RESTORE_DTBO_SHA256" "$RESTORE_DTBO_IMAGE" |
+      tee "$run_dir/restore-dtbo-image-sha256.txt"
+    verify_restore_dtbo_hash || return 1
+    if ! fastboot_do flash dtbo_b "$RESTORE_DTBO_IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-dtbo-b-restore.txt"; then
+      log "Restore attempt failed while flashing dtbo_b; watcher remains armed"
+      return 1
+    fi
   fi
-  fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b-restore.txt"
-  fastboot_do --set-active=b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"
+  verify_restore_image_hash || return 1
+  validate_fastboot_restore_context boot_b "$RESTORE_IMAGE" || return 1
+  if ! fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b-restore.txt"; then
+    log "Restore attempt failed while flashing boot_b; watcher remains armed"
+    return 1
+  fi
+  verify_restore_image_hash || return 1
+  validate_fastboot_restore_context boot_b "$RESTORE_IMAGE" || return 1
+  if ! fastboot_do --set-active=b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"; then
+    log "boot_b write was accepted but set-active failed; watcher remains armed"
+    return 1
+  fi
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-after.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-after.txt" || true
 
@@ -278,64 +502,127 @@ restore_from_fastboot() {
       die "Invalid --after-restore mode: $AFTER_RESTORE" 2
       ;;
   esac
-  log "Rescue complete"
+  log "Fastboot accepted the restore, but no strict readback is available; watcher remains armed"
 }
 
 verify_restore_image_hash() {
   local actual=""
 
   actual="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
-  [ "$actual" = "$RESTORE_IMAGE_EXPECTED_SHA256" ] ||
-    die "Restore image hash mismatch: expected $RESTORE_IMAGE_EXPECTED_SHA256, got $actual" 3
+  if [ "$actual" != "$RESTORE_IMAGE_EXPECTED_SHA256" ]; then
+    log "REFUSING restore: image hash mismatch, expected $RESTORE_IMAGE_EXPECTED_SHA256, got $actual"
+    return 1
+  fi
+}
+
+verify_restore_dtbo_hash() {
+  local actual=""
+
+  [ -n "$RESTORE_DTBO_IMAGE" ] || return 0
+  actual="$(sha256sum "$RESTORE_DTBO_IMAGE" | awk '{ print $1 }')"
+  if [ "$actual" != "$RESTORE_DTBO_SHA256" ]; then
+    log "REFUSING restore: dtbo image hash mismatch, expected $RESTORE_DTBO_SHA256, got $actual"
+    return 1
+  fi
 }
 
 main() {
+  local deadline=0
+  local fastboot_deadline=0
+  local fastboot_restore_accepted=0
+  local fastboot_seen_but_lock_busy=0
+  local last_status=0
+  local state=""
+
   validate_seconds TIMEOUT_SEC "$TIMEOUT_SEC"
   validate_seconds POLL_SEC "$POLL_SEC"
+  validate_seconds FASTBOOT_CMD_TIMEOUT_SEC "$FASTBOOT_CMD_TIMEOUT_SEC"
   [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
   case "$AFTER_RESTORE" in
     recovery|system|bootloader|none) ;;
     *) die "--after-restore must be one of: recovery, system, bootloader, none" 2 ;;
   esac
   [ -s "$RESTORE_IMAGE" ] || die "Missing restore image: $RESTORE_IMAGE" 2
+  if [ -n "$CONTRACT_NONCE" ] || [ -n "$CONTRACT_CHALLENGE_FILE" ] || [ -n "$CONTRACT_ACK_FILE" ]; then
+    [[ "$CONTRACT_NONCE" =~ ^[0-9a-f]{64}$ ]] || die "--contract-nonce must be exactly 64 hexadecimal characters" 2
+    [ -n "$READY_FILE" ] || die "Watcher contract requires --ready-file" 2
+    [ -n "$CONTRACT_CHALLENGE_FILE" ] || die "Watcher contract requires --contract-challenge-file" 2
+    [ -n "$CONTRACT_ACK_FILE" ] || die "Watcher contract requires --contract-ack-file" 2
+    [ "$READY_FILE" != "$CONTRACT_CHALLENGE_FILE" ] || die "Watcher contract files must be distinct" 2
+    [ "$READY_FILE" != "$CONTRACT_ACK_FILE" ] || die "Watcher contract files must be distinct" 2
+    [ "$CONTRACT_CHALLENGE_FILE" != "$CONTRACT_ACK_FILE" ] || die "Watcher contract files must be distinct" 2
+    [ "$BOOT_B_ONLY" -eq 1 ] || die "Versioned watcher contracts require --boot-b-only" 2
+    command -v readlink >/dev/null 2>&1 || die "Missing readlink" 127
+    WATCHER_SCRIPT_PATH="$(readlink -f "$0")"
+    WATCHER_STARTTIME="$(process_starttime "$$")" || die "Could not read watcher process starttime" 3
+    CONTRACT_ACTIVE=1
+  fi
   if [ -z "$RESTORE_IMAGE_EXPECTED_SHA256" ]; then
     RESTORE_IMAGE_EXPECTED_SHA256="$(sha256sum "$RESTORE_IMAGE" | awk '{ print $1 }')"
   elif ! [[ "$RESTORE_IMAGE_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
     die "--restore-boot-b-sha256 must be exactly 64 hexadecimal characters" 2
   fi
   verify_restore_image_hash
-  if [ -n "$RESTORE_DTBO_IMAGE" ]; then
+  if [ -n "$RESTORE_DTBO_IMAGE" ] || [ -n "$RESTORE_DTBO_SHA256" ]; then
+    [ -n "$RESTORE_DTBO_IMAGE" ] || die "--restore-dtbo-b-sha256 requires --restore-dtbo-b" 2
+    [ -n "$RESTORE_DTBO_SHA256" ] || die "--restore-dtbo-b requires --restore-dtbo-b-sha256" 2
     [ -s "$RESTORE_DTBO_IMAGE" ] || die "Missing restore dtbo image: $RESTORE_DTBO_IMAGE" 2
+    [[ "$RESTORE_DTBO_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+      die "--restore-dtbo-b-sha256 must be exactly 64 hexadecimal characters" 2
+    verify_restore_dtbo_hash || die "Restore dtbo image failed its startup hash validation" 3
   fi
   command -v adb >/dev/null 2>&1 || die "Missing adb" 127
   command -v fastboot >/dev/null 2>&1 || die "Missing fastboot" 127
   command -v sha256sum >/dev/null 2>&1 || die "Missing sha256sum" 127
+  command -v stat >/dev/null 2>&1 || die "Missing stat" 127
+  command -v timeout >/dev/null 2>&1 || die "Missing timeout" 127
+  command -v flock >/dev/null 2>&1 || die "Missing flock" 127
 
   log "Run directory: $run_dir"
   log "Target serial: $SERIAL"
   log "Restore image: $RESTORE_IMAGE"
   log "Restore image SHA256: $RESTORE_IMAGE_EXPECTED_SHA256"
+  log "Restore scope: $([ "$BOOT_B_ONLY" -eq 1 ] && printf 'boot_b-only' || printf 'legacy explicit')"
   log "Restore dtbo image: ${RESTORE_DTBO_IMAGE:-none}"
+  log "Restore dtbo image SHA256: ${RESTORE_DTBO_SHA256:-none}"
   log "After restore: $AFTER_RESTORE"
   log "Timeout: ${TIMEOUT_SEC}s"
+  log "Watcher contract: $CONTRACT_ACTIVE"
   publish_ready
 
-  local deadline=$((SECONDS + TIMEOUT_SEC))
-  local last_status=0
-  local state=""
+  deadline=$((SECONDS + TIMEOUT_SEC))
   while [ "$SECONDS" -lt "$deadline" ]; do
     if fastboot_present; then
+      if [ "$fastboot_restore_accepted" -eq 1 ]; then
+        sleep "$POLL_SEC"
+        continue
+      fi
       log "Target visible in fastboot"
       if ! phone_lock_acquire "rescue restore boot_b" 0; then
         log "Phone operation lock is busy; leaving target untouched and retrying"
         sleep "$POLL_SEC"
         continue
       fi
-      restore_from_fastboot
-      exit 0
+      if restore_from_fastboot; then
+        fastboot_restore_accepted=1
+      else
+        log "Fastboot restore was not completed safely; retrying while watcher remains alive"
+      fi
+      phone_lock_release
+      sleep "$POLL_SEC"
+      continue
     fi
-
     state="$(adb_state)"
+    if [ "$fastboot_restore_accepted" -eq 1 ] && [ "$state" = "recovery" ]; then
+      if [ $((SECONDS - last_status)) -ge 60 ]; then
+        log "Accepted restore is visible in recovery; holding without reflashing"
+        last_status=$SECONDS
+      fi
+      sleep "$POLL_SEC"
+      continue
+    fi
+    fastboot_restore_accepted=0
+
     if [ "$state" = "recovery" ]; then
       log "Target visible in recovery ADB; rebooting to bootloader for boot_b restore"
       if ! phone_lock_acquire "rescue recovery-to-fastboot boot_b restore" 0; then
@@ -344,10 +631,15 @@ main() {
         continue
       fi
       collect_recovery_crash_artifacts "direct-recovery-before-restore"
-      adb_do reboot bootloader
+      if ! adb_do reboot bootloader; then
+        log "Recovery-to-bootloader request failed; watcher remains armed"
+        phone_lock_release
+        sleep "$POLL_SEC"
+        continue
+      fi
       phone_lock_release
-      local fastboot_deadline=$((SECONDS + 90))
-      local fastboot_seen_but_lock_busy=0
+      fastboot_deadline=$((SECONDS + 90))
+      fastboot_seen_but_lock_busy=0
       while [ "$SECONDS" -lt "$fastboot_deadline" ]; do
         if fastboot_present; then
           if ! phone_lock_acquire "rescue restore boot_b" 0; then
@@ -355,8 +647,13 @@ main() {
             fastboot_seen_but_lock_busy=1
             break
           fi
-          restore_from_fastboot
-          exit 0
+          if restore_from_fastboot; then
+            fastboot_restore_accepted=1
+          else
+            log "Restore after recovery handoff failed safely; continuing to watch"
+          fi
+          phone_lock_release
+          break
         fi
         sleep 2
       done
@@ -364,7 +661,10 @@ main() {
         sleep "$POLL_SEC"
         continue
       fi
-      die "Recovery rebooted but fastboot did not appear" 3
+      if [ "$fastboot_restore_accepted" -eq 0 ]; then
+        log "Recovery rebooted but no verified fastboot restore completed; watcher remains armed"
+      fi
+      continue
     fi
 
     if [ $((SECONDS - last_status)) -ge 60 ]; then
