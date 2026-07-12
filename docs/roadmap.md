@@ -7,14 +7,14 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- refine the D6 stock-preserving overlay until the R5 control reaches SSH;
-  D6 already applies to both base DTBs and exposes all UFS LUNs, NCM, and ACM
+- keep D6 as a timing-sensitive negative control; it exposes all UFS LUNs,
+  NCM, and ACM, but a repeat cycle entered Qualcomm `900e` crashdump mode
 - prearm the verified ACM bootloader fallback before every initramfs
   continuation so a failed rootfs transition remains remotely recoverable
 - rerun the `super` loop hook after late UFS discovery and require both pinned
   postmarketOS filesystem UUIDs before leaving the ACM shell
-- validate D7 first with R5; its complete vendor UFS fragments must produce a
-  fresh downstream SSH identity before the same DTBO is paired with mainline
+- use hardware-validated D7 for the next direct-mainline pairing; unchanged R5
+  produced fresh SSH and exact `boot_b`/`dtbo_b` readback with this overlay
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,

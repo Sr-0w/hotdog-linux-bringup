@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Mainline not observed | D5 and D6 are stock-derived overlays that apply offline to both base DTBs. D5 reached the R5 telnet initramfs; D6 additionally exposed all UFS LUNs and ACM, but neither completed a verified rootfs transition. |
+| Persistent direct boot | Mainline not observed | D7 is a stock-derived overlay that applies to both base DTBs and boots unchanged R5 through to fresh SSH. Exact hardware readback confirmed R5 `boot_b` SHA256 `23fa53...` and D7 `dtbo_b` SHA256 `c7b22d...`. The direct mainline pairing remains untested. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -87,10 +87,15 @@ Display support can then be developed without losing the remote debug channel.
 5. Keep D5 as the first structurally valid dual-base overlay result. It boots
    R5 into the initramfs but does not provide a complete downstream control.
 6. Keep D6 as the UFS-symbol bridge result. It exposes every UFS LUN and USB
-   ACM, but the rootfs transition after `pmos_continue_boot` remains unverified.
-   Prearm the ACM bootloader fallback before the next continuation attempt.
-7. Defer the r4 package-generated direct image until a direct handoff baseline
+   ACM, but the rootfs transition after `pmos_continue_boot` remains unverified;
+   a repeat cycle entered Qualcomm `900e` crashdump mode.
+7. Use D7 as the validated DTBO control. Unchanged R5 reached fresh SSH with
+   boot ID `fe700727-e7c3-4605-9881-b65e3b4d6daf`; exact readback matched R5
+   `boot_b` SHA256 `23fa53...` and D7 `dtbo_b` SHA256 `c7b22d...`.
+8. Pair D7 with the exact known-working K1 payload before changing any other
+   direct-boot variable.
+9. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-8. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+10. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.
