@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Direct `fastboot boot` | Inconclusive | The D1 raw image is accepted with `OKAY` but does not leave the fastboot USB instance; bridge raw/AVB and Lineage raw controls fail with `Load Error`. Persistent `boot_b` is the authoritative next test. |
+| Persistent direct mainline | Not observed | The R5 downstream control boots directly and restores reliably. Exact D1 and D1-pack writes both returned to fastboot USB in three to four seconds without mainline ACM, NCM, or `bcdDevice=0617`; DTB-pack entry 12 alone is not sufficient. D2 header-v0 append-DTB is prepared next. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -50,16 +50,23 @@ flowchart LR
 The bridge is a temporary engineering tool. The long-term target is a normal
 postmarketOS/pmaports boot that does not depend on the downstream kernel.
 
-The current milestone is a persistent `boot_b` test with the exact
-kexec-validated payload. The temporary `fastboot boot` path is not a positive
-direct-boot signal on this bootloader: the D1 raw header-v2 image
-`8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0`
-returns `OKAY` and then remains visible in fastboot, while bridge raw/AVB and
-Lineage raw controls fail explicitly with `Load Error`.
-The public evidence summary for this cycle is
-[docs/evidence/2026-07-11-mainline-k1.md](docs/evidence/2026-07-11-mainline-k1.md).
-The pinned persistent D1 launcher is `scripts/test-mainline617-direct-d1.sh`.
-See [docs/direct-boot.md](docs/direct-boot.md) for the controlled test matrix.
+Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
+baseline and two negative mainline handoff results. D1 AVB
+`f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`
+and D1-pack AVB
+`2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754`
+were each written and read back exactly before reboot, then returned to real
+fastboot USB without an observed mainline USB identity. R5 was restored and
+verified after each cycle. D1-pack therefore shows that replacing DTB entry 12
+is not sufficient; it does not identify the exact early failure boundary.
+
+The next control is the exact K1 payload in a header-v0 image with the DTB
+appended to the kernel, launched by
+`scripts/test-mainline617-direct-d2-header0.sh`. The watchdog-kernel control
+`scripts/test-mainline617-direct-d1-wdt.sh` is prepared after D2 and remains a
+secondary hypothesis. See the
+[2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
+[controlled test matrix](docs/direct-boot.md).
 
 ## Mainline fixes validated so far
 

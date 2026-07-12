@@ -420,6 +420,48 @@ validate_direct_d1_pack_artifacts_and_launcher() {
   log "D1-pack artifacts and launcher validated"
 }
 
+validate_direct_followup_artifacts_and_launchers() {
+  local d2_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-140000-mainline617-direct-exact-header0"
+  local d2_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d2-header0.sh"
+  local wdt_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150100-mainline617-direct-wdt-d1"
+  local wdt_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d1-wdt.sh"
+  local wdt_config="$HOTDOG_ROOT/build/experiments/2026-07-11-143000-mainline617-qcom-wdt-builtin/config"
+
+  check_sha "D2-header0 AVB image" "$d2_dir/boot-mainline617-direct-exact-header0-stockos-avb.img" "2076c16598a63bfcfea416b47789eacf74086e33919c0715949cd42719f9b71e"
+  check_sha "D2-header0 raw image" "$d2_dir/boot-mainline617-direct-exact-header0.img" "c7c07a0cbf1311395343135253a10b555381f97ff32509c77257fc7b3aee3614"
+  check_sha "D2-header0 appended payload" "$d2_dir/components/boot-mainline617-direct-exact-header0-payload" "9fa9e318cf9d1efea349028a4c1e80b8477fd4839d7a73d3efdc0a0e5811bd09"
+  check_sha "D2-header0 exact K1 kernel" "$d2_dir/components/kernel" "48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83"
+  check_sha "D2-header0 exact K1 DTB" "$d2_dir/components/dtb" "cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440"
+  check_sha "D2-header0 exact K1 ramdisk" "$d2_dir/components/ramdisk" "b7e939614b7cb34ecdd8639613d76b8adba39b069b6591e35c39bc4c57a37622"
+  check_size "D2-header0 AVB image" "$d2_dir/boot-mainline617-direct-exact-header0-stockos-avb.img" "100663296"
+  check_size "D2-header0 raw image" "$d2_dir/boot-mainline617-direct-exact-header0.img" "50294784"
+  require_text "D2-header0 unpacked header" "$d2_dir/unpack.txt" "boot image header version: 0"
+  require_file "$d2_launcher"
+  bash -n "$d2_launcher"
+  require_text "D2-header0 launcher pins AVB image" "$d2_launcher" 'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-140000-mainline617-direct-exact-header0/boot-mainline617-direct-exact-header0-stockos-avb.img"'
+  require_text "D2-header0 launcher pins AVB hash" "$d2_launcher" "2076c16598a63bfcfea416b47789eacf74086e33919c0715949cd42719f9b71e"
+  require_text "D2-header0 launcher rejects overrides" "$d2_launcher" "Unsupported option for pinned D2-header0 test"
+  require_text "D2-header0 launcher starts from R5 SSH" "$d2_launcher" "--from-pmos-ssh"
+  require_text "D2-header0 launcher prearms rescue" "$d2_launcher" "--start-rescue-watcher"
+  require_text "D2-header0 launcher requires K1 wrapper" "$d2_launcher" "--expect-cmdline-token rdinit=/hotdog-mainline-wrapper"
+
+  check_sha "D1-wdt AVB image" "$wdt_dir/boot.img" "74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d"
+  check_sha "D1-wdt raw image" "$wdt_dir/boot-mainline617-direct-wdt-d1.img" "c5b31bc45096705a16255efe059306368de97570cf2e385c6187227e346e4580"
+  check_sha "D1-wdt kernel" "$wdt_dir/components/kernel" "c1d19855e75dd1cfa7ab8e6dd21c0751b6c6f79b5bc588b6c4f5fa7d8d42941e"
+  check_sha "D1-wdt unchanged DTB" "$wdt_dir/components/dtb" "cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440"
+  check_sha "D1-wdt unchanged ramdisk" "$wdt_dir/components/ramdisk" "b7e939614b7cb34ecdd8639613d76b8adba39b069b6591e35c39bc4c57a37622"
+  check_size "D1-wdt AVB image" "$wdt_dir/boot.img" "100663296"
+  check_size "D1-wdt raw image" "$wdt_dir/boot-mainline617-direct-wdt-d1.img" "50298880"
+  require_text "D1-wdt built-in Qualcomm watchdog" "$wdt_config" "CONFIG_QCOM_WDT=y"
+  require_file "$wdt_launcher"
+  bash -n "$wdt_launcher"
+  require_text "D1-wdt launcher pins AVB image" "$wdt_launcher" 'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150100-mainline617-direct-wdt-d1/boot.img"'
+  require_text "D1-wdt launcher pins AVB hash" "$wdt_launcher" "74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d"
+  require_text "D1-wdt launcher rejects overrides" "$wdt_launcher" "Unsupported option for pinned D1-wdt test"
+  require_text "D1-wdt launcher prearms rescue" "$wdt_launcher" "--start-rescue-watcher"
+  log "D2-header0 and D1-wdt artifacts and launchers validated"
+}
+
 validate_dtb_entry12() {
   local label="$1"
   local dtb="$2"
@@ -655,6 +697,7 @@ main() {
 
   validate_direct_d1_artifacts_and_launcher
   validate_direct_d1_pack_artifacts_and_launcher
+  validate_direct_followup_artifacts_and_launchers
   validate_kernel_prefix_tester_guards
   validate_d1_safety_offline
   validate_acm_collector

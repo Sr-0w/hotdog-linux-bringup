@@ -45,7 +45,7 @@ Earlier direct candidates used older DTBs, different initramfs archives, or a
 command line missing the final SMMU, wrapper, and timing parameters. They do
 not isolate the bootloader handoff from the already fixed userspace problems.
 
-## Prepared candidates
+## Candidate identities
 
 A local two-run check reproduced the single-DTB D1 boot images byte-for-byte;
 this checks deterministic packaging, not clean-clone package reproducibility.
@@ -53,19 +53,21 @@ The raw image SHA256 is
 `8eee58ec96bcaaba5563e1aed9c3a00ac4c41ac495bc9ca728a45aa0bcd56ae0`;
 the deterministic AVB copy SHA256 is
 `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`.
-These hashes describe prepared artifacts, not a successful hardware result.
+The AVB image was later tested persistently and returned to fastboot without an
+accepted mainline identity; the hashes do not describe a successful mainline
+boot.
 The raw `8eee58ec...` image is a temporary packaging and `fastboot boot`
 artifact only; it must not be flashed. The AVB image
 `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`
-is the image pinned by the next persistent `boot_b` test.
+is the image used by the recorded persistent D1 test.
 
 A debug kernel retaining the K1 Android entry layout and changing
 `CONFIG_QCOM_WDT=m` to `CONFIG_QCOM_WDT=y` has also been built. Its Image
 SHA256 is
 `c1d19855e75dd1cfa7ab8e6dd21c0751b6c6f79b5bc588b6c4f5fa7d8d42941e`.
-The only other config change is `CONFIG_WATCHDOG_SYSFS=y`; this was prepared
-as a watchdog/restart-handler debug control, not as the pinned D1 persistent
-test. The change is tracked in
+The only other config change is `CONFIG_WATCHDOG_SYSFS=y`; this is prepared as
+the D1-wdt debug control after D2, not as a result of either completed cycle.
+The change is tracked in
 [mainline-direct-debug.fragment](../configs/mainline-direct-debug.fragment),
 and [test-mainline617-qcom-wdt.sh](../scripts/test-mainline617-qcom-wdt.sh)
 hash-checks the complete test tuple.
@@ -75,7 +77,7 @@ image SHA256 is
 `c5b31bc45096705a16255efe059306368de97570cf2e385c6187227e346e4580`;
 its AVB copy SHA256 is
 `74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d`.
-It is not the pinned D1 persistent test.
+It has not been tested on hardware.
 
 This standalone debug payload is distinct from the package path. The debug
 payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the current r4 package keeps
@@ -100,7 +102,7 @@ D1 keeps the boot-image contract used by the working downstream image:
 - DTB offset `0x01f00000`
 
 Only the payload is replaced with the kexec-validated mainline Image, DTB,
-initramfs, and command line. This is the most useful direct test because:
+initramfs, and command line. This was the first persistent direct test because:
 
 - success would show that this header-v2 packaging and payload can cross the
   direct bootloader handoff;
@@ -128,10 +130,10 @@ The default `100663296`-byte partition size is the value observed on the
 tested HD1913. It is not permission to flash another device: verify that
 device's partition geometry and recovery path independently.
 
-## Pinned persistent D1 launcher
+## Persistent D1 launcher and result
 
 [test-mainline617-direct-d1.sh](../scripts/test-mainline617-direct-d1.sh) is
-the next persistent direct-boot launcher. It intentionally narrows the test to
+the launcher used for the recorded persistent D1 cycle. It narrows the test to
 one pinned D1 image and one pinned recovery bridge:
 
 | Item | Pinned value |
@@ -164,6 +166,17 @@ bridge is not success: if SSH returns on downstream 4.14, or if fastboot returns
 and the no-paint bridge is restored, the run only proves recovery worked. A
 timeout without a USB recovery path leaves the companion watcher running.
 
+On 2026-07-12, the D1 AVB image was written to `boot_b` and read back with the
+exact pinned hash before reboot. Downstream USB disconnected at `13:27:38` and
+fastboot `18d1:d00d` appeared at `13:27:41`. No mainline
+`bcdDevice=0617`, ACM, NCM, or `900e` state was observed. The result is a
+negative direct-handoff signal, not mainline success. R5 was restored, a fresh
+downstream SSH boot was confirmed, and the later `boot_b` readback matched the
+pinned R5 hash exactly.
+
+The complete public record is
+[the 2026-07-12 direct-boot evidence](evidence/2026-07-12-direct-boot.md).
+
 The D1 ramdisk contains two concatenated `newc` archives. The older archive
 still carries the historical framebuffer probe bytes, but the final effective
 `hotdog_fb_test.sh` is the later wait-only replacement. Both offline validators
@@ -186,11 +199,9 @@ actually emitted by the `linux-oneplus-hotdog-mainline617-k1` APK:
 | raw header-v2 image | `63badda8d95b291248c91a8864dfa23f5e1f14a9d6346b9a036d08fd0273a0cd` |
 | AVB `NONE` image | `94df0da7f7067f6769aa86b0da091ccdd0252e17420bb464830119e71641a06e` |
 
-This candidate is a package-reproducibility test after the historical D1
-baseline has been validated on hardware. It must not replace or precede D1,
-because doing so would mix bootloader-handoff validation with the change from
-the historical K1 Image to the package-built kernel. It has not been tested on
-hardware.
+This candidate is a package-reproducibility test only after a direct mainline
+handoff baseline has been validated on hardware. It remains deferred because
+D1 and D1-pack returned to fastboot without an accepted mainline identity.
 
 The r3 package supersedes r0 as an intermediate package result. It builds
 `qcom-wdt` into the kernel and replaces the installed hotdog DTB with
@@ -232,8 +243,8 @@ the source pack and replaced original entry in `SHA256SUMS` and the manifest:
   --outdir /path/to/local-output/direct-d1-pack
 ```
 
-The single-DTB form remains the primary D1 experiment because it changes the
-fewest payload variables relative to kexec. The pack form is a control for
+The single-DTB form was the primary D1 experiment because it changes the fewest
+payload variables relative to kexec. The pack form was the next control for
 bootloader DTB selection.
 
 [test-mainline617-direct-d1-pack.sh](../scripts/test-mainline617-direct-d1-pack.sh)
@@ -244,31 +255,75 @@ and offsets remain unchanged. It pins raw image SHA256
 `f72e8eab80d07fe265bfe5520228b3ff758d47980a2f0204f774b14d5314b1ac`
 and AVB image SHA256
 `2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754`.
-Run it only after the historical single-DTB D1 test has a recorded result.
-The D1-pack image has not been tested on hardware.
+It was run after the historical single-DTB D1 result. The exact AVB image was
+written and read back before reboot. Downstream USB disconnected at `13:36:16`
+and fastboot `18d1:d00d` appeared at `13:36:20`; no mainline
+`bcdDevice=0617`, ACM, NCM, or `900e` state was observed. R5 was then restored
+and re-attested by fresh SSH and an exact later `boot_b` readback. Replacing
+DTB-pack entry 12 is therefore not sufficient for direct boot on the tested
+handset.
+
+## D2 header-v0 append-DTB control
+
+[test-mainline617-direct-d2-header0.sh](../scripts/test-mainline617-direct-d2-header0.sh)
+is the next prepared control. Relative to D1, it keeps the exact K1 Image
+`48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83`,
+DTB `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`,
+and ramdisk
+`b7e939614b7cb34ecdd8639613d76b8adba39b069b6591e35c39bc4c57a37622`.
+Only the boot-image contract changes from header v2 with a separate DTB section
+to header v0 with the DTB appended to the kernel payload.
+
+| D2 artifact | SHA256 |
+|---|---|
+| AVB image | `2076c16598a63bfcfea416b47789eacf74086e33919c0715949cd42719f9b71e` |
+| Raw image | `c7c07a0cbf1311395343135253a10b555381f97ff32509c77257fc7b3aee3614` |
+| Appended payload | `9fa9e318cf9d1efea349028a4c1e80b8477fd4839d7a73d3efdc0a0e5811bd09` |
+
+D2 has passed offline candidate validation. It has not been booted on hardware.
+
+## D1 watchdog control
+
+[test-mainline617-direct-d1-wdt.sh](../scripts/test-mainline617-direct-d1-wdt.sh)
+is prepared after D2. It retains the D1 header-v2 layout, ramdisk, transformed
+DTB, command line, and rollback policy while changing only the kernel to
+`c1d19855e75dd1cfa7ab8e6dd21c0751b6c6f79b5bc588b6c4f5fa7d8d42941e`
+with `CONFIG_QCOM_WDT=y` and `CONFIG_WATCHDOG_SYSFS=y`. The raw image is
+`c5b31bc45096705a16255efe059306368de97570cf2e385c6187227e346e4580`;
+the AVB image is
+`74ab6d70f54257399d6b3afe59eaba337a67fc2254355341e2cba52fd769627d`.
+
+This control has passed offline validation but has not been booted. The
+watchdog remains a secondary hypothesis rather than a proven cause because the
+observed D1 and D1-pack returns to fastboot USB occurred within three to four
+seconds.
 
 ## Follow-up matrix
 
-| ID | Change from the validated baseline | Question answered |
+| ID | State or change | Result or question |
 |---|---|---|
-| K0 | Boot the downstream bridge directly | Is the bootloader and recovery baseline intact? |
-| K1 | Load the pinned mainline payload by kexec | Does the payload itself still work? |
-| D1 | Flash the pinned AVB header-v2 image to `boot_b` with `test-mainline617-direct-d1.sh` | Does the exact K1 payload survive the persistent bootloader handoff? |
-| D1-pack | After D1 has a recorded result, run the pinned DTB-pack launcher with entry 12 replaced | Does the bootloader require Android DTB selection? |
-| D1-pkg | After D1 has a recorded result, use the hash-recorded r4 package kernel and installed DTB in the otherwise identical single-DTB image | Does the pmaports-built payload reproduce the D1 result? |
-| D2 | Append the K1 DTB to Image in header v0 | Is separate-DTB handoff the failure? |
+| K0 | Observed: boot the R5 downstream bridge directly | Fresh 4.14 SSH, slot B, configured serial marker, and exact rollback readback confirm the tested recovery baseline. |
+| K1 | Observed: load the pinned mainline payload by kexec | The exact K1 payload reaches postmarketOS userspace through the bridge. |
+| D1 | Observed: exact K1 payload in persistent header v2 | Returned to fastboot in about three seconds without an accepted mainline USB identity. |
+| D1-pack | Observed: replace DTB-pack entry 12 | Returned to fastboot in about four seconds; the pack replacement is not sufficient. |
+| D2 | Prepared next: append the exact K1 DTB to Image in header v0 | Does the alternate kernel/DTB handoff cross the early direct-entry boundary? |
+| D1-wdt | Prepared after D2: substitute the built-in-watchdog kernel | Does watchdog initialization affect the early return, despite the short observed interval? |
+| D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D3 | Compare minimal and full command lines | Are injected Android bootargs involved? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-Do not start D1-pack or D2-D4 until D1 has a recorded result. Do not start the
-package-built control until D1 itself is validated. Each candidate must change
-one handoff variable and retain the other known-good payload hashes.
+D1 and D1-pack now have recorded negative results. D2 is next, followed by
+D1-wdt. Keep the package-built control deferred until a direct handoff baseline
+exists. Each candidate must change one handoff variable and retain the other
+known-good payload hashes.
 
 ## pmaports integration target
 
-The D1 contract maps to `deviceinfo_header_version="2"`, a 4096-byte page, and
-the base, kernel, ramdisk, tags, and DTB offsets listed above. Kernel arguments
-are supplied by `kernel-cmdline.conf`, currently containing
+The D1 header-v2 candidate maps to `deviceinfo_header_version="2"`, a 4096-byte
+page, and the base, kernel, ramdisk, tags, and DTB offsets listed above. Its
+persistent return to fastboot means those fields are not yet a validated
+direct-boot contract. Kernel arguments are supplied by `kernel-cmdline.conf`,
+currently containing
 `clk_ignore_unused`, rather than the deprecated `deviceinfo_kernel_cmdline`
 field. The final device package must use
 `deviceinfo_flash_fastboot_partition_rootfs="super"` rather than the legacy
@@ -290,11 +345,13 @@ flashed. The persistent downstream no-paint bridge remains the recovery image
 and the pinned launcher restores it whenever the recovery path appears.
 
 The historical K1-compatible Qualcomm watchdog module was validated after
-mainline userspace, but that result does not validate the r4 built-in driver.
+mainline userspace, but that result does not validate the r4 or D1-wdt built-in
+driver.
 `RESTART2(bootloader)` still falls back to normal boot with the observed
-`cf63ae...` DTB, which lacks the PON boot-mode mapping. The D1 persistent test
-therefore depends on the prearmed rescue watcher and restore image rather than
-on mainline rebooting itself cleanly into fastboot.
+`cf63ae...` DTB, which lacks the PON boot-mode mapping. The D1 and D1-pack
+cycles demonstrated that the prearmed watcher can restore R5 when fastboot
+returns. D2 and later persistent controls continue to depend on this recovery
+path rather than on mainline rebooting itself cleanly into fastboot.
 
 ## Completion criteria
 

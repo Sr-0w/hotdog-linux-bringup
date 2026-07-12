@@ -7,14 +7,20 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- validate a built-in Qualcomm APSS watchdog and reliable software reboot
-- hardware-test the hotdog-only PON reboot-mode pmaports patch after D1; the
-  patch adds `mode-bootloader = <2>` and `mode-recovery = <1>` and has only
-  been validated offline so far
-- test the exact kexec-validated payload in the working header-v2 boot contract
-- validate a direct image generated from the exact r4 package payload; r4 is
-  byte-reproducible in the tested pmbootstrap environment, but its direct image
-  and hardware behavior remain unvalidated
+- run the prepared D2 control next: the exact K1 payload in Android header v0
+  with its DTB appended to the kernel; D1 header v2 and D1-pack both returned to
+  fastboot without an observed mainline USB identity
+- run D1-wdt only after D2; the built-in watchdog remains a secondary
+  hypothesis because the observed return to fastboot took only three to four
+  seconds
+- retain the hash-pinned R5 bridge as the validated rollback baseline for every
+  persistent control
+- after direct entry works, validate the built-in Qualcomm APSS watchdog,
+  reliable software reboot, and the hotdog-only PON reboot-mode properties
+- validate a direct image generated from the exact r4 package payload only
+  after a direct handoff baseline exists; r4 is byte-reproducible in the tested
+  pmbootstrap environment, but its direct image and hardware behavior remain
+  unvalidated
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
 - restore the complete RAM map
