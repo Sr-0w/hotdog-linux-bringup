@@ -332,13 +332,16 @@ seconds.
 | D3 | Observed: replace incompatible stock DTBO entry 5 with a no-op | Returned to fastboot after about 3.84 seconds without an accepted mainline identity. |
 | D3-wdt | Observed: keep D3 DTBO and substitute the built-in-watchdog kernel | Same approximately 3.84-second result. |
 | D4-entry | Observed: PSCI reset at the first `primary_entry` instructions | Same approximately 3.84-second result; no positive proof of kernel entry. |
+| D5 | Observed: filter stock entry 5 against K1 fixups | Applies to both DTBs and reaches the R5 telnet initramfs, but the rootfs mount does not complete. |
+| D6 | Observed: add K1 aliases for vendor UFS symbols before filtering | R5 exposes all UFS LUNs, NCM, and ACM; `pmos_continue_boot` does not reach SSH. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
 D1 through D4-entry have recorded negative results. The R5 + no-op DTBO
-control also failed, invalidating the no-op as a comparative baseline. A
-filtered stock-preserving overlay compatible with both base DTBs is next.
+control also failed, invalidating the no-op as a comparative baseline. D5 and
+D6 move the failure boundary into the R5 initramfs and prove UFS enumeration,
+but are not yet complete downstream controls.
 Keep the package-built control deferred until a direct handoff baseline
 exists. Each candidate must change one handoff variable and retain the other
 known-good payload hashes.
