@@ -336,7 +336,9 @@ seconds.
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-D1 through D4-entry have recorded negative results. The R5 + no-op DTBO control is next.
+D1 through D4-entry have recorded negative results. The R5 + no-op DTBO
+control also failed, invalidating the no-op as a comparative baseline. A
+filtered stock-preserving overlay compatible with both base DTBs is next.
 Keep the package-built control deferred until a direct handoff baseline
 exists. Each candidate must change one handoff variable and retain the other
 known-good payload hashes.

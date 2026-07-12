@@ -124,6 +124,16 @@ retry decrement as D3. It therefore supplied no positive proof that
 `primary_entry` was reached. The pinned AVB image is
 `06fe64e230f3b09f693d81500bd92a207badda8309e71375f77695a95b094607`.
 
+## R5 no-op DTBO baseline control
+
+The known-good R5 `boot_b` was tested with the same D3 no-op `dtbo_b`. It also
+returned to fastboot in approximately 3.84 seconds and decremented the slot
+retry count once. Rollback restored and read back original `dtbo_b` and exact
+R5 `boot_b`. Therefore the no-op overlay is not a valid baseline even for the
+downstream kernel, and D3 through D4-entry cannot isolate a mainline-only
+failure. The next overlay must retain the stock fragments that resolve against
+both downstream and K1 base DTBs.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed
