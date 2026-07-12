@@ -11,6 +11,8 @@ The packaging and submission gates are tracked separately in the
   D6 already applies to both base DTBs and exposes all UFS LUNs, NCM, and ACM
 - prearm the verified ACM bootloader fallback before every initramfs
   continuation so a failed rootfs transition remains remotely recoverable
+- rerun the `super` loop hook after late UFS discovery and require both pinned
+  postmarketOS filesystem UUIDs before leaving the ACM shell
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
