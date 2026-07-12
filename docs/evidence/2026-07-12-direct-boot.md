@@ -134,6 +134,27 @@ downstream kernel, and D3 through D4-entry cannot isolate a mainline-only
 failure. The next overlay must retain the stock fragments that resolve against
 both downstream and K1 base DTBs.
 
+## D5 and D6 filtered overlay controls
+
+D5 reproducibly filters stock entry 5 by removing fragments whose external
+fixups do not resolve in K1, then validates the result against both downstream
+and mainline base DTBs. It retains 56 of 125 fragments. On hardware, R5 reached
+the USB telnet initramfs with kernel `4.14.357-openela-perf`, but the nested
+filesystem mount failed and strict SSH acceptance was not reached.
+
+D6 adds K1 symbol aliases for the vendor UFS controller, PHY, and regulator
+names before running the same filter. It retains 58 fragments, including
+fragments 59 and 60. On hardware, R5 exposed `/dev/sda` through `/dev/sdf`, the
+complete `/dev/sde*` partition set, USB NCM, and the `ttyGS0` ACM shell. The
+transition after `pmos_continue_boot` did not produce SSH. The original DTBO
+and exact R5 boot image were restored after D5 and read back by SHA256. D6
+requires the same restoration after a manual return to fastboot.
+
+The next cycle must prearm
+[`guard-pmos-acm-continue.py`](../../scripts/guard-pmos-acm-continue.py) before
+leaving the ACM shell. This captures the delayed initramfs log and schedules a
+verified `RESTART2(bootloader)` fallback without requiring physical input.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed

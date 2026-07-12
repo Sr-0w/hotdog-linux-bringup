@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Mainline not observed | R5 also failed with the no-op DTBO in about 3.84 seconds. D3/D4 therefore do not isolate mainline behavior; a stock-preserving overlay compatible with both DTBs is required. |
+| Persistent direct boot | Mainline not observed | D5 and D6 are stock-derived overlays that apply offline to both base DTBs. D5 reached the R5 telnet initramfs; D6 additionally exposed all UFS LUNs and ACM, but neither completed a verified rootfs transition. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -84,11 +84,13 @@ Display support can then be developed without losing the remote debug channel.
    read back exactly and left no pstore record.
 4. Keep the downstream R5 + no-op DTBO result as a failed baseline control.
    It proves that removing all 125 stock fragments is not viable.
-5. Build a filtered overlay that retains every fragment whose fixups resolve
-   against both downstream and K1 DTBs, and require successful offline apply
-   to both bases before another hardware cycle.
-5. Defer the r4 package-generated direct image until a direct handoff baseline
+5. Keep D5 as the first structurally valid dual-base overlay result. It boots
+   R5 into the initramfs but does not provide a complete downstream control.
+6. Keep D6 as the UFS-symbol bridge result. It exposes every UFS LUN and USB
+   ACM, but the rootfs transition after `pmos_continue_boot` remains unverified.
+   Prearm the ACM bootloader fallback before the next continuation attempt.
+7. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-6. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+8. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.

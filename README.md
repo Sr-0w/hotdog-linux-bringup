@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | Not observed | The R5 + no-op DTBO control also returned to fastboot in about 3.84 seconds. The no-op removes stock fragments required even by the known-good downstream path, so D3/D4 do not isolate mainline behavior. A filtered overlay that applies to both DTBs is required next. |
+| Persistent direct mainline | Not observed | D5 proved a structurally valid filtered overlay can boot R5 into its initramfs. D6 restored the vendor UFS fragments through K1 symbol aliases and exposed every UFS LUN, but did not complete the rootfs transition. A direct mainline cycle remains gated on a fully booting R5 DTBO control. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -69,8 +69,12 @@ with a no-op while booting unchanged D1. Raw host USB shows fastboot returning
 3.84 seconds after disconnect, matching D1/D2. Its rollback restored and read
 back original `dtbo_b` before exact R5 `boot_b`. D3-wdt and D4-entry produced
 the same interval. The R5 control then proved the no-op DTBO itself is not a
-valid baseline. The next candidate must preserve every stock fragment that can
-apply to both downstream and K1 DTBs. See the
+valid baseline. D5 retained 56 fragments and applied cleanly to both DTBs; R5
+reached its telnet initramfs but failed to mount the nested filesystems. D6
+added K1 aliases for the vendor UFS symbols, retained 58 fragments, exposed all
+UFS LUNs and USB ACM, then stalled during `pmos_continue_boot`. These controls
+locate the current problem after downstream kernel entry and UFS discovery,
+but before a verified rootfs/userspace transition. See the
 [2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
 [controlled test matrix](docs/direct-boot.md).
 

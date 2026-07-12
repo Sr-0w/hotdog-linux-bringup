@@ -7,9 +7,10 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- build a stock-preserving filtered overlay next; the downstream R5 + no-op
-  DTBO control also returned to fastboot, proving that a zero-fragment baseline
-  is invalid. Require offline application to both downstream and K1 base DTBs
+- refine the D6 stock-preserving overlay until the R5 control reaches SSH;
+  D6 already applies to both base DTBs and exposes all UFS LUNs, NCM, and ACM
+- prearm the verified ACM bootloader fallback before every initramfs
+  continuation so a failed rootfs transition remains remotely recoverable
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
