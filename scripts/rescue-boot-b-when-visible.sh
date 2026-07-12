@@ -12,6 +12,8 @@ RESTORE_IMAGE_EXPECTED_SHA256="${RESTORE_IMAGE_EXPECTED_SHA256:-}"
 RESTORE_DTBO_IMAGE="${RESTORE_DTBO_IMAGE:-}"
 RESTORE_DTBO_SHA256="${RESTORE_DTBO_SHA256:-}"
 BOOT_B_ONLY=0
+DUAL_PARTITION=0
+DTBO_OPTION_SEEN=0
 TIMEOUT_SEC="${TIMEOUT_SEC:-21600}"
 POLL_SEC="${POLL_SEC:-5}"
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
@@ -22,6 +24,8 @@ CONTRACT_NONCE=""
 CONTRACT_CHALLENGE_FILE=""
 CONTRACT_ACK_FILE=""
 CONTRACT_ACTIVE=0
+CONTRACT_VERSION=0
+RESTORE_COMPLETE_FILE=""
 WATCHER_SCRIPT_PATH=""
 WATCHER_STARTTIME=""
 
@@ -40,10 +44,16 @@ Options:
   --restore-boot-b-sha256 SHA256
                          Expected restore image hash. If omitted, the startup
                          hash is pinned for the lifetime of this watcher.
-  --restore-dtbo-b FILE  Optional known-good dtbo_b image to flash before boot_b.
+  --restore-dtbo-b FILE  Known-good dtbo_b image for explicit dual mode.
   --restore-dtbo-b-sha256 SHA256
                          Required exact hash whenever --restore-dtbo-b is used.
   --boot-b-only          Explicitly clear and forbid every dtbo restore input.
+  --dual-partition       Explicitly enable the attested dtbo_b + boot_b mode.
+                         Requires both restore DTBO arguments and a versioned
+                         watcher contract.
+  --restore-complete-file FILE
+                         Shared dual-watcher marker published only after the
+                         ordered restore and handoff are accepted.
   --after-restore MODE   recovery, system, bootloader, or none. Default: recovery.
   --timeout SEC          Seconds to wait. Default: 21600.
   --poll SEC             Poll interval. Default: 5.
@@ -77,15 +87,25 @@ while [ "$#" -gt 0 ]; do
     --restore-dtbo-b)
       [ "$#" -ge 2 ] || { echo "Missing value for --restore-dtbo-b" >&2; exit 2; }
       RESTORE_DTBO_IMAGE="$2"
+      DTBO_OPTION_SEEN=1
       shift
       ;;
     --restore-dtbo-b-sha256)
       [ "$#" -ge 2 ] || { echo "Missing value for --restore-dtbo-b-sha256" >&2; exit 2; }
       RESTORE_DTBO_SHA256="${2,,}"
+      DTBO_OPTION_SEEN=1
       shift
       ;;
     --boot-b-only)
       BOOT_B_ONLY=1
+      ;;
+    --dual-partition)
+      DUAL_PARTITION=1
+      ;;
+    --restore-complete-file)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-complete-file" >&2; exit 2; }
+      RESTORE_COMPLETE_FILE="$2"
+      shift
       ;;
     --after-restore)
       [ "$#" -ge 2 ] || { echo "Missing value for --after-restore" >&2; exit 2; }
@@ -189,21 +209,41 @@ publish_ready() {
   tmp="$READY_FILE.$$.tmp"
   umask 077
   if [ "$CONTRACT_ACTIVE" -eq 1 ]; then
-    {
-      printf 'contract_version=2\n'
-      printf 'pid=%s\n' "$$"
-      printf 'starttime=%s\n' "$WATCHER_STARTTIME"
-      printf 'serial=%s\n' "$SERIAL"
-      printf 'restore_image=%s\n' "$RESTORE_IMAGE"
-      printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
-      printf 'boot_b_only=1\n'
-      printf 'restore_dtbo_image=none\n'
-      printf 'restore_dtbo_sha256=none\n'
-      printf 'nonce=%s\n' "$CONTRACT_NONCE"
-      printf 'watcher_script=%s\n' "$WATCHER_SCRIPT_PATH"
-      printf 'challenge_file=%s\n' "$CONTRACT_CHALLENGE_FILE"
-      printf 'ack_file=%s\n' "$CONTRACT_ACK_FILE"
-    } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+    if [ "$CONTRACT_VERSION" -eq 2 ]; then
+      {
+        printf 'contract_version=2\n'
+        printf 'pid=%s\n' "$$"
+        printf 'starttime=%s\n' "$WATCHER_STARTTIME"
+        printf 'serial=%s\n' "$SERIAL"
+        printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+        printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+        printf 'boot_b_only=1\n'
+        printf 'restore_dtbo_image=none\n'
+        printf 'restore_dtbo_sha256=none\n'
+        printf 'nonce=%s\n' "$CONTRACT_NONCE"
+        printf 'watcher_script=%s\n' "$WATCHER_SCRIPT_PATH"
+        printf 'challenge_file=%s\n' "$CONTRACT_CHALLENGE_FILE"
+        printf 'ack_file=%s\n' "$CONTRACT_ACK_FILE"
+      } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+    else
+      {
+        printf 'contract_version=3\n'
+        printf 'pid=%s\n' "$$"
+        printf 'starttime=%s\n' "$WATCHER_STARTTIME"
+        printf 'serial=%s\n' "$SERIAL"
+        printf 'restore_image=%s\n' "$RESTORE_IMAGE"
+        printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+        printf 'boot_b_only=0\n'
+        printf 'dual_partition=1\n'
+        printf 'restore_dtbo_image=%s\n' "$RESTORE_DTBO_IMAGE"
+        printf 'restore_dtbo_sha256=%s\n' "$RESTORE_DTBO_SHA256"
+        printf 'restore_complete_file=%s\n' "$RESTORE_COMPLETE_FILE"
+        printf 'nonce=%s\n' "$CONTRACT_NONCE"
+        printf 'watcher_script=%s\n' "$WATCHER_SCRIPT_PATH"
+        printf 'challenge_file=%s\n' "$CONTRACT_CHALLENGE_FILE"
+        printf 'ack_file=%s\n' "$CONTRACT_ACK_FILE"
+      } > "$tmp" || die "Could not write rescue watcher readiness file: $READY_FILE" 3
+    fi
   else
     {
       printf 'pid=%s\n' "$$"
@@ -239,7 +279,7 @@ publish_contract_ack() {
   [ "$CONTRACT_ACTIVE" -eq 1 ] || return 0
   [ -r "$CONTRACT_CHALLENGE_FILE" ] || return 0
   actual="$(< "$CONTRACT_CHALLENGE_FILE")" || return 0
-  expected_prefix="contract_version=2"$'\n'"nonce=$CONTRACT_NONCE"$'\n'
+  expected_prefix="contract_version=$CONTRACT_VERSION"$'\n'"nonce=$CONTRACT_NONCE"$'\n'
   case "$actual" in
     "$expected_prefix"challenge=*) ;;
     *) return 0 ;;
@@ -251,7 +291,7 @@ publish_contract_ack() {
   tmp="$CONTRACT_ACK_FILE.$$.tmp"
   umask 077
   {
-    printf 'contract_version=2\n'
+    printf 'contract_version=%s\n' "$CONTRACT_VERSION"
     printf 'pid=%s\n' "$$"
     printf 'starttime=%s\n' "$WATCHER_STARTTIME"
     printf 'nonce=%s\n' "$CONTRACT_NONCE"
@@ -441,15 +481,16 @@ wait_recovery_adb() {
 }
 
 restore_from_fastboot() {
+  if dual_restore_complete; then
+    log "Peer watcher already published the accepted dual restore; holding without reflashing"
+    return 0
+  fi
   validate_fastboot_restore_context boot_b "$RESTORE_IMAGE" || return 1
   get_fastboot_var current-slot | tee "$run_dir/current-slot-before.txt" || true
   get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
   get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-before.txt" || true
 
-  verify_restore_image_hash || return 1
-  log "Restoring boot_b"
-  sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
-  if [ -n "$RESTORE_DTBO_IMAGE" ]; then
+  if [ "$DUAL_PARTITION" -eq 1 ]; then
     verify_restore_dtbo_hash || return 1
     validate_fastboot_restore_context dtbo_b "$RESTORE_DTBO_IMAGE" || return 1
     verify_restore_dtbo_hash || return 1
@@ -462,6 +503,9 @@ restore_from_fastboot() {
       return 1
     fi
   fi
+  verify_restore_image_hash || return 1
+  log "Restoring boot_b"
+  sha256sum "$RESTORE_IMAGE" | tee "$run_dir/restore-image-sha256.txt"
   verify_restore_image_hash || return 1
   validate_fastboot_restore_context boot_b "$RESTORE_IMAGE" || return 1
   if ! fastboot_do flash boot_b "$RESTORE_IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b-restore.txt"; then
@@ -480,7 +524,9 @@ restore_from_fastboot() {
   case "$AFTER_RESTORE" in
     recovery)
       log "Rebooting to recovery"
-      fastboot_do reboot recovery 2>&1 | tee "$run_dir/fastboot-reboot-recovery.txt" || true
+      if ! fastboot_do reboot recovery 2>&1 | tee "$run_dir/fastboot-reboot-recovery.txt"; then
+        [ "$DUAL_PARTITION" -eq 0 ] || return 1
+      fi
       if wait_recovery_adb; then
         collect_recovery_crash_artifacts "after-restore"
       else
@@ -489,11 +535,15 @@ restore_from_fastboot() {
       ;;
     system)
       log "Rebooting system"
-      fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot-system.txt" || true
+      if ! fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot-system.txt"; then
+        [ "$DUAL_PARTITION" -eq 0 ] || return 1
+      fi
       ;;
     bootloader)
       log "Rebooting bootloader"
-      fastboot_do reboot bootloader 2>&1 | tee "$run_dir/fastboot-reboot-bootloader.txt" || true
+      if ! fastboot_do reboot bootloader 2>&1 | tee "$run_dir/fastboot-reboot-bootloader.txt"; then
+        [ "$DUAL_PARTITION" -eq 0 ] || return 1
+      fi
       ;;
     none)
       log "Leaving target in fastboot after restore"
@@ -502,6 +552,13 @@ restore_from_fastboot() {
       die "Invalid --after-restore mode: $AFTER_RESTORE" 2
       ;;
   esac
+  if [ "$DUAL_PARTITION" -eq 1 ]; then
+    publish_dual_restore_complete || {
+      log "Could not publish the accepted dual restore marker; watcher remains armed"
+      return 1
+    }
+    log "Accepted dual restore marker published: $RESTORE_COMPLETE_FILE"
+  fi
   log "Fastboot accepted the restore, but no strict readback is available; watcher remains armed"
 }
 
@@ -526,6 +583,34 @@ verify_restore_dtbo_hash() {
   fi
 }
 
+dual_restore_complete() {
+  local actual=""
+  local expected=""
+
+  [ "$DUAL_PARTITION" -eq 1 ] && [ -r "$RESTORE_COMPLETE_FILE" ] || return 1
+  actual="$(< "$RESTORE_COMPLETE_FILE")"
+  expected="$(dual_restore_marker_expected)"
+  [ "$actual" = "$expected" ]
+}
+
+dual_restore_marker_expected() {
+  printf 'contract_version=3\n'
+  printf 'serial=%s\n' "$SERIAL"
+  printf 'restore_dtbo_sha256=%s\n' "$RESTORE_DTBO_SHA256"
+  printf 'restore_boot_sha256=%s\n' "$RESTORE_IMAGE_EXPECTED_SHA256"
+  printf 'order=dtbo_b,boot_b,set_active_b,reboot\n'
+}
+
+publish_dual_restore_complete() {
+  local tmp=""
+
+  [ "$DUAL_PARTITION" -eq 1 ] || return 0
+  tmp="$RESTORE_COMPLETE_FILE.$$.tmp"
+  umask 077
+  dual_restore_marker_expected > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$RESTORE_COMPLETE_FILE"
+}
+
 main() {
   local deadline=0
   local fastboot_deadline=0
@@ -538,6 +623,8 @@ main() {
   validate_seconds POLL_SEC "$POLL_SEC"
   validate_seconds FASTBOOT_CMD_TIMEOUT_SEC "$FASTBOOT_CMD_TIMEOUT_SEC"
   [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
+  [ "$BOOT_B_ONLY" -eq 0 ] || [ "$DUAL_PARTITION" -eq 0 ] ||
+    die "--boot-b-only and --dual-partition are mutually exclusive" 2
   case "$AFTER_RESTORE" in
     recovery|system|bootloader|none) ;;
     *) die "--after-restore must be one of: recovery, system, bootloader, none" 2 ;;
@@ -551,7 +638,18 @@ main() {
     [ "$READY_FILE" != "$CONTRACT_CHALLENGE_FILE" ] || die "Watcher contract files must be distinct" 2
     [ "$READY_FILE" != "$CONTRACT_ACK_FILE" ] || die "Watcher contract files must be distinct" 2
     [ "$CONTRACT_CHALLENGE_FILE" != "$CONTRACT_ACK_FILE" ] || die "Watcher contract files must be distinct" 2
-    [ "$BOOT_B_ONLY" -eq 1 ] || die "Versioned watcher contracts require --boot-b-only" 2
+    if [ "$BOOT_B_ONLY" -eq 1 ]; then
+      CONTRACT_VERSION=2
+      [ -z "$RESTORE_COMPLETE_FILE" ] || die "boot_b-only contract refuses --restore-complete-file" 2
+    elif [ "$DUAL_PARTITION" -eq 1 ]; then
+      CONTRACT_VERSION=3
+      [ -n "$RESTORE_COMPLETE_FILE" ] || die "dual contract requires --restore-complete-file" 2
+      [ "$READY_FILE" != "$RESTORE_COMPLETE_FILE" ] || die "Watcher contract files must be distinct" 2
+      [ "$CONTRACT_CHALLENGE_FILE" != "$RESTORE_COMPLETE_FILE" ] || die "Watcher contract files must be distinct" 2
+      [ "$CONTRACT_ACK_FILE" != "$RESTORE_COMPLETE_FILE" ] || die "Watcher contract files must be distinct" 2
+    else
+      die "Versioned watcher contracts require --boot-b-only or --dual-partition" 2
+    fi
     command -v readlink >/dev/null 2>&1 || die "Missing readlink" 127
     WATCHER_SCRIPT_PATH="$(readlink -f "$0")"
     WATCHER_STARTTIME="$(process_starttime "$$")" || die "Could not read watcher process starttime" 3
@@ -563,14 +661,18 @@ main() {
     die "--restore-boot-b-sha256 must be exactly 64 hexadecimal characters" 2
   fi
   verify_restore_image_hash
-  if [ -n "$RESTORE_DTBO_IMAGE" ] || [ -n "$RESTORE_DTBO_SHA256" ]; then
+  if [ "$DUAL_PARTITION" -eq 1 ]; then
     [ -n "$RESTORE_DTBO_IMAGE" ] || die "--restore-dtbo-b-sha256 requires --restore-dtbo-b" 2
     [ -n "$RESTORE_DTBO_SHA256" ] || die "--restore-dtbo-b requires --restore-dtbo-b-sha256" 2
     [ -s "$RESTORE_DTBO_IMAGE" ] || die "Missing restore dtbo image: $RESTORE_DTBO_IMAGE" 2
     [[ "$RESTORE_DTBO_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
       die "--restore-dtbo-b-sha256 must be exactly 64 hexadecimal characters" 2
     verify_restore_dtbo_hash || die "Restore dtbo image failed its startup hash validation" 3
+  elif [ "$DTBO_OPTION_SEEN" -eq 1 ] || [ -n "$RESTORE_DTBO_IMAGE" ] || [ -n "$RESTORE_DTBO_SHA256" ]; then
+    die "dtbo restore inputs require explicit --dual-partition" 2
   fi
+  [ "$DUAL_PARTITION" -eq 0 ] || [ "$CONTRACT_ACTIVE" -eq 1 ] ||
+    die "dual-partition mode requires a versioned watcher contract" 2
   command -v adb >/dev/null 2>&1 || die "Missing adb" 127
   command -v fastboot >/dev/null 2>&1 || die "Missing fastboot" 127
   command -v sha256sum >/dev/null 2>&1 || die "Missing sha256sum" 127
@@ -582,7 +684,13 @@ main() {
   log "Target serial: $SERIAL"
   log "Restore image: $RESTORE_IMAGE"
   log "Restore image SHA256: $RESTORE_IMAGE_EXPECTED_SHA256"
-  log "Restore scope: $([ "$BOOT_B_ONLY" -eq 1 ] && printf 'boot_b-only' || printf 'legacy explicit')"
+  if [ "$BOOT_B_ONLY" -eq 1 ]; then
+    log "Restore scope: boot_b-only-v2"
+  elif [ "$DUAL_PARTITION" -eq 1 ]; then
+    log "Restore scope: dual-partition-v3"
+  else
+    log "Restore scope: legacy boot_b-only"
+  fi
   log "Restore dtbo image: ${RESTORE_DTBO_IMAGE:-none}"
   log "Restore dtbo image SHA256: ${RESTORE_DTBO_SHA256:-none}"
   log "After restore: $AFTER_RESTORE"
@@ -592,6 +700,12 @@ main() {
 
   deadline=$((SECONDS + TIMEOUT_SEC))
   while [ "$SECONDS" -lt "$deadline" ]; do
+    publish_contract_ack || true
+    if dual_restore_complete; then
+      fastboot_restore_accepted=1
+      sleep "$POLL_SEC"
+      continue
+    fi
     if fastboot_present; then
       if [ "$fastboot_restore_accepted" -eq 1 ]; then
         sleep "$POLL_SEC"

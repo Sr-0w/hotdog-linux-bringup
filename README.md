@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | Not observed | The R5 downstream control boots directly and restores reliably. Exact D1 and D1-pack writes both returned to fastboot USB in three to four seconds without mainline ACM, NCM, or `bcdDevice=0617`; DTB-pack entry 12 alone is not sufficient. D2 header-v0 append-DTB is prepared next. |
+| Persistent direct mainline | Not observed | The R5 downstream control boots directly and restores reliably. Exact D1, D1-pack, and D2 writes returned to fastboot without mainline ACM, NCM, or `bcdDevice=0617`. Header v2 versus v0, separate versus appended DTB, and DTB-pack entry 12 do not explain the failure. D3 is prepared to remove the incompatible stock DTBO overlay from the handoff. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -51,20 +51,23 @@ The bridge is a temporary engineering tool. The long-term target is a normal
 postmarketOS/pmaports boot that does not depend on the downstream kernel.
 
 Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
-baseline and two negative mainline handoff results. D1 AVB
+baseline and three negative mainline handoff results. D1 AVB
 `f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994`
 and D1-pack AVB
 `2f3bf9b7cde3b2d48a3cf4d6fe2fb2f92e210e1a6b1249505fa15be10c26b754`
+plus D2 header-v0 AVB
+`2076c16598a63bfcfea416b47789eacf74086e33919c0715949cd42719f9b71e`
 were each written and read back exactly before reboot, then returned to real
 fastboot USB without an observed mainline USB identity. R5 was restored and
-verified after each cycle. D1-pack therefore shows that replacing DTB entry 12
-is not sufficient; it does not identify the exact early failure boundary.
+verified after each cycle. These controls exclude the tested boot-header and
+DTB-placement variants, but do not identify the exact early failure boundary.
 
-The next control is the exact K1 payload in a header-v0 image with the DTB
-appended to the kernel, launched by
-`scripts/test-mainline617-direct-d2-header0.sh`. The watchdog-kernel control
-`scripts/test-mainline617-direct-d1-wdt.sh` is prepared after D2 and remains a
-secondary hypothesis. See the
+Offline overlay analysis found that the stock `dtbo_b` entry selected for this
+hardware applies to the downstream DTB but fails against the K1 DTB with
+`FDT_ERR_NOTFOUND`. The next pinned control, D3, preserves the DTBO table and
+replaces only that overlay with a no-op entry while booting the unchanged D1
+payload. Its dual-partition rollback restores the original `dtbo_b` before R5
+`boot_b`. The watchdog-kernel control remains a secondary hypothesis. See the
 [2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
 [controlled test matrix](docs/direct-boot.md).
 

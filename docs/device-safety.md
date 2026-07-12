@@ -48,7 +48,10 @@ Bridge testing may update `boot_b`, and the relevant wrappers explicitly refuse
 to target another partition.
 
 Never modify `super`, `vbmeta`, `dtbo`, or both boot slots merely to reproduce a
-mainline experiment. Understand the exact script and artifact first.
+mainline experiment. An explicit DTBO experiment must pin both candidate and
+original hashes, restore original `dtbo_b` before the known-good `boot_b`, and
+use the versioned dual-partition rescue contract. Understand the exact script
+and artifact first.
 
 ## Rescue paths
 

@@ -63,7 +63,11 @@ cleanup() {
     [ -d "$case_dir" ] || continue
     kill_case_watchers "$case_dir"
   done
-  rm -rf -- "$TMP"
+  if [ "${HOTDOG_KEEP_TEST_TMP:-0}" -eq 1 ]; then
+    log "Keeping test directory: $TMP"
+  else
+    rm -rf -- "$TMP"
+  fi
 }
 trap cleanup EXIT
 
@@ -139,6 +143,19 @@ if [[ "$all" == *"/proc/sysrq-trigger"* ]]; then
     printf 'no-usb\n' > "$MOCK_STATE_DIR/state"
   fi
   exit "${MOCK_REBOOT_SSH_STATUS:-255}"
+fi
+
+if [[ "$all" == *"HOTDOG_BOOTLOADER_DISPATCH="* ]]; then
+  exec {probe_fd}> "$HOTDOG_LOG_ROOT/phone-operation.lock.flock"
+  if flock -n "$probe_fd"; then
+    : > "$MOCK_STATE_DIR/source-handoff-lock-lost"
+    exit 9
+  fi
+  exec {probe_fd}>&-
+  : > "$MOCK_STATE_DIR/source-handoff-lock-held"
+  printf 'fastboot\n' > "$MOCK_STATE_DIR/state"
+  printf 'HOTDOG_BOOTLOADER_DISPATCH=%s\n' "$SOURCE_BOOT_ID"
+  exit 0
 fi
 
 if [ -n "${MUTATE_IMAGE_PATH:-}" ] && [[ "$all" == *"sh -s"* ]] &&
@@ -232,6 +249,17 @@ case "$state" in
 esac
 MOCK
 
+cat > "$MOCK_BIN/file" <<'MOCK'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "${1:-}" in
+  */reboot-helper)
+    printf '%s: ELF 64-bit LSB executable, ARM aarch64\n' "$1"
+    ;;
+  *) exec /usr/bin/file "$@" ;;
+esac
+MOCK
+
 cat > "$MOCK_BIN/adb" <<'MOCK'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -307,11 +335,11 @@ case "${1:-}" in
         fi
         ;;
       current-slot) value="b" ;;
-      has-slot:boot) value="yes" ;;
-      has-slot:dtbo) value="yes" ;;
+      has-slot:boot) value="${MOCK_HAS_SLOT_BOOT:-yes}" ;;
+      has-slot:dtbo) value="${MOCK_HAS_SLOT_DTBO:-yes}" ;;
       partition-size:boot_b) value="0x6000000" ;;
       partition-size:dtbo_b)
-        value="0x1800000"
+        value="${MOCK_DTBO_PARTITION_SIZE:-0x1800000}"
         if [ -n "${MUTATE_DTBO_PATH:-}" ] && [ ! -e "$MOCK_STATE_DIR/dtbo-mutated" ]; then
           printf 'mutation\n' >> "$MUTATE_DTBO_PATH"
           : > "$MOCK_STATE_DIR/dtbo-mutated"
@@ -336,7 +364,8 @@ case "${1:-}" in
       fi
     fi
     : > "$MOCK_STATE_DIR/fastboot-$phase-flash-entered"
-    if [ "${MOCK_FASTBOOT_KILL_ON:-}" = "$phase-flash" ]; then
+    if [ "${MOCK_FASTBOOT_KILL_ON:-}" = "$phase-flash" ] ||
+      [ "${MOCK_FASTBOOT_KILL_ON:-}" = "$phase-flash-$2" ]; then
       kill_primary_watcher
     fi
     : > "$MOCK_STATE_DIR/fastboot-$phase-flash-dispatched"
@@ -415,6 +444,11 @@ nonce=""
 challenge_file=""
 ack_file=""
 boot_b_only=0
+dual_partition=0
+restore_dtbo=""
+restore_dtbo_sha=""
+restore_complete=""
+contract_version=2
 ambient_dtbo="${RESTORE_DTBO_IMAGE:-}"
 ambient_dtbo_sha="${RESTORE_DTBO_SHA256:-}"
 while [ "$#" -gt 0 ]; do
@@ -423,6 +457,10 @@ while [ "$#" -gt 0 ]; do
     --restore-boot-b) restore="$2"; shift 2 ;;
     --restore-boot-b-sha256) restore_sha="$2"; shift 2 ;;
     --boot-b-only) boot_b_only=1; shift ;;
+    --dual-partition) dual_partition=1; contract_version=3; shift ;;
+    --restore-dtbo-b) restore_dtbo="$2"; shift 2 ;;
+    --restore-dtbo-b-sha256) restore_dtbo_sha="$2"; shift 2 ;;
+    --restore-complete-file) restore_complete="$2"; shift 2 ;;
     --ready-file) ready="$2"; shift 2 ;;
     --contract-nonce) nonce="$2"; shift 2 ;;
     --contract-challenge-file) challenge_file="$2"; shift 2 ;;
@@ -431,10 +469,14 @@ while [ "$#" -gt 0 ]; do
     *) exit 2 ;;
   esac
 done
-[ "$boot_b_only" -eq 1 ] || exit 2
-RESTORE_DTBO_IMAGE=""
-RESTORE_DTBO_SHA256=""
-[ -z "$ambient_dtbo$ambient_dtbo_sha" ] || printf 'ambient-dtbo-neutralized\n' >> "$MOCK_STATE_DIR/dtbo-neutralized.log"
+if [ "$dual_partition" -eq 1 ]; then
+  [ "$boot_b_only" -eq 0 ] && [ -n "$restore_dtbo" ] && [ -n "$restore_dtbo_sha" ] && [ -n "$restore_complete" ] || exit 2
+else
+  [ "$boot_b_only" -eq 1 ] || exit 2
+  RESTORE_DTBO_IMAGE=""
+  RESTORE_DTBO_SHA256=""
+  [ -z "$ambient_dtbo$ambient_dtbo_sha" ] || printf 'ambient-dtbo-neutralized\n' >> "$MOCK_STATE_DIR/dtbo-neutralized.log"
+fi
 process_starttime() {
   local stat_line=""
   local remainder=""
@@ -455,15 +497,23 @@ printf '%s\n' "$$" > "$MOCK_STATE_DIR/current-watcher.pid"
 tmp="$ready.$$.tmp"
 if [ -n "$nonce" ]; then
   {
-    printf 'contract_version=2\n'
+    printf 'contract_version=%s\n' "$contract_version"
     printf 'pid=%s\n' "$$"
     printf 'starttime=%s\n' "$starttime"
     printf 'serial=%s\n' "$serial"
     printf 'restore_image=%s\n' "$restore"
     printf 'restore_sha256=%s\n' "$restore_sha"
-    printf 'boot_b_only=1\n'
-    printf 'restore_dtbo_image=none\n'
-    printf 'restore_dtbo_sha256=none\n'
+    if [ "$dual_partition" -eq 1 ]; then
+      printf 'boot_b_only=0\n'
+      printf 'dual_partition=1\n'
+      printf 'restore_dtbo_image=%s\n' "$restore_dtbo"
+      printf 'restore_dtbo_sha256=%s\n' "$restore_dtbo_sha"
+      printf 'restore_complete_file=%s\n' "$restore_complete"
+    else
+      printf 'boot_b_only=1\n'
+      printf 'restore_dtbo_image=none\n'
+      printf 'restore_dtbo_sha256=none\n'
+    fi
     printf 'nonce=%s\n' "$nonce"
     printf 'watcher_script=%s\n' "$watcher_script"
     printf 'challenge_file=%s\n' "$challenge_file"
@@ -478,6 +528,7 @@ else
   } > "$tmp"
 fi
 mv "$tmp" "$ready"
+[ "$contract_version" -ne 3 ] || cp "$ready" "$MOCK_STATE_DIR/v3-contract-$count"
 cleanup_mock_watcher() {
   rm -f "$ready" "$challenge_file" "$ack_file"
 }
@@ -492,7 +543,7 @@ publish_mock_ack() {
   [ -n "$nonce" ] || return 0
   [ -r "$challenge_file" ] || return 0
   actual="$(< "$challenge_file")"
-  expected_prefix="contract_version=2"$'\n'"nonce=$nonce"$'\n'
+  expected_prefix="contract_version=$contract_version"$'\n'"nonce=$nonce"$'\n'
   case "$actual" in
     "$expected_prefix"challenge=*) ;;
     *) return 0 ;;
@@ -509,7 +560,7 @@ publish_mock_ack() {
   printf '%s\n' "$ack_count" > "$MOCK_STATE_DIR/contract-ack.count"
   ack_tmp="$ack_file.$$.tmp"
   {
-    printf 'contract_version=2\n'
+    printf 'contract_version=%s\n' "$contract_version"
     printf 'pid=%s\n' "$$"
     printf 'starttime=%s\n' "$starttime"
     printf 'nonce=%s\n' "$nonce"
@@ -713,6 +764,10 @@ new_case() {
   : > "$case_dir/remote-writer-invocations"
   printf 'test-image-%s\n' "$name" > "$case_dir/test.img"
   printf 'restore-image-%s\n' "$name" > "$case_dir/restore.img"
+  printf 'candidate-dtbo-%s\n' "$name" > "$case_dir/candidate-dtbo.img"
+  printf 'restore-dtbo-%s\n' "$name" > "$case_dir/restore-dtbo.img"
+  truncate -s 1024 "$case_dir/candidate-dtbo.img" "$case_dir/restore-dtbo.img"
+  printf 'reboot-helper-%s\n' "$name" > "$case_dir/reboot-helper"
   printf '%s\n' "$case_dir/restore.img" > "$case_dir/restore.path"
   printf '%s\n' "$case_dir"
 }
@@ -1411,10 +1466,9 @@ test_boot_b_only_neutralizes_ambient_dtbo() {
   pass "boot_b-only watcher contracts neutralize ambient DTBO image and hash"
 }
 
-test_legacy_dtbo_requires_live_hash_pin() {
+test_dtbo_requires_explicit_versioned_dual_contract() {
   local case_dir=""
   local restore_sha=""
-  local dtbo_sha=""
   local status=0
   local watcher_file="$ROOT/scripts/rescue-boot-b-when-visible.sh"
   local restore_body=""
@@ -1430,6 +1484,7 @@ test_legacy_dtbo_requires_live_hash_pin() {
     --serial "$SERIAL" \
     --restore-boot-b "$case_dir/restore.img" \
     --restore-boot-b-sha256 "$restore_sha" \
+    --dual-partition \
     --restore-dtbo-b "$case_dir/dtbo.img" \
     --after-restore none --timeout 2 --poll 1 > "$case_dir/output.log" 2>&1
   status=$?
@@ -1438,34 +1493,12 @@ test_legacy_dtbo_requires_live_hash_pin() {
   grep -q -- '--restore-dtbo-b requires --restore-dtbo-b-sha256' "$case_dir/output.log" ||
     fail "missing DTBO hash was not diagnosed"
   [ ! -s "$case_dir/fastboot-writes.log" ] || fail "unhashed DTBO reached fastboot"
-
-  case_dir="$(new_case dtbo-mutated-before-flash)"
-  printf 'fastboot\n' > "$case_dir/state"
-  printf 'explicit-dtbo\n' > "$case_dir/dtbo.img"
-  restore_sha="$(sha256sum "$case_dir/restore.img" | awk '{ print $1 }')"
-  dtbo_sha="$(sha256sum "$case_dir/dtbo.img" | awk '{ print $1 }')"
-  set +e
-  helper_env "$case_dir" MUTATE_DTBO_PATH="$case_dir/dtbo.img" \
-    "$ROOT/scripts/rescue-boot-b-when-visible.sh" \
-    --serial "$SERIAL" \
-    --restore-boot-b "$case_dir/restore.img" \
-    --restore-boot-b-sha256 "$restore_sha" \
-    --restore-dtbo-b "$case_dir/dtbo.img" \
-    --restore-dtbo-b-sha256 "$dtbo_sha" \
-    --after-restore none --timeout 2 --poll 1 > "$case_dir/output.log" 2>&1
-  status=$?
-  set -e
-  [ "$status" -eq 3 ] || fail "mutated explicit DTBO returned $status instead of 3"
-  [ -e "$case_dir/dtbo-mutated" ] || fail "DTBO mutation boundary was not exercised"
-  grep -q 'dtbo image hash mismatch' "$case_dir/output.log" || fail "mutated DTBO hash was not revalidated"
-  ! grep -q '^FLASH dtbo_b$' "$case_dir/fastboot-writes.log" || fail "mutated DTBO reached dtbo_b"
-  ! grep -q '^FLASH boot_b$' "$case_dir/fastboot-writes.log" || fail "DTBO failure fell through to boot_b"
   restore_body="$(sed -n '/^restore_from_fastboot()/,/^}/p' "$watcher_file")"
   final_hash_line="$(grep -n 'verify_restore_dtbo_hash || return 1' <<< "$restore_body" | tail -n 1 | cut -d: -f1)"
   dtbo_flash_line="$(grep -n 'fastboot_do flash dtbo_b' <<< "$restore_body" | cut -d: -f1)"
   [ -n "$final_hash_line" ] && [ -n "$dtbo_flash_line" ] && [ "$final_hash_line" -lt "$dtbo_flash_line" ] ||
     fail "DTBO hash is not revalidated at the final fastboot flash boundary"
-  pass "legacy DTBO restore requires and revalidates an explicit SHA256 immediately before flash"
+  pass "DTBO restore requires explicit dual mode/hash and retains final-boundary revalidation"
 }
 
 test_writer_contract_rejections() {
@@ -2203,6 +2236,229 @@ test_launchers_reject_serial_divergence() {
   pass "R5, D1 and D1-pack refuse divergent ANDROID_SERIAL identities before transport"
 }
 
+run_dual_case() {
+  local case_dir="$1"
+  shift
+  local boot_sha candidate_dtbo_sha restore_sha restore_dtbo_sha helper_sha
+
+  boot_sha="$(sha256sum "$case_dir/test.img" | awk '{ print $1 }')"
+  candidate_dtbo_sha="$(sha256sum "$case_dir/candidate-dtbo.img" | awk '{ print $1 }')"
+  restore_sha="$(sha256sum "$case_dir/restore.img" | awk '{ print $1 }')"
+  restore_dtbo_sha="$(sha256sum "$case_dir/restore-dtbo.img" | awk '{ print $1 }')"
+  helper_sha="$(sha256sum "$case_dir/reboot-helper" | awk '{ print $1 }')"
+  helper_env "$case_dir" "$@" "$ROOT/scripts/test-boot-b-image.sh" \
+    --image "$case_dir/test.img" --image-sha256 "$boot_sha" \
+    --dual-partition-transaction \
+    --candidate-dtbo-b "$case_dir/candidate-dtbo.img" --candidate-dtbo-b-sha256 "$candidate_dtbo_sha" \
+    --restore-dtbo-b "$case_dir/restore-dtbo.img" --restore-dtbo-b-sha256 "$restore_dtbo_sha" \
+    --restore-boot-b "$case_dir/restore.img" --restore-boot-b-sha256 "$restore_sha" \
+    --reboot-helper "$case_dir/reboot-helper" --reboot-helper-sha256 "$helper_sha" \
+    --serial "$SERIAL" --expected-product 'msmnile hotdog' \
+    --start-rescue-watcher --require-dirty-survival \
+    --expect-kernel-prefix 6.17.0-sm8150 \
+    --expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
+    --expect-cmdline-token androidboot.slot_suffix=_b \
+    --expect-cmdline-token "androidboot.serialno=$SERIAL" \
+    --restore-after none --boot-wait 3 --poll 1 --fastboot-timeout 2 \
+    --rescue-watch-timeout 30 --rescue-watch-poll 1
+}
+
+run_dual_source_case() {
+  local case_dir="$1"
+  local boot_sha candidate_dtbo_sha restore_sha restore_dtbo_sha helper_sha
+
+  boot_sha="$(sha256sum "$case_dir/test.img" | awk '{ print $1 }')"
+  candidate_dtbo_sha="$(sha256sum "$case_dir/candidate-dtbo.img" | awk '{ print $1 }')"
+  restore_sha="$(sha256sum "$case_dir/restore.img" | awk '{ print $1 }')"
+  restore_dtbo_sha="$(sha256sum "$case_dir/restore-dtbo.img" | awk '{ print $1 }')"
+  helper_sha="$(sha256sum "$case_dir/reboot-helper" | awk '{ print $1 }')"
+  helper_env "$case_dir" MOCK_REBOOT_STATE=target "$ROOT/scripts/test-boot-b-image.sh" \
+    --image "$case_dir/test.img" --image-sha256 "$boot_sha" \
+    --dual-partition-transaction \
+    --candidate-dtbo-b "$case_dir/candidate-dtbo.img" --candidate-dtbo-b-sha256 "$candidate_dtbo_sha" \
+    --restore-dtbo-b "$case_dir/restore-dtbo.img" --restore-dtbo-b-sha256 "$restore_dtbo_sha" \
+    --restore-boot-b "$case_dir/restore.img" --restore-boot-b-sha256 "$restore_sha" \
+    --reboot-helper "$case_dir/reboot-helper" --reboot-helper-sha256 "$helper_sha" \
+    --serial "$SERIAL" --expected-product 'msmnile hotdog' \
+    --from-pmos-ssh --start-rescue-watcher --require-dirty-survival \
+    --expect-source-kernel-prefix "$SOURCE_KERNEL" \
+    --expect-source-cmdline-token androidboot.slot_suffix=_b \
+    --expect-source-cmdline-token "androidboot.serialno=$SERIAL" \
+    --expect-kernel-prefix 6.17.0-sm8150 \
+    --expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
+    --expect-cmdline-token androidboot.slot_suffix=_b \
+    --expect-cmdline-token "androidboot.serialno=$SERIAL" \
+    --restore-after none --boot-wait 3 --poll 1 --fastboot-timeout 2 \
+    --rescue-watch-timeout 30 --rescue-watch-poll 1
+}
+
+test_dual_candidate_order_and_contract() {
+  local case_dir=""
+  case_dir="$(new_case dual-order)"
+  printf 'fastboot\n' > "$case_dir/state"
+  run_dual_case "$case_dir" MOCK_REBOOT_STATE=target > "$case_dir/output.log" 2>&1 ||
+    fail "valid dual candidate transaction returned nonzero"
+  mapfile -t writes < "$case_dir/fastboot-writes.log"
+  [ "${writes[0]:-}" = 'FLASH dtbo_b' ] && [ "${writes[1]:-}" = 'FLASH boot_b' ] ||
+    fail "dual candidate write order is not dtbo_b then boot_b"
+  grep -qx 'contract_version=3' "$case_dir"/v3-contract-* 2>/dev/null ||
+    fail "dual watchers did not publish v3 contracts"
+  pass "dual candidate writes dtbo_b before boot_b under exact v3 watcher contracts"
+}
+
+test_dual_rollback_order_and_single_acceptance() {
+  local case_dir="" status=0
+  case_dir="$(new_case dual-rollback-order)"
+  printf 'fastboot\n' > "$case_dir/state"
+  set +e
+  run_dual_case "$case_dir" MOCK_REBOOT_STATE=fastboot > "$case_dir/output.log" 2>&1
+  status=$?
+  set -e
+  [ "$status" -ne 0 ] || fail "dual rollback path falsely classified candidate success"
+  mapfile -t writes < "$case_dir/fastboot-writes.log"
+  [ "${writes[0]:-}" = 'FLASH dtbo_b' ] && [ "${writes[1]:-}" = 'FLASH boot_b' ] &&
+    [ "${writes[2]:-}" = 'FLASH dtbo_b' ] && [ "${writes[3]:-}" = 'FLASH boot_b' ] ||
+    fail "dual rollback did not preserve candidate and restore ordering"
+  [ "$(grep -c '^FLASH dtbo_b$' "$case_dir/fastboot-writes.log")" -eq 2 ] ||
+    fail "dual accepted rollback looped over dtbo_b"
+  pass "dual rollback restores dtbo_b then R5 boot_b once before slot handoff"
+}
+
+test_dual_candidate_mutation_refused() {
+  local case_dir="" status=0
+  case_dir="$(new_case dual-candidate-mutation)"
+  printf 'fastboot\n' > "$case_dir/state"
+  set +e
+  run_dual_case "$case_dir" MUTATE_DTBO_PATH="$case_dir/candidate-dtbo.img" > "$case_dir/output.log" 2>&1
+  status=$?
+  set -e
+  [ "$status" -eq 3 ] || fail "mutated candidate dtbo returned $status instead of 3"
+  [ ! -s "$case_dir/fastboot-writes.log" ] || fail "mutated candidate dtbo reached a partition write"
+  pass "candidate dtbo mutation at the last validation boundary is refused"
+}
+
+test_dual_restore_dtbo_mutation_refused() {
+  local case_dir="" status=0
+  case_dir="$(new_case dual-restore-mutation)"
+  printf 'fastboot\n' > "$case_dir/state"
+  set +e
+  run_dual_case "$case_dir" MOCK_REBOOT_STATE=fastboot \
+    MUTATE_DTBO_PATH="$case_dir/restore-dtbo.img" > "$case_dir/output.log" 2>&1
+  status=$?
+  set -e
+  [ "$status" -eq 3 ] || fail "mutated restore dtbo returned $status instead of 3"
+  mapfile -t writes < "$case_dir/fastboot-writes.log"
+  [ "${writes[0]:-}" = 'FLASH dtbo_b' ] && [ "${writes[1]:-}" = 'FLASH boot_b' ] ||
+    fail "restore mutation test did not first exercise the complete candidate write"
+  [ "${#writes[@]}" -eq 2 ] || fail "mutated restore dtbo reached a rollback write"
+  assert_live_current_watcher "$case_dir"
+  pass "restore dtbo mutation is refused before rollback writes while rescue remains armed"
+}
+
+test_dual_dtbo_context_refused() {
+  local variant="" case_dir="" status=0
+  for variant in slot size; do
+    case_dir="$(new_case "dual-context-$variant")"
+    printf 'fastboot\n' > "$case_dir/state"
+    set +e
+    if [ "$variant" = slot ]; then
+      run_dual_case "$case_dir" MOCK_HAS_SLOT_DTBO=no > "$case_dir/output.log" 2>&1
+    else
+      run_dual_case "$case_dir" MOCK_DTBO_PARTITION_SIZE=0x10 > "$case_dir/output.log" 2>&1
+    fi
+    status=$?
+    set -e
+    [ "$status" -eq 2 ] || fail "bad dtbo $variant context returned $status instead of 2"
+    [ ! -s "$case_dir/fastboot-writes.log" ] || fail "bad dtbo $variant context reached a partition write"
+    kill_case_watchers "$case_dir"
+  done
+  pass "dtbo_b has-slot and capacity failures are refused before writes"
+}
+
+test_dual_quorum_loss_each_candidate_transport() {
+  local point="" case_dir="" status=0 watcher_count=0
+  for point in candidate-flash-dtbo_b candidate-flash-boot_b candidate-set-active candidate-reboot; do
+    case_dir="$(new_case "dual-quorum-$point")"
+    printf 'fastboot\n' > "$case_dir/state"
+    set +e
+    run_dual_case "$case_dir" MOCK_FASTBOOT_KILL_ON="$point" > "$case_dir/output.log" 2>&1
+    status=$?
+    set -e
+    [ "$status" -eq 3 ] || fail "quorum loss at $point returned $status instead of 3"
+    watcher_count="$(cat "$case_dir/watcher.count")"
+    [ "$watcher_count" -ge 3 ] || fail "quorum loss at $point did not attempt watcher rearm"
+    assert_live_current_watcher "$case_dir"
+    kill_case_watchers "$case_dir"
+  done
+  pass "quorum loss aborts dtbo, boot, activation and reboot candidate transports and rearms rescue"
+}
+
+test_d3_launcher_is_pinned() {
+  local output="" status=0 launcher="$ROOT/scripts/test-mainline617-direct-d3-dtbo-noop.sh"
+  set +e
+  output="$(HOTDOG_ROOT="$ROOT" HOTDOG_LOCAL_ENV="$TMP/no-env" "$launcher" --poll 99 2>&1)"
+  status=$?
+  set -e
+  [ "$status" -eq 2 ] && [[ "$output" == *'accepts no options'* ]] || fail "D3 launcher accepted an override"
+  grep -Fq '339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb' "$launcher" || fail "D3 candidate dtbo hash is not pinned"
+  grep -Fq '95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672' "$launcher" || fail "D3 restore dtbo hash is not pinned"
+  pass "D3 launcher rejects CLI weakening and pins both DTBO identities"
+}
+
+test_dual_source_handoff_holds_single_lock() {
+  local body=""
+  local acquire_line=""
+  local handoff_line=""
+  local wait_line=""
+  local flash_line=""
+
+  body="$(sed -n '/if \[ "$DUAL_PARTITION_TRANSACTION" -eq 1 \]; then/,/flash_candidate_from_fastboot/p' \
+    "$ROOT/scripts/test-boot-b-image.sh")"
+  acquire_line="$(grep -n 'phone_lock_acquire "D3 R5 handoff' <<< "$body" | cut -d: -f1)"
+  handoff_line="$(grep -n 'run_guarded_transport "strict source R5 bootloader handoff"' <<< "$body" | cut -d: -f1)"
+  wait_line="$(grep -n 'wait_for_fastboot 120' <<< "$body" | cut -d: -f1)"
+  flash_line="$(grep -n 'flash_candidate_from_fastboot' <<< "$body" | tail -n 1 | cut -d: -f1)"
+
+  [ -n "$acquire_line" ] && [ -n "$handoff_line" ] && [ -n "$wait_line" ] && [ -n "$flash_line" ] ||
+    fail "dual source handoff lock boundaries are incomplete"
+  [ "$acquire_line" -lt "$handoff_line" ] && [ "$handoff_line" -lt "$wait_line" ] &&
+    [ "$wait_line" -lt "$flash_line" ] ||
+    fail "dual source handoff does not hold the main lock across fastboot visibility and writes"
+  grep -Fq 'reboot_args+=(--phone-lock-fd "$PHONE_LOCK_FD")' <<< "$body" ||
+    fail "dual source handoff does not pass the inherited lock to its helper"
+  grep -Fq 'phone_lock_adopt_fd "$INHERITED_PHONE_LOCK_FD"' \
+    "$ROOT/scripts/reboot-pmos-to-bootloader.sh" ||
+    fail "source reboot helper cannot adopt the parent transaction lock"
+  pass "dual R5 handoff holds one inherited lock through fastboot candidate writes"
+}
+
+test_dual_source_handoff_runtime_lock() {
+  local case_dir=""
+
+  case_dir="$(new_case dual-source-runtime-lock)"
+  run_dual_source_case "$case_dir" > "$case_dir/output.log" 2>&1 ||
+    fail "dual source handoff with inherited lock returned nonzero"
+  [ -e "$case_dir/source-handoff-lock-held" ] ||
+    fail "source handoff did not observe the parent lock"
+  [ ! -e "$case_dir/source-handoff-lock-lost" ] ||
+    fail "source handoff could reacquire the supposedly held transaction lock"
+  mapfile -t writes < "$case_dir/fastboot-writes.log"
+  [ "${writes[0]:-}" = 'FLASH dtbo_b' ] && [ "${writes[1]:-}" = 'FLASH boot_b' ] ||
+    fail "runtime source handoff did not preserve D3 candidate write order"
+  grep -q 'pmOS SSH kernel matches expected prefix: 6.17.0-sm8150' "$case_dir/output.log" ||
+    fail "runtime source handoff did not reach the strict mainline identity"
+  pass "dual R5 handoff dynamically retains its lock through fastboot and D3 writes"
+}
+
+if [ -n "${HOTDOG_OFFLINE_TEST_FILTER:-}" ]; then
+  case "$HOTDOG_OFFLINE_TEST_FILTER" in
+    dual-source-runtime-lock) test_dual_source_handoff_runtime_lock ;;
+    *) fail "unknown HOTDOG_OFFLINE_TEST_FILTER: $HOTDOG_OFFLINE_TEST_FILTER" ;;
+  esac
+  log "All $PASS_COUNT filtered offline D1 safety tests passed"
+  exit 0
+fi
+
 test_strict_success_contract
 test_atomic_ack_peer_flip_refused
 test_legacy_generic_no_rescue_contract
@@ -2213,7 +2469,7 @@ test_ssh_reboot_dispatch_proof
 test_fastboot_ack_transport_windows
 test_restore_fastboot_transport_windows
 test_boot_b_only_neutralizes_ambient_dtbo
-test_legacy_dtbo_requires_live_hash_pin
+test_dtbo_requires_explicit_versioned_dual_contract
 test_writer_contract_rejections
 test_real_helper_contract_fields
 test_watcher_dies_between_ensure_and_writer
@@ -2233,5 +2489,14 @@ test_dirty_recovery_fastbootd_handoff_watcher_guard
 test_fastbootd_legacy_clean_no_watcher
 test_launchers_reject_timing
 test_launchers_reject_serial_divergence
+test_dual_candidate_order_and_contract
+test_dual_rollback_order_and_single_acceptance
+test_dual_candidate_mutation_refused
+test_dual_restore_dtbo_mutation_refused
+test_dual_dtbo_context_refused
+test_dual_quorum_loss_each_candidate_transport
+test_d3_launcher_is_pinned
+test_dual_source_handoff_holds_single_lock
+test_dual_source_handoff_runtime_lock
 
 log "All $PASS_COUNT offline D1 safety tests passed"

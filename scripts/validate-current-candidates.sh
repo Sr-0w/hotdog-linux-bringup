@@ -420,6 +420,27 @@ validate_direct_d1_pack_artifacts_and_launcher() {
   log "D1-pack artifacts and launcher validated"
 }
 
+validate_direct_d3_dual_launcher() {
+  local launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d3-dtbo-noop.sh"
+  local candidate_dtbo="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"
+  local restore_dtbo="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
+
+  bash -n "$launcher"
+  check_sha "D3 no-op candidate dtbo_b" "$candidate_dtbo" "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+  check_size "D3 no-op candidate dtbo_b" "$candidate_dtbo" "25165824"
+  check_sha "D3 original restore dtbo_b" "$restore_dtbo" "95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672"
+  check_size "D3 original restore dtbo_b" "$restore_dtbo" "25165824"
+  require_text "D3 pins dual mode" "$launcher" "--dual-partition-transaction"
+  require_text "D3 pins D1 hash" "$launcher" "f8e83ae15cb016612433b8a2d800d828b025d56c76640a2ebb41a3061baf8994"
+  require_text "D3 pins R5 hash" "$launcher" "23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50"
+  require_text "D3 pins candidate dtbo hash" "$launcher" "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+  require_text "D3 pins restore dtbo hash" "$launcher" "95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672"
+  require_text "D3 refuses options" "$launcher" "accepts no options"
+  require_text "dual watcher contract v3" "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" "contract_version=3"
+  require_text "dual rollback order marker" "$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh" "order=dtbo_b,boot_b,set_active_b,reboot"
+  log "D3 dual-partition launcher and artifacts validated"
+}
+
 validate_direct_followup_artifacts_and_launchers() {
   local d2_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-140000-mainline617-direct-exact-header0"
   local d2_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d2-header0.sh"
@@ -697,6 +718,7 @@ main() {
 
   validate_direct_d1_artifacts_and_launcher
   validate_direct_d1_pack_artifacts_and_launcher
+  validate_direct_d3_dual_launcher
   validate_direct_followup_artifacts_and_launchers
   validate_kernel_prefix_tester_guards
   validate_d1_safety_offline

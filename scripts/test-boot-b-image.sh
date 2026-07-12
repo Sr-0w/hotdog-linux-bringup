@@ -9,6 +9,14 @@ source "$(dirname "$0")/phone-lock.sh"
 SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 IMAGE=""
 IMAGE_EXPECTED_SHA256=""
+DUAL_PARTITION_TRANSACTION=0
+CANDIDATE_DTBO_IMAGE=""
+CANDIDATE_DTBO_EXPECTED_SHA256=""
+RESTORE_DTBO_IMAGE=""
+RESTORE_DTBO_EXPECTED_SHA256=""
+RESTORE_COMPLETE_FILE=""
+REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
+REBOOT_HELPER_EXPECTED_SHA256=""
 RESTORE_IMAGE="${RESTORE_IMAGE:-$HOTDOG_STABLE_PMOS_BOOT_B}"
 RESTORE_IMAGE_EXPECTED_SHA256=""
 EXPECTED_FASTBOOT_PRODUCTS="${EXPECTED_FASTBOOT_PRODUCTS:-msmnile hotdog}"
@@ -50,6 +58,7 @@ declare -a RESCUE_WATCHER_ACK_FILES=("" "")
 declare -a RESCUE_WATCHER_SCRIPT_PATHS=("" "")
 KEEP_RESCUE_WATCHER=0
 BOOT_B_MAY_BE_DIRTY=0
+DTBO_B_MAY_BE_DIRTY=0
 RESTORE_READBACK_VERIFIED=0
 STRICT_MAINLINE_SUCCESS_ACKED=0
 REQUIRE_DIRTY_SURVIVAL=0
@@ -64,7 +73,8 @@ Usage: test-boot-b-image.sh --image boot.img [options]
 
 Flash one boot image to boot_b, reboot, classify the result, and run the
 configured restore fallback if the bootloader rejects the image.
-This script does not flash super, dtbo, vbmeta, recovery, or any other partition.
+The default mode only writes boot_b. The explicit dual-partition mode also
+writes dtbo_b; neither mode writes super, vbmeta, recovery, or other partitions.
 
 Options:
   --image FILE           Boot image to flash to boot_b.
@@ -72,6 +82,15 @@ Options:
   --restore-boot-b FILE  Restore boot_b to FILE if fastboot returns.
   --restore-boot-b-sha256 SHA256
                          Require this exact restore hash through every fallback.
+  --dual-partition-transaction
+                         Explicit v3 dtbo_b + boot_b transaction. Requires all
+                         four DTBO path/hash arguments and two rescue watchers.
+  --candidate-dtbo-b FILE
+  --candidate-dtbo-b-sha256 SHA256
+  --restore-dtbo-b FILE
+  --restore-dtbo-b-sha256 SHA256
+  --reboot-helper FILE
+  --reboot-helper-sha256 SHA256
   --serial SERIAL        Restrict adb/fastboot commands to SERIAL.
   --expected-product STR Space-separated fastboot products. Default: "msmnile hotdog".
   --allow-locked         Do not fail early if fastboot reports locked.
@@ -147,6 +166,39 @@ while [ "$#" -gt 0 ]; do
     --restore-boot-b-sha256)
       [ "$#" -ge 2 ] || { echo "Missing value for --restore-boot-b-sha256" >&2; exit 2; }
       RESTORE_IMAGE_EXPECTED_SHA256="${2,,}"
+      shift
+      ;;
+    --dual-partition-transaction)
+      DUAL_PARTITION_TRANSACTION=1
+      ;;
+    --candidate-dtbo-b)
+      [ "$#" -ge 2 ] || { echo "Missing value for --candidate-dtbo-b" >&2; exit 2; }
+      CANDIDATE_DTBO_IMAGE="$2"
+      shift
+      ;;
+    --candidate-dtbo-b-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --candidate-dtbo-b-sha256" >&2; exit 2; }
+      CANDIDATE_DTBO_EXPECTED_SHA256="${2,,}"
+      shift
+      ;;
+    --restore-dtbo-b)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-dtbo-b" >&2; exit 2; }
+      RESTORE_DTBO_IMAGE="$2"
+      shift
+      ;;
+    --restore-dtbo-b-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --restore-dtbo-b-sha256" >&2; exit 2; }
+      RESTORE_DTBO_EXPECTED_SHA256="${2,,}"
+      shift
+      ;;
+    --reboot-helper)
+      [ "$#" -ge 2 ] || { echo "Missing value for --reboot-helper" >&2; exit 2; }
+      REBOOT_HELPER="$2"
+      shift
+      ;;
+    --reboot-helper-sha256)
+      [ "$#" -ge 2 ] || { echo "Missing value for --reboot-helper-sha256" >&2; exit 2; }
+      REBOOT_HELPER_EXPECTED_SHA256="${2,,}"
       shift
       ;;
     --expected-product)
@@ -369,15 +421,27 @@ process_cmdline_has_token() {
 watcher_ready_expected() {
   local index="$1"
 
-  printf 'contract_version=2\n'
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    printf 'contract_version=3\n'
+  else
+    printf 'contract_version=2\n'
+  fi
   printf 'pid=%s\n' "${RESCUE_WATCHER_PIDS[$index]}"
   printf 'starttime=%s\n' "${RESCUE_WATCHER_STARTTIMES[$index]}"
   printf 'serial=%s\n' "$SERIAL"
   printf 'restore_image=%s\n' "$RESTORE_IMAGE"
   printf 'restore_sha256=%s\n' "$RESTORE_IMAGE_SHA256"
-  printf 'boot_b_only=1\n'
-  printf 'restore_dtbo_image=none\n'
-  printf 'restore_dtbo_sha256=none\n'
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    printf 'boot_b_only=0\n'
+    printf 'dual_partition=1\n'
+    printf 'restore_dtbo_image=%s\n' "$RESTORE_DTBO_IMAGE"
+    printf 'restore_dtbo_sha256=%s\n' "$RESTORE_DTBO_EXPECTED_SHA256"
+    printf 'restore_complete_file=%s\n' "$RESTORE_COMPLETE_FILE"
+  else
+    printf 'boot_b_only=1\n'
+    printf 'restore_dtbo_image=none\n'
+    printf 'restore_dtbo_sha256=none\n'
+  fi
   printf 'nonce=%s\n' "${RESCUE_WATCHER_NONCES[$index]}"
   printf 'watcher_script=%s\n' "${RESCUE_WATCHER_SCRIPT_PATHS[$index]}"
   printf 'challenge_file=%s\n' "${RESCUE_WATCHER_CHALLENGE_FILES[$index]}"
@@ -403,8 +467,20 @@ rescue_watcher_process_identity_valid() {
   process_cmdline_has_token "$pid" "$RESTORE_IMAGE" || return 1
   process_cmdline_has_token "$pid" --restore-boot-b-sha256 || return 1
   process_cmdline_has_token "$pid" "$RESTORE_IMAGE_SHA256" || return 1
-  process_cmdline_has_token "$pid" --boot-b-only || return 1
-  ! process_cmdline_has_token "$pid" --restore-dtbo-b || return 1
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    process_cmdline_has_token "$pid" --dual-partition || return 1
+    ! process_cmdline_has_token "$pid" --boot-b-only || return 1
+    process_cmdline_has_token "$pid" --restore-dtbo-b || return 1
+    process_cmdline_has_token "$pid" "$RESTORE_DTBO_IMAGE" || return 1
+    process_cmdline_has_token "$pid" --restore-dtbo-b-sha256 || return 1
+    process_cmdline_has_token "$pid" "$RESTORE_DTBO_EXPECTED_SHA256" || return 1
+    process_cmdline_has_token "$pid" --restore-complete-file || return 1
+    process_cmdline_has_token "$pid" "$RESTORE_COMPLETE_FILE" || return 1
+  else
+    process_cmdline_has_token "$pid" --boot-b-only || return 1
+    ! process_cmdline_has_token "$pid" --restore-dtbo-b || return 1
+    ! process_cmdline_has_token "$pid" --dual-partition || return 1
+  fi
   process_cmdline_has_token "$pid" --ready-file || return 1
   process_cmdline_has_token "$pid" "${RESCUE_WATCHER_READY_FILES[$index]}" || return 1
   process_cmdline_has_token "$pid" --contract-challenge-file || return 1
@@ -446,15 +522,15 @@ challenge_rescue_watcher() {
   rm -f "$ack_file"
   umask 077
   {
-    printf 'contract_version=2\n'
+    printf 'contract_version=%s\n' "$([ "$DUAL_PARTITION_TRANSACTION" -eq 1 ] && printf 3 || printf 2)"
     printf 'nonce=%s\n' "$nonce"
     printf 'challenge=%s\n' "$challenge"
   } > "$challenge_tmp" || return 1
   mv -f "$challenge_tmp" "$challenge_file" || return 1
   kill -USR1 "$pid" 2>/dev/null || return 1
 
-  expected_ack="$(printf 'contract_version=2\npid=%s\nstarttime=%s\nnonce=%s\nchallenge=%s\n' \
-    "$pid" "$starttime" "$nonce" "$challenge")"
+  expected_ack="$(printf 'contract_version=%s\npid=%s\nstarttime=%s\nnonce=%s\nchallenge=%s\n' \
+    "$([ "$DUAL_PARTITION_TRANSACTION" -eq 1 ] && printf 3 || printf 2)" "$pid" "$starttime" "$nonce" "$challenge")"
   deadline=$((SECONDS + 20))
   while [ "$SECONDS" -lt "$deadline" ]; do
     rescue_watcher_contract_static_valid "$index" || return 1
@@ -497,6 +573,7 @@ start_rescue_watcher_instance() {
   local nonce=""
   local script_path=""
   local pid=""
+  local -a scope_args=(--boot-b-only)
 
   [ "$START_RESCUE_WATCHER" -eq 1 ] || return 0
   rescue_watcher_contract_static_valid "$index" && return 0
@@ -515,6 +592,14 @@ start_rescue_watcher_instance() {
   RESCUE_WATCHER_ACK_FILES[$index]="$ack_file"
   RESCUE_WATCHER_NONCES[$index]="$nonce"
   RESCUE_WATCHER_SCRIPT_PATHS[$index]="$script_path"
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    scope_args=(
+      --dual-partition
+      --restore-dtbo-b "$RESTORE_DTBO_IMAGE"
+      --restore-dtbo-b-sha256 "$RESTORE_DTBO_EXPECTED_SHA256"
+      --restore-complete-file "$RESTORE_COMPLETE_FILE"
+    )
+  fi
   rm -f "$pidfile" "$ready_file" "$challenge_file" "$ack_file"
 
   log "Starting companion rescue watcher $number/2 for $SERIAL"
@@ -529,7 +614,7 @@ start_rescue_watcher_instance() {
         --serial "$SERIAL" \
         --restore-boot-b "$RESTORE_IMAGE" \
         --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
-        --boot-b-only \
+        "${scope_args[@]}" \
         --after-restore "$RESTORE_AFTER_FASTBOOT" \
         --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
         --poll "$RESCUE_WATCHER_POLL_SEC" \
@@ -545,7 +630,7 @@ start_rescue_watcher_instance() {
         --serial "$SERIAL" \
         --restore-boot-b "$RESTORE_IMAGE" \
         --restore-boot-b-sha256 "$RESTORE_IMAGE_SHA256" \
-        --boot-b-only \
+        "${scope_args[@]}" \
         --after-restore "$RESTORE_AFTER_FASTBOOT" \
         --timeout "$RESCUE_WATCHER_TIMEOUT_SEC" \
         --poll "$RESCUE_WATCHER_POLL_SEC" \
@@ -592,7 +677,7 @@ rescue_watcher_alive() {
 
 rescue_watcher_must_survive() {
   [ "${REQUIRE_DIRTY_SURVIVAL:-0}" -eq 1 ] &&
-    [ "${BOOT_B_MAY_BE_DIRTY:-0}" -eq 1 ] &&
+    { [ "${BOOT_B_MAY_BE_DIRTY:-0}" -eq 1 ] || [ "${DTBO_B_MAY_BE_DIRTY:-0}" -eq 1 ]; } &&
     [ "${RESTORE_READBACK_VERIFIED:-0}" -eq 0 ] &&
     [ "${STRICT_MAINLINE_SUCCESS_ACKED:-0}" -eq 0 ]
 }
@@ -703,7 +788,7 @@ terminate_transport_group() {
   [ "${ACTIVE_TRANSPORT_PID:-}" != "$pid" ] || ACTIVE_TRANSPORT_PID=""
 }
 
-run_guarded_fastboot_transport() {
+run_guarded_transport() {
   local label="$1"
   local output="$2"
   local transport_pid=""
@@ -711,15 +796,15 @@ run_guarded_fastboot_transport() {
   shift 2
 
   ensure_rescue_watcher_alive "before $label" || return 3
-  setsid --wait fastboot -s "$SERIAL" "$@" > "$output" 2>&1 &
+  setsid --wait "$@" > "$output" 2>&1 &
   transport_pid="$!"
   ACTIVE_TRANSPORT_PID="$transport_pid"
   while transport_process_running "$transport_pid"; do
     if ! rescue_watcher_pair_static_valid; then
-      log "ERROR: rescue pair degraded during $label; terminating fastboot transport"
+      log "ERROR: rescue pair degraded during $label; terminating transport"
       terminate_transport_group "$transport_pid"
       ensure_rescue_watcher_alive "rearm after interrupted $label" || true
-      [ -s "$output" ] && sed 's/^/[fastboot] /' "$output" >&2 || true
+      [ -s "$output" ] && sed 's/^/[transport] /' "$output" >&2 || true
       return 3
     fi
     sleep 0.01
@@ -730,9 +815,16 @@ run_guarded_fastboot_transport() {
     status=$?
   fi
   ACTIVE_TRANSPORT_PID=""
-  [ -s "$output" ] && sed 's/^/[fastboot] /' "$output" || true
+  [ -s "$output" ] && sed 's/^/[transport] /' "$output" || true
   ensure_rescue_watcher_alive "after $label" || return 3
   return "$status"
+}
+
+run_guarded_fastboot_transport() {
+  local label="$1"
+  local output="$2"
+  shift 2
+  run_guarded_transport "$label" "$output" fastboot -s "$SERIAL" "$@"
 }
 
 normalize_value() {
@@ -898,6 +990,8 @@ parse_fastboot_size() {
 
 validate_fastboot_restore_context() {
   local restore_file="$1"
+  local partition_label="${2:-boot_b}"
+  local slot_base=""
   local current_slot=""
   local has_slot=""
   local is_userspace=""
@@ -906,19 +1000,23 @@ validate_fastboot_restore_context() {
   local restore_size=""
   local unlocked=""
 
+  case "$partition_label" in
+    boot_b|dtbo_b) slot_base="${partition_label%_b}" ;;
+    *) die "Unsupported partition context: $partition_label" 2 ;;
+  esac
   [ -n "$EXPECTED_FASTBOOT_PRODUCTS" ] ||
-    die "Expected fastboot product list is empty; refusing boot_b restore" 2
+    die "Expected fastboot product list is empty; refusing $partition_label access" 2
   validate_fastboot_identity
   unlocked="$(normalize_value "$(get_fastboot_var unlocked)")"
   case "$unlocked" in
     yes|true|1|unlocked) ;;
-    *) die "boot_b restore requires an unlocked bootloader (got ${unlocked:-missing})" 2 ;;
+    *) die "$partition_label access requires an unlocked bootloader (got ${unlocked:-missing})" 2 ;;
   esac
 
   is_userspace="$(normalize_value "$(get_fastboot_var is-userspace)")"
   case "$is_userspace" in
     no|false|0) ;;
-    yes|true|1) die "fastbootd/userspace detected; refusing boot_b restore" 2 ;;
+    yes|true|1) die "fastbootd/userspace detected; refusing $partition_label access" 2 ;;
     *) die "Could not prove bootloader fastboot context (is-userspace=${is_userspace:-missing})" 2 ;;
   esac
 
@@ -928,20 +1026,20 @@ validate_fastboot_restore_context() {
     *) die "Invalid or missing current-slot before boot_b restore: ${current_slot:-missing}" 2 ;;
   esac
 
-  has_slot="$(normalize_value "$(get_fastboot_var has-slot:boot)")"
+  has_slot="$(normalize_value "$(get_fastboot_var "has-slot:$slot_base")")"
   case "$has_slot" in
     yes|true|1) ;;
-    *) die "Fastboot does not attest that boot is slotted (has-slot:boot=${has_slot:-missing})" 2 ;;
+    *) die "Fastboot does not attest that $slot_base is slotted (has-slot:$slot_base=${has_slot:-missing})" 2 ;;
   esac
 
-  partition_size_raw="$(get_fastboot_var partition-size:boot_b)"
+  partition_size_raw="$(get_fastboot_var "partition-size:$partition_label")"
   partition_size="$(parse_fastboot_size "$partition_size_raw")" ||
-    die "Invalid or missing partition-size:boot_b: ${partition_size_raw:-missing}" 2
+    die "Invalid or missing partition-size:$partition_label: ${partition_size_raw:-missing}" 2
   restore_size="$(stat -c '%s' "$restore_file")"
   [ "$partition_size" -ge "$restore_size" ] ||
-    die "boot_b partition is too small: $partition_size bytes < restore $restore_size bytes" 2
+    die "$partition_label partition is too small: $partition_size bytes < image $restore_size bytes" 2
 
-  log "Fastboot restore context OK: serial=$SERIAL slot=$current_slot boot_b_size=$partition_size"
+  log "Fastboot context OK: serial=$SERIAL slot=$current_slot partition=$partition_label size=$partition_size"
 }
 
 ensure_bootloader_fastboot() {
@@ -1238,6 +1336,11 @@ rollback_via_source_ssh_if_safe() {
   local token=""
 
   [ "$START_FROM_PMOS_SSH" -eq 1 ] || return 1
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    KEEP_RESCUE_WATCHER=1
+    log "Source-SSH boot-only rollback is forbidden for a dual-partition transaction"
+    return 1
+  fi
   [ "$BOOT_B_MAY_BE_DIRTY" -eq 1 ] || return 0
   [ -n "$RESTORE_IMAGE" ] || return 1
   [ -n "$EXPECT_SOURCE_KERNEL_PREFIX" ] || {
@@ -1426,6 +1529,17 @@ return_after_restore_from_fastboot() {
       die "Invalid restore-after mode: $RESTORE_AFTER_FASTBOOT" 2
       ;;
   esac
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    local marker_tmp="$RESTORE_COMPLETE_FILE.$$.tmp"
+    {
+      printf 'contract_version=3\nserial=%s\n' "$SERIAL"
+      printf 'restore_dtbo_sha256=%s\n' "$RESTORE_DTBO_EXPECTED_SHA256"
+      printf 'restore_boot_sha256=%s\n' "$RESTORE_IMAGE_SHA256"
+      printf 'order=dtbo_b,boot_b,set_active_b,reboot\n'
+    } > "$marker_tmp"
+    mv -f "$marker_tmp" "$RESTORE_COMPLETE_FILE"
+    log "Published accepted dual restore marker"
+  fi
 }
 
 restore_boot_b_if_configured() {
@@ -1436,13 +1550,23 @@ restore_boot_b_if_configured() {
     ensure_rescue_watcher_alive "immediately before fastboot restore" ||
       die "Cannot restore boot_b without a live companion watcher" 3
   fi
-  validate_fastboot_restore_context "$RESTORE_IMAGE"
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    verify_restore_dtbo_hash
+    validate_fastboot_restore_context "$RESTORE_DTBO_IMAGE" dtbo_b
+    ensure_rescue_watcher_alive "final dtbo_b restore write boundary" ||
+      die "Companion rescue watcher died before dtbo_b restore" 3
+    verify_restore_dtbo_hash
+    run_guarded_fastboot_transport "restore dtbo_b flash" \
+      "$run_dir/fastboot-restore-dtbo-b.txt" flash dtbo_b "$RESTORE_DTBO_IMAGE" ||
+      die "dtbo_b restore flash lost its rescue quorum or failed" 3
+  fi
+  validate_fastboot_restore_context "$RESTORE_IMAGE" boot_b
   verify_restore_image_hash
   if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
     ensure_rescue_watcher_alive "final fastboot restore write boundary" ||
       die "Companion rescue watcher died before fastboot restore" 3
   fi
-  validate_fastboot_restore_context "$RESTORE_IMAGE"
+  validate_fastboot_restore_context "$RESTORE_IMAGE" boot_b
   verify_restore_image_hash
 
   log "Restoring boot_b from $RESTORE_IMAGE"
@@ -1458,7 +1582,7 @@ restore_boot_b_if_configured() {
     ensure_rescue_watcher_alive "before restored slot activation" ||
       die "Companion rescue watcher died after fastboot restore" 3
   fi
-  validate_fastboot_restore_context "$RESTORE_IMAGE"
+  validate_fastboot_restore_context "$RESTORE_IMAGE" boot_b
   verify_restore_image_hash
   log "Rearming active slot b after boot_b restore"
   if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
@@ -1496,6 +1620,22 @@ verify_test_image_hash() {
     die "Test image changed after validation: expected $IMAGE_EXPECTED_SHA256, got $actual" 3
 }
 
+verify_candidate_dtbo_hash() {
+  local actual=""
+
+  actual="$(sha256sum "$CANDIDATE_DTBO_IMAGE" | awk '{ print $1 }')"
+  [ "$actual" = "$CANDIDATE_DTBO_EXPECTED_SHA256" ] ||
+    die "Candidate dtbo changed after validation: expected $CANDIDATE_DTBO_EXPECTED_SHA256, got $actual" 3
+}
+
+verify_restore_dtbo_hash() {
+  local actual=""
+
+  actual="$(sha256sum "$RESTORE_DTBO_IMAGE" | awk '{ print $1 }')"
+  [ "$actual" = "$RESTORE_DTBO_EXPECTED_SHA256" ] ||
+    die "Restore dtbo changed after validation: expected $RESTORE_DTBO_EXPECTED_SHA256, got $actual" 3
+}
+
 collect_recovery_crash_artifacts() {
   local label="$1"
   local out="$run_dir/recovery-crash-$label"
@@ -1522,6 +1662,63 @@ restore_boot_b_from_adb_mode_if_configured() {
   ensure_bootloader_fastboot
   restore_boot_b_if_configured
   return_after_restore_from_fastboot
+}
+
+flash_candidate_from_fastboot() {
+  validate_fastboot_identity
+  ensure_bootloader_fastboot
+  validate_fastboot_restore_context "$IMAGE" boot_b
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    validate_fastboot_restore_context "$CANDIDATE_DTBO_IMAGE" dtbo_b
+  fi
+
+  start_rescue_watcher || die "Could not prearm companion rescue watcher before fastboot flash" 3
+  ensure_rescue_watcher_alive "immediately before candidate transaction" ||
+    die "Companion rescue watcher is not alive at the write boundary" 3
+
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    validate_fastboot_restore_context "$CANDIDATE_DTBO_IMAGE" dtbo_b
+    verify_candidate_dtbo_hash
+    DTBO_B_MAY_BE_DIRTY=1
+    BOOT_B_MAY_BE_DIRTY=1
+    run_guarded_fastboot_transport "candidate dtbo_b flash" \
+      "$run_dir/fastboot-flash-dtbo-b.txt" flash dtbo_b "$CANDIDATE_DTBO_IMAGE" ||
+      die "Candidate dtbo_b flash lost its rescue quorum or failed" 3
+  else
+    BOOT_B_MAY_BE_DIRTY=1
+  fi
+
+  validate_fastboot_restore_context "$IMAGE" boot_b
+  verify_test_image_hash
+  log "Flashing boot_b"
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    run_guarded_fastboot_transport "candidate boot_b flash" \
+      "$run_dir/fastboot-flash-boot-b.txt" flash boot_b "$IMAGE" ||
+      die "Candidate boot_b flash lost its rescue quorum or failed" 3
+  else
+    fastboot_do flash boot_b "$IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b.txt"
+  fi
+
+  if [ "$SET_ACTIVE_B" -eq 1 ]; then
+    validate_fastboot_restore_context "$IMAGE" boot_b
+    verify_test_image_hash
+    log "Setting active slot b"
+    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+      run_guarded_fastboot_transport "candidate slot-b activation" \
+        "$run_dir/fastboot-set-active-b.txt" set_active b ||
+        die "Slot-b activation lost its rescue quorum or failed" 3
+    else
+      fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"
+    fi
+  fi
+  log "Rebooting into flashed boot_b"
+  if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
+    run_guarded_fastboot_transport "candidate fastboot reboot" \
+      "$run_dir/fastboot-reboot.txt" reboot ||
+      die "Candidate reboot lost its rescue quorum or failed" 3
+  else
+    fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot.txt"
+  fi
 }
 
 main() {
@@ -1556,6 +1753,29 @@ main() {
   fi
   if [ "$REQUIRE_DIRTY_SURVIVAL" -eq 1 ] && [ "$START_RESCUE_WATCHER" -ne 1 ]; then
     die "Dirty-survival policy requires --start-rescue-watcher before any phone access" 2
+  fi
+  if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+    [ "$START_RESCUE_WATCHER" -eq 1 ] || die "Dual-partition transaction requires --start-rescue-watcher" 2
+    [ "$SET_ACTIVE_B" -eq 1 ] || die "Dual-partition transaction requires slot-b activation" 2
+    [ -n "$CANDIDATE_DTBO_IMAGE" ] && [ -n "$CANDIDATE_DTBO_EXPECTED_SHA256" ] &&
+      [ -n "$RESTORE_DTBO_IMAGE" ] && [ -n "$RESTORE_DTBO_EXPECTED_SHA256" ] ||
+      die "Dual-partition transaction requires candidate and restore DTBO paths and SHA256 values" 2
+    for hash in "$CANDIDATE_DTBO_EXPECTED_SHA256" "$RESTORE_DTBO_EXPECTED_SHA256"; do
+      [[ "$hash" =~ ^[0-9a-f]{64}$ ]] || die "Dual-partition DTBO SHA256 must be exactly 64 hexadecimal characters" 2
+    done
+    [ -s "$CANDIDATE_DTBO_IMAGE" ] || die "Candidate dtbo image is missing: $CANDIDATE_DTBO_IMAGE" 2
+    [ -s "$RESTORE_DTBO_IMAGE" ] || die "Restore dtbo image is missing: $RESTORE_DTBO_IMAGE" 2
+    [ -s "$REBOOT_HELPER" ] || die "Source reboot helper is missing: $REBOOT_HELPER" 2
+    [[ "$REBOOT_HELPER_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+      die "Dual-partition transaction requires --reboot-helper-sha256" 2
+    [ "$(sha256sum "$REBOOT_HELPER" | awk '{ print $1 }')" = "$REBOOT_HELPER_EXPECTED_SHA256" ] ||
+      die "Source reboot helper SHA256 mismatch" 3
+    RESTORE_COMPLETE_FILE="$run_dir/dual-restore-complete"
+    rm -f "$RESTORE_COMPLETE_FILE"
+    verify_candidate_dtbo_hash
+    verify_restore_dtbo_hash
+  elif [ -n "$CANDIDATE_DTBO_IMAGE$CANDIDATE_DTBO_EXPECTED_SHA256$RESTORE_DTBO_IMAGE$RESTORE_DTBO_EXPECTED_SHA256" ]; then
+    die "DTBO inputs require --dual-partition-transaction" 2
   fi
 
   command -v adb >/dev/null 2>&1 || die "Missing adb" 127
@@ -1602,6 +1822,9 @@ main() {
   log "Expected source cmdline tokens: ${EXPECT_SOURCE_CMDLINE_TOKENS[*]:-none}"
   log "Restore image SHA256: ${RESTORE_IMAGE_SHA256:-none}"
   log "Expected test image SHA256: $IMAGE_EXPECTED_SHA256"
+  log "Transaction scope: $([ "$DUAL_PARTITION_TRANSACTION" -eq 1 ] && printf 'dtbo_b+boot_b-v3' || printf 'boot_b-only-v2')"
+  log "Candidate dtbo SHA256: ${CANDIDATE_DTBO_EXPECTED_SHA256:-none}"
+  log "Restore dtbo SHA256: ${RESTORE_DTBO_EXPECTED_SHA256:-none}"
   log "Restore-after mode: $RESTORE_AFTER_FASTBOOT"
   log "Companion rescue watcher: $START_RESCUE_WATCHER"
   log "Require dirty survival: $REQUIRE_DIRTY_SURVIVAL"
@@ -1638,8 +1861,28 @@ main() {
         die "Companion rescue watcher failed its pre-write liveness check" 3
     fi
 
-    phone_lock_acquire "D1 boot_b write, observation and rollback transaction" 0 ||
-      die "Could not acquire phone operation lock before pmOS SSH flash" 3
+    if [ "$DUAL_PARTITION_TRANSACTION" -eq 1 ]; then
+      local -a reboot_args=(
+        --mode bootloader --helper "$REBOOT_HELPER" --helper-sha256 "$REBOOT_HELPER_EXPECTED_SHA256"
+        --host "$PMOS_HOST" --user "$PMOS_USER" --password "$PMOS_PASSWORD" --serial "$SERIAL"
+        --expected-source-boot-id "$PMOS_BOOT_ID_BEFORE"
+        --expected-source-kernel "$PMOS_KERNEL_BEFORE"
+      )
+      for token in "${EXPECT_SOURCE_CMDLINE_TOKENS[@]}"; do
+        reboot_args+=(--expected-source-cmdline-token "$token")
+      done
+      phone_lock_acquire "D3 R5 handoff, dtbo_b and boot_b transaction" 0 ||
+        die "Could not acquire phone operation lock before D3 source handoff" 3
+      reboot_args+=(--phone-lock-fd "$PHONE_LOCK_FD")
+      run_guarded_transport "strict source R5 bootloader handoff" \
+        "$run_dir/source-r5-reboot-bootloader.txt" \
+        "$HOTDOG_ROOT/scripts/reboot-pmos-to-bootloader.sh" "${reboot_args[@]}" ||
+        die "Strict source R5 bootloader handoff lost its rescue quorum or failed" 3
+      wait_for_fastboot 120
+      flash_candidate_from_fastboot
+    else
+      phone_lock_acquire "D1 boot_b write, observation and rollback transaction" 0 ||
+        die "Could not acquire phone operation lock before pmOS SSH flash" 3
     if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
       ensure_rescue_watcher_alive "immediately before D1 SSH writer" ||
         die "Companion rescue watcher is not alive at the D1 write boundary" 3
@@ -1656,10 +1899,11 @@ main() {
       rollback_via_source_ssh_if_safe "D1 writer or reboot verification failed" || true
       die "pmOS SSH flash/reboot helper failed; rollback status recorded above" 4
     fi
-    if [ "$START_RESCUE_WATCHER" -eq 1 ] &&
-      ! ensure_rescue_watcher_alive "after D1 SSH writer"; then
-      rollback_via_source_ssh_if_safe "rescue watcher died immediately after D1 write" || true
-      die "Companion rescue watcher could not be rearmed after D1 write" 3
+      if [ "$START_RESCUE_WATCHER" -eq 1 ] &&
+        ! ensure_rescue_watcher_alive "after D1 SSH writer"; then
+        rollback_via_source_ssh_if_safe "rescue watcher died immediately after D1 write" || true
+        die "Companion rescue watcher could not be rearmed after D1 write" 3
+      fi
     fi
   else
     phone_lock_acquire "test boot_b image" 0
@@ -1683,67 +1927,7 @@ main() {
       die "Phone is not visible in recovery ADB or fastboot" 3
     fi
 
-    validate_fastboot_identity
-    ensure_bootloader_fastboot
-    validate_fastboot_restore_context "$IMAGE"
-
-    get_fastboot_var current-slot | tee "$run_dir/current-slot-before.txt" || true
-    get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-before.txt" || true
-    get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-before.txt" || true
-
-    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-      start_rescue_watcher || die "Could not prearm companion rescue watcher before fastboot flash" 3
-      ensure_rescue_watcher_alive "immediately before direct fastboot D1 write" ||
-        die "Companion rescue watcher is not alive at the direct write boundary" 3
-    fi
-    verify_test_image_hash
-    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-      ensure_rescue_watcher_alive "final direct fastboot D1 write boundary" ||
-        die "Companion rescue watcher died before direct fastboot D1 write" 3
-    fi
-    BOOT_B_MAY_BE_DIRTY=1
-    log "Flashing boot_b"
-    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-      run_guarded_fastboot_transport "candidate boot_b flash" \
-        "$run_dir/fastboot-flash-boot-b.txt" flash boot_b "$IMAGE" ||
-        die "Candidate boot_b flash lost its rescue quorum or failed" 3
-    else
-      fastboot_do flash boot_b "$IMAGE" 2>&1 | tee "$run_dir/fastboot-flash-boot-b.txt"
-    fi
-
-    if [ "$SET_ACTIVE_B" -eq 1 ]; then
-      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-        ensure_rescue_watcher_alive "before activating candidate slot b" ||
-          die "Companion rescue watcher died before candidate slot activation" 3
-      fi
-      validate_fastboot_restore_context "$IMAGE"
-      verify_test_image_hash
-      log "Setting active slot b"
-      if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-        run_guarded_fastboot_transport "candidate slot-b activation" \
-          "$run_dir/fastboot-set-active-b.txt" set_active b ||
-          die "Slot-b activation lost its rescue quorum or failed" 3
-      else
-        fastboot_do set_active b 2>&1 | tee "$run_dir/fastboot-set-active-b.txt"
-      fi
-    fi
-
-    get_fastboot_var current-slot | tee "$run_dir/current-slot-after-flash.txt" || true
-    get_fastboot_var slot-retry-count:b | tee "$run_dir/slot-retry-count-b-after-flash.txt" || true
-    get_fastboot_var slot-unbootable:b | tee "$run_dir/slot-unbootable-b-after-flash.txt" || true
-
-    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-      ensure_rescue_watcher_alive "before rebooting into candidate boot_b" ||
-        die "Companion rescue watcher died before candidate reboot" 3
-    fi
-    log "Rebooting into flashed boot_b"
-    if [ "$START_RESCUE_WATCHER" -eq 1 ]; then
-      run_guarded_fastboot_transport "candidate fastboot reboot" \
-        "$run_dir/fastboot-reboot.txt" reboot ||
-        die "Candidate reboot lost its rescue quorum or failed" 3
-    else
-      fastboot_do reboot 2>&1 | tee "$run_dir/fastboot-reboot.txt"
-    fi
+    flash_candidate_from_fastboot
   fi
 
   local deadline=$((SECONDS + BOOT_WAIT_SEC))

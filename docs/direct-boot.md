@@ -266,7 +266,7 @@ handset.
 ## D2 header-v0 append-DTB control
 
 [test-mainline617-direct-d2-header0.sh](../scripts/test-mainline617-direct-d2-header0.sh)
-is the next prepared control. Relative to D1, it keeps the exact K1 Image
+retains the exact K1 Image
 `48ac790a9f15dbf3e976557d1baee6a72b847fefed17fed9e700424d91e3fa83`,
 DTB `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`,
 and ramdisk
@@ -280,7 +280,28 @@ to header v0 with the DTB appended to the kernel payload.
 | Raw image | `c7c07a0cbf1311395343135253a10b555381f97ff32509c77257fc7b3aee3614` |
 | Appended payload | `9fa9e318cf9d1efea349028a4c1e80b8477fd4839d7a73d3efdc0a0e5811bd09` |
 
-D2 has passed offline candidate validation. It has not been booted on hardware.
+D2 was written and read back exactly on hardware, then returned to fastboot
+without an accepted mainline identity. R5 was restored and verified afterward.
+Changing from header v2 with a separate DTB to header v0 with an appended DTB
+did not change the observed result class.
+
+## D3 no-op DTBO control
+
+[test-mainline617-direct-d3-dtbo-noop.sh](../scripts/test-mainline617-direct-d3-dtbo-noop.sh)
+tests a bootloader-applied overlay mismatch while keeping the D1 `boot_b`
+payload unchanged. Stock DTBO entry 5 applies to the downstream DTB but fails
+against the K1 DTB with `FDT_ERR_NOTFOUND`. The candidate replaces only that
+entry with a no-op overlay and keeps the original DTBO table layout and size.
+The candidate can be reproduced from the exact tested stock dump and K1 DTB
+with [build-d3-noop-dtbo.sh](../scripts/build-d3-noop-dtbo.sh); the builder
+pins both input hashes and the expected final image hash.
+
+The D3 launcher pins candidate and restore hashes for both `dtbo_b` and
+`boot_b`, requires two version-3 rescue watcher contracts, and holds one
+inherited phone lock across the R5 reboot-to-bootloader transition and all
+candidate writes. Rollback order is original `dtbo_b`, R5 `boot_b`, slot B,
+then reboot. D3 has passed offline validation but has not yet been run on
+hardware.
 
 ## D1 watchdog control
 
@@ -306,14 +327,14 @@ seconds.
 | K1 | Observed: load the pinned mainline payload by kexec | The exact K1 payload reaches postmarketOS userspace through the bridge. |
 | D1 | Observed: exact K1 payload in persistent header v2 | Returned to fastboot in about three seconds without an accepted mainline USB identity. |
 | D1-pack | Observed: replace DTB-pack entry 12 | Returned to fastboot in about four seconds; the pack replacement is not sufficient. |
-| D2 | Prepared next: append the exact K1 DTB to Image in header v0 | Does the alternate kernel/DTB handoff cross the early direct-entry boundary? |
-| D1-wdt | Prepared after D2: substitute the built-in-watchdog kernel | Does watchdog initialization affect the early return, despite the short observed interval? |
+| D2 | Observed: append the exact K1 DTB to Image in header v0 | Returned to fastboot; the alternate header and DTB placement are not sufficient. |
+| D3 | Prepared: replace incompatible stock DTBO entry 5 with a no-op | Does preventing the bootloader overlay failure allow the unchanged D1 payload to enter mainline? |
+| D1-wdt | Prepared after D3: substitute the built-in-watchdog kernel | Does watchdog initialization affect the early return, despite the short observed interval? |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
-| D3 | Compare minimal and full command lines | Are injected Android bootargs involved? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
-D1 and D1-pack now have recorded negative results. D2 is next, followed by
-D1-wdt. Keep the package-built control deferred until a direct handoff baseline
+D1, D1-pack, and D2 now have recorded negative results. D3 is next, followed
+by D1-wdt if needed. Keep the package-built control deferred until a direct handoff baseline
 exists. Each candidate must change one handoff variable and retain the other
 known-good payload hashes.
 
