@@ -334,6 +334,7 @@ seconds.
 | D4-entry | Observed: PSCI reset at the first `primary_entry` instructions | Same approximately 3.84-second result; no positive proof of kernel entry. |
 | D5 | Observed: filter stock entry 5 against K1 fixups | Applies to both DTBs and reaches the R5 telnet initramfs, but the rootfs mount does not complete. |
 | D6 | Observed: add K1 aliases for vendor UFS symbols before filtering | R5 exposes all UFS LUNs, NCM, and ACM; `pmos_continue_boot` does not reach SSH. |
+| D7 | Prepared: retain the complete vendor UFS fragments with a K1 fixed-regulator GDSC bridge | Applies to both base DTBs; fragments 59/60 match stock structurally. Hardware test pending. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
