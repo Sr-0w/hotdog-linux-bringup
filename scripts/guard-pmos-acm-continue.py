@@ -47,6 +47,8 @@ def main():
     parser.add_argument("--fallback-delay", type=int, default=180)
     parser.add_argument("--log-delay", type=int, default=45)
     parser.add_argument("--prompt-timeout", type=int, default=20)
+    parser.add_argument("--boot-uuid", default="9ecffd22-eacf-4b9f-9b0f-3f7ca738a731")
+    parser.add_argument("--root-uuid", default="de13a416-8942-4d87-9947-dce62fba9465")
     args = parser.parse_args()
 
     helper = open(args.helper, "rb").read()
@@ -69,6 +71,19 @@ def main():
         banner = read_until(fd, PROMPT, args.prompt_timeout)
         if EXPECTED_BANNER not in banner:
             raise RuntimeError("refusing non-hotdog or non-initramfs ACM endpoint")
+
+        write_line(
+            fd,
+            "/bin/busybox ash /hooks/00-hotdog-super-loop-fix.sh; "
+            "echo ACM_STORAGE_CHECK; blkid",
+        )
+        storage = read_until(fd, PROMPT, 30)
+        for label, uuid in (
+            ("pmOS_boot", args.boot_uuid),
+            ("pmOS_root", args.root_uuid),
+        ):
+            if label.encode("ascii") not in storage or uuid.encode("ascii") not in storage:
+                raise RuntimeError(f"{label} with UUID {uuid} was not exposed")
 
         write_line(fd, f"rm -f {REMOTE_HELPER}.b64 {REMOTE_HELPER}")
         read_until(fd, PROMPT, 5)
@@ -102,6 +117,7 @@ def main():
         write_line(fd, "echo ACM_GUARD_ARMED; pmos_continue_boot")
         output = read_until(fd, b"Continuing boot", 20)
         sys.stdout.buffer.write(banner)
+        sys.stdout.buffer.write(storage)
         sys.stdout.buffer.write(verification)
         sys.stdout.buffer.write(armed)
         sys.stdout.buffer.write(output)

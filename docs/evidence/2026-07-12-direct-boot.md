@@ -153,7 +153,9 @@ requires the same restoration after a manual return to fastboot.
 The next cycle must prearm
 [`guard-pmos-acm-continue.py`](../../scripts/guard-pmos-acm-continue.py) before
 leaving the ACM shell. This captures the delayed initramfs log and schedules a
-verified `RESTART2(bootloader)` fallback without requiring physical input.
+verified `RESTART2(bootloader)` fallback without requiring physical input. It
+also reruns the `super` loop hook after late UFS discovery and refuses to
+continue unless both pinned postmarketOS filesystem UUIDs are visible.
 
 ## Offline validation
 
