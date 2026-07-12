@@ -1,5 +1,3 @@
-# Maintainer: Sr-0w <Sr-0w@users.noreply.github.com>
-
 pkgname=firmware-oneplus-hotdog
 pkgver=20241212
 pkgrel=0
@@ -7,6 +5,7 @@ pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
 url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
 arch="aarch64"
 license="proprietary"
+maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 options="!check !strip !archcheck !tracedeps pmb:cross-native"
 
 subpackages="
@@ -22,7 +21,7 @@ subpackages="
 _commit="5e5c534784a848bc39a02c421cc5273d79678fb3"
 source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
 builddir="$srcdir/$pkgname-$_commit"
-_fwdir="/lib/firmware/qcom/sm8150/oneplus/hotdog"
+_fwdir="/usr/lib/firmware/qcom/sm8150/oneplus/hotdog"
 
 package() {
 	mkdir -p "$pkgdir"
@@ -32,9 +31,9 @@ adreno() {
 	pkgdesc="OnePlus hotdog adreno firmware"
 
 	install -Dm644 "$builddir"/a630_sqe.fw -t \
-		"$subpkgdir/lib/firmware/qcom/"
+		"$subpkgdir/usr/lib/firmware/qcom/"
 	install -Dm644 "$builddir"/a640_gmu.bin -t \
-		"$subpkgdir/lib/firmware/qcom/"
+		"$subpkgdir/usr/lib/firmware/qcom/"
 	install -Dm644 "$builddir"/a640_zap.mbn -t \
 		"$subpkgdir/$_fwdir/"
 }
@@ -49,9 +48,9 @@ bluetooth() {
 	pkgdesc="OnePlus hotdog Bluetooth firmware"
 
 	install -Dm644 "$builddir"/crbtfw*.tlv -t \
-		"$subpkgdir/lib/firmware/qca/"
+		"$subpkgdir/usr/lib/firmware/qca/"
 	install -Dm644 "$builddir"/crnv*.bin -t \
-		"$subpkgdir/lib/firmware/qca/"
+		"$subpkgdir/usr/lib/firmware/qca/"
 }
 
 cdsp() {
@@ -76,9 +75,9 @@ wlan() {
 	pkgdesc="OnePlus hotdog WLAN firmware"
 
 	install -Dm644 "$builddir"/firmware-5.bin -t \
-		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
+		"$subpkgdir/usr/lib/firmware/ath10k/WCN3990/hw1.0/"
 	install -Dm644 "$builddir"/board-2.bin -t \
-		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
+		"$subpkgdir/usr/lib/firmware/ath10k/WCN3990/hw1.0/"
 	install -Dm644 "$builddir"/wlanmdsp.mbn -t "$subpkgdir/$_fwdir/"
 }
 

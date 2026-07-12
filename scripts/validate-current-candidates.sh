@@ -209,6 +209,8 @@ validate_r5_no_paint_framebuffer_helper() {
 
 validate_kernel_prefix_tester_guards() {
   local telnet_body=""
+  local dtbo_restore_body=""
+  local ensure_bootloader_body=""
   local boot_b_tester="$HOTDOG_ROOT/scripts/test-boot-b-image.sh"
   local fastboot_tester="$HOTDOG_ROOT/scripts/test-fastboot-boot-image.sh"
   local ssh_flasher="$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh"
@@ -235,7 +237,11 @@ validate_kernel_prefix_tester_guards() {
   require_text "boot_b tester checks source kernel" "$boot_b_tester" "EXPECT_SOURCE_KERNEL_PREFIX"
   require_text "boot_b tester checks source cmdline" "$boot_b_tester" "EXPECT_SOURCE_CMDLINE_TOKENS"
   require_text "boot_b tester passes pinned restore hash" "$boot_b_tester" "--restore-boot-b-sha256"
-  require_text "boot_b tester delays watchdog acknowledgement" "$boot_b_tester" "acknowledge_pmos_watchdog"
+  require_text "boot_b tester atomically binds strict identity and ACK" "$boot_b_tester" "pmos_ssh_probe_and_ack_strict"
+  require_text "boot_b tester emits atomic identity ACK marker" "$boot_b_tester" "HOTDOG_ATOMIC_IDENTITY_ACK=ok"
+  require_text "boot_b tester requires atomic ACK before strict success" "$boot_b_tester" 'PMOS_PROBE_ATOMIC_ACKED" -eq 1'
+  require_text "boot_b tester rejects dirty policy without watcher" "$boot_b_tester" \
+    "Dirty-survival policy requires --start-rescue-watcher before any phone access"
   telnet_body="$(sed -n '/^collect_pmos_telnet_logs()/,/^}/p' "$boot_b_tester")"
   if grep -Fq 'hotdog_rescue_watchdog.ok' <<< "$telnet_body"; then
     fail "telnet diagnostics still acknowledge the rescue watchdog"
@@ -243,9 +249,40 @@ validate_kernel_prefix_tester_guards() {
   require_text "rescue watcher publishes readiness" "$rescue_watcher" "publish_ready"
   require_text "rescue watcher publishes restore hash" "$rescue_watcher" "restore_sha256="
   require_text "rescue watcher revalidates restore hash" "$rescue_watcher" "verify_restore_image_hash"
+  require_text "rescue watcher publishes versioned contract" "$rescue_watcher" "contract_version=2"
+  require_text "rescue watcher handles live contract challenges" "$rescue_watcher" "publish_contract_ack"
+  require_text "rescue watcher supports explicit boot_b-only scope" "$rescue_watcher" "--boot-b-only"
+  require_text "rescue watcher clears ambient dtbo image" "$rescue_watcher" 'RESTORE_DTBO_IMAGE=""'
+  require_text "rescue watcher requires explicit dtbo SHA256" "$rescue_watcher" "--restore-dtbo-b-sha256"
+  require_text "rescue watcher revalidates dtbo hash" "$rescue_watcher" "verify_restore_dtbo_hash"
+  dtbo_restore_body="$(sed -n '/^restore_from_fastboot()/,/^}/p' "$rescue_watcher")"
+  [ "$(grep -c 'verify_restore_dtbo_hash || return 1' <<< "$dtbo_restore_body")" -ge 3 ] ||
+    fail "rescue watcher lacks startup/context/final DTBO hash boundaries"
+  require_text "boot_b tester passes mandatory watcher contract" "$boot_b_tester" "--require-watcher-contract"
+  require_text "boot_b tester pins watcher starttime" "$boot_b_tester" "--required-watcher-starttime"
+  require_text "boot_b tester passes independent backup contract" "$boot_b_tester" "--required-watcher2-starttime"
+  require_text "boot_b tester supervises fastboot transports" "$boot_b_tester" "run_guarded_fastboot_transport"
+  require_text "boot_b tester guards restore flash transport" "$boot_b_tester" '"restore boot_b flash"'
+  require_text "boot_b tester guards restored slot activation" "$boot_b_tester" '"restored slot-b activation"'
+  require_text "boot_b tester guards restored reboot" "$boot_b_tester" '"restored fastboot system reboot"'
+  ensure_bootloader_body="$(sed -n '/^ensure_bootloader_fastboot()/,/^}/p' "$boot_b_tester")"
+  grep -Fq 'run_guarded_fastboot_transport "fastbootd bootloader reboot"' <<< "$ensure_bootloader_body" ||
+    fail "boot_b tester does not guard the fastbootd-to-bootloader transport"
+  [ "$(grep -c 'ensure_rescue_watcher_alive' <<< "$ensure_bootloader_body")" -ge 3 ] ||
+    fail "boot_b tester does not reattest rescue around the fastbootd handoff"
+  grep -Fq 'fastboot_do reboot bootloader' <<< "$ensure_bootloader_body" ||
+    fail "boot_b tester lost the legacy no-watcher fastbootd route"
   require_text "SSH flasher pins device serial" "$ssh_flasher" "androidboot.serialno=\$expected_serial"
   require_text "SSH flasher pins hotdog project" "$ssh_flasher" "androidboot.prjname=19801"
   require_text "SSH flasher validates boot_b PARTNAME" "$ssh_flasher" 'partname" = "boot_b'
+  require_text "SSH flasher freezes boot_b symlink target" "$ssh_flasher" 'part_link_now="$(readlink -f "$part"'
+  require_text "SSH flasher writes resolved block device" "$ssh_flasher" 'of="$part_real"'
+  require_text "SSH flasher reads resolved block device" "$ssh_flasher" 'dd if="$part_real"'
+  require_text "SSH flasher challenges exact watcher contract" "$ssh_flasher" "challenge_required_watcher"
+  require_text "SSH flasher validates watcher process starttime" "$ssh_flasher" "process_starttime"
+  require_text "SSH flasher requires two-watcher quorum" "$ssh_flasher" "required_watcher_pair_static_valid"
+  require_text "SSH flasher supervises transport process groups" "$ssh_flasher" "run_guarded_transport"
+  require_text "SSH flasher verifies reboot dispatch proof" "$ssh_flasher" "HOTDOG_REBOOT_DISPATCH="
 
   require_text "fastboot tester documents kernel-prefix guard" "$fastboot_tester" "--expect-kernel-prefix PREFIX"
   require_text "fastboot tester parses kernel-prefix guard" "$fastboot_tester" "--expect-kernel-prefix)"
@@ -255,6 +292,15 @@ validate_kernel_prefix_tester_guards() {
   require_text "fastboot tester returns nonzero for kernel guard failures" "$fastboot_tester" "return 5"
 
   log "generic kernel-prefix guards validated"
+}
+
+validate_d1_safety_offline() {
+  local safety_test="$HOTDOG_ROOT/scripts/test-d1-safety-offline.sh"
+
+  require_file "$safety_test"
+  bash -n "$safety_test"
+  bash "$safety_test"
+  log "offline D1 safety regression suite validated"
 }
 
 validate_acm_collector() {
@@ -574,6 +620,22 @@ main() {
   require_wrapper_restore_pointer "current r5 wrapper" "$current_wrapper"
   check_sha "current r5 no-paint image" "$image" "23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50"
   check_sha "current r5 restore image" "$restore" "23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50"
+  require_text "current r5 wrapper pins expected SHA256" "$current_wrapper" 'expected_sha256="23fa53d382425e9414a2e2a4b6e10f42d59ce1d6623b7fa1fbebf21ffe0c8a50"'
+  require_text "current r5 wrapper passes pinned image SHA256" "$current_wrapper" '--image-sha256 "$expected_sha256"'
+  require_text "current r5 wrapper passes pinned restore SHA256" "$current_wrapper" '--restore-boot-b-sha256 "$expected_sha256"'
+  require_text "current r5 wrapper rejects command-line options" "$current_wrapper" 'accepts no command-line options'
+  require_text "current r5 wrapper validates source mode" "$current_wrapper" 'HOTDOG_FROM_PMOS_SSH must be exactly 0 or 1'
+  require_text "current r5 wrapper pins expected products" "$current_wrapper" '--expected-product "msmnile hotdog"'
+  require_text "current r5 wrapper pins boot wait" "$current_wrapper" '--boot-wait 420'
+  require_text "current r5 wrapper pins observation poll" "$current_wrapper" '--poll 2'
+  require_text "current r5 wrapper pins rescue timeout" "$current_wrapper" '--rescue-watch-timeout 21600'
+  require_text "current r5 wrapper pins canonical SSH helper" "$current_wrapper" 'export HOTDOG_FLASH_BOOT_B_SSH_HELPER="$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh"'
+  require_text "current r5 wrapper pins canonical rescue helper" "$current_wrapper" 'export HOTDOG_RESCUE_WATCHER_HELPER="$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"'
+  require_text "current r5 wrapper uses canonical target serial" "$current_wrapper" 'serial="$HOTDOG_TARGET_SERIAL"'
+  require_text "shared serial guard rejects divergent identities" "$HOTDOG_ROOT/scripts/env.sh" 'differs from HOTDOG_TARGET_SERIAL'
+  if grep -Fq '"$@"' "$current_wrapper"; then
+    fail "current r5 wrapper still forwards arbitrary caller options"
+  fi
   dir="$(dirname "$image")"
   cmdline="$dir/cmdline-watchdog.txt"
   log "current r5 wrapper: $current_wrapper"
@@ -594,6 +656,7 @@ main() {
   validate_direct_d1_artifacts_and_launcher
   validate_direct_d1_pack_artifacts_and_launcher
   validate_kernel_prefix_tester_guards
+  validate_d1_safety_offline
   validate_acm_collector
   validate_reproducible_builder_guards
 

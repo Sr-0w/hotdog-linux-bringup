@@ -19,6 +19,8 @@ single developer workstation or a live debugging session.
 - [roadmap.md](roadmap.md): remaining work, ordered by dependency
 - [hardware-roadmap.md](hardware-roadmap.md): staged subsystem experiments after
   direct boot is validated
+- [pmaports-upstreaming.md](pmaports-upstreaming.md): package architecture,
+  validation gates, and submission scope
 - [repository-layout.md](repository-layout.md): tracked versus local-only state
 - [android-reference.md](android-reference.md): Android-side facts worth capturing
 
@@ -28,10 +30,14 @@ Raw experiment records live in the ignored local `reports/` directory. Promote
 reusable conclusions into the documents above without publishing device serials,
 credentials, proprietary dumps, or workstation-specific paths.
 
+- [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
+  evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
+  and the validated `20241212-r0` APK set.
 - [evidence/2026-07-11-mainline-k1.md](evidence/2026-07-11-mainline-k1.md):
-  primary public evidence for the hardware-validated K1 Linux 6.17 cycle,
+  primary public evidence for the hardware-observed K1 kexec cycle,
   including payload hashes, the kexec timeline, and direct-boot controls.
-- [evidence/k1-kernel-package.md](evidence/k1-kernel-package.md): successful K1
-  `pmbootstrap` APK build evidence and pinned payload hashes.
+- [evidence/k1-kernel-package.md](evidence/k1-kernel-package.md): historical r0
+  hashes, the intermediate r3 reproducibility diagnosis, and exact r4
+  double-build evidence from the tested pmbootstrap environment.
 - [evidence/k1-dtb-source.md](evidence/k1-dtb-source.md): buildable K1 hotdog
-  DTB source baseline and exact source-to-tested-DTB reproduction chain.
+  DTB source baseline and exact source-to-observed-final-DTB transform chain.

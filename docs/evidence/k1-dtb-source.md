@@ -1,7 +1,9 @@
 # K1 hotdog DTB source reproduction
 
-The hardware-tested K1 base DTB is now reproducible from tracked source. The
-source patch is [`patches/mainline-hotdog-k1-dts.patch`](../../patches/mainline-hotdog-k1-dts.patch).
+The K1 base DTB input is reproducible from tracked source. It is the
+source-reproduced input to the transform chain, not a standalone
+hardware-tested result. The source patch is
+[`patches/mainline-hotdog-k1-dts.patch`](../../patches/mainline-hotdog-k1-dts.patch).
 
 ## Pinned inputs
 
@@ -47,8 +49,8 @@ variant without separate validation.
 
 The source-built `440525...` DTB is the input to
 `scripts/build-mainline-k1-dtb-chain.sh`. The ordered lowbank, firmware-gap,
-SMMU, ICE, and DWC3 bring-up transforms reproduce the hardware-tested final
-DTB:
+SMMU, ICE, and DWC3 bring-up transforms reproduce the `cf63ae...` result tied
+to the hardware-observed 2026-07-11 kexec cycle:
 
 ```text
 440525... -> e58d41... -> d9d31d... -> d8cfc7... -> 7334f7... -> cf63ae...
@@ -56,6 +58,10 @@ DTB:
 
 The final SHA256 is
 `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`.
+The current r4 package applies the same fail-closed transform while packaging
+and installs this final DTB instead of the `440525...` base input. Both tested
+r4 builds contain the exact `cf63ae...` result; this package result remains
+hardware-untested.
 The lowbank and SMMU/ICE removals remain temporary bring-up constraints, not
 upstreamable fixes. PON reboot-mode properties are tracked separately and are
 not part of the exact K1 base.

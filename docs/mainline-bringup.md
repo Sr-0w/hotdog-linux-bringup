@@ -1,4 +1,4 @@
-# Mainline bring-up notes
+# Mainline bring-up record
 
 This document records the minimum set of changes that produced a real
 postmarketOS userspace under Linux 6.17 on the OnePlus 7T Pro HD1913.
@@ -29,6 +29,12 @@ It records the K1 payload hashes, kexec/USB/SSH timeline, no-echo ACM capture,
 exact `qcom-wdt.ko` module load, reboot behavior, and temporary
 `fastboot boot` controls.
 
+This is a historical `CONFIG_QCOM_WDT=m` hardware record. The current r4
+package uses `CONFIG_QCOM_WDT=y`, contains no `qcom-wdt.ko` payload member, and
+has not been tested on hardware. Two r4 builds are byte-identical in the tested
+pmbootstrap environment; this does not establish cross-toolchain
+reproducibility or hardware behavior.
+
 Summary:
 
 - the exact K1 Linux 6.17 payload reached postmarketOS userspace through the
@@ -43,7 +49,7 @@ Summary:
 - bridge raw no-paint, bridge AVB, and Lineage raw controls failed explicitly
   with `Load Error`
 
-Secondary local run IDs:
+Additional run identifiers:
 `test-mainline-via-kexec-2026-07-11-163810`,
 `pmos-usb-ssh-2026-07-11-164111`,
 `mainline617-k1-qcom-wdt-live-2026-07-11-164151`,
@@ -209,7 +215,8 @@ rules.
 3. Replace fixed timing waits with deterministic probe ordering.
 4. Describe the full RAM map instead of exposing only the low bank.
 5. Bring up display clocks, DSI, panel, and DRM under mainline.
-6. Add the missing boot-mode mapping so `RESTART2(bootloader)` enters
-   fastboot instead of falling back to normal boot.
+6. Hardware-test the staging PON boot-mode mapping and express the accepted
+   result in the maintained kernel source; the observed K1 DTB still lacks it.
 7. Validate the exact direct payload from persistent `boot_b`.
-8. Package the final device changes in pmaports rather than local artifacts.
+8. Validate a package-generated direct image; an offline K1 package build does
+   not establish bootloader or hardware equivalence.

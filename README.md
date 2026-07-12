@@ -24,8 +24,10 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB networking | Working | NCM gadget, host address `172.16.42.2`, device address `172.16.42.1`. |
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
-| Mainline reboot | Partial | A late-loaded exact `qcom-wdt.ko` drives a physical reboot, but `RESTART2(bootloader)` falls back to normal boot because boot-mode mapping is still missing. |
+| Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
+| K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
 | Direct `fastboot boot` | Inconclusive | The D1 raw image is accepted with `OKAY` but does not leave the fastboot USB instance; bridge raw/AVB and Lineage raw controls fail with `Load Error`. Persistent `boot_b` is the authoritative next test. |
+| Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
@@ -81,8 +83,10 @@ the following bring-up changes:
    and expose its boot and root filesystems through loop devices.
 9. Capture the short-lived USB ACM console with host echo disabled so the
    collector does not feed bytes back into the target during early boot.
-10. Load the K1-matching `qcom-wdt.ko` module after userspace comes up when a
-    restart-handler probe is required.
+10. In the historical K1 configuration, load the matching `qcom-wdt.ko` after
+    userspace comes up when a restart-handler probe is required. The current r4
+    package instead builds this driver into the kernel and remains
+    hardware-untested.
 
 These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
 ICE removal, reduced memory map, and timing waits all need proper replacements.
@@ -115,7 +119,7 @@ ignored local directories. Follow [docs/host-setup.md](docs/host-setup.md),
 [docs/artifacts.md](docs/artifacts.md), and
 [docs/device-safety.md](docs/device-safety.md) before any hardware operation.
 
-Once the validated local artifacts have been built or restored, the complete
+Once the hash-pinned artifacts have been built or restored, the complete
 mainline cycle is launched with:
 
 ```bash
@@ -160,6 +164,7 @@ runtime data and must remain local.
 - [Source trees](docs/sources.md)
 - [Roadmap](docs/roadmap.md)
 - [Hardware enablement roadmap](docs/hardware-roadmap.md)
+- [pmaports upstreaming plan](docs/pmaports-upstreaming.md)
 
 ## Contributing
 
