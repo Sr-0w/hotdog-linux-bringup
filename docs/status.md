@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Direct-boot candidates | Prepared, not hardware-tested | Historical single-DTB D1 remains first. D1-pack is a single-variable DTB-selection fallback only after a recorded D1 result; the package-built candidate is a reproducibility control only after D1 validation. |
+| Persistent direct boot | Mainline not observed | The R5 downstream bridge direct-boots and restores reliably. Exact D1 and D1-pack AVB writes both returned to fastboot USB in three to four seconds without mainline `bcdDevice=0617`, ACM, NCM, or a `900e` state. D1-pack proves that replacing DTB entry 12 is not sufficient; D2 header-v0 append-DTB is prepared next. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -73,23 +73,20 @@ Display support can then be developed without losing the remote debug channel.
 
 ## Current validation queue
 
-1. Boot D1 persistently from `boot_b`: the exact K1 payload in an Android
-   header v2 image with stock offsets, with the no-paint bridge rescue watcher
-   confirmed ready with the pinned restore hash before the write.
-2. Accept D1 only after a fresh postmarketOS SSH boot ID reports kernel
-   `6.17.0-sm8150` and the expected wrapper, slot-B, and serial command-line
-   markers; ADB, telnet, ping, or a returned 4.14 bridge are diagnostics, not
-   success.
-3. Treat `fastboot boot` as non-authoritative on this ABL: valid controls return
-   `Load Error`, while one D1 transfer reported `OKAY` without leaving fastboot.
-4. Only after D1 has a recorded result, use
-   `test-mainline617-direct-d1-pack.sh` as the single-variable DTB-pack fallback.
-   This prepared image has not been tested on hardware.
-5. Treat `2026-07-11-224500-mainline617-pmaports-k1-direct` as the historical
-   r0 package control. After D1 has a recorded result, generate a separate r4
-   package candidate, record its kernel, installed DTB, raw-image, and AVB
-   hashes, and test it without reusing the r0 identity. The same-environment r4
-   package reproducibility check is complete; the direct image is not.
-6. After D1, boot a DTB containing the hotdog-only PON reboot-mode properties
-   and verify whether Linux reboot-to-bootloader and reboot-to-recovery select
-   the expected RESTART2 modes.
+1. Preserve R5 as the recovery baseline. Its direct boot, fresh downstream SSH
+   identity, slot-B and configured-serial markers, and exact post-restore
+   `boot_b` readback are validated with SHA256 `23fa53...`.
+2. Keep D1 and D1-pack classified as observed negative handoff results. Both
+   exact AVB writes returned to fastboot USB without an accepted mainline
+   identity; DTB-pack entry 12 did not change that result.
+3. Run D2 next with `test-mainline617-direct-d2-header0.sh`. It retains the
+   exact D1 kernel, DTB, ramdisk, and command line while changing only to Android
+   header v0 with the DTB appended to the kernel payload.
+4. Only after D2, run the prepared D1-wdt control. Its built-in Qualcomm
+   watchdog is a secondary hypothesis, not a proven cause of the three-to-four
+   second return to fastboot.
+5. Defer the r4 package-generated direct image until a direct handoff baseline
+   works. Record its kernel, installed DTB, raw-image, and AVB hashes without
+   reusing the historical r0 identity.
+6. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+   properties and verify RESTART2 bootloader and recovery selection.
