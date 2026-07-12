@@ -110,9 +110,18 @@ policy, and rollback images, but substitutes the watchdog debug kernel.
 The debug kernel uses `CONFIG_QCOM_WDT=y` and
 `CONFIG_WATCHDOG_SYSFS=y`. The pinned launcher is
 [`test-mainline617-direct-d3-wdt.sh`](../../scripts/test-mainline617-direct-d3-wdt.sh).
-No D3-wdt hardware result is claimed yet. The 32-second D3 interval makes
-watchdog initialization a more useful single-variable control than running the
-same kernel with the known-incompatible stock overlay.
+D3-wdt was run and returned to fastboot after the same approximately 32-second
+interval as D3. Original `dtbo_b` and R5 `boot_b` were restored and read back
+exactly; pstore remained empty. Built-in watchdog initialization therefore did
+not change the observed failure boundary.
+
+## Prepared D4 primary-entry probe
+
+D4 keeps the D3 no-op DTBO and exact D1 ramdisk, DTB, command line, header, and
+AVB policy. Its kernel calls PSCI `SYSTEM_RESET` as the first operation in
+`primary_entry`. An immediate reset proves that the bootloader entered the
+kernel; another approximately 32-second return indicates failure before that
+entry point. The pinned AVB image is `06fe64e230f3b09f693d81500bd92a207badda8309e71375f77695a95b094607`.
 
 ## Offline validation
 

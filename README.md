@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | Not observed | D1, D1-pack, and D2 returned to fastboot in 3-4 seconds. D3 replaced the incompatible stock overlay with a no-op and returned in about 32 seconds without mainline USB. The changed timing shows that DTBO affects the handoff, but it is not sufficient. D3-wdt is next. |
+| Persistent direct mainline | Not observed | D3 and D3-wdt both returned after about 32 seconds without mainline USB; built-in watchdog made no difference. D4-entry now places a PSCI reset at the first kernel entry instructions to prove whether ABL reaches `primary_entry`. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -67,8 +67,8 @@ hardware applies to the downstream DTB but fails against the K1 DTB with
 `FDT_ERR_NOTFOUND`. D3 preserved the DTBO table and replaced only that overlay
 with a no-op while booting unchanged D1. It returned to fastboot after about
 32 seconds, substantially later than D1/D2. Its rollback restored and read
-back original `dtbo_b` before exact R5 `boot_b`. D3-wdt now changes only the
-kernel to the built-in Qualcomm watchdog variant. See the
+back original `dtbo_b` before exact R5 `boot_b`. D3-wdt produced the same
+32-second result. D4-entry now probes the first kernel instructions. See the
 [2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
 [controlled test matrix](docs/direct-boot.md).
 

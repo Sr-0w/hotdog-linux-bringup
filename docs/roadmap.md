@@ -7,9 +7,9 @@ The packaging and submission gates are tracked separately in the
 
 ## Priority 0: reproducible mainline boot
 
-- run D3-wdt next: D3's no-op overlay changed the return-to-fastboot interval
-  from 3-4 seconds to about 32 seconds; keep that DTBO and change only to the
-  built-in Qualcomm watchdog kernel
+- run D4-entry next: D3 and D3-wdt both returned after about 32 seconds, so use
+  a PSCI reset in the first `primary_entry` instructions to distinguish kernel
+  entry from a pre-entry bootloader timeout
 - retain the hash-pinned R5 bridge as the validated rollback baseline for every
   persistent control
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
