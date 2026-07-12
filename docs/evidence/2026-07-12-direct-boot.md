@@ -183,11 +183,18 @@ and D7 `dtbo_b` SHA256
 This promotes D7 from an offline candidate to the validated downstream DTBO
 control for the next direct-mainline pairing.
 
-The pinned next-step launcher is
+The first pinned pairing launcher was
 [`test-mainline617-direct-d8-d7-dtbo.sh`](../../scripts/test-mainline617-direct-d8-d7-dtbo.sh).
-It pairs D7 with the exact K1 boot payload already validated through kexec and
-restores R5+D7 on every non-success path. Relative to the accepted D7 hardware
-control, only `boot_b` changes.
+It paired D7 with the original exact K1 direct image and returned to fastboot
+after approximately 26 seconds. Offline replay then exposed a missing contract:
+the D1/D8 embedded DTB lacks D7's vendor-symbol and fixed-regulator bridge, so
+applying D7 to the actual embedded DTB fails with `FDT_ERR_NOTFOUND`.
+
+The corrected D9 image keeps the D1 kernel, ramdisk, command line, and header
+byte-identical while replacing only the embedded DTB with the exact bridged K1
+base used to filter D7. D7 applies successfully to that embedded DTB offline.
+The pinned launcher is
+[`test-mainline617-direct-d9-d7-bridge.sh`](../../scripts/test-mainline617-direct-d9-d7-bridge.sh).
 
 ## Offline validation
 
