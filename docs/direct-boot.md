@@ -360,7 +360,8 @@ seconds.
 | D30 | Observed: forced no-SMP reaches post-`smp_init()` reset | Reproduced the slot-B reset loop, proving that all of `smp_init()` returns with secondary CPU activation bypassed. |
 | D31 | Observed: forced no-SMP userspace remains unavailable | No USB or SSH appeared during 360 seconds. The display went black, briefly showed fastboot without user action, then held the OnePlus logo. |
 | D32 | Observed: forced no-SMP reaches post-`sched_init_smp()` reset | Reproduced the slot-B reset loop, proving scheduler SMP initialization returns on the forced single-CPU path. |
-| D33 | Prepared: forced no-SMP pre-`do_basic_setup()` reset | Tests the boundary after workqueue topology, async, padata, and late page-allocation setup. |
+| D33 | Observed: forced no-SMP reaches pre-`do_basic_setup()` reset | Reproduced the slot-B reset loop, proving workqueue topology, async, padata, and late page-allocation setup return. |
+| D34 | Prepared: forced no-SMP post-`do_basic_setup()` reset | Tests whether the general initcall sequence returns. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -399,7 +400,8 @@ D30 reproduces the reset loop, proving the whole function returns. D31 removes
 the checkpoint but does not expose USB or SSH. D32 tests whether
 `sched_init_smp()` returns on the forced single-CPU path and reproduces the
 reset loop. D33 moves the checkpoint immediately before `do_basic_setup()`.
-R6 plus stock
+D33 also reproduces the loop, so D34 moves it immediately after the general
+initcall sequence. R6 plus stock
 DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.

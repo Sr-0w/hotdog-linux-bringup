@@ -434,6 +434,9 @@ AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
 It reproduced the slot-B reset loop, proving that `sched_init_smp()` returns on
 the forced single-CPU path.
+Fastboot was exposed manually. R6 then booted with ID
+`648cc7ab-0289-4692-95f3-fde6a54ba420`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
 
 D33 moves the checkpoint after `workqueue_init_topology()`, `async_init()`,
 `padata_init()`, and `page_alloc_init_late()`, immediately before
@@ -441,6 +444,16 @@ D33 moves the checkpoint after `workqueue_init_topology()`, `async_init()`,
 `9d6cbc77fa1d5d59514594a9cb12ff1673b09b0808f85f0499d044257506a3f3`
 and its AVB image SHA256 is
 `f193e6fd59a8ec3d050e3f4ca9b523da4a6705c3c0e02d3e31d29f0b1635acbc`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass.
+It reproduced the slot-B reset loop, proving that all four preparation calls
+return and the direct boot reaches the boundary before `do_basic_setup()`.
+
+D34 moves the checkpoint immediately after `do_basic_setup()`. Its kernel Image
+SHA256 is
+`f652865ec84362b5eee067123967d726c7fb1257ca32679aecbd1f3e45a1ebe3`
+and its AVB image SHA256 is
+`68ff6f261a07d6f647a759195928af47dd0de8a355a69a577d40038bfea19a84`.
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
 
