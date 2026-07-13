@@ -268,10 +268,16 @@ Fastboot was exposed manually, then rollback produced R6 boot ID
 `e531eea3-9dbe-4740-8f4e-68eb0860fa07` with exact boot and DTBO hashes. D16
 proves early C startup plus architecture and device-tree setup.
 
-D17 moves the reset immediately after `console_init()`. Its AVB image SHA256 is
+D17 moved the reset immediately after `console_init()`. Its AVB image SHA256 is
 `18706ac45471e88835fff678ec9d1b97d149a1a0a16da1f0818a0bff388a6e7a`.
-A reset loop will prove the central memory, scheduler, interrupt, timer,
-timekeeping, and console initialization block.
+It exhausted all seven slot-B attempts and reached the triangle-red screen.
+Fastboot was exposed manually, then rollback produced R6 boot ID
+`84bf1e3f-72b2-4a3b-b18c-76197576f55a` with exact partition hashes. D17 proves
+the central memory, scheduler, interrupt, timer, timekeeping, and console block.
+
+D18 moves the reset immediately before `rest_init()`. Its AVB image SHA256 is
+`f6c33388e9d4bf5589bf07ab732fe17ce44de52faf73a4aa6aa320bca0eba770`.
+A reset loop will prove the complete `start_kernel()` initialization sequence.
 
 ## Offline validation
 
