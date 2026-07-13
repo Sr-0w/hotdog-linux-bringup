@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Hang in `bringup_nonboot_cpus()` | D20 proved PID 1 and the `kthreadd` handoff. D26 exhausted all attempts immediately before `bringup_nonboot_cpus()`, while D25 never reached the checkpoint immediately after it. D27 uses `maxcpus=0` to skip the call. |
+| Persistent direct boot | SMP bring-up under diagnosis | D26 exhausted all attempts immediately before `bringup_nonboot_cpus()`, while D25 did not reach the checkpoint after it with `maxcpus=1`. D27 shows that `maxcpus=0` still does not finish all of `smp_init()`; D28 tests immediately after the call. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -130,11 +130,14 @@ Display support can then be developed without losing the remote debug channel.
 24. Keep D26 as proof that idle/hotplug thread setup completes before
    `bringup_nonboot_cpus()`. It exhausted all slot-B attempts and reached the
    triangle-red screen; manual fastboot exposure allowed exact rollback.
-25. Test D27 with `maxcpus=0` and the post-`smp_init()` checkpoint. A reset loop
-   proves that skipping `bringup_nonboot_cpus()` lets the function return and
-   establishes a single-CPU direct-boot development path.
-26. Defer the r4 package-generated direct image until a direct handoff baseline
+25. Keep D27 as evidence that `maxcpus=0` does not reach the post-`smp_init()`
+   checkpoint. It stayed on the fixed logo for 120 seconds without USB; manual
+   fastboot exposure allowed exact R6 plus stock-DTBO rollback.
+26. Test D28 immediately after `bringup_nonboot_cpus()` with `maxcpus=0`. A
+   reset loop proves that the call is skipped and moves the remaining hang to
+   CPU counting or `smp_cpus_done()`.
+27. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-27. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+28. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.

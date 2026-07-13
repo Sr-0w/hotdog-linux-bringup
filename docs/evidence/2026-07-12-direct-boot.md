@@ -369,6 +369,15 @@ D27 reuses D23's post-`smp_init()` checkpoint and changes only the command line
 to `maxcpus=0`, which makes `bringup_nonboot_cpus()` return immediately. Its AVB
 image SHA256 is
 `38e6efb5bc0dd9899955819a72d612a40544aff6dd76281f5cd0d8367ba41ced`.
+It remained on the fixed OnePlus logo for 120 seconds and never exposed USB,
+so the end of `smp_init()` was still not reached. Fastboot was exposed
+manually. R6 then booted with ID
+`0aa1fdd7-c368-466d-a095-e1b885bf5457`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D28 retains `maxcpus=0` and moves the checkpoint immediately after
+`bringup_nonboot_cpus()`. Its AVB image SHA256 is
+`91da81ba552753ef14b5e3f3bb074a3e02dfa9c26edb23e042f8951b21fee5da`.
 
 ## Offline validation
 
