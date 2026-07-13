@@ -322,8 +322,22 @@ R6 boot ID `614591d8-da02-4bbf-9a4e-72f32eeec3d2` with exact partition hashes.
 D23 requests the reset after `smp_init()` and before `sched_init_smp()`. Its AVB
 image SHA256 is
 `cc87668f3debee208ff6baefd15d7f3ec218cffc989e885e9d2be25d7440aa98`.
-A reset loop will identify `sched_init_smp()` as the D21 hang; a fixed logo will
-identify `smp_init()`.
+It remained on the OnePlus logo for the full 120-second observation window and
+never exposed USB. The checkpoint was not reached, which isolates the direct
+boot hang inside `smp_init()`. Fastboot was exposed manually and the rescue
+watcher restored both partitions. R6 then booted with ID
+`7ad3e90b-dffe-4c14-b098-11629ea596ba`; strict device-side readback matched R6
+`boot_b` SHA256
+`e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369`
+and stock `dtbo_b` SHA256
+`95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`.
+
+D24 keeps the D23 kernel checkpoint but adds `maxcpus=1` to the command line.
+Its AVB image SHA256 is
+`5b851b1e04623eb60622c7181e8974653c24c82b0875d31ca352af78877957c1`.
+Reaching the reset will show that secondary CPU bring-up is the blocking part
+of `smp_init()`; failing to reach it will move the next probe before and after
+CPU-hotplug thread initialization.
 
 ## Offline validation
 
