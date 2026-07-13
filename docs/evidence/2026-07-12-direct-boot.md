@@ -260,10 +260,18 @@ fresh R6 boot ID was `e9991d64-d61c-45a2-835f-36b06336b758`, and both
 partition hashes matched exactly. D15 proves the complete MMU-on assembly setup
 and moves the first unknown boundary into C startup.
 
-D16 calls the same PSCI reset immediately after `setup_arch()` returns. Its AVB
+D16 called the same PSCI reset immediately after `setup_arch()` returned. Its AVB
 image SHA256 is
 `c4eae792d904b486001802feec7363e416f838552a540d3728f898c1863daf70`.
-A reset loop will prove early C startup plus architecture and device-tree setup.
+It exhausted all seven slot-B attempts and reached the triangle-red screen.
+Fastboot was exposed manually, then rollback produced R6 boot ID
+`e531eea3-9dbe-4740-8f4e-68eb0860fa07` with exact boot and DTBO hashes. D16
+proves early C startup plus architecture and device-tree setup.
+
+D17 moves the reset immediately after `console_init()`. Its AVB image SHA256 is
+`18706ac45471e88835fff678ec9d1b97d149a1a0a16da1f0818a0bff388a6e7a`.
+A reset loop will prove the central memory, scheduler, interrupt, timer,
+timekeeping, and console initialization block.
 
 ## Offline validation
 

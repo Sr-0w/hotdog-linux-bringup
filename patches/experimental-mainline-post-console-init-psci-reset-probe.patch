@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: reset after console_init
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET immediately after
+console_init() returns. Reaching it proves memory, scheduler, RCU, IRQ, timer,
+timekeeping, interrupt-enable, late slab, and console initialization.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+--- a/init/main.c
++++ b/init/main.c
+@@ -29,6 +29,7 @@
+ #include <linux/initrd.h>
+ #include <linux/memblock.h>
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+ #include <linux/console.h>
+ #include <linux/nmi.h>
+@@ -102,5 +103,6 @@
+ #include <linux/stackdepot.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+ #include <net/net_namespace.h>
+@@ -893,6 +895,15 @@ static void __init early_numa_node_init(void)
+ #endif
+ }
+-
++
++static __init __noreturn void hotdog_post_console_init_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+ void start_kernel(void)
+ {
+@@ -1033,6 +1044,7 @@ void start_kernel(void)
+ 	 * this. But we do want output early, in case something goes wrong.
+ 	 */
+ 	console_init();
++	hotdog_post_console_init_reset();
+ 	if (panic_later)
+ 		panic("Too many boot %s vars at `%s'", panic_later,
+ 		      panic_param);
+--
+2.53.0
