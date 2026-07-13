@@ -353,7 +353,8 @@ seconds.
 | D23 | Observed: no reset after `smp_init()` | Held at the OnePlus logo for 120 seconds without USB. Manual fastboot exposure allowed exact R6 plus stock-DTBO rollback. This isolates the hang inside `smp_init()`. |
 | D24 | Observed: no reset with `maxcpus=1` | Held at the fixed OnePlus logo for 120 seconds without USB. Manual fastboot exposure allowed exact rollback. Limiting activation to one CPU does not make `smp_init()` return. |
 | D25 | Observed: no reset after `bringup_nonboot_cpus()` | Held at the fixed OnePlus logo for 120 seconds without USB. Manual fastboot exposure allowed exact rollback. The call does not return or the preceding setup hangs. |
-| D26 | Prepared: reset before `bringup_nonboot_cpus()` | Keeps `maxcpus=1` and tests after idle/hotplug thread initialization. |
+| D26 | Observed: reset before `bringup_nonboot_cpus()` | Exhausted all slot-B attempts and reached the triangle-red screen. Manual fastboot exposure allowed exact rollback. Together with D25, this isolates the hang to the call itself. |
+| D27 | Prepared: post-`smp_init()` reset with `maxcpus=0` | Tests whether skipping `bringup_nonboot_cpus()` provides a single-CPU path beyond `smp_init()`. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -382,8 +383,9 @@ immediately before `smp_init()` and reproduced the reset loop. D23 places the
 checkpoint immediately after `smp_init()` and did not reach it, isolating the
 hang inside that function. D24 keeps the D23 checkpoint and adds `maxcpus=1`,
 but still does not reach it. D25 moves the reset inside `smp_init()`, directly
-after `bringup_nonboot_cpus()`, and still does not reach it. D26 moves the reset
-immediately before that call. R6 plus
+after `bringup_nonboot_cpus()`, and still does not reach it. D26 reaches the
+reset immediately before that call, isolating the hang to the call itself. D27
+uses `maxcpus=0` to skip it. R6 plus
 stock DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.
