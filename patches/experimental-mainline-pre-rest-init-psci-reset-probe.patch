@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: reset before rest_init
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET after the complete
+start_kernel() initialization sequence, immediately before rest_init() creates
+the first kernel threads.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+--- a/init/main.c
++++ b/init/main.c
+@@ -29,6 +29,7 @@
+ #include <linux/initrd.h>
+ #include <linux/memblock.h>
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+ #include <linux/console.h>
+ #include <linux/nmi.h>
+@@ -102,5 +103,6 @@
+ #include <linux/stackdepot.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+ #include <net/net_namespace.h>
+@@ -893,6 +895,14 @@ static void __init early_numa_node_init(void)
+ #endif
+ }
+-
++static __init __noreturn void hotdog_pre_rest_init_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+ void start_kernel(void)
+ {
+@@ -1089,9 +1099,10 @@ void start_kernel(void)
+ 	taskstats_init_early();
+ 	delayacct_init();
+-
++
+ 	acpi_subsystem_init();
+ 	arch_post_acpi_subsys_init();
+ 	kcsan_init();
++	hotdog_pre_rest_init_reset();
+-
++
+ 	/* Do the rest non-__init'ed, we're now alive */
+ 	rest_init();
+--
+2.53.0
