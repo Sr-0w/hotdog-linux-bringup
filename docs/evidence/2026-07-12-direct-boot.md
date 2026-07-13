@@ -243,9 +243,19 @@ D13 places the checkpoint at the first instructions of `__primary_switched`.
 Its AVB image SHA256 is
 `5c7ca0cb7c77653d74c4e2fbee7af3e88fc568312af5809474e57816ca35b645`.
 The DTB, ramdisk, command line, and Android image contract are byte-identical
-to D9 through D12. A reset loop will prove `__enable_mmu()`, early kernel
-mapping and relocation, and the virtual branch; failure to loop will isolate
-the block inside `__primary_switch`.
+to D9 through D12. D13 exposed no host-visible USB identity during the short
+observation window, but it continued resetting until all seven slot-B attempts
+were exhausted and the triangle-red boot-failure screen appeared. After manual
+fastboot exposure, the watcher restored R6 plus stock DTBO. The resulting R6
+boot ID was `1f60cd16-09de-444f-9455-6b40db597fb3`, and both partition hashes
+matched exactly. D13 therefore proves `__enable_mmu()`, early kernel mapping
+and relocation, and the virtual branch into `__primary_switched`.
+
+D15 moves the reset to the final assembly checkpoint before `start_kernel()`.
+Its AVB image SHA256 is
+`0ebd90d0c89b0e3f68fcda0f52c0dd7fb7da387fc8f580244347545051726d41`.
+A reset loop will prove the complete MMU-on assembly setup and move the first
+unknown boundary into C startup.
 
 ## Offline validation
 
