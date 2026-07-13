@@ -208,6 +208,21 @@ and complete `dtbo_b` to SHA256
 `95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`.
 The D9 launcher and both rescue watchers now restore this exact pair.
 
+## D9 direct result and D10 entry probe
+
+D9 was written with D7 after a strictly verified R6 source boot. It remained
+outside every host-visible USB mode for the full 540-second observation window:
+no mainline SSH, ACM, NCM, ADB, fastboot, or Qualcomm crashdump identity was
+observed. A manual hard reset exposed fastboot, where the prearmed watchers
+restored stock `dtbo_b` followed by R6 `boot_b`. The subsequent fresh R6 boot
+read back both restore hashes exactly. Ramoops was empty, so D9 is classified
+as a prolonged silent block rather than a verified panic or userspace boot.
+
+D10 retains D9's DTB, ramdisk, command line, header, and D7 overlay. Its only
+payload change is the previously disassembled kernel probe whose first
+`primary_entry` instructions issue PSCI `SYSTEM_RESET`. A changed outcome
+relative to D9 will prove that the bootloader reached mainline code.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed
