@@ -335,9 +335,19 @@ and stock `dtbo_b` SHA256
 D24 keeps the D23 kernel checkpoint but adds `maxcpus=1` to the command line.
 Its AVB image SHA256 is
 `5b851b1e04623eb60622c7181e8974653c24c82b0875d31ca352af78877957c1`.
-Reaching the reset will show that secondary CPU bring-up is the blocking part
-of `smp_init()`; failing to reach it will move the next probe before and after
-CPU-hotplug thread initialization.
+It remained on the fixed OnePlus logo for the full 120-second observation
+window and never exposed USB. Limiting CPU activation does not make
+`smp_init()` return, so a simple secondary-core bring-up failure is not a
+sufficient explanation. Fastboot was exposed manually. R6 then booted with ID
+`644f5f1d-005e-4e01-99a6-3ac4953bc2f3`; strict device-side readback matched
+the exact R6 `boot_b` and stock `dtbo_b` hashes recorded above.
+
+D25 retains `maxcpus=1` and requests the reset immediately after
+`bringup_nonboot_cpus()` returns, before CPU counts and `smp_cpus_done()`. Its
+kernel Image SHA256 is
+`947f42dd235206d9db2edcefc6d78bf9d35fcb72e9d3a545214da6db5e48eef5`
+and its AVB image SHA256 is
+`73069cc8d1d9e04f1afe9c6f644c6495cd5dd65a71b73f3a2f99c11e8675505b`.
 
 ## Offline validation
 

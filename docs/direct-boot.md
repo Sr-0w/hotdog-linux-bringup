@@ -351,7 +351,8 @@ seconds.
 | D21 | Observed: no reset after `sched_init_smp()` | Held at the OnePlus logo for the full 120-second observation window with no USB recovery path. Manual fastboot exposure after one attempt allowed rollback. The unresolved interval begins before completion of SMP initialization. |
 | D22 | Observed: reset immediately before `smp_init()` | Exhausted all slot-B attempts and reached the triangle-red screen. Manual fastboot exposure allowed rollback. This proves workqueue, memory, and pre-SMP initcall setup. |
 | D23 | Observed: no reset after `smp_init()` | Held at the OnePlus logo for 120 seconds without USB. Manual fastboot exposure allowed exact R6 plus stock-DTBO rollback. This isolates the hang inside `smp_init()`. |
-| D24 | Prepared: D23 with `maxcpus=1` | Tests whether skipping secondary CPU bring-up lets `smp_init()` return. |
+| D24 | Observed: no reset with `maxcpus=1` | Held at the fixed OnePlus logo for 120 seconds without USB. Manual fastboot exposure allowed exact rollback. Limiting activation to one CPU does not make `smp_init()` return. |
+| D25 | Prepared: reset after `bringup_nonboot_cpus()` | Keeps `maxcpus=1` and separates idle/hotplug preparation from final ARM64 SMP setup. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -378,8 +379,9 @@ failure interval. D20 moves the checkpoint immediately after PID 1 observes
 `sched_init_smp()` but did not reach the reset. D22 places the next checkpoint
 immediately before `smp_init()` and reproduced the reset loop. D23 places the
 checkpoint immediately after `smp_init()` and did not reach it, isolating the
-hang inside that function. D24 keeps the D23 checkpoint but adds `maxcpus=1`
-to bypass secondary CPU bring-up. R6 plus
+hang inside that function. D24 keeps the D23 checkpoint and adds `maxcpus=1`,
+but still does not reach it. D25 moves the reset inside `smp_init()`, directly
+after `bringup_nonboot_cpus()`. R6 plus
 stock DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.
