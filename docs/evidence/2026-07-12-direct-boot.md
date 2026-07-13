@@ -304,8 +304,17 @@ exact partition hashes.
 D21 moves the reset after `sched_init_smp()` and before topology workqueue setup
 and regular initcalls. Its AVB image SHA256 is
 `4763ebfe3ba2e33b91d5055c2c80b17c9a69a5ff063ed04bd14a69dc8c2701f7`.
-A reset loop will prove the early `kernel_init_freeable()` sequence through SMP
-bring-up and scheduler SMP initialization.
+It did not reset and remained on the OnePlus logo for the full 120-second
+observation window. No USB recovery path appeared. The unresolved interval is
+therefore between the D20 `kthreadd` handoff and completion of
+`sched_init_smp()`. Fastboot was exposed manually after one attempt, with
+slot-B retry count `6` and `unbootable=no`. Rollback produced R6 boot ID
+`6f6e113e-40d0-44d5-904c-55f071d03711` with exact partition hashes.
+
+D22 requests the reset after pre-SMP initcalls and immediately before
+`smp_init()`. Its AVB image SHA256 is
+`cbc1cfb693e24003d9f94625fbea9a7a9468dc709b465006beefb149f738505f`.
+A reset loop will isolate the D21 hang to `smp_init()` or `sched_init_smp()`.
 
 ## Offline validation
 
