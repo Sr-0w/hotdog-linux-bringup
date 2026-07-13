@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | C entry proven; full boot pending | D10 through D13 proved the complete pre-MMU and MMU-on assembly path. D15 exhausted all slot attempts at the final instruction before `start_kernel()`, proving the C entry call is reached. D16 tests immediately after `setup_arch()`. |
+| Persistent direct boot | Architecture setup proven; full boot pending | D10 through D15 proved the complete assembly path into C. D16 exhausted all slot attempts after `setup_arch()`, proving early C, architecture, and device-tree setup. D17 tests immediately after `console_init()`. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -105,10 +105,12 @@ Display support can then be developed without losing the remote debug channel.
    virtual branch reach the first `__primary_switched` instructions.
 13. Keep D15 as proof that task/stack setup, vectors, FDT preservation,
    `kimage_voffset`, boot-mode state, and `finalise_el2` all complete.
-14. Test D16 immediately after `setup_arch()` to cover early C and architecture
-   and device-tree initialization in one cycle.
-15. Defer the r4 package-generated direct image until a direct handoff baseline
+14. Keep D16 as proof that early C, initial CPU/page state, `setup_arch()`, and
+   device-tree processing complete in direct boot.
+15. Test D17 immediately after `console_init()` to cover the central memory,
+   scheduler, IRQ, timer, timekeeping, and console setup block.
+16. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-16. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+17. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.
