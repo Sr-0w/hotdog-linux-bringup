@@ -448,12 +448,26 @@ AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
 It reproduced the slot-B reset loop, proving that all four preparation calls
 return and the direct boot reaches the boundary before `do_basic_setup()`.
+Fastboot was exposed manually. R6 then booted with ID
+`6dc1961f-8a66-415d-8658-96e022ec99ba`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
 
 D34 moves the checkpoint immediately after `do_basic_setup()`. Its kernel Image
 SHA256 is
 `f652865ec84362b5eee067123967d726c7fb1257ca32679aecbd1f3e45a1ebe3`
 and its AVB image SHA256 is
 `68ff6f261a07d6f647a759195928af47dd0de8a355a69a577d40038bfea19a84`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass.
+It held the fixed OnePlus logo for the complete 120-second observation window
+without USB, so the post-`do_basic_setup()` checkpoint was not reached.
+
+D35 moves the checkpoint inside `do_basic_setup()`, after `cpuset_init_smp()`,
+`driver_init()`, `init_irq_proc()`, and `do_ctors()`, but before
+`do_initcalls()`. Its kernel Image SHA256 is
+`b75fc4a8e425efb8e1969045988b57ab9ae6e32e5d0f308a517d2b657ddb887a`
+and its AVB image SHA256 is
+`348316717922cd14449ad212b702b5405dc42ad1a1187b0a9e43360c19dee74a`.
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
 
