@@ -336,7 +336,8 @@ seconds.
 | D6 | Observed: add K1 aliases for vendor UFS symbols before filtering | R5 exposes all UFS LUNs, NCM, and ACM; `pmos_continue_boot` does not reach SSH. |
 | D7 | Observed: retain the complete vendor UFS fragments with a K1 fixed-regulator GDSC bridge | Unchanged R5 reaches fresh SSH; exact readback confirms R5 `boot_b` and D7 `dtbo_b`. |
 | D8 | Observed: pair D7 with the original exact K1 direct image | Returned to fastboot after about 26 seconds. Offline replay then proved the embedded K1 DTB lacks D7's required vendor-symbol bridge and rejects the overlay with `FDT_ERR_NOTFOUND`. |
-| D9 | Prepared: pair D7 with a direct image containing the D7-bridged K1 DTB | Kernel, ramdisk, command line, and header remain identical to D1/D8; D7 applies successfully to the actual embedded DTB. |
+| R6 | Observed: R5-equivalent bridge with downstream watchdog disabled and stock DTBO | Reaches fresh 4.14 SSH; cmdline and exact `boot_b`/`dtbo_b` readback establish the current rollback baseline. |
+| D9 | Prepared: pair D7 with a direct image containing the D7-bridged K1 DTB | Kernel, ramdisk, command line, and header remain identical to D1/D8; D7 applies successfully to the actual embedded DTB. Rollback is pinned to R6 plus stock DTBO. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -348,7 +349,9 @@ D7 is the complete downstream control: unchanged R5 reaches fresh SSH while
 the overlay remains applicable to the bridged K1 DTB. D8 showed that merely
 pairing D7 with the original D1 image is insufficient because D1 embeds the
 unbridged K1 DTB. D9 changes only that embedded DTB to the exact base used for
-D7 filtering. Keep the package-built control deferred until D9 is classified.
+D7 filtering. R6 plus stock DTBO replaces R5 plus D7 as the rollback target so
+a slow downstream boot cannot be killed by the vendor watchdog. Keep the
+package-built control deferred until D9 is classified.
 
 ## pmaports integration target
 

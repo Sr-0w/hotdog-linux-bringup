@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | Not observed | D7 is the validated DTBO control: unchanged R5 boots through to fresh SSH with complete UFS and the real postmarketOS rootfs. Pairing this DTBO contract with mainline is the next direct-boot test. |
+| Persistent direct mainline | Not observed | D8 returned to fastboot because its embedded DTB could not accept D7. D9 corrects that contract and is the next direct-boot test. R6 plus stock DTBO is the verified no-watchdog rollback environment. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -76,8 +76,11 @@ UFS LUNs and USB ACM, then stalled during `pmos_continue_boot`; a repeat entered
 Qualcomm `900e` crashdump mode. D7 retains the complete vendor UFS fragments
 through an always-on fixed-regulator bridge for `ufs_phy_gdsc`. With unchanged
 R5 it reached a fresh SSH boot on hardware, and strict readback confirmed the
-R5 boot image plus D7 DTBO exactly. This establishes the downstream control
-needed for the next direct-mainline pairing. See the
+R5 boot image plus D7 DTBO exactly. D8 then returned to fastboot after about
+26 seconds; offline replay proved its embedded DTB could not accept D7. D9
+embeds the corrected bridged DTB. The rollback environment is now R6 with the
+stock DTBO: it reached fresh SSH with `watchdog_v2.enable=0`, and strict
+readback matched both images exactly. See the
 [2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
 [controlled test matrix](docs/direct-boot.md).
 

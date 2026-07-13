@@ -15,8 +15,9 @@ The packaging and submission gates are tracked separately in the
   postmarketOS filesystem UUIDs before leaving the ACM shell
 - use hardware-validated D7 for the next direct-mainline pairing; unchanged R5
   produced fresh SSH and exact `boot_b`/`dtbo_b` readback with this overlay
-- retain the hash-pinned R5 bridge as the validated rollback baseline for every
-  persistent control
+- retain the hash-pinned R6 bridge plus stock DTBO as the validated rollback
+  baseline; hardware readback proves the watchdog-disabled command line and
+  both partition images
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
 - validate a direct image generated from the exact r4 package payload only
