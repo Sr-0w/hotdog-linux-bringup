@@ -406,6 +406,9 @@ and its AVB image SHA256 is
 `8b1802b0e6cea492a8f6ee4bdb6dcac68e73fd9a8179101988fade15c32b11cd`.
 It reproduced the slot-B reset loop, proving that the remainder of `smp_init()`
 returns with the forced single-CPU bypass.
+Fastboot was exposed manually. R6 then booted with ID
+`72e04b3d-c53e-4202-bfa7-7f25526d34a0`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
 
 D31 retains only the in-kernel `setup_max_cpus = 0` assignment and removes all
 diagnostic reset code. Its kernel Image SHA256 is
