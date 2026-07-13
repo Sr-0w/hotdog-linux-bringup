@@ -359,6 +359,16 @@ D26 retains `maxcpus=1` and moves the reset immediately before
 `626385545ca98cc3fc02557823263c20e2979ff89fad5e680801b1fb6ce9f6d5`
 and its AVB image SHA256 is
 `3e04e8dd8284bc372e2a55330b888dc691bef28b05a2fc2db94f465468e697af`.
+It exhausted all seven slot-B attempts and reached the triangle-red screen.
+Together with D25, this isolates the hang to `bringup_nonboot_cpus()` itself.
+Fastboot was exposed manually. R6 then booted with ID
+`fac24965-e2f1-4e00-9fa8-de5857de3959`; strict device-side readback again
+matched the exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D27 reuses D23's post-`smp_init()` checkpoint and changes only the command line
+to `maxcpus=0`, which makes `bringup_nonboot_cpus()` return immediately. Its AVB
+image SHA256 is
+`38e6efb5bc0dd9899955819a72d612a40544aff6dd76281f5cd0d8367ba41ced`.
 
 ## Offline validation
 
