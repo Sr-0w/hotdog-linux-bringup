@@ -342,7 +342,8 @@ seconds.
 | D11 | Observed: move the PSCI reset after initial idmap creation | Reproduced the seven-reset loop, proving MMU-state detection, argument preservation, early stack setup, and `__pi_create_init_idmap()`. |
 | D12 | Observed: move the PSCI reset after `__cpu_setup` | Reproduced the seven-reset loop, proving cache maintenance, `init_kernel_el()`, and CPU setup immediately before `__primary_switch`. |
 | D13 | Observed: reset at the start of `__primary_switched` | Exhausted all slot-B attempts and reached the triangle-red failure screen. This proves MMU enable, early mapping and relocation, and the virtual branch. |
-| D15 | Prepared: reset immediately before `start_kernel()` | Tests initial task and stack setup, vectors, FDT preservation, `kimage_voffset`, boot-mode state, and `finalise_el2`. |
+| D15 | Observed: reset immediately before `start_kernel()` | Exhausted all slot-B attempts and marked the slot unbootable. Manual fastboot exposure allowed rollback. This proves the complete assembly path into C entry. |
+| D16 | Prepared: reset immediately after `setup_arch()` | Tests early C startup, initial CPU/page state, architecture setup, and device-tree processing. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -359,8 +360,9 @@ boundary beyond D8's early return. D10 changed only the first executed kernel
 instructions and exhausted every slot retry, proving direct kernel entry. D11
 reproduced the loop after idmap creation. D12 reproduced it after
 `__cpu_setup`, proving the complete pre-MMU path. D13 reached the first MMU-on
-virtual instructions and exhausted every slot retry. D15 moves the checkpoint
-to the final assembly instruction before `start_kernel()`. R6 plus
+virtual instructions and exhausted every slot retry. D15 reproduced the loop
+at the final assembly instruction before `start_kernel()`. D16 moves the
+checkpoint past `setup_arch()` in C. R6 plus
 stock DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.

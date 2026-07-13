@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: reset after setup_arch
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET immediately after
+setup_arch() returns. Reaching it proves early C startup, initial CPU and page
+state, and the architecture and device-tree setup path.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+--- a/init/main.c
++++ b/init/main.c
+@@ -29,6 +29,7 @@
+ #include <linux/initrd.h>
+ #include <linux/memblock.h>
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+ #include <linux/console.h>
+ #include <linux/nmi.h>
+@@ -102,5 +103,6 @@
+ #include <linux/stackdepot.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+ #include <net/net_namespace.h>
+@@ -893,6 +895,15 @@ static void __init early_numa_node_init(void)
+ #endif
+ }
+-
++
++static __init __noreturn void hotdog_post_setup_arch_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+ void start_kernel(void)
+ {
+@@ -917,6 +928,7 @@ void start_kernel(void)
+ 	page_address_init();
+ 	pr_notice("%s", linux_banner);
+ 	setup_arch(&command_line);
++	hotdog_post_setup_arch_reset();
+ 	/* Static keys and static calls are needed by LSMs */
+ 	jump_label_init();
+ 	static_call_init();
+--
+2.53.0

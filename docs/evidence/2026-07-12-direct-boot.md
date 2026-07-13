@@ -251,11 +251,19 @@ boot ID was `1f60cd16-09de-444f-9455-6b40db597fb3`, and both partition hashes
 matched exactly. D13 therefore proves `__enable_mmu()`, early kernel mapping
 and relocation, and the virtual branch into `__primary_switched`.
 
-D15 moves the reset to the final assembly checkpoint before `start_kernel()`.
+D15 moved the reset to the final assembly checkpoint before `start_kernel()`.
 Its AVB image SHA256 is
 `0ebd90d0c89b0e3f68fcda0f52c0dd7fb7da387fc8f580244347545051726d41`.
-A reset loop will prove the complete MMU-on assembly setup and move the first
-unknown boundary into C startup.
+It exhausted all seven slot-B attempts and left the slot unbootable. Fastboot
+was exposed manually, after which the script restored R6 plus stock DTBO. The
+fresh R6 boot ID was `e9991d64-d61c-45a2-835f-36b06336b758`, and both
+partition hashes matched exactly. D15 proves the complete MMU-on assembly setup
+and moves the first unknown boundary into C startup.
+
+D16 calls the same PSCI reset immediately after `setup_arch()` returns. Its AVB
+image SHA256 is
+`c4eae792d904b486001802feec7363e416f838552a540d3728f898c1863daf70`.
+A reset loop will prove early C startup plus architecture and device-tree setup.
 
 ## Offline validation
 
