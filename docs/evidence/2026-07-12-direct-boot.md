@@ -404,6 +404,17 @@ after the complete `smp_init()` call. Its kernel Image SHA256 is
 `fce94110ed1de46832953da0f00e0f5e364940f19143d97e2a1105eb76ab8dc8`
 and its AVB image SHA256 is
 `8b1802b0e6cea492a8f6ee4bdb6dcac68e73fd9a8179101988fade15c32b11cd`.
+It reproduced the slot-B reset loop, proving that the remainder of `smp_init()`
+returns with the forced single-CPU bypass.
+
+D31 retains only the in-kernel `setup_max_cpus = 0` assignment and removes all
+diagnostic reset code. Its kernel Image SHA256 is
+`9ca6b04b90c05f873617c22dd5c3aae7e4f41f0b668004ba99adb539e24eeb77`
+and its AVB image SHA256 is
+`0af212920af5080daf26a0189d74a6cae834aa43b7b5bcf58d0de93143fe2237`.
+The extracted kernel and D9 command line match their pinned inputs, AVB
+verification passes, and disassembly shows the zero assignment immediately
+before `bringup_nonboot_cpus()` with no D30 reset symbol.
 
 ## Offline validation
 
