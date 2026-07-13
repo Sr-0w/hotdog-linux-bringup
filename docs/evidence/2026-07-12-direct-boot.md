@@ -378,6 +378,20 @@ exact R6 `boot_b` and stock `dtbo_b` hashes.
 D28 retains `maxcpus=0` and moves the checkpoint immediately after
 `bringup_nonboot_cpus()`. Its AVB image SHA256 is
 `91da81ba552753ef14b5e3f3bb074a3e02dfa9c26edb23e042f8951b21fee5da`.
+It remained on the fixed OnePlus logo for 120 seconds and never exposed USB,
+so the checkpoint was not reached. The boot image contains `maxcpus=0`, the
+embedded DTB has no `/chosen/bootargs`, and the kernel has an empty
+`CONFIG_CMDLINE`; the effective boot-time command line is still unobserved.
+Fastboot was exposed manually. R6 then booted with ID
+`8d6891f9-f9da-4556-b3a1-08ffd8f07a5a`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D29 removes command-line transport from the experiment by assigning
+`setup_max_cpus = 0` directly before `bringup_nonboot_cpus()`, then requesting
+the reset immediately afterward. Its kernel Image SHA256 is
+`18d56c9f81b7014be320af7b153cfeff6755e0cfed40f1fca4e86df9a3d730c9`
+and its AVB image SHA256 is
+`8a245da635c575512231a3899fc3deef124564d7ffcaedb915d5ed251fbfed4a`.
 
 ## Offline validation
 
