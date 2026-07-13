@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: force no-SMP then reset after smp_init
+
+Force setup_max_cpus to zero before bringup_nonboot_cpus(), then request PSCI
+SYSTEM_RESET after the complete smp_init() call returns.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c  | 11 +++++++++++
+ kernel/smp.c |  1 +
+ 2 files changed, 12 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+index 5753e9539..c37a60121 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -29,6 +29,7 @@
+ #include <linux/initrd.h>
+ #include <linux/memblock.h>
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+ #include <linux/console.h>
+ #include <linux/nmi.h>
+@@ -102,6 +103,7 @@
+ #include <linux/stackdepot.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+ #include <net/net_namespace.h>
+ 
+@@ -892,6 +894,14 @@ static void __init early_numa_node_init(void)
+ #endif
+ #endif
+ }
++static __init __noreturn void hotdog_post_smp_init_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
+ 
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+ void start_kernel(void)
+@@ -1569,6 +1579,7 @@ static noinline void __init kernel_init_freeable(void)
+ 	lockup_detector_init();
+ 
+ 	smp_init();
++	hotdog_post_smp_init_reset();
+ 	sched_init_smp();
+ 
+ 	workqueue_init_topology();
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -999,6 +999,7 @@ void __init smp_init(void)
+ 
+ 	pr_info("Bringing up secondary CPUs ...\n");
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+ 
+ 	num_nodes = num_online_nodes();
+-- 
+2.53.0

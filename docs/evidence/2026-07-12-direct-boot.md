@@ -392,6 +392,18 @@ the reset immediately afterward. Its kernel Image SHA256 is
 `18d56c9f81b7014be320af7b153cfeff6755e0cfed40f1fca4e86df9a3d730c9`
 and its AVB image SHA256 is
 `8a245da635c575512231a3899fc3deef124564d7ffcaedb915d5ed251fbfed4a`.
+It exhausted all seven slot-B attempts and reached the triangle-red screen,
+proving that the forced single-CPU path returns from `bringup_nonboot_cpus()`.
+The negative D28 result therefore reflects ineffective command-line transport,
+not a hang after a successfully skipped call. Fastboot was exposed manually.
+R6 then booted with ID `18caf338-020b-45e3-82d4-b69b02d3aabe`; strict
+device-side readback matched the exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D30 retains the forced `setup_max_cpus = 0` assignment and moves the checkpoint
+after the complete `smp_init()` call. Its kernel Image SHA256 is
+`fce94110ed1de46832953da0f00e0f5e364940f19143d97e2a1105eb76ab8dc8`
+and its AVB image SHA256 is
+`8b1802b0e6cea492a8f6ee4bdb6dcac68e73fd9a8179101988fade15c32b11cd`.
 
 ## Offline validation
 
