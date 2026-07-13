@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Initcall boundary under diagnosis | D29 through D32 prove that the forced single-CPU path returns from `smp_init()` and `sched_init_smp()`. D31 still exposed no USB or SSH during 360 seconds. D33 tests the boundary immediately before `do_basic_setup()`. |
+| Persistent direct boot | General initcalls under diagnosis | D29 through D33 prove that the forced single-CPU path reaches `do_basic_setup()`. D31 still exposed no USB or SSH during 360 seconds. D34 tests whether the general initcall sequence itself returns. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -146,11 +146,14 @@ Display support can then be developed without losing the remote debug channel.
    held the OnePlus logo; no USB or SSH appeared during 360 seconds.
 30. Keep D32 as proof that `sched_init_smp()` returns with the forced bypass. It
    reproduced the slot-B reset loop.
-31. Test D33 after workqueue topology, async, padata, and late page-allocation
-   setup, immediately before `do_basic_setup()`. A reset loop isolates the next
-   unresolved interval to the general initcall path or later userspace setup.
-32. Defer the r4 package-generated direct image until a direct handoff baseline
+31. Keep D33 as proof that workqueue topology, async, padata, and late
+   page-allocation setup return. It reproduced the slot-B reset loop immediately
+   before `do_basic_setup()`.
+32. Test D34 immediately after `do_basic_setup()`. A reset loop moves the next
+   unresolved interval to initramfs and userspace preparation; a fixed logo
+   isolates it inside the general initcall sequence.
+33. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-33. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+34. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.
