@@ -231,9 +231,21 @@ non-kernel image component remains byte-identical to D9 and D10. Its result
 reproduced the seven-reset loop and OnePlus boot-failure screen. Direct entry
 therefore completes initial idmap construction successfully.
 
-D12 moves the checkpoint after cache maintenance, `init_kernel_el()`, and
-`__cpu_setup()`, immediately before `__primary_switch`. It will distinguish a
-failure in that CPU setup block from one in the MMU switch or later C startup.
+D12 moved the checkpoint after cache maintenance, `init_kernel_el()`, and
+`__cpu_setup()`, immediately before `__primary_switch`. It reproduced the
+seven-reset loop and exhausted the slot-B attempts. The subsequent R6 boot
+read back `boot_b` as `e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369`
+and stock `dtbo_b` as
+`95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`.
+The direct path therefore completes the entire pre-MMU setup block.
+
+D13 places the checkpoint at the first instructions of `__primary_switched`.
+Its AVB image SHA256 is
+`5c7ca0cb7c77653d74c4e2fbee7af3e88fc568312af5809474e57816ca35b645`.
+The DTB, ramdisk, command line, and Android image contract are byte-identical
+to D9 through D12. A reset loop will prove `__enable_mmu()`, early kernel
+mapping and relocation, and the virtual branch; failure to loop will isolate
+the block inside `__primary_switch`.
 
 ## Offline validation
 

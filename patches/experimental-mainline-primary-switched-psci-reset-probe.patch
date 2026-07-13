@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: hotdog: reset at MMU-on virtual entry
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET at the start of
+__primary_switched. Reaching it proves that __enable_mmu(), early kernel
+mapping and relocation, and the branch to the virtual kernel address complete.
+
+Do not ship this patch in a normal kernel.
+---
+ arch/arm64/kernel/head.S | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -218,6 +218,16 @@ SYM_CODE_END(preserve_boot_args)
+  *   x0 = __pa(KERNEL_START)
+  */
+ SYM_FUNC_START_LOCAL(__primary_switched)
++	/* Hotdog checkpoint: prove the MMU-on virtual entry path. */
++	movz	x0, #0x0009
++	movk	x0, #0x8400, lsl #16
++	mov	x1, xzr
++	mov	x2, xzr
++	mov	x3, xzr
++	smc	#0
++9:	wfe
++	b	9b
++
+ 	adr_l	x4, init_task
+ 	init_cpu_task x4, x5, x6
+ 
+-- 
+2.53.0
