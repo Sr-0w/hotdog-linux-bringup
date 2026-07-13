@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Direct entry proven; full boot pending | D10 exhausted all seven slot attempts through an immediate PSCI reset, proving the bootloader executes mainline `primary_entry`. D11 moves the checkpoint after initial idmap creation. R6 plus stock DTBO is the verified rollback environment. |
+| Persistent direct boot | Direct pre-MMU setup proven; full boot pending | D10 proved `primary_entry`; D11 reproduced the reset loop after initial idmap creation. D12 moves the checkpoint after `__cpu_setup`, immediately before `__primary_switch`. R6 plus stock DTBO is the verified rollback environment. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -97,10 +97,12 @@ Display support can then be developed without losing the remote debug channel.
    exact rollback afterward, and no ramoops record.
 9. Keep D10 as positive direct-entry evidence. The first `primary_entry`
    instructions exhausted all seven slot attempts through PSCI reset.
-10. Test D11 with the reset moved after MMU-state detection, argument
-   preservation, early stack setup, and initial idmap creation.
-11. Defer the r4 package-generated direct image until a direct handoff baseline
+10. Keep D11 as proof that MMU-state detection, boot-argument preservation,
+   early stack setup, and initial idmap creation complete in direct boot.
+11. Test D12 after cache maintenance, `init_kernel_el()`, and `__cpu_setup`,
+   immediately before `__primary_switch`.
+12. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-12. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+13. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.
