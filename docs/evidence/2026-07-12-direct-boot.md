@@ -348,6 +348,17 @@ kernel Image SHA256 is
 `947f42dd235206d9db2edcefc6d78bf9d35fcb72e9d3a545214da6db5e48eef5`
 and its AVB image SHA256 is
 `73069cc8d1d9e04f1afe9c6f644c6495cd5dd65a71b73f3a2f99c11e8675505b`.
+It remained on the fixed OnePlus logo for 120 seconds and never exposed USB,
+so the checkpoint was not reached. Fastboot was exposed manually. R6 then
+booted with ID `da7eb6c6-a65f-4685-816e-ee2003fc112a`; strict device-side
+readback again matched the exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D26 retains `maxcpus=1` and moves the reset immediately before
+`bringup_nonboot_cpus()`, after `idle_threads_init()` and
+`cpuhp_threads_init()`. Its kernel Image SHA256 is
+`626385545ca98cc3fc02557823263c20e2979ff89fad5e680801b1fb6ce9f6d5`
+and its AVB image SHA256 is
+`3e04e8dd8284bc372e2a55330b888dc691bef28b05a2fc2db94f465468e697af`.
 
 ## Offline validation
 
