@@ -418,6 +418,17 @@ and its AVB image SHA256 is
 The extracted kernel and D9 command line match their pinned inputs, AVB
 verification passes, and disassembly shows the zero assignment immediately
 before `bringup_nonboot_cpus()` with no D30 reset symbol.
+It exposed no USB or SSH during the full 360-second observation window. The
+display went black, briefly showed fastboot without user action, then held the
+OnePlus logo. The host did not observe a corresponding recovery USB identity.
+
+D32 retains the forced bypass and requests PSCI SYSTEM_RESET immediately after
+`sched_init_smp()` returns. Its kernel Image SHA256 is
+`846ff89ef39229cb68b6a00bac38c808c035b12efdbbb788dc00c872e22c8984`
+and its AVB image SHA256 is
+`493d89ccc71c37ebe32966eeaab36997b0abab2a559c4d78ae57ee05be114a33`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass.
 
 ## Offline validation
 
