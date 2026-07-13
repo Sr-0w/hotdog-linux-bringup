@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: hotdog: reset before start_kernel
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET after the complete
+MMU-on assembly setup, immediately before entering start_kernel(). Reaching it
+proves the initial task, stack, vectors, FDT, offset and EL setup path.
+
+Do not ship this patch in a normal kernel.
+---
+ arch/arm64/kernel/head.S | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -255,6 +255,16 @@ SYM_FUNC_START_LOCAL(__primary_switched)
+ 	mov	x0, x20
+ 	bl	finalise_el2			// Prefer VHE if possible
+ 	ldp	x29, x30, [sp], #16
++
++	/* Hotdog checkpoint: prove the complete assembly path before C startup. */
++	movz	x0, #0x0009
++	movk	x0, #0x8400, lsl #16
++	mov	x1, xzr
++	mov	x2, xzr
++	mov	x3, xzr
++	smc	#0
++9:	wfe
++	b	9b
+ 	bl	start_kernel
+ 	ASM_BUG()
+ SYM_FUNC_END(__primary_switched)
+--
+2.53.0
