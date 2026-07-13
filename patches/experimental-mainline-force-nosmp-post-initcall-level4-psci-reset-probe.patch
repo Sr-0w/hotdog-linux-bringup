@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: reset after subsys initcalls
+
+Force setup_max_cpus to zero before secondary CPU bring-up, then request PSCI
+SYSTEM_RESET after initcall level 4 (subsys) has returned. This distinguishes
+the two remaining direct-mainline candidates: subsys and fs initcalls.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c  | 13 +++++++++++++
+ kernel/smp.c |  1 +
+ 2 files changed, 14 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+index 5753e9539..1b3b05b78 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -31,2 +31,3 @@
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+@@ -104,2 +105,3 @@
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+@@ -1332,2 +1334,11 @@ static void __init do_initcall_level(int level, char *command_line)
+ 
++static __init __noreturn void hotdog_post_initcall_level4_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ static void __init do_initcalls(void)
+@@ -1347,2 +1358,4 @@ static void __init do_initcalls(void)
+ 		do_initcall_level(level, command_line);
++		if (level == 4)
++			hotdog_post_initcall_level4_reset();
+ 	}
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -1001,2 +1001,3 @@ void __init smp_init(void)
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+-- 
+2.53.0

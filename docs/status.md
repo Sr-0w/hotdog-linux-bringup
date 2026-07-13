@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Upper initcall levels under diagnosis | D36 reaches the checkpoint after level 3 (`arch`), proving levels 0-3 return. D37 bisects the remaining interval after level 5 (`fs`). |
+| Persistent direct boot | `subsys`/`fs` initcalls under diagnosis | D36 proves levels 0-3 return, while D37 does not reach the checkpoint after level 5. D38 distinguishes level 4 (`subsys`) from level 5 (`fs`). |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -154,10 +154,12 @@ Display support can then be developed without losing the remote debug channel.
 33. Keep D35 as proof that `cpuset_init_smp()`, `driver_init()`,
    `init_irq_proc()`, and `do_ctors()` return before `do_initcalls()`.
 34. Keep D36 as proof that initcall levels 0-3 (`pure` through `arch`) return.
-35. Test D37 after initcall level 5 (`fs`). A reset places the hang in levels
-   6-7; no reset places it in levels 4-5.
-36. Defer the r4 package-generated direct image until a direct handoff baseline
+35. Keep D37 as the upper bound: its checkpoint after level 5 (`fs`) was not
+   reached, limiting the hang to levels 4-5.
+36. Test D38 after initcall level 4 (`subsys`). A reset identifies level 5
+   (`fs`); no reset identifies level 4 (`subsys`).
+37. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-37. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+38. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.

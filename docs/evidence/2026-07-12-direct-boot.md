@@ -499,6 +499,20 @@ and its AVB image SHA256 is
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass. A reset selects initcall levels
 6-7 as the failing half; no reset selects levels 4-5.
+It held the fixed OnePlus logo for the complete observation window, so the
+checkpoint after level 5 was not reached and levels 4-5 remain unresolved.
+Fastboot was exposed manually. R6 then booted with ID
+`97545a57-b5e9-4c69-8b79-ffa705524ebe`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D38 moves the checkpoint after initcall level 4 (`subsys`). Its kernel Image
+SHA256 is
+`e7ca2215d3e0c600e1eb72562305c1411aa10e7979527405ee4d1168c4c9f6f3`
+and its AVB image SHA256 is
+`65b94338086851b0e1c8e883fd0fbd63a9ef5699ceffe64c65c2ab0e210c6141`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass. A reset identifies level 5
+(`fs`) as the failing level; no reset identifies level 4 (`subsys`).
 
 ## Offline validation
 
