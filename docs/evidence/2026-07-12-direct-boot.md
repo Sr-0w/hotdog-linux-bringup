@@ -314,7 +314,16 @@ slot-B retry count `6` and `unbootable=no`. Rollback produced R6 boot ID
 D22 requests the reset after pre-SMP initcalls and immediately before
 `smp_init()`. Its AVB image SHA256 is
 `cbc1cfb693e24003d9f94625fbea9a7a9468dc709b465006beefb149f738505f`.
-A reset loop will isolate the D21 hang to `smp_init()` or `sched_init_smp()`.
+It exhausted all seven slot-B attempts and reached the triangle-red screen.
+Fastboot was exposed manually with retry count `0` and `unbootable=yes`. This
+isolates the D21 hang to `smp_init()` or `sched_init_smp()`. Rollback produced
+R6 boot ID `614591d8-da02-4bbf-9a4e-72f32eeec3d2` with exact partition hashes.
+
+D23 requests the reset after `smp_init()` and before `sched_init_smp()`. Its AVB
+image SHA256 is
+`cc87668f3debee208ff6baefd15d7f3ec218cffc989e885e9d2be25d7440aa98`.
+A reset loop will identify `sched_init_smp()` as the D21 hang; a fixed logo will
+identify `smp_init()`.
 
 ## Offline validation
 
