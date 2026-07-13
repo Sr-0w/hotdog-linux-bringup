@@ -295,8 +295,17 @@ slot-B retry count `6` and `unbootable=no`. Rollback produced R6 boot ID
 D20 requests the reset after PID 1 observes `kthreadd` completion and before
 `kernel_init_freeable()`. Its AVB image SHA256 is
 `4d64de88f338f9f985dec1270d696a69dd7f5fb00b09741e3b556776f80ee42b`.
-A reset loop will prove task creation, scheduler handoff, and the transition
-into PID 1, while leaving SMP and initcalls for the next interval.
+It exhausted all seven slot-B attempts and reached the triangle-red screen.
+Fastboot was exposed manually with retry count `0` and `unbootable=yes`. This
+proves task creation, scheduler handoff, and the transition into PID 1.
+Rollback produced R6 boot ID `d642b148-937d-4be9-893d-cf5d91c02aca` with
+exact partition hashes.
+
+D21 moves the reset after `sched_init_smp()` and before topology workqueue setup
+and regular initcalls. Its AVB image SHA256 is
+`4763ebfe3ba2e33b91d5055c2c80b17c9a69a5ff063ed04bd14a69dc8c2701f7`.
+A reset loop will prove the early `kernel_init_freeable()` sequence through SMP
+bring-up and scheduler SMP initialization.
 
 ## Offline validation
 
