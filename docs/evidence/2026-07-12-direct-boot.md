@@ -196,6 +196,18 @@ base used to filter D7. D7 applies successfully to that embedded DTB offline.
 The pinned launcher is
 [`test-mainline617-direct-d9-d7-bridge.sh`](../../scripts/test-mainline617-direct-d9-d7-bridge.sh).
 
+## R6 no-watchdog rollback baseline
+
+R6 keeps the R5 kernel and embedded DTB while adding only the downstream
+`watchdog_v2.enable=0` command-line parameter. With the original stock DTBO it
+reached fresh postmarketOS SSH on boot ID
+`329a582e-755f-49c8-a8fa-a96c8d759ce7`. Read-only hardware verification
+matched the first 61,808,640 bytes of `boot_b` to SHA256
+`e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369`
+and complete `dtbo_b` to SHA256
+`95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`.
+The D9 launcher and both rescue watchers now restore this exact pair.
+
 ## Offline validation
 
 The pinned D2, D3, and D3-wdt launchers retain the attested-source checks, fail-closed
