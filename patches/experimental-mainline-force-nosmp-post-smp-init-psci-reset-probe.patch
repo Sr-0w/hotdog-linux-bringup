@@ -16,13 +16,15 @@ diff --git a/init/main.c b/init/main.c
 index 5753e9539..c37a60121 100644
 --- a/init/main.c
 +++ b/init/main.c
-@@ -31 +31,2 @@
+@@ -31,2 +31,3 @@
  #include <linux/acpi.h>
 +#include <linux/arm-smccc.h>
-@@ -104 +105,2 @@
+ #include <linux/bootconfig.h>
+@@ -104,2 +105,3 @@
  #include <linux/pidfs.h>
 +#include <uapi/linux/psci.h>
-@@ -894 +896,9 @@ static void __init early_numa_node_init(void)
+ #include <linux/ptdump.h>
+@@ -894,2 +896,10 @@ static void __init early_numa_node_init(void)
  }
 +static __init __noreturn void hotdog_post_smp_init_reset(void)
 +{
@@ -32,15 +34,18 @@ index 5753e9539..c37a60121 100644
 +	for (;;)
 +		asm volatile("wfe");
 +}
-@@ -1571 +1581,2 @@ static noinline void __init kernel_init_freeable(void)
+ 
+@@ -1571,2 +1581,3 @@ static noinline void __init kernel_init_freeable(void)
  	smp_init();
 +	hotdog_post_smp_init_reset();
+ 	sched_init_smp();
 diff --git a/kernel/smp.c b/kernel/smp.c
 index 56f83aa58..fe4785767 100644
 --- a/kernel/smp.c
 +++ b/kernel/smp.c
-@@ -1002 +1002,2 @@ void __init smp_init(void)
+@@ -1001,2 +1001,3 @@ void __init smp_init(void)
+ 
 +	setup_max_cpus = 0;
  	bringup_nonboot_cpus(setup_max_cpus);
---
+-- 
 2.53.0
