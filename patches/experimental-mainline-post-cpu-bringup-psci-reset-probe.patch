@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] smp: hotdog: reset after CPU bring-up
+
+This diagnostic checkpoint requests PSCI SYSTEM_RESET immediately after
+bringup_nonboot_cpus() returns and before the final architecture SMP setup.
+
+Do not ship this patch in a normal kernel.
+---
+ kernel/smp.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/kernel/smp.c b/kernel/smp.c
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -8,6 +8,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+ #include <linux/irq_work.h>
++#include <linux/arm-smccc.h>
+ #include <linux/rcupdate.h>
+ #include <linux/rculist.h>
+ #include <linux/kernel.h>
+@@ -26,6 +27,7 @@
+ #include <linux/sched/debug.h>
+ #include <linux/jump_label.h>
+ #include <linux/string_choices.h>
++#include <uapi/linux/psci.h>
+ 
+ #include <trace/events/ipi.h>
+ #define CREATE_TRACE_POINTS
+@@ -989,6 +991,15 @@ void __init setup_nr_cpu_ids(void)
+ 	set_nr_cpu_ids(find_last_bit(cpumask_bits(cpu_possible_mask), NR_CPUS) + 1);
+ }
+ 
++static __init __noreturn void hotdog_post_bringup_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ /* Called by boot processor to activate the rest. */
+ void __init smp_init(void)
+ {
+@@ -1000,6 +1011,7 @@ void __init smp_init(void)
+ 	pr_info("Bringing up secondary CPUs ...\n");
+ 
+ 	bringup_nonboot_cpus(setup_max_cpus);
++	hotdog_post_bringup_reset();
+ 
+ 	num_nodes = num_online_nodes();
+ 	num_cpus  = num_online_cpus();
+--
+2.53.0
