@@ -339,7 +339,8 @@ seconds.
 | R6 | Observed: R5-equivalent bridge with downstream watchdog disabled and stock DTBO | Reaches fresh 4.14 SSH; cmdline and exact `boot_b`/`dtbo_b` readback establish the current rollback baseline. |
 | D9 | Observed: pair D7 with a direct image containing the D7-bridged K1 DTB | No USB identity appeared during 540 seconds. Manual fastboot recovery triggered exact R6 plus stock-DTBO rollback; ramoops was empty. |
 | D10 | Observed: substitute the `primary_entry` PSCI reset kernel in D9 | Exhausted all seven slot-B attempts and marked the slot unbootable, while D9 consumed only one. This proves direct execution reached `primary_entry`. |
-| D11 | Prepared: move the PSCI reset after initial idmap creation | Tests MMU-state detection, argument preservation, early stack setup, and `__pi_create_init_idmap()` without changing the image contract. |
+| D11 | Observed: move the PSCI reset after initial idmap creation | Reproduced the seven-reset loop, proving MMU-state detection, argument preservation, early stack setup, and `__pi_create_init_idmap()`. |
+| D12 | Prepared: move the PSCI reset after `__cpu_setup` | Tests cache maintenance, `init_kernel_el()`, and CPU setup immediately before `__primary_switch`. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -354,7 +355,8 @@ unbridged K1 DTB. D9 changes only that embedded DTB to the exact base used for
 D7 filtering. D9 remained silently unavailable for 540 seconds, moving the
 boundary beyond D8's early return. D10 changed only the first executed kernel
 instructions and exhausted every slot retry, proving direct kernel entry. D11
-moves that checkpoint after the first pre-MMU idmap construction. R6 plus
+reproduced the loop after idmap creation. D12 moves the checkpoint immediately
+before `__primary_switch`. R6 plus
 stock DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.

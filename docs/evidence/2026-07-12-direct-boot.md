@@ -228,7 +228,12 @@ that the bootloader executed the direct mainline `primary_entry` code.
 D11 moves the same reset checkpoint after `record_mmu_state()`,
 `preserve_boot_args()`, early stack setup, and `__pi_create_init_idmap()`. Every
 non-kernel image component remains byte-identical to D9 and D10. Its result
-will place D9's silent block before or after initial idmap construction.
+reproduced the seven-reset loop and OnePlus boot-failure screen. Direct entry
+therefore completes initial idmap construction successfully.
+
+D12 moves the checkpoint after cache maintenance, `init_kernel_el()`, and
+`__cpu_setup()`, immediately before `__primary_switch`. It will distinguish a
+failure in that CPU setup block from one in the MMU switch or later C startup.
 
 ## Offline validation
 
