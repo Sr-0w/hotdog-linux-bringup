@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] smp: hotdog: force single-CPU direct boot
+
+Force setup_max_cpus to zero immediately before secondary CPU bring-up. This
+is an experimental direct-boot bypass for the hotdog SMP hang and is not a
+production fix.
+---
+ kernel/smp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -1001,2 +1001,3 @@ void __init smp_init(void)
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+-- 
+2.53.0
