@@ -364,7 +364,8 @@ seconds.
 | D34 | Observed: no forced no-SMP post-`do_basic_setup()` reset | Held the fixed OnePlus logo for 120 seconds without USB, isolating the next unresolved interval inside `do_basic_setup()`. |
 | D35 | Observed: forced no-SMP reaches pre-`do_initcalls()` reset | Reproduced the slot-B reset loop, proving the driver-core preamble returns and isolating the unresolved interval to the eight general initcall levels. |
 | D36 | Observed: forced no-SMP reaches reset after initcall level 3 | Reproduced the slot-B reset loop, proving levels 0-3 (`pure` through `arch`) return and selecting levels 4-7 as the unresolved half. |
-| D37 | Prepared: forced no-SMP reset after initcall level 5 | Bisects the remaining interval after `fs`: a reset selects levels 6-7, while no reset selects levels 4-5. |
+| D37 | Observed: no forced no-SMP reset after initcall level 5 | Held the fixed OnePlus logo, selecting levels 4-5 (`subsys`/`fs`) as the unresolved interval. |
+| D38 | Prepared: forced no-SMP reset after initcall level 4 | Distinguishes the remaining pair: a reset identifies level 5 (`fs`), while no reset identifies level 4 (`subsys`). |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -406,8 +407,9 @@ reset loop. D33 moves the checkpoint immediately before `do_basic_setup()`.
 D33 also reproduces the loop. D34 does not reach the checkpoint after the
 general initcall sequence. D35 reaches its checkpoint inside `do_basic_setup()`
 immediately before `do_initcalls()`, proving the preamble returns. D36 reaches
-its checkpoint after level 3 (`arch`), proving levels 0-3 return. D37 now
-bisects the remaining interval after level 5 (`fs`). R6 plus stock
+its checkpoint after level 3 (`arch`), proving levels 0-3 return. D37 does not
+reach its checkpoint after level 5 (`fs`), limiting the hang to levels 4-5.
+D38 now distinguishes `subsys` from `fs`. R6 plus stock
 DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.
