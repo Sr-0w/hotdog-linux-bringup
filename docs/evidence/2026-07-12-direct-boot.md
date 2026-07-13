@@ -513,6 +513,28 @@ and its AVB image SHA256 is
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass. A reset identifies level 5
 (`fs`) as the failing level; no reset identifies level 4 (`subsys`).
+It held the fixed OnePlus logo for the complete observation window, identifying
+level 4 (`subsys`) as the failing level. Fastboot was exposed manually. R6 then
+booted with ID `33fe1011-1df7-4def-bb1f-7d5c83d7c0cf`; strict device-side
+readback matched the exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+R6 mounted `/sys/fs/pstore` but found no records. Mainline had registered
+ramoops at postcore level before the hang, so the empty result was investigated
+rather than treated as absence of logging. The bootloader truncates the R6
+command line after `ramoops.record_size`; R6 consequently uses 4 KiB defaults
+for console, ftrace, and pmsg, while the D38 mainline DTB used 256 KiB, 256 KiB,
+and 2 MiB. The shared physical address was correct but the sub-buffer offsets
+were incompatible. Strict `/dev/mem` prevented raw recovery of the old layout.
+
+D39 resets after subsys entry 69 of 138. Its kernel Image SHA256 is
+`8ac551f1f0d29ba3e7d07b741de6fa416a7ff41a6c87cdfc5a4c61669dbff65c`.
+Its DTB uses the effective R6 ramoops layout and has SHA256
+`040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c`.
+The complete AVB image SHA256 is
+`dbe0663e4c766b9e4ed3cbed634eee2ce57480b391f2641a4dbd36a4907a57d0`.
+AVB verification, extracted payload comparison, source-patch reproduction,
+ramoops property verification, and the checkpoint call-site disassembly all
+pass.
 
 ## Offline validation
 
