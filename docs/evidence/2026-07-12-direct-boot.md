@@ -421,12 +421,26 @@ before `bringup_nonboot_cpus()` with no D30 reset symbol.
 It exposed no USB or SSH during the full 360-second observation window. The
 display went black, briefly showed fastboot without user action, then held the
 OnePlus logo. The host did not observe a corresponding recovery USB identity.
+Fastboot was exposed manually. R6 then booted with ID
+`c82425db-a6de-4b6d-a23c-5eba5285dc2c`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
 
 D32 retains the forced bypass and requests PSCI SYSTEM_RESET immediately after
 `sched_init_smp()` returns. Its kernel Image SHA256 is
 `846ff89ef39229cb68b6a00bac38c808c035b12efdbbb788dc00c872e22c8984`
 and its AVB image SHA256 is
 `493d89ccc71c37ebe32966eeaab36997b0abab2a559c4d78ae57ee05be114a33`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass.
+It reproduced the slot-B reset loop, proving that `sched_init_smp()` returns on
+the forced single-CPU path.
+
+D33 moves the checkpoint after `workqueue_init_topology()`, `async_init()`,
+`padata_init()`, and `page_alloc_init_late()`, immediately before
+`do_basic_setup()`. Its kernel Image SHA256 is
+`9d6cbc77fa1d5d59514594a9cb12ff1673b09b0808f85f0499d044257506a3f3`
+and its AVB image SHA256 is
+`f193e6fd59a8ec3d050e3f4ca9b523da4a6705c3c0e02d3e31d29f0b1635acbc`.
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
 

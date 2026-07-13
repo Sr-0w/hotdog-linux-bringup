@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: force no-SMP then reset before basic setup
+
+Force setup_max_cpus to zero before secondary CPU bring-up, then request PSCI
+SYSTEM_RESET after page_alloc_init_late() and before do_basic_setup().
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c  | 12 ++++++++++++
+ kernel/smp.c |  1 +
+ 2 files changed, 13 insertions(+)
+
+diff --git a/init/main.c b/init/main.c
+index 5753e9539..80b82e621 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -31,2 +31,3 @@
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+@@ -104,2 +105,3 @@
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+@@ -895,2 +897,11 @@ static void __init early_numa_node_init(void)
+ 
++static __init __noreturn void hotdog_pre_basic_setup_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
++}
++
+ asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
+@@ -1577,2 +1588,3 @@ static noinline void __init kernel_init_freeable(void)
+ 	page_alloc_init_late();
++	hotdog_pre_basic_setup_reset();
+ 
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -1001,2 +1001,3 @@ void __init smp_init(void)
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+-- 
+2.53.0
