@@ -285,8 +285,18 @@ the complete `start_kernel()` initialization sequence.
 D19 moves the reset into PID 1, immediately after `kernel_init_freeable()`.
 Its AVB image SHA256 is
 `d61de0104cfe226c76c5349e0af99f6cf32dff1344d575a3d92701ef44ee329d`.
-A reset loop will prove `rest_init()`, scheduler handoff, SMP setup, initcalls,
-initramfs waiting, and rootfs/early userspace preparation.
+It did not reset and remained on the OnePlus `Powered by Android` logo for the
+full 120-second observation window. No USB recovery path appeared. This places
+the first unresolved interval between entry to `rest_init()` and return from
+`kernel_init_freeable()`. Fastboot was exposed manually after one attempt, with
+slot-B retry count `6` and `unbootable=no`. Rollback produced R6 boot ID
+`0ed8b787-2f44-4309-84fa-b18a35e75a0a` with exact partition hashes.
+
+D20 requests the reset after PID 1 observes `kthreadd` completion and before
+`kernel_init_freeable()`. Its AVB image SHA256 is
+`4d64de88f338f9f985dec1270d696a69dd7f5fb00b09741e3b556776f80ee42b`.
+A reset loop will prove task creation, scheduler handoff, and the transition
+into PID 1, while leaving SMP and initcalls for the next interval.
 
 ## Offline validation
 

@@ -346,7 +346,8 @@ seconds.
 | D16 | Observed: reset immediately after `setup_arch()` | Exhausted all slot-B attempts and reached the triangle-red screen. Manual fastboot exposure allowed rollback. This proves early C plus architecture and device-tree setup. |
 | D17 | Observed: reset immediately after `console_init()` | Exhausted all slot-B attempts and reached the triangle-red screen. Manual fastboot exposure allowed rollback. This proves central kernel and console initialization. |
 | D18 | Observed: reset immediately before `rest_init()` | Exhausted all slot-B attempts and reached the triangle-red screen. Manual fastboot exposure allowed rollback. This proves the complete `start_kernel()` sequence. |
-| D19 | Prepared: reset after `kernel_init_freeable()` | Tests `rest_init()`, PID 1 and `kthreadd`, SMP setup, initcalls, initramfs waiting, and rootfs/early userspace preparation. |
+| D19 | Observed: no reset after `kernel_init_freeable()` | Held at the OnePlus logo for the full 120-second observation window with no USB recovery path. Manual fastboot exposure after one attempt allowed rollback. The first unresolved interval is between `rest_init()` and the end of `kernel_init_freeable()`. |
+| D20 | Prepared: reset after PID 1 observes `kthreadd` completion | Separates task creation and scheduler handoff from the SMP and initcall body of `kernel_init_freeable()`. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -366,8 +367,10 @@ reproduced the loop after idmap creation. D12 reproduced it after
 virtual instructions and exhausted every slot retry. D15 reproduced the loop
 at the final assembly instruction before `start_kernel()`. D16 reproduced the
 loop after `setup_arch()` in C. D17 reproduced it after `console_init()`. D18
-reproduced it at the end of `start_kernel()`, before `rest_init()`. D19 moves
-the checkpoint into PID 1, after `kernel_init_freeable()`. R6 plus
+reproduced it at the end of `start_kernel()`, before `rest_init()`. D19 did not
+reach its checkpoint after `kernel_init_freeable()`, locating the first later
+failure interval. D20 moves the checkpoint immediately after PID 1 observes
+`kthreadd` completion. R6 plus
 stock DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.
