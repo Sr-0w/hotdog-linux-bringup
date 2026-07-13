@@ -485,6 +485,20 @@ and its AVB image SHA256 is
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass. A reset selects initcall levels
 4-7 as the failing half; no reset selects levels 0-3.
+It reproduced the slot-B reset loop, proving levels 0-3 (`pure`, `core`,
+`postcore`, and `arch`) return and selecting levels 4-7 as the unresolved half.
+Fastboot was exposed manually. R6 then booted with ID
+`7e94c98e-9703-4a69-b1f9-27ee4132f077`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D37 moves the checkpoint after initcall level 5 (`fs`). Its kernel Image
+SHA256 is
+`9a41adb207e43a93ed9669cff89eff47c199f49859174db47b3588971f89a07f`
+and its AVB image SHA256 is
+`a8bdef4551474097a93dd5cecdaab4b8e45cc66a32f9a680b193145638878f5c`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass. A reset selects initcall levels
+6-7 as the failing half; no reset selects levels 4-5.
 
 ## Offline validation
 

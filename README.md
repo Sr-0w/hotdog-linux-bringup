@@ -26,7 +26,7 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | General initcalls under diagnosis | D35 reaches the checkpoint immediately before `do_initcalls()`, proving the driver-core preamble returns. D36 bisects the eight general initcall levels after level 3 (`arch`). |
+| Persistent direct mainline | Upper initcall levels under diagnosis | D36 reaches the checkpoint after level 3 (`arch`), proving levels 0-3 return. D37 bisects the remaining interval after level 5 (`fs`). |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
