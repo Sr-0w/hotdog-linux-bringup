@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | SMP bring-up under diagnosis | D26 exhausted all attempts immediately before `bringup_nonboot_cpus()`, while D25 did not reach the checkpoint after it with `maxcpus=1`. D27 and D28 show that boot-image `maxcpus=0` does not reach either later checkpoint. D29 forces the value in-kernel. |
+| Persistent direct boot | SMP bring-up under diagnosis | D29 forces `setup_max_cpus = 0` in-kernel and reaches the checkpoint after `bringup_nonboot_cpus()`. This proves secondary-CPU activation is the first direct-boot hang and that boot-image `maxcpus=0` was ineffective. D30 tests whether the remainder of `smp_init()` returns with the forced bypass. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -136,11 +136,14 @@ Display support can then be developed without losing the remote debug channel.
 26. Keep D28 as evidence that boot-image `maxcpus=0` does not reach the
    checkpoint immediately after `bringup_nonboot_cpus()`. It stayed on the
    fixed logo for 120 seconds; manual fastboot exposure allowed exact rollback.
-27. Test D29 with `setup_max_cpus = 0` forced in the kernel before the call. A
-   reset loop proves the prior command-line path was ineffective and provides
-   a deterministic single-CPU bypass for continued bring-up.
-28. Defer the r4 package-generated direct image until a direct handoff baseline
+27. Keep D29 as proof that forcing `setup_max_cpus = 0` in-kernel makes
+   `bringup_nonboot_cpus()` return. It exhausted all slot-B attempts and reached
+   the triangle-red screen; exact R6 plus stock-DTBO rollback was verified.
+28. Test D30 with the same forced single-CPU bypass and the checkpoint after the
+   complete `smp_init()` call. A reset loop proves the bypass can carry direct
+   boot into the next initialization interval.
+29. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-29. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
+30. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
    properties and verify RESTART2 bootloader and recovery selection.
