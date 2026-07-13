@@ -470,6 +470,21 @@ and its AVB image SHA256 is
 `348316717922cd14449ad212b702b5405dc42ad1a1187b0a9e43360c19dee74a`.
 AVB verification, extracted payload comparison, source-patch reproduction, and
 the checkpoint call-site disassembly all pass.
+It reproduced the slot-B reset loop, proving that the complete driver-core
+preamble returns and that the remaining persistent direct-boot hang is inside
+the eight general initcall levels.
+Fastboot was exposed manually. R6 then booted with ID
+`a5ed5fdf-acd1-419a-a717-ce4d1d908b49`; strict device-side readback matched the
+exact R6 `boot_b` and stock `dtbo_b` hashes.
+
+D36 moves the checkpoint after initcall level 3 (`arch`). Its kernel Image
+SHA256 is
+`4d4327bd715e6c6bdbe2b22812e7b60c8ec052d4614fcade6edc62053b0f8267`
+and its AVB image SHA256 is
+`36389555550addbd22290f3902ac08a3227a6feedf2972c15f3eb4476cd308f4`.
+AVB verification, extracted payload comparison, source-patch reproduction, and
+the checkpoint call-site disassembly all pass. A reset selects initcall levels
+4-7 as the failing half; no reset selects levels 0-3.
 
 ## Offline validation
 
