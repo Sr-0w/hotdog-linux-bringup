@@ -218,10 +218,17 @@ restored stock `dtbo_b` followed by R6 `boot_b`. The subsequent fresh R6 boot
 read back both restore hashes exactly. Ramoops was empty, so D9 is classified
 as a prolonged silent block rather than a verified panic or userspace boot.
 
-D10 retains D9's DTB, ramdisk, command line, header, and D7 overlay. Its only
-payload change is the previously disassembled kernel probe whose first
-`primary_entry` instructions issue PSCI `SYSTEM_RESET`. A changed outcome
-relative to D9 will prove that the bootloader reached mainline code.
+D10 retained D9's DTB, ramdisk, command line, header, and D7 overlay. Its only
+payload change was the disassembled kernel probe whose first `primary_entry`
+instructions issue PSCI `SYSTEM_RESET`. D10 exhausted all seven slot-B retry
+attempts and left the slot marked unbootable; D9 had consumed only one attempt.
+The OnePlus boot-failure screen then appeared. This differential result proves
+that the bootloader executed the direct mainline `primary_entry` code.
+
+D11 moves the same reset checkpoint after `record_mmu_state()`,
+`preserve_boot_args()`, early stack setup, and `__pi_create_init_idmap()`. Every
+non-kernel image component remains byte-identical to D9 and D10. Its result
+will place D9's silent block before or after initial idmap construction.
 
 ## Offline validation
 
