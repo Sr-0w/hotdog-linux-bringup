@@ -1,8 +1,41 @@
 diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
-index ca04b338c..d3496953f 100644
+index ca04b338c..a39873ee6 100644
 --- a/arch/arm64/kernel/head.S
 +++ b/arch/arm64/kernel/head.S
-@@ -58,9 +58,14 @@
+@@ -42,6 +42,32 @@
+ #error PAGE_OFFSET must be at least 2MB aligned
+ #endif
+ 
++/*
++ * This breadcrumb lives inside the Image, so both the identity mapping and
++ * the final kernel mapping can update it before normal physical mappings are
++ * available. The host derives its physical address from the Image load
++ * address and the symbol offset reported by nm.
++ */
++	.macro	hotdog_mark_early_stage stage, cached=0
++	adr_l	x9, hotdog_early_breadcrumb
++	movz	w10, #0x4448
++	movk	w10, #0x3245, lsl #16		// "HDE2"
++	str	w10, [x9, #0x00]
++	mov	w10, #1
++	str	w10, [x9, #0x04]		// format version
++	mov	w10, #\stage
++	str	w10, [x9, #0x08]
++	mvn	w10, w10
++	str	w10, [x9, #0x0c]		// torn-write guard
++	.if \cached
++	dc	cvac, x9
++	dsb	sy
++	.else
++	dmb	sy
++	dc	ivac, x9
++	.endif
++	.endm
++
+ /*
+  * Kernel startup entry point.
+  * ---------------------------
+@@ -58,9 +84,14 @@
  	/*
  	 * DO NOT MODIFY. Image header expected by Linux boot-loaders.
  	 */
@@ -18,10 +51,11 @@ index ca04b338c..d3496953f 100644
  	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
  	le64sym	_kernel_flags_le		// Informative flags, little-endian
  	.quad	0				// reserved
-@@ -127,6 +132,39 @@ SYM_CODE_START(primary_entry)
+@@ -127,6 +158,40 @@ SYM_CODE_START(primary_entry)
  	 * the TCR will have been set.
  	 */
  	bl	__cpu_setup			// initialise processor
++	hotdog_mark_early_stage 10
 +
 +	/*
 +	 * Direct-boot diagnostic safety net. Preserve an exact early-stage
@@ -58,6 +92,51 @@ index ca04b338c..d3496953f 100644
  	b	__primary_switch
  SYM_CODE_END(primary_entry)
  
+@@ -218,6 +283,7 @@ SYM_CODE_END(preserve_boot_args)
+  *   x0 = __pa(KERNEL_START)
+  */
+ SYM_FUNC_START_LOCAL(__primary_switched)
++	hotdog_mark_early_stage 50, 1
+ 	adr_l	x4, init_task
+ 	init_cpu_task x4, x5, x6
+ 
+@@ -243,6 +309,7 @@ SYM_FUNC_START_LOCAL(__primary_switched)
+ 	mov	x0, x20
+ 	bl	finalise_el2			// Prefer VHE if possible
+ 	ldp	x29, x30, [sp], #16
++	hotdog_mark_early_stage 60, 1
+ 	bl	start_kernel
+ 	ASM_BUG()
+ SYM_FUNC_END(__primary_switched)
+@@ -506,9 +573,11 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
+ SYM_FUNC_END(__no_granule_support)
+ 
+ SYM_FUNC_START_LOCAL(__primary_switch)
++	hotdog_mark_early_stage 20
+ 	adrp	x1, reserved_pg_dir
+ 	adrp	x2, __pi_init_idmap_pg_dir
+ 	bl	__enable_mmu
++	hotdog_mark_early_stage 30, 1
+ 
+ 	adrp	x1, early_init_stack
+ 	mov	sp, x1
+@@ -516,8 +585,16 @@ SYM_FUNC_START_LOCAL(__primary_switch)
+ 	mov	x0, x20				// pass the full boot status
+ 	mov	x1, x21				// pass the FDT
+ 	bl	__pi_early_map_kernel		// Map and relocate the kernel
++	hotdog_mark_early_stage 40, 1
+ 
+ 	ldr	x8, =__primary_switched
+ 	adrp	x0, KERNEL_START		// __pa(KERNEL_START)
+ 	br	x8
+ SYM_FUNC_END(__primary_switch)
++
++	.pushsection ".mmuoff.data.write", "aw"
++	.balign	64
++	.global	hotdog_early_breadcrumb
++hotdog_early_breadcrumb:
++	.space	64
++	.popsection
 diff --git a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
 index ef6d66229..18211a047 100644
 --- a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
@@ -81,18 +160,114 @@ index ef6d66229..18211a047 100644
  	if (client != NULL)
  		return (struct spi_device *)client;
 diff --git a/init/main.c b/init/main.c
-index 5753e9539..031df87e3 100644
+index 5753e9539..a6b94cddc 100644
 --- a/init/main.c
 +++ b/init/main.c
-@@ -77,6 +77,7 @@
- #include <linux/idr.h>
- #include <linux/kgdb.h>
- #include <linux/ftrace.h>
-+#include <linux/io.h>
- #include <linux/async.h>
- #include <linux/shmem_fs.h>
- #include <linux/slab.h>
-@@ -1316,9 +1317,85 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+@@ -117,6 +117,36 @@
+ 
+ static int kernel_init(void *);
+ 
++#define HOTDOG_EARLY_BREADCRUMB_MAGIC	0x32454448
++
++struct hotdog_early_breadcrumb {
++	u32 magic;
++	u32 version;
++	u32 stage;
++	u32 stage_inverse;
++	u32 detail;
++	u32 detail_inverse;
++	u32 reserved[10];
++};
++
++extern struct hotdog_early_breadcrumb hotdog_early_breadcrumb;
++
++static __always_inline void hotdog_mark_start_kernel_stage(u32 stage,
++						    u32 detail)
++{
++	struct hotdog_early_breadcrumb *breadcrumb =
++		&hotdog_early_breadcrumb;
++
++	WRITE_ONCE(breadcrumb->magic, HOTDOG_EARLY_BREADCRUMB_MAGIC);
++	WRITE_ONCE(breadcrumb->version, 1);
++	WRITE_ONCE(breadcrumb->stage, stage);
++	WRITE_ONCE(breadcrumb->stage_inverse, ~stage);
++	WRITE_ONCE(breadcrumb->detail, detail);
++	WRITE_ONCE(breadcrumb->detail_inverse, ~detail);
++	dcache_clean_poc((unsigned long)breadcrumb,
++			 (unsigned long)breadcrumb + sizeof(*breadcrumb));
++}
++
+ /*
+  * Debug helper: via this flag we know that we are in 'early bootup code'
+  * where only the boot processor is running with IRQ disabled.  This means
+@@ -899,8 +929,10 @@ void start_kernel(void)
+ 	char *command_line;
+ 	char *after_dashes;
+ 
++	hotdog_mark_start_kernel_stage(100, 0);
+ 	set_task_stack_end_magic(&init_task);
+ 	smp_setup_processor_id();
++	hotdog_mark_start_kernel_stage(110, 0);
+ 	debug_objects_early_init();
+ 	init_vmlinux_build_id();
+ 
+@@ -917,6 +949,7 @@ void start_kernel(void)
+ 	page_address_init();
+ 	pr_notice("%s", linux_banner);
+ 	setup_arch(&command_line);
++	hotdog_mark_start_kernel_stage(120, 0);
+ 	/* Static keys and static calls are needed by LSMs */
+ 	jump_label_init();
+ 	static_call_init();
+@@ -956,6 +989,7 @@ void start_kernel(void)
+ 	sort_main_extable();
+ 	trap_init();
+ 	mm_core_init();
++	hotdog_mark_start_kernel_stage(140, 0);
+ 	maple_tree_init();
+ 	poking_init();
+ 	ftrace_init();
+@@ -969,6 +1003,7 @@ void start_kernel(void)
+ 	 * time - but meanwhile we still have a functioning scheduler.
+ 	 */
+ 	sched_init();
++	hotdog_mark_start_kernel_stage(150, 0);
+ 
+ 	if (WARN(!irqs_disabled(),
+ 		 "Interrupts were enabled *very* early, fixing it\n"))
+@@ -1009,6 +1044,7 @@ void start_kernel(void)
+ 	softirq_init();
+ 	timekeeping_init();
+ 	time_init();
++	hotdog_mark_start_kernel_stage(160, 0);
+ 
+ 	/* This must be after timekeeping is initialized */
+ 	random_init();
+@@ -1024,6 +1060,7 @@ void start_kernel(void)
+ 
+ 	early_boot_irqs_disabled = false;
+ 	local_irq_enable();
++	hotdog_mark_start_kernel_stage(170, 0);
+ 
+ 	kmem_cache_init_late();
+ 
+@@ -1033,6 +1070,7 @@ void start_kernel(void)
+ 	 * this. But we do want output early, in case something goes wrong.
+ 	 */
+ 	console_init();
++	hotdog_mark_start_kernel_stage(180, 0);
+ 	if (panic_later)
+ 		panic("Too many boot %s vars at `%s'", panic_later,
+ 		      panic_param);
+@@ -1094,6 +1132,7 @@ void start_kernel(void)
+ 	kcsan_init();
+ 
+ 	/* Do the rest non-__init'ed, we're now alive */
++	hotdog_mark_start_kernel_stage(190, 0);
+ 	rest_init();
+ 
+ 	/*
+@@ -1316,9 +1355,85 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
  	return 0;
  }
  
@@ -178,7 +353,7 @@ index 5753e9539..031df87e3 100644
  
  	parse_args(initcall_level_names[level],
  		   command_line, __start___param,
-@@ -1327,8 +1404,13 @@ static void __init do_initcall_level(int level, char *command_line)
+@@ -1327,8 +1442,13 @@ static void __init do_initcall_level(int level, char *command_line)
  		   NULL, ignore_unknown_bootoption);
  
  	do_trace_initcall_level(initcall_level_names[level]);
@@ -194,16 +369,17 @@ index 5753e9539..031df87e3 100644
  }
  
  static void __init do_initcalls(void)
-@@ -1337,6 +1419,8 @@ static void __init do_initcalls(void)
+@@ -1337,6 +1457,9 @@ static void __init do_initcalls(void)
  	size_t len = saved_command_line_len + 1;
  	char *command_line;
  
++	hotdog_mark_start_kernel_stage(200, 0);
 +	hotdog_prepare_initcall_diagnostics();
 +
  	command_line = kzalloc(len, GFP_KERNEL);
  	if (!command_line)
  		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-@@ -1347,6 +1431,7 @@ static void __init do_initcalls(void)
+@@ -1347,6 +1470,7 @@ static void __init do_initcalls(void)
  		do_initcall_level(level, command_line);
  	}
  

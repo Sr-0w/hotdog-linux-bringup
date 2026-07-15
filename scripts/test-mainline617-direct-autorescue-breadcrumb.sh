@@ -4,13 +4,14 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-105118-mainline617-direct-autorescue-breadcrumb/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-215005-mainline617-direct-autorescue-early-stages/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 
-BOOT_SHA=a4552626e2c4426707937b2d3eedeef8e3f5fcfb1f06f21dafd633fc98605485
+BOOT_SHA=567ec0509b24c67677d3c8dcdd729b1ceb3fd6bd020864a4a692b26faa8f4a00
+EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
 RESTORE_BOOT_SHA=e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369
@@ -31,8 +32,10 @@ if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
 Usage: test-mainline617-direct-autorescue-breadcrumb.sh
 
 Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
-OnePlus fastboot restart marker, and a persistent per-initcall breadcrumb.
-The verified R6 bridge and stock DTBO remain the rollback target.
+OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
+and a persistent per-initcall breadcrumb. If Qualcomm 900e appears, both
+records are read automatically. The verified R6 bridge and stock DTBO remain
+the rollback target.
 USAGE
 	exit 0
 fi
@@ -52,7 +55,8 @@ check_sha "R6 bootloader reboot helper" "$REBOOT_HELPER" "$REBOOT_HELPER_SHA"
 export HOTDOG_FLASH_BOOT_B_SSH_HELPER="$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh"
 export HOTDOG_RESCUE_WATCHER_HELPER="$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
 
-exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
+set +e
+"$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
 	--image "$BOOT_IMAGE" --image-sha256 "$BOOT_SHA" \
 	--dual-partition-transaction \
 	--candidate-dtbo-b "$D7_DTBO" --candidate-dtbo-b-sha256 "$D7_DTBO_SHA" \
@@ -67,5 +71,15 @@ exec "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
 	--expect-source-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL" \
 	--expect-kernel-prefix 6.17.0-sm8150 \
 	--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
-	--restore-after system --boot-wait 240 --poll 1 --fastboot-timeout 15 \
+	--restore-after system --boot-wait 90 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
+test_status=$?
+set -e
+
+if lsusb -d 05c6:900e 2>/dev/null | grep -q .; then
+	printf 'Qualcomm 900e detected; reading fixed and early breadcrumbs.\n'
+	"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
+		--early-breadcrumb-address "$EARLY_BREADCRUMB_PHYS" || true
+fi
+
+exit "$test_status"

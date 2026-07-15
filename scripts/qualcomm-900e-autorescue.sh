@@ -12,12 +12,14 @@ HELPER="$HOTDOG_ROOT/helpers/hotdog_sahara_900e.py"
 
 usage() {
 	cat <<'USAGE'
-Usage: qualcomm-900e-autorescue.sh inspect|reset
+Usage: qualcomm-900e-autorescue.sh inspect [--early-breadcrumb-address ADDRESS]
+       qualcomm-900e-autorescue.sh reset
 
 Operate on the configured hotdog target only while Qualcomm 05c6:900e is
 visible. "inspect" reads the experimental breadcrumb and restart reason from
 physical memory. "reset" sends SAHARA_RESET_REQ. Neither action reads or
-writes phone storage.
+writes phone storage. ADDRESS accepts decimal or a 0x-prefixed physical
+address and reads one additional 64-byte diagnostic record.
 USAGE
 }
 
@@ -48,7 +50,22 @@ case "${1:-}" in
 		exit 2
 		;;
 esac
-[ "$#" -eq 1 ] || die "This command accepts exactly one action" 2
+shift
+
+early_breadcrumb_address="${HOTDOG_EARLY_BREADCRUMB_PHYS:-}"
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--early-breadcrumb-address)
+			[ "$action" = inspect ] || die "Early breadcrumb reads require inspect" 2
+			[ "$#" -ge 2 ] || die "Missing value for $1" 2
+			early_breadcrumb_address="$2"
+			shift 2
+			;;
+		*)
+			die "Unknown argument: $1" 2
+			;;
+	esac
+done
 
 hotdog_require_target_serial
 command -v lsusb >/dev/null 2>&1 || die "Missing command: lsusb" 127
@@ -68,7 +85,15 @@ log "Target serial: $HOTDOG_TARGET_SERIAL"
 log "Phone storage access: none"
 phone_lock_acquire "Qualcomm 900e Sahara $action" 0 || die "Could not acquire phone-operation lock" 4
 
-"$PYTHON_BIN" -u "$HELPER" "$action" \
-	--edl-source "$EDL_SOURCE" \
+helper_args=(
+	"$action"
+	--edl-source "$EDL_SOURCE"
 	--serial "$HOTDOG_TARGET_SERIAL"
+)
+if [ "$action" = inspect ] && [ -n "$early_breadcrumb_address" ]; then
+	helper_args+=(--early-breadcrumb-address "$early_breadcrumb_address")
+	log "Additional early breadcrumb: $early_breadcrumb_address (64 bytes)"
+fi
+
+"$PYTHON_BIN" -u "$HELPER" "${helper_args[@]}"
 log "Sahara $action completed"

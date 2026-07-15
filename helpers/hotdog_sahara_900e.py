@@ -10,11 +10,38 @@ import sys
 from pathlib import Path
 
 
+def physical_address(value: str) -> int:
+    address = int(value, 0)
+    if not 0 <= address <= 0xFFFFFFFFFFFFFFFF:
+        raise argparse.ArgumentTypeError("physical address is outside u64 range")
+    return address
+
+
+def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
+    if len(data) < 0x18:
+        raise ValueError("early breadcrumb is shorter than 24 bytes")
+
+    magic, version, stage, stage_inverse, detail, detail_inverse = (
+        struct.unpack_from("<IIIIII", data)
+    )
+    return {
+        "magic": magic,
+        "version": version,
+        "stage": stage,
+        "stage_inverse": stage_inverse,
+        "detail": detail,
+        "detail_inverse": detail_inverse,
+        "stage_valid": int(stage_inverse == ((~stage) & 0xFFFFFFFF)),
+        "detail_valid": int(detail_inverse == ((~detail) & 0xFFFFFFFF)),
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=("inspect", "reset"))
     parser.add_argument("--edl-source", type=Path, required=True)
     parser.add_argument("--serial", required=True)
+    parser.add_argument("--early-breadcrumb-address", type=physical_address)
     return parser.parse_args()
 
 
@@ -99,6 +126,24 @@ def main() -> int:
             print(f"breadcrumb_index={index}")
             print(f"breadcrumb_initcall_address=0x{low | (high << 32):016x}")
         print(f"restart_reason=0x{struct.unpack('<I', restart_reason)[0]:08x}")
+
+        if args.early_breadcrumb_address is not None:
+            early = protocol.read_memory(args.early_breadcrumb_address, 0x40)
+            print(
+                "early_breadcrumb_address="
+                f"0x{args.early_breadcrumb_address:016x}"
+            )
+            print(f"early_breadcrumb_hex={early.hex()}")
+            try:
+                decoded = decode_early_breadcrumb(early)
+            except ValueError as error:
+                print(f"error={error}", file=sys.stderr)
+                return 10
+            for field, value in decoded.items():
+                if field == "magic":
+                    print(f"early_breadcrumb_magic=0x{value:08x}")
+                else:
+                    print(f"early_breadcrumb_{field}={value}")
         return 0
     finally:
         cdc.close()
