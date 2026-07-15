@@ -379,8 +379,50 @@ window.
 
 The builder verified boot-header v2 metadata, extracted payload identity, the
 partition-sized AVB hash footer, and deterministic component hashes. Hardware
-validation requires one manual return to fastboot from the preceding fixed-logo
-candidate.
+displayed all three checkpoints while retaining the OnePlus splash. This proves
+execution reached stage 20 immediately before `__enable_mmu()`. No USB identity
+or watchdog reset followed during the 90-second observation window.
+
+### Identity-mapped post-MMU checkpoints
+
+The next image added the first 2 MiB of splash memory to the initial identity
+map and cleaned post-MMU framebuffer writes to the point of coherency. Block 4
+is written immediately after `__enable_mmu()` returns; block 5 follows the
+stage-30 breadcrumb and its cache maintenance.
+
+| Item | Value |
+|---|---|
+| Kernel Image SHA256 | `f7620d647e374419210ef415f3705752876a498f6aabc0fd27b04d4d8b0f8663` |
+| Raw boot image SHA256 | `6e81e211829d35a1af2e6fac23dc0a72dd6dbe0b7b327755508e44b27eaf0339` |
+| AVB boot image SHA256 | `3f8f1a23b31af77bdf9b19487f7518c586902127768c488b7521dcb1f1680192` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+Hardware displayed all five checkpoints. Direct boot therefore returns from
+`__enable_mmu()` and completes the stage-30 breadcrumb. The unresolved region
+begins at `__pi_early_map_kernel()` or a later transition that had no visual
+checkpoint in this image. USB remained absent and the early watchdog again did
+not reset the phone.
+
+### Prepared virtual-flow checkpoints
+
+The current diagnostic extends the visual trace without changing the DTB,
+initramfs, command line, or rollback contract. Checkpoints 6 and 7 bracket
+`__pi_early_map_kernel()` and stage 40. Checkpoints 8 and 9 bracket the first
+stage-50 breadcrumb after branching to `__primary_switched`. Checkpoints 10 and
+11 bracket stage 60 after `finalise_el2()` and immediately before
+`start_kernel()`.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `a016fd828a6295756077d68efd30cb2ec0ef505435764833ba11353b30798d06` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `4396054c7333f929b0a86438348d81eaddda1320263665257f89e2e00880f65c` |
+| Raw boot image SHA256 | `cfca32ece7cc7792986e4fa1abbf8a6e0ba934e0a120370ee8dd3df55cc571e0` |
+| AVB boot image SHA256 | `4236402b872cd9174dc42dbb1cc348d7d214dccbc76a56b8f5b776f74dcbd348` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The builder verified header-v2 metadata, extracted payload identity, component
+hashes, and the partition-sized AVB footer. Hardware validation is pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 
