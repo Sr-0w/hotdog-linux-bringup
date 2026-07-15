@@ -1,0 +1,225 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index ca04b338c..d3496953f 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -58,9 +58,14 @@
+ 	/*
+ 	 * DO NOT MODIFY. Image header expected by Linux boot-loaders.
+ 	 */
++#ifdef CONFIG_EFI
+ 	efi_signature_nop			// special NOP to identity as PE/COFF executable
+ 	b	primary_entry			// branch to kernel start, magic
+-	.quad	0				// Image load offset from start of RAM, little-endian
++#else
++	b	primary_entry			// stock Android entry layout
++	.long	0				// reserved / stock-compatible code1
++#endif
++	.quad	0x00080000			// Image load offset from start of RAM, little-endian
+ 	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
+ 	le64sym	_kernel_flags_le		// Informative flags, little-endian
+ 	.quad	0				// reserved
+@@ -127,6 +132,39 @@ SYM_CODE_START(primary_entry)
+ 	 * the TCR will have been set.
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
++
++	/*
++	 * Direct-boot diagnostic safety net. Preserve an exact early-stage
++	 * breadcrumb, ask the downstream boot chain to enter fastboot after a
++	 * reset, then arm the APSS watchdog for 30 seconds. init/main.c updates
++	 * the breadcrumb and clears both safety devices after all initcalls.
++	 */
++	movz	x9, #0xf000
++	movk	x9, #0xa9bf, lsl #16		// unused tail page of ramoops
++	movz	w10, #0x4f47
++	movk	w10, #0x4844, lsl #16		// "HDOG"
++	str	w10, [x9, #0x00]
++	mov	w10, #1
++	str	w10, [x9, #0x04]		// stage: primary_entry
++
++	movz	x9, #0xf65c
++	movk	x9, #0x146b, lsl #16		// IMEM restart_reason
++	movz	w10, #0x5500
++	movk	w10, #0x7766, lsl #16		// bootloader on next reset
++	str	w10, [x9]
++
++	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
++	str	wzr, [x9, #0x08]		// disable
++	mov	w10, #1
++	str	w10, [x9, #0x04]		// reset counter
++	movz	w10, #0xfe88
++	movk	w10, #0x000e, lsl #16		// 30 * 32764 ticks
++	str	w10, [x9, #0x10]		// bark time
++	str	w10, [x9, #0x14]		// bite time
++	mov	w10, #1
++	str	w10, [x9, #0x08]		// enable
++	dsb	sy
++
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)
+ 
+diff --git a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
+index ef6d66229..18211a047 100644
+--- a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
++++ b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
+@@ -112,7 +112,7 @@ struct device *getDev(void)
+   * slave
+   * @return client if it was previously set or NULL in all the other cases
+   */
+-struct i2c_client *getClient()
++struct i2c_client *getClient(void)
+ {
+ 	if (client != NULL)
+ 		return (struct i2c_client *)client;
+@@ -125,7 +125,7 @@ struct i2c_client *getClient()
+   * slave
+   * @return client if it was previously set or NULL in all the other cases
+   */
+-struct spi_device *getClient()
++struct spi_device *getClient(void)
+ {
+ 	if (client != NULL)
+ 		return (struct spi_device *)client;
+diff --git a/init/main.c b/init/main.c
+index 5753e9539..031df87e3 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -77,6 +77,7 @@
+ #include <linux/idr.h>
+ #include <linux/kgdb.h>
+ #include <linux/ftrace.h>
++#include <linux/io.h>
+ #include <linux/async.h>
+ #include <linux/shmem_fs.h>
+ #include <linux/slab.h>
+@@ -1316,9 +1317,85 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+ 	return 0;
+ }
+ 
++#define HOTDOG_APSS_WDT_PHYS		0x17c10000
++#define HOTDOG_APSS_WDT_SIZE		0x1000
++#define HOTDOG_APSS_WDT_RATE		32764
++#define HOTDOG_APSS_WDT_TIMEOUT_SEC	30
++#define HOTDOG_APSS_WDT_RST		0x04
++#define HOTDOG_APSS_WDT_ENABLE		0x08
++#define HOTDOG_APSS_WDT_BARK_TIME	0x10
++#define HOTDOG_APSS_WDT_BITE_TIME	0x14
++#define HOTDOG_IMEM_REASON_PHYS		0x146bf65c
++#define HOTDOG_BREADCRUMB_PHYS		0xa9bff000
++#define HOTDOG_BREADCRUMB_MAGIC		0x48444f47
++
++static void __iomem *hotdog_apss_wdt_base;
++static void __iomem *hotdog_imem_reason;
++static void __iomem *hotdog_breadcrumb;
++static u32 hotdog_initcall_index;
++
++static void __init hotdog_write_breadcrumb(u32 stage, u32 level,
++					   initcall_t call)
++{
++	u64 address = (unsigned long)call;
++
++	if (!hotdog_breadcrumb)
++		return;
++
++	writel(HOTDOG_BREADCRUMB_MAGIC, hotdog_breadcrumb + 0x00);
++	writel(stage, hotdog_breadcrumb + 0x04);
++	writel(level, hotdog_breadcrumb + 0x08);
++	writel(hotdog_initcall_index, hotdog_breadcrumb + 0x0c);
++	writel(lower_32_bits(address), hotdog_breadcrumb + 0x10);
++	writel(upper_32_bits(address), hotdog_breadcrumb + 0x14);
++	wmb();
++}
++
++static void __init hotdog_prepare_initcall_diagnostics(void)
++{
++	u32 ticks = HOTDOG_APSS_WDT_TIMEOUT_SEC * HOTDOG_APSS_WDT_RATE;
++
++	hotdog_breadcrumb = ioremap(HOTDOG_BREADCRUMB_PHYS, SZ_4K);
++	hotdog_imem_reason = ioremap(HOTDOG_IMEM_REASON_PHYS, sizeof(u32));
++	hotdog_apss_wdt_base = ioremap(HOTDOG_APSS_WDT_PHYS,
++						 HOTDOG_APSS_WDT_SIZE);
++	hotdog_write_breadcrumb(2, U32_MAX, NULL);
++
++	if (hotdog_imem_reason)
++		writel(0x77665500, hotdog_imem_reason);
++
++	if (hotdog_apss_wdt_base) {
++		writel(0, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_ENABLE);
++		writel(1, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_RST);
++		writel(ticks, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_BARK_TIME);
++		writel(ticks, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_BITE_TIME);
++		writel(1, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_ENABLE);
++		wmb();
++	}
++
++	pr_emerg("HOTDOG: direct-boot watchdog and persistent initcall trace armed\n");
++}
++
++static void __init hotdog_finish_initcall_diagnostics(void)
++{
++	hotdog_write_breadcrumb(5, U32_MAX, NULL);
++
++	if (hotdog_apss_wdt_base) {
++		writel(0, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_ENABLE);
++		wmb();
++	}
++	if (hotdog_imem_reason) {
++		writel(0x77665501, hotdog_imem_reason);
++		wmb();
++	}
++
++	pr_emerg("HOTDOG: initcalls completed; diagnostic watchdog disarmed\n");
++}
++
+ static void __init do_initcall_level(int level, char *command_line)
+ {
+ 	initcall_entry_t *fn;
++	initcall_t call;
+ 
+ 	parse_args(initcall_level_names[level],
+ 		   command_line, __start___param,
+@@ -1327,8 +1404,13 @@ static void __init do_initcall_level(int level, char *command_line)
+ 		   NULL, ignore_unknown_bootoption);
+ 
+ 	do_trace_initcall_level(initcall_level_names[level]);
+-	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
+-		do_one_initcall(initcall_from_entry(fn));
++	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
++		call = initcall_from_entry(fn);
++		hotdog_write_breadcrumb(3, level, call);
++		do_one_initcall(call);
++		hotdog_write_breadcrumb(4, level, call);
++		hotdog_initcall_index++;
++	}
+ }
+ 
+ static void __init do_initcalls(void)
+@@ -1337,6 +1419,8 @@ static void __init do_initcalls(void)
+ 	size_t len = saved_command_line_len + 1;
+ 	char *command_line;
+ 
++	hotdog_prepare_initcall_diagnostics();
++
+ 	command_line = kzalloc(len, GFP_KERNEL);
+ 	if (!command_line)
+ 		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
+@@ -1347,6 +1431,7 @@ static void __init do_initcalls(void)
+ 		do_initcall_level(level, command_line);
+ 	}
+ 
++	hotdog_finish_initcall_diagnostics();
+ 	kfree(command_line);
+ }
+ 
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -999,6 +999,7 @@ void __init smp_init(void)
+ 
+ 	pr_info("Bringing up secondary CPUs ...\n");
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+ 
+ 	num_nodes = num_online_nodes();

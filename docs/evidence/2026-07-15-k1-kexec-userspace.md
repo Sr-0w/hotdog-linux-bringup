@@ -66,3 +66,30 @@ arms the APSS watchdog. If an initcall stalls, the next warm reset should retain
 the last stage and request fastboot instead of leaving the handset indefinitely
 on the logo. The fastboot request and breadcrumb recovery remain hardware
 tests; they are not presented as working until observed on the device.
+
+The complete experimental source delta is tracked as
+[`experimental-mainline-autorescue-breadcrumb.patch`](../../patches/experimental-mainline-autorescue-breadcrumb.patch).
+It applies directly to K1 commit
+`379d8fe35c7ca685a650bd82fd023af0ea3f0de0` and includes the temporary Android
+entry layout, forced single-CPU bring-up, FTS prototype correction, and the
+watchdog/breadcrumb instrumentation.
+
+| Reproduction item | SHA256 |
+|---|---|
+| Standalone patch | `82982736ffd52690cc747887e1bfd5de416a30d804b96efa6947171396fde9b2` |
+| Final `.config` | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
+| Original prepared Image | `80c9a8457661aad5bb3d4354462cdb76a212f94fb9e4fd946f73c68a65e16261` |
+| Clean rebuild Image with a fresh CPIO | `4354cb544eaee32b733d074b39665bb91709b9901ae2c73f00f628555db989ed` |
+| Clean relink Image with the original CPIO | `282366e99219f92c960a6146b01489a80555cf69e129ce1bfd17bda003bd9d4e` |
+| Prepared AVB boot image | `a4552626e2c4426707937b2d3eedeef8e3f5fcfb1f06f21dafd633fc98605485` |
+
+The clean replay started from the pinned commit, applied only the standalone
+patch, copied the tracked K1 package config, enabled `CONFIG_QCOM_WDT=m`, ran
+`make ARCH=arm64 LLVM=1 olddefconfig`, and built with Clang 22.1.8 and LLD
+21.1.8. The resulting source files and final config match the prepared
+candidate exactly. Recreating the original CPIO byte-for-byte and relinking
+produced the second clean-replay hash above. It still differs from the original
+candidate because that candidate came from an incremental thin-archive build;
+the archive retains source-path-prefixed member names that can affect linker
+tie ordering. The original Image is therefore recorded as an experimental
+artifact, not claimed as a byte-for-byte clean-build output.
