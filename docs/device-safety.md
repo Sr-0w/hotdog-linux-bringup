@@ -113,6 +113,19 @@ scripts/rescue-pmos-to-fastboot-when-visible.sh \
 This watcher does not flash partitions. Pair it with the prearmed fastboot
 restore watcher used by the direct-boot wrappers.
 
+If an experimental watchdog enters Qualcomm Crashdump instead, inspect the
+tracked breadcrumb without dumping all RAM:
+
+```bash
+scripts/qualcomm-900e-autorescue.sh inspect
+```
+
+The same wrapper can issue a protocol-level SoC reset with the `reset` action.
+On the tested HD1913 this reset is accepted, but a persistently failing boot
+candidate may return to `900e`; it does not alter slots or restore partitions.
+Both actions validate the configured serial, acquire the phone-operation lock,
+and perform no phone-storage access.
+
 ## Reporting a failed test
 
 Include:

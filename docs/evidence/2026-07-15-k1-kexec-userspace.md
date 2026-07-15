@@ -93,3 +93,38 @@ candidate because that candidate came from an incremental thin-archive build;
 the archive retains source-path-prefixed member names that can affect linker
 tie ordering. The original Image is therefore recorded as an experimental
 artifact, not claimed as a byte-for-byte clean-build output.
+
+### Hardware result
+
+The prepared AVB image was written to `boot_b` with the D7 DTBO after a fresh,
+identity-checked R6 boot. The APSS watchdog reset the phone into Qualcomm
+Crashdump (`05c6:900e`) rather than fastboot. A direct `SAHARA_RESET_REQ` was
+accepted and produced a repeatable physical reboot, but the same candidate
+returned to `900e` on the next watchdog expiry.
+
+Sahara memory-debug mode then read only the dedicated breadcrumb page and IMEM
+restart reason:
+
+| Field | Observed value |
+|---|---|
+| Breadcrumb magic | `0x48444f47` (`HDOG`) |
+| Breadcrumb stage | `1` (`primary_entry`) |
+| IMEM restart reason | `0x77665500` |
+
+Stage 2 is written by `hotdog_prepare_initcall_diagnostics()` immediately
+before normal initcall processing. Its absence proves that this candidate does
+not reach `do_initcalls`; bytes after the stage-1 header are stale RAM and must
+not be interpreted as an initcall index. Reading the APSS watchdog MMIO through
+Sahara timed out, so no post-reset register value is claimed.
+
+The boot ROM accepted Sahara command mode but rejected the signed OnePlus
+Firehose loader and `SWITCH_TO_DMSS_DLOAD`. The tested `900e` transport can
+therefore inspect RAM and reset the SoC, but cannot yet restore partitions or
+select fastboot without a physical button cycle. The bounded public interface
+for these two validated operations is
+[`qualcomm-900e-autorescue.sh`](../../scripts/qualcomm-900e-autorescue.sh).
+
+The next direct diagnostic should move breadcrumbs into the early assembly and
+`start_kernel()` path between `primary_entry` and `do_initcalls`. It also needs
+a firmware-compatible recovery selector in addition to the verified APSS
+watchdog, because the IMEM value alone did not prevent Crashdump selection.
