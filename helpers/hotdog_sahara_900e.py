@@ -24,7 +24,7 @@ def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
     magic, version, stage, stage_inverse, detail, detail_inverse = (
         struct.unpack_from("<IIIIII", data)
     )
-    return {
+    decoded = {
         "magic": magic,
         "version": version,
         "stage": stage,
@@ -34,6 +34,32 @@ def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
         "stage_valid": int(stage_inverse == ((~stage) & 0xFFFFFFFF)),
         "detail_valid": int(detail_inverse == ((~detail) & 0xFFFFFFFF)),
     }
+    if version < 2:
+        return decoded
+    if len(data) < 0x30:
+        raise ValueError("version-2 early breadcrumb is shorter than 48 bytes")
+
+    (
+        level,
+        level_inverse,
+        address_low,
+        address_high,
+        address_low_inverse,
+        address_high_inverse,
+    ) = struct.unpack_from("<IIIIII", data, 0x18)
+    decoded.update(
+        {
+            "level": level,
+            "level_inverse": level_inverse,
+            "level_valid": int(level_inverse == ((~level) & 0xFFFFFFFF)),
+            "initcall_address": address_low | (address_high << 32),
+            "address_valid": int(
+                address_low_inverse == ((~address_low) & 0xFFFFFFFF)
+                and address_high_inverse == ((~address_high) & 0xFFFFFFFF)
+            ),
+        }
+    )
+    return decoded
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,6 +168,8 @@ def main() -> int:
             for field, value in decoded.items():
                 if field == "magic":
                     print(f"early_breadcrumb_magic=0x{value:08x}")
+                elif field == "initcall_address":
+                    print(f"early_breadcrumb_{field}=0x{value:016x}")
                 else:
                     print(f"early_breadcrumb_{field}={value}")
         return 0

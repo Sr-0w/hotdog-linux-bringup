@@ -77,7 +77,8 @@ watchdog/breadcrumb instrumentation.
 | Reproduction item | SHA256 |
 |---|---|
 | Hardware-tested patch snapshot | `82982736ffd52690cc747887e1bfd5de416a30d804b96efa6947171396fde9b2` |
-| Current tracked early-stage patch | `86891ac59e252a8aa0fd9976be313ee5b4235d329eab28ee3adac64900057c08` |
+| Hardware-tested early-stage patch | `86891ac59e252a8aa0fd9976be313ee5b4235d329eab28ee3adac64900057c08` |
+| Current tracked initcall patch | `6083811fe76c0868f75979e117b61994228856d3010f7329edc2ce4fe0cb17c7` |
 | Final `.config` | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
 | Original prepared Image | `80c9a8457661aad5bb3d4354462cdb76a212f94fb9e4fd946f73c68a65e16261` |
 | Clean rebuild Image with a fresh CPIO | `4354cb544eaee32b733d074b39665bb91709b9901ae2c73f00f628555db989ed` |
@@ -111,13 +112,21 @@ restart reason:
 |---|---|
 | Breadcrumb magic | `0x48444f47` (`HDOG`) |
 | Breadcrumb stage | `1` (`primary_entry`) |
+| Image-resident magic | `0x32454448` (`HDE2`) |
+| Image-resident format | version 1 |
+| Image-resident stage | `200` (`do_initcalls()` entry) |
+| Stage/detail guards | valid |
 | IMEM restart reason | `0x77665500` |
 
-Stage 2 is written by `hotdog_prepare_initcall_diagnostics()` immediately
-before normal initcall processing. Its absence proves that this candidate does
-not reach `do_initcalls`; bytes after the stage-1 header are stale RAM and must
-not be interpreted as an initcall index. Reading the APSS watchdog MMIO through
-Sahara timed out, so no post-reset register value is claimed.
+The fixed page is initialized in pre-MMU assembly, but its stage-2 update first
+depends on `ioremap()` of that normal RAM page. The fixed record remaining at
+stage 1 therefore did not prove a pre-initcall failure. The independent,
+guarded Image-resident record reached stage 200 immediately before
+`hotdog_prepare_initcall_diagnostics()`, proving that direct boot reaches
+`do_initcalls()`. This supersedes the earlier pre-initcall interpretation.
+Bytes after the fixed stage-1 header remain stale RAM and must not be
+interpreted as an initcall index. Reading the APSS watchdog MMIO through Sahara
+timed out, so no post-reset register value is claimed.
 
 The boot ROM accepted Sahara command mode but rejected the signed OnePlus
 Firehose loader and `SWITCH_TO_DMSS_DLOAD`. The tested `900e` transport can
@@ -126,14 +135,14 @@ select fastboot without a physical button cycle. The bounded public interface
 for these two validated operations is
 [`qualcomm-900e-autorescue.sh`](../../scripts/qualcomm-900e-autorescue.sh).
 
-### Prepared early-stage follow-up
+### Image-resident early-stage result
 
 The next candidate moves the missing diagnostics into an Image-resident
 64-byte record that is writable through both the identity and final kernel
 mappings. Each stage and detail value has a bitwise-inverse guard, and every
 cached write is cleaned to the point of coherency before execution continues.
-This candidate is built and AVB-verified but has not yet been booted on
-hardware.
+This candidate was built, AVB-verified, and booted on hardware. It entered
+Qualcomm Crashdump after reaching stage 200 with valid stage and detail guards.
 
 | Item | Value |
 |---|---|
@@ -169,6 +178,47 @@ transition:
 | 190 | immediately before `rest_init()` |
 | 200 | entry to `do_initcalls()` |
 
+The hardware result selected the initcall loop, rather than early arm64 entry,
+as the next diagnostic boundary.
+
+### Prepared per-initcall follow-up
+
+The current candidate removes the failed normal-RAM `ioremap()` path. It keeps
+the breadcrumb embedded in the Image, adds guarded initcall level and function
+address fields, marks each watchdog setup operation, and records every initcall
+immediately before and after execution. The APSS watchdog is kicked around each
+returning initcall and disarmed only after all levels complete.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `6083811fe76c0868f75979e117b61994228856d3010f7329edc2ce4fe0cb17c7` |
+| Final `.config` SHA256 | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
+| Breadcrumb format | version 2 |
+| Kernel Image SHA256 | `e372480a634412f0f9ab150eff48b5a8cf5eff7691eaf70b3013b4c0dee60051` |
+| Raw boot image SHA256 | `1e311adffc7866372f9d64754cd1ff8b79a00825fc11b0e629744eaba7c4869b` |
+| AVB boot image SHA256 | `94c9898b636b8035a5f7de8f36379b9c833064dd5201d744108a0f4bcf23e5cc` |
+| DTB SHA256 | `040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c` |
+| Initramfs SHA256 | `b7e939614b7cb34ecdd8639613d76b8adba39b069b6591e35c39bc4c57a37622` |
+| Cmdline SHA256 | `e72379faaf011ea3cacca4202a625dc8839ac32187a6b59c8c1784f1d02cc960` |
+| Breadcrumb Image offset | `0x1b8f800` |
+| Expected physical address | `0x81c0f800` |
+
+| Stage | Meaning |
+|---:|---|
+| 201 | entered diagnostic watchdog preparation |
+| 202 | IMEM restart-reason mapping returned; detail is mapping success |
+| 203 | APSS watchdog mapping returned; detail is mapping success |
+| 204 | watchdog programming completed |
+| 300 | immediately before an initcall |
+| 301 | immediately after the same initcall returned |
+| 400 | all initcall levels completed and watchdog disarm started |
+
+For stages 300 and 301, `detail` is the global initcall index, `level` is the
+kernel initcall level, and `initcall_address` is the full virtual function
+address. Stage, detail, level, and address all carry inverse guards so a torn
+write can be rejected before resolving the address against the matching
+`vmlinux`.
+
 If the candidate returns to `900e`, read both records without dumping RAM:
 
 ```bash
@@ -176,7 +226,7 @@ scripts/qualcomm-900e-autorescue.sh inspect \
   --early-breadcrumb-address 0x81c0f800
 ```
 
-The physical address is valid only for the exact Image hash above. A
+The physical address must be paired with the selected Image hash. A
 firmware-compatible recovery selector is still needed in addition to the
 verified APSS watchdog, because the IMEM value alone did not prevent Crashdump
 selection.
