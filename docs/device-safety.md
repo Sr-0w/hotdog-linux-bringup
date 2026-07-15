@@ -73,6 +73,32 @@ needs an independently validated reboot-to-fastboot mechanism; the current
 experimental path combines a pre-MMU APSS watchdog with PM8150 PON bootloader
 mode selection.
 
+### Host-side reset limits
+
+A disconnected USB device cannot receive a USB control request. Disabling its
+root-hub port, resetting the xHCI host controller, or cycling VBUS may recover a
+host-side link, but none of those operations resets the application processor
+of a battery-powered phone. A USB Power Delivery Hard Reset resets the power
+contract and PD communications, not the Snapdragon SoC.
+
+Do not depend on host USB power control for unattended direct-boot tests. Many
+root hubs do not implement per-port VBUS switching, and Linux cannot report
+whether a logically disabled port still supplies VBUS. Every direct candidate
+that may stall before USB initialization must therefore arm a hardware reset
+path before the first unbounded operation.
+
+If the candidate can still reach postmarketOS USB networking, a second watcher
+can validate its exact kernel and command line before requesting fastboot:
+
+```bash
+scripts/rescue-pmos-to-fastboot-when-visible.sh \
+  --expected-kernel-prefix '6.17.0-sm8150' \
+  --expected-cmdline-token 'rdinit=/hotdog-mainline-wrapper'
+```
+
+This watcher does not flash partitions. Pair it with the prearmed fastboot
+restore watcher used by the direct-boot wrappers.
+
 ## Reporting a failed test
 
 Include:
