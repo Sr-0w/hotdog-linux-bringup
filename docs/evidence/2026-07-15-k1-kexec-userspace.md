@@ -78,7 +78,7 @@ watchdog/breadcrumb instrumentation.
 |---|---|
 | Hardware-tested patch snapshot | `82982736ffd52690cc747887e1bfd5de416a30d804b96efa6947171396fde9b2` |
 | Hardware-tested early-stage patch | `86891ac59e252a8aa0fd9976be313ee5b4235d329eab28ee3adac64900057c08` |
-| Current tracked diagnostic patch | `fc260de080e3e769dfa570ca634bd6e55eedaf3f7cd943158636aa0041120206` |
+| Current tracked diagnostic patch | `af31f706d59595dc280b47d2b539f4692acb8f7a59e0d38a53615d6a03ef5bee` |
 | Final `.config` | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
 | Original prepared Image | `80c9a8457661aad5bb3d4354462cdb76a212f94fb9e4fd946f73c68a65e16261` |
 | Clean rebuild Image with a fresh CPIO | `4354cb544eaee32b733d074b39665bb91709b9901ae2c73f00f628555db989ed` |
@@ -288,7 +288,7 @@ The same Linux 6.17 payload advances normally after kexec. This motivates, but
 does not yet prove, the hypothesis that the direct ABL handoff leaves the
 SM8150 system counter disabled.
 
-The next candidate sets `CNTCR.EN` at the architected SM8150 control base
+The first candidate set `CNTCR.EN` at the architected SM8150 control base
 `0x17c20000` before enabling the MMU. Breadcrumb format 3 preserves `CNTCR`
 and `CNTVCT_EL0` values from immediately before and after that write, while
 retaining the guarded per-initcall record. A fixed-iteration delay makes the
@@ -305,7 +305,39 @@ counter delta meaningful without depending on the timer being functional.
 | Breadcrumb physical address | `0x81c0f800` |
 
 Payload hashes, extracted component comparison, patch reverse-application,
-and AVB verification passed. Hardware validation is pending.
+and AVB verification passed. On hardware, the image held at the fixed OnePlus
+logo with no USB identity and did not reach the pre-MMU recovery watchdog.
+Manual fastboot allowed the detached rollback watcher to restore exact R6 and
+the stock DTBO. R6 then reached its postmarketOS rootfs, NCM, ACM, OpenRC, and
+the root ACM shell. This run produced no counter sample and does not validate
+the timer hypothesis.
+
+The recovered 4.14 reference reports both CP15 and MMIO timers running at
+19.20 MHz and selects `arch_sys_counter` as its only available clocksource.
+`/proc/timer_list` shows advancing high-resolution timers and jiffies. A
+read-only `/dev/mem` request for `0x17c20000` was rejected with `Bad address`,
+so no raw downstream `CNTCR` value is claimed.
+
+### Guarded system-counter handoff test
+
+The replacement removes all `0x17c20000` access from `primary_entry`. It arms
+the APSS watchdog and bootloader restart reason first, then maps the system
+counter from `do_initcalls()` context. Breadcrumb stages distinguish mapping,
+read, write, and post-write progress. Any MMIO fault is therefore inside the
+30-second recovery window.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `af31f706d59595dc280b47d2b539f4692acb8f7a59e0d38a53615d6a03ef5bee` |
+| Kernel Image SHA256 | `b5c767ade9b443150104b66803602541132450c34420563ade56d18a374a3573` |
+| Raw boot image SHA256 | `e2e2d31fffd931a16b3a2c521483ec95557cbc56ff8dc32f005ef39b61d42ceb` |
+| AVB boot image SHA256 | `5434853a155c218b7cc3d74eb7010cf91aa3d69dfdd596999755e730d6046e91` |
+| Breadcrumb format | version 3, 80-byte Sahara read |
+| Breadcrumb physical address | `0x81c0f800` |
+
+Extracted payload hashes, `sha256sum -c`, AVB verification, source diff
+checks, and disassembly checks passed. A second clean packaging run reproduced
+both the raw and AVB images byte for byte. Hardware validation is pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 

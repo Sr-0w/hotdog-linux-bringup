@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-225249-mainline617-direct-system-counter-enable/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-235115-mainline617-direct-system-counter-post-watchdog/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=b1210988b470ae0f8595f035b4d5d7c561b4e5fb18f9158532a93bef86a80f5e
+BOOT_SHA=5434853a155c218b7cc3d74eb7010cf91aa3d69dfdd596999755e730d6046e91
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -35,11 +35,11 @@ Usage: test-mainline617-direct-autorescue-breadcrumb.sh
 
 Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
 OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
-an explicit SM8150 system-counter enable, and a persistent per-initcall
-breadcrumb. If Qualcomm 900e appears, the stage and raw counter samples are
-read automatically. The verified R6 bridge and stock DTBO remain the rollback
-target. Set HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX to the exact running R6 slot
-(`_a` or `_b`); the default is `_b`.
+an SM8150 system-counter probe performed only after that watchdog is armed,
+and a persistent per-initcall breadcrumb. If Qualcomm 900e appears, the stage
+and raw counter samples are read automatically. The verified R6 bridge and
+stock DTBO remain the rollback target. Set HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX
+to the exact running R6 slot (`_a` or `_b`); the default is `_b`.
 
 Set HOTDOG_TEST_START_MODE=fastboot only when the verified target is already
 in bootloader fastboot. The default, pmOS-ssh, validates and hands off from a

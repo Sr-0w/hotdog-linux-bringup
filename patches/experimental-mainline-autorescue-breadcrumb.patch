@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
-index ca04b338c..df7bc61e2 100644
+index ca04b338c..82d1241fe 100644
 --- a/arch/arm64/kernel/head.S
 +++ b/arch/arm64/kernel/head.S
 @@ -42,6 +42,45 @@
@@ -64,40 +64,11 @@ index ca04b338c..df7bc61e2 100644
  	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
  	le64sym	_kernel_flags_le		// Informative flags, little-endian
  	.quad	0				// reserved
-@@ -127,6 +171,69 @@ SYM_CODE_START(primary_entry)
+@@ -127,6 +171,40 @@ SYM_CODE_START(primary_entry)
  	 * the TCR will have been set.
  	 */
  	bl	__cpu_setup			// initialise processor
 +	hotdog_mark_early_stage 10
-+
-+	/*
-+	 * Test whether ABL hands the SM8150 system counter to a non-stock Image
-+	 * with CNTCR.EN clear. The kexec path inherits an enabled counter from the
-+	 * downstream kernel, while direct boot stalls in timer-driven calibration.
-+	 * Record the control state and virtual counter on both sides of the
-+	 * smallest architectural fix so a Sahara dump can validate the hypothesis.
-+	 */
-+	adr_l	x9, hotdog_early_breadcrumb
-+	movz	x10, #0x17c2, lsl #16	// CNTCTLBase: 0x17c20000
-+	ldr	w11, [x10, #0x00]		// CNTCR before
-+	str	w11, [x9, #0x30]
-+	mrs	x12, cntvct_el0
-+	str	x12, [x9, #0x38]
-+	orr	w11, w11, #1			// CNTCR.EN
-+	str	w11, [x10, #0x00]
-+	dsb	sy
-+	isb
-+	mov	x13, #4096
-+1:	subs	x13, x13, #1
-+	b.ne	1b
-+	ldr	w11, [x10, #0x00]		// CNTCR after
-+	str	w11, [x9, #0x34]
-+	mrs	x12, cntvct_el0
-+	str	x12, [x9, #0x40]
-+	dc	cvac, x9
-+	add	x11, x9, #64
-+	dc	cvac, x11
-+	dsb	sy
 +
 +	/*
 +	 * Direct-boot diagnostic safety net. Preserve an exact early-stage
@@ -134,7 +105,7 @@ index ca04b338c..df7bc61e2 100644
  	b	__primary_switch
  SYM_CODE_END(primary_entry)
  
-@@ -218,6 +325,7 @@ SYM_CODE_END(preserve_boot_args)
+@@ -218,6 +296,7 @@ SYM_CODE_END(preserve_boot_args)
   *   x0 = __pa(KERNEL_START)
   */
  SYM_FUNC_START_LOCAL(__primary_switched)
@@ -142,7 +113,7 @@ index ca04b338c..df7bc61e2 100644
  	adr_l	x4, init_task
  	init_cpu_task x4, x5, x6
  
-@@ -243,6 +351,7 @@ SYM_FUNC_START_LOCAL(__primary_switched)
+@@ -243,6 +322,7 @@ SYM_FUNC_START_LOCAL(__primary_switched)
  	mov	x0, x20
  	bl	finalise_el2			// Prefer VHE if possible
  	ldp	x29, x30, [sp], #16
@@ -150,7 +121,7 @@ index ca04b338c..df7bc61e2 100644
  	bl	start_kernel
  	ASM_BUG()
  SYM_FUNC_END(__primary_switched)
-@@ -506,9 +615,11 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
+@@ -506,9 +586,11 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
  SYM_FUNC_END(__no_granule_support)
  
  SYM_FUNC_START_LOCAL(__primary_switch)
@@ -162,7 +133,7 @@ index ca04b338c..df7bc61e2 100644
  
  	adrp	x1, early_init_stack
  	mov	sp, x1
-@@ -516,8 +627,16 @@ SYM_FUNC_START_LOCAL(__primary_switch)
+@@ -516,8 +598,16 @@ SYM_FUNC_START_LOCAL(__primary_switch)
  	mov	x0, x20				// pass the full boot status
  	mov	x1, x21				// pass the FDT
  	bl	__pi_early_map_kernel		// Map and relocate the kernel
@@ -240,10 +211,18 @@ index ef6d66229..18211a047 100644
  	if (client != NULL)
  		return (struct spi_device *)client;
 diff --git a/init/main.c b/init/main.c
-index 5753e9539..7d4b2a63d 100644
+index 5753e9539..0827ef202 100644
 --- a/init/main.c
 +++ b/init/main.c
-@@ -117,6 +117,59 @@
+@@ -109,6 +109,7 @@
+ #include <asm/setup.h>
+ #include <asm/sections.h>
+ #include <asm/cacheflush.h>
++#include <asm/sysreg.h>
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/initcall.h>
+@@ -117,6 +118,59 @@
  
  static int kernel_init(void *);
  
@@ -303,7 +282,7 @@ index 5753e9539..7d4b2a63d 100644
  /*
   * Debug helper: via this flag we know that we are in 'early bootup code'
   * where only the boot processor is running with IRQ disabled.  This means
-@@ -899,8 +952,10 @@ void start_kernel(void)
+@@ -899,8 +953,10 @@ void start_kernel(void)
  	char *command_line;
  	char *after_dashes;
  
@@ -314,7 +293,7 @@ index 5753e9539..7d4b2a63d 100644
  	debug_objects_early_init();
  	init_vmlinux_build_id();
  
-@@ -917,6 +972,7 @@ void start_kernel(void)
+@@ -917,6 +973,7 @@ void start_kernel(void)
  	page_address_init();
  	pr_notice("%s", linux_banner);
  	setup_arch(&command_line);
@@ -322,7 +301,7 @@ index 5753e9539..7d4b2a63d 100644
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -956,6 +1012,7 @@ void start_kernel(void)
+@@ -956,6 +1013,7 @@ void start_kernel(void)
  	sort_main_extable();
  	trap_init();
  	mm_core_init();
@@ -330,7 +309,7 @@ index 5753e9539..7d4b2a63d 100644
  	maple_tree_init();
  	poking_init();
  	ftrace_init();
-@@ -969,6 +1026,7 @@ void start_kernel(void)
+@@ -969,6 +1027,7 @@ void start_kernel(void)
  	 * time - but meanwhile we still have a functioning scheduler.
  	 */
  	sched_init();
@@ -338,7 +317,7 @@ index 5753e9539..7d4b2a63d 100644
  
  	if (WARN(!irqs_disabled(),
  		 "Interrupts were enabled *very* early, fixing it\n"))
-@@ -1009,6 +1067,7 @@ void start_kernel(void)
+@@ -1009,6 +1068,7 @@ void start_kernel(void)
  	softirq_init();
  	timekeeping_init();
  	time_init();
@@ -346,7 +325,7 @@ index 5753e9539..7d4b2a63d 100644
  
  	/* This must be after timekeeping is initialized */
  	random_init();
-@@ -1024,6 +1083,7 @@ void start_kernel(void)
+@@ -1024,6 +1084,7 @@ void start_kernel(void)
  
  	early_boot_irqs_disabled = false;
  	local_irq_enable();
@@ -354,7 +333,7 @@ index 5753e9539..7d4b2a63d 100644
  
  	kmem_cache_init_late();
  
-@@ -1033,6 +1093,7 @@ void start_kernel(void)
+@@ -1033,6 +1094,7 @@ void start_kernel(void)
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
@@ -362,7 +341,7 @@ index 5753e9539..7d4b2a63d 100644
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1094,6 +1155,7 @@ void start_kernel(void)
+@@ -1094,6 +1156,7 @@ void start_kernel(void)
  	kcsan_init();
  
  	/* Do the rest non-__init'ed, we're now alive */
@@ -370,7 +349,7 @@ index 5753e9539..7d4b2a63d 100644
  	rest_init();
  
  	/*
-@@ -1316,9 +1378,75 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+@@ -1316,9 +1379,133 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
  	return 0;
  }
  
@@ -383,9 +362,13 @@ index 5753e9539..7d4b2a63d 100644
 +#define HOTDOG_APSS_WDT_BARK_TIME	0x10
 +#define HOTDOG_APSS_WDT_BITE_TIME	0x14
 +#define HOTDOG_IMEM_REASON_PHYS		0x146bf65c
++#define HOTDOG_SYSTEM_COUNTER_PHYS	0x17c20000
++#define HOTDOG_SYSTEM_COUNTER_SIZE	0x1000
++#define HOTDOG_SYSTEM_COUNTER_CNTCR	0x00
 +
 +static void __iomem *hotdog_apss_wdt_base;
 +static void __iomem *hotdog_imem_reason;
++static void __iomem *hotdog_system_counter_base;
 +static u32 hotdog_initcall_index;
 +
 +static void __init hotdog_kick_diagnostic_watchdog(void)
@@ -394,6 +377,59 @@ index 5753e9539..7d4b2a63d 100644
 +		writel(1, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_RST);
 +		wmb();
 +	}
++}
++
++static void __init hotdog_probe_system_counter(void)
++{
++	struct hotdog_early_breadcrumb *breadcrumb =
++		&hotdog_early_breadcrumb;
++	u64 counter_before, counter_after;
++	u32 control_before, control_after;
++	int i;
++
++	hotdog_mark_start_kernel_stage(205, 0);
++	hotdog_system_counter_base = ioremap(HOTDOG_SYSTEM_COUNTER_PHYS,
++					     HOTDOG_SYSTEM_COUNTER_SIZE);
++	hotdog_mark_start_kernel_stage(206, !!hotdog_system_counter_base);
++	if (!hotdog_system_counter_base)
++		return;
++
++	WRITE_ONCE(breadcrumb->counter_control_before, U32_MAX);
++	WRITE_ONCE(breadcrumb->counter_control_after, U32_MAX);
++	WRITE_ONCE(breadcrumb->virtual_counter_before, U64_MAX);
++	WRITE_ONCE(breadcrumb->virtual_counter_after, U64_MAX);
++	dcache_clean_poc((unsigned long)breadcrumb,
++			 (unsigned long)breadcrumb + sizeof(*breadcrumb));
++
++	/* Any fault below is now covered by the already armed APSS watchdog. */
++	hotdog_mark_start_kernel_stage(207, 0);
++	control_before = readl_relaxed(hotdog_system_counter_base +
++				       HOTDOG_SYSTEM_COUNTER_CNTCR);
++	counter_before = read_sysreg(cntvct_el0);
++	WRITE_ONCE(breadcrumb->counter_control_before, control_before);
++	WRITE_ONCE(breadcrumb->virtual_counter_before, counter_before);
++	dcache_clean_poc((unsigned long)breadcrumb,
++			 (unsigned long)breadcrumb + sizeof(*breadcrumb));
++
++	hotdog_mark_start_kernel_stage(208, control_before);
++	writel_relaxed(control_before | BIT(0), hotdog_system_counter_base +
++					 HOTDOG_SYSTEM_COUNTER_CNTCR);
++	wmb();
++	isb();
++	for (i = 0; i < 4096; i++)
++		cpu_relax();
++
++	control_after = readl_relaxed(hotdog_system_counter_base +
++				      HOTDOG_SYSTEM_COUNTER_CNTCR);
++	counter_after = read_sysreg(cntvct_el0);
++	WRITE_ONCE(breadcrumb->counter_control_after, control_after);
++	WRITE_ONCE(breadcrumb->virtual_counter_after, counter_after);
++	dcache_clean_poc((unsigned long)breadcrumb,
++			 (unsigned long)breadcrumb + sizeof(*breadcrumb));
++	hotdog_mark_start_kernel_stage(209, counter_after != counter_before);
++
++	pr_emerg("HOTDOG: system counter CNTCR %#x -> %#x, CNTVCT %llu -> %llu\n",
++		 control_before, control_after, counter_before, counter_after);
 +}
 +
 +static void __init hotdog_prepare_initcall_diagnostics(void)
@@ -419,6 +455,7 @@ index 5753e9539..7d4b2a63d 100644
 +		wmb();
 +	}
 +	hotdog_mark_start_kernel_stage(204, 0);
++	hotdog_probe_system_counter();
 +
 +	pr_emerg("HOTDOG: direct-boot watchdog and persistent initcall trace armed\n");
 +}
@@ -446,7 +483,7 @@ index 5753e9539..7d4b2a63d 100644
  
  	parse_args(initcall_level_names[level],
  		   command_line, __start___param,
-@@ -1327,8 +1455,17 @@ static void __init do_initcall_level(int level, char *command_line)
+@@ -1327,8 +1514,17 @@ static void __init do_initcall_level(int level, char *command_line)
  		   NULL, ignore_unknown_bootoption);
  
  	do_trace_initcall_level(initcall_level_names[level]);
@@ -466,7 +503,7 @@ index 5753e9539..7d4b2a63d 100644
  }
  
  static void __init do_initcalls(void)
-@@ -1337,6 +1474,9 @@ static void __init do_initcalls(void)
+@@ -1337,6 +1533,9 @@ static void __init do_initcalls(void)
  	size_t len = saved_command_line_len + 1;
  	char *command_line;
  
@@ -476,7 +513,7 @@ index 5753e9539..7d4b2a63d 100644
  	command_line = kzalloc(len, GFP_KERNEL);
  	if (!command_line)
  		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-@@ -1347,6 +1487,7 @@ static void __init do_initcalls(void)
+@@ -1347,6 +1546,7 @@ static void __init do_initcalls(void)
  		do_initcall_level(level, command_line);
  	}
  
