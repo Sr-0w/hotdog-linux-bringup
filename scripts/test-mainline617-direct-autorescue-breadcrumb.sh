@@ -4,14 +4,15 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-221312-mainline617-direct-initcall-v2-guarded/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-223210-mainline617-direct-initcall-v2-skip-xor-calibration/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
+START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=94c9898b636b8035a5f7de8f36379b9c833064dd5201d744108a0f4bcf23e5cc
+BOOT_SHA=ac80f1ece46ad0363de94950f27788ed9b40c8c19d83c84b5ecfbfc6a1249a18
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -38,6 +39,10 @@ and a persistent per-initcall breadcrumb. If Qualcomm 900e appears, both
 records are read automatically. The verified R6 bridge and stock DTBO remain
 the rollback target. Set HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX to the exact running
 R6 slot (`_a` or `_b`); the default is `_b`.
+
+Set HOTDOG_TEST_START_MODE=fastboot only when the verified target is already
+in bootloader fastboot. The default, pmOS-ssh, validates and hands off from a
+healthy R6 userspace.
 USAGE
 	exit 0
 fi
@@ -48,6 +53,10 @@ hotdog_require_target_serial
 case "$SOURCE_SLOT_SUFFIX" in
 	_a|_b) ;;
 	*) die "HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX must be _a or _b" 2 ;;
+esac
+case "$START_MODE" in
+	pmos-ssh|fastboot) ;;
+	*) die "HOTDOG_TEST_START_MODE must be pmos-ssh or fastboot" 2 ;;
 esac
 [ -z "${ANDROID_SERIAL:-}" ] || [ "$ANDROID_SERIAL" = "$HOTDOG_TARGET_SERIAL" ] ||
 	die "ANDROID_SERIAL differs from HOTDOG_TARGET_SERIAL" 2
@@ -61,6 +70,17 @@ check_sha "R6 bootloader reboot helper" "$REBOOT_HELPER" "$REBOOT_HELPER_SHA"
 export HOTDOG_FLASH_BOOT_B_SSH_HELPER="$HOTDOG_ROOT/scripts/flash-boot-b-from-pmos-ssh.sh"
 export HOTDOG_RESCUE_WATCHER_HELPER="$HOTDOG_ROOT/scripts/rescue-boot-b-when-visible.sh"
 
+start_args=()
+if [ "$START_MODE" = pmos-ssh ]; then
+	start_args=(
+		--from-pmos-ssh
+		--expect-source-kernel-prefix 4.14.357-openela-perf
+		--expect-source-cmdline-token watchdog_v2.enable=0
+		--expect-source-cmdline-token "androidboot.slot_suffix=$SOURCE_SLOT_SUFFIX"
+		--expect-source-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL"
+	)
+fi
+
 set +e
 "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
 	--image "$BOOT_IMAGE" --image-sha256 "$BOOT_SHA" \
@@ -70,11 +90,7 @@ set +e
 	--restore-boot-b "$RESTORE_BOOT" --restore-boot-b-sha256 "$RESTORE_BOOT_SHA" \
 	--reboot-helper "$REBOOT_HELPER" --reboot-helper-sha256 "$REBOOT_HELPER_SHA" \
 	--serial "$HOTDOG_TARGET_SERIAL" --expected-product 'msmnile hotdog' \
-	--from-pmos-ssh --start-rescue-watcher --require-dirty-survival \
-	--expect-source-kernel-prefix 4.14.357-openela-perf \
-	--expect-source-cmdline-token watchdog_v2.enable=0 \
-	--expect-source-cmdline-token "androidboot.slot_suffix=$SOURCE_SLOT_SUFFIX" \
-	--expect-source-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL" \
+	"${start_args[@]}" --start-rescue-watcher --require-dirty-survival \
 	--expect-kernel-prefix 6.17.0-sm8150 \
 	--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
 	--restore-after system --boot-wait 90 --poll 1 --fastboot-timeout 15 \

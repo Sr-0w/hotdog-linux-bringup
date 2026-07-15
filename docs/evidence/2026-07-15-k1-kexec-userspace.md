@@ -219,6 +219,42 @@ address. Stage, detail, level, and address all carry inverse guards so a torn
 write can be rejected before resolving the address against the matching
 `vmlinux`.
 
+### Per-initcall hardware result
+
+The format-v2 candidate entered Qualcomm Crashdump with every guard valid and
+the following last record:
+
+| Field | Value |
+|---|---|
+| Stage | `300` (before initcall) |
+| Global index | `524` |
+| Initcall level | `6` |
+| Runtime function address | `0xffffffc0817ff264` |
+| Link-time function address | `0xffffffc08177f264` |
+| KASLR slide | `0x80000` |
+| Resolved symbol | `calibrate_xor_blocks` in `crypto/xor.c` |
+
+The PREL32 entry is level-6 local index 108 at link address
+`0xffffffc081827f34`. Its signed offset resolves to
+`calibrate_xor_blocks()`. That function enters `do_xor_speed()`, which waits
+for `ktime_get()` to advance before measuring throughput. This is the second
+time-based boot calibration to block after the RAID6 benchmark, so the common
+direct-boot timer path is now the primary root-cause target.
+
+### Prepared XOR-calibration bypass
+
+The next diagnostic image changes only the existing `initcall_blacklist`
+command-line value by appending `calibrate_xor_blocks`. Kernel, DTB, initramfs,
+watchdog, and format-v2 per-initcall instrumentation are unchanged.
+
+| Item | Value |
+|---|---|
+| Kernel Image SHA256 | `e372480a634412f0f9ab150eff48b5a8cf5eff7691eaf70b3013b4c0dee60051` |
+| Cmdline SHA256 | `e4e36d4a0f4378905d1836675146e761cef2881f595a6afa6cf4ea02125aa1d8` |
+| Raw boot image SHA256 | `0f1d8fe2001c247d69e74dc7948552b25d1d17e736a800c662ac8e3d8783b6b7` |
+| AVB boot image SHA256 | `ac80f1ece46ad0363de94950f27788ed9b40c8c19d83c84b5ecfbfc6a1249a18` |
+| Breadcrumb physical address | `0x81c0f800` |
+
 If the candidate returns to `900e`, read both records without dumping RAM:
 
 ```bash
