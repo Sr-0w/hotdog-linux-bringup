@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-223210-mainline617-direct-initcall-v2-skip-xor-calibration/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-15-224158-mainline617-direct-initcall-v2-no-xor-benchmark/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=ac80f1ece46ad0363de94950f27788ed9b40c8c19d83c84b5ecfbfc6a1249a18
+BOOT_SHA=fb79f45c8a4e57dc05da5ee66725df568cd1e7981794328f8deac79bf6fc231f
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
