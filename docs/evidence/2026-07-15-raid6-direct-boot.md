@@ -94,7 +94,10 @@ reach automatic recovery. No counter record was recovered, so this is not
 evidence for or against the timer hypothesis.
 
 The replacement image moves the entire counter probe after watchdog arming
-and normal `ioremap()` setup:
+and normal `ioremap()` setup. This is also after the standard architected-timer
+driver has mapped the same control page to inspect `CNTTIDR` and configure
+`CNTACR`; that driver does not touch `CNTCR` and assumes firmware started the
+counter:
 
 | Item | Value |
 |---|---|
