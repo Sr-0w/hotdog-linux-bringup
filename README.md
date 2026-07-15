@@ -27,9 +27,9 @@ OnePlus bootloader remains under active bring-up.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Reaches level-6 initcalls | The guarded trace reached global initcall 524 and stopped inside `calibrate_xor_blocks()`. Both a pre-MMU and a guarded mapped system-counter probe held at the fixed logo without yielding counter evidence. The next image arms the watchdog before the persistent breadcrumb and framebuffer diagnostics, then draws three compact pre-MMU checkpoints to localize the regression visually. |
+| Persistent direct mainline | Reaches the post-MMU arm64 entry path | A reproducible framebuffer trace now proves that direct boot returns from `__enable_mmu()` and completes the guarded stage-30 breadcrumb. An earlier guarded build reached level-6 initcall 524 and stopped inside `calibrate_xor_blocks()`, but later builds exposed an additional early-entry regression. The current 11-checkpoint image brackets `__pi_early_map_kernel()`, `__primary_switched`, `finalise_el2()`, and the branch to `start_kernel()`. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
-| Early display output | Partial | Kernel output is visible during early boot. |
+| Early display output | Working for diagnostics | Direct pre-MMU and identity-mapped post-MMU framebuffer writes are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
 | Touch, Wi-Fi, Bluetooth, audio, modem, cameras | Not validated | These remain bring-up work. |
@@ -86,6 +86,17 @@ SSH, proving that another direct-only blocker remains after the RAID6 fix.
 The intervening one-try experiments are superseded because they
 reached the red failure screen with slot B already at retry count zero and do
 not prove checkpoint execution.
+
+The current direct-entry trace no longer depends on slot retry behavior or a
+working kernel console. Three cumulative blocks prove execution immediately
+before `__enable_mmu()`. An initial 2 MiB identity mapping for the inherited
+bootloader framebuffer then keeps the diagnostic surface available across the
+MMU transition; two additional blocks prove that `__enable_mmu()` returns and
+the guarded stage-30 breadcrumb completes. The prepared follow-up extends the
+same trace to 11 blocks, covering `__pi_early_map_kernel()`, the virtual branch
+to `__primary_switched`, `finalise_el2()`, and the final branch to
+`start_kernel()`. Exact image hashes and checkpoint meanings are recorded in
+the [2026-07-15 K1 evidence](docs/evidence/2026-07-15-k1-kexec-userspace.md).
 
 Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
 baseline and three negative mainline handoff results. D1 AVB
