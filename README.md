@@ -24,9 +24,9 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | USB networking | Working | NCM gadget, host address `172.16.42.2`, device address `172.16.42.1`. |
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
-| Mainline reboot | Partial | Historical kexec testing proved a late-loaded exact `qcom-wdt.ko` can drive a physical reboot. The current r4 package builds `qcom-wdt` into the kernel; that path is not hardware-tested, and `RESTART2(bootloader)` remains unresolved on the observed DTB. |
+| Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | `subsys` initcalls under diagnosis | D38 proves the hang is in level 4 (`subsys`). D39 bisects its 138 entries at 69 and aligns mainline ramoops with R6 so the last initcall trace can survive rollback. |
+| Persistent direct mainline | First blocking initcall isolated | D50 reached its reset after `subsys` entry 48, while D42 did not reach entry 49. The first blocking entry is therefore 49, `raid6_select_algo`. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -49,6 +49,35 @@ flowchart LR
 
 The bridge is a temporary engineering tool. The long-term target is a normal
 postmarketOS/pmaports boot that does not depend on the downstream kernel.
+
+The tested OnePlus ABL does not provide a dependable unattended fallback to a
+known-good A slot: after slot B reached retry count zero, firmware kept B active
+and displayed the red failure screen instead of selecting successful slot A.
+The PM8150 PON bootloader reason works from a mainline kexec boot, but D46-D48
+did not make it a dependable pre-MMU recovery path. Current direct-boot tests
+therefore keep verified R6 on slot A, place one candidate on slot B, classify
+the result from the display, and use manual fastboot only after the candidate
+has stopped. A detached host supervisor then restores and verifies R6/A.
+
+D39 was reproduced unchanged with the original R6/B transaction, seven slot
+retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint
+from entry 69 to entry 66 and also held at the fixed logo for 110 seconds. D41
+changes only the checkpoint to entry 33; it reset repeatedly, exhausted the
+slot-B attempts, and selected the working R6 image on slot A. The valid
+unresolved range was therefore `subsys` entries 34-66. D42 held at the fixed
+logo and did not reach its checkpoint after entry 49, narrowing that range to
+entries 34-49. D43 reached its checkpoint after entry 41 and automatically
+fell back to R6 on slot A, narrowing the range to entries 42-49. The search now
+advances sequentially: D44 also reached its checkpoint after entry 42 and
+returned through R6/A. D45, D46, and D47 then reached entries 43, 44, and 45.
+D47 and D48 were restored directly to R6/B by the prearmed watcher, proving
+entries 45 and 46 return. D49 then fell back to R6/A after entry 47 and was
+recovered through software fastboot. D50 then proved entry 48 returns. Combined
+with D42, this isolates entry 49, `raid6_select_algo`; no redundant blocking
+test was launched while the phone was unattended.
+The intervening one-try experiments are superseded because they
+reached the red failure screen with slot B already at retry count zero and do
+not prove checkpoint execution.
 
 Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
 baseline and three negative mainline handoff results. D1 AVB

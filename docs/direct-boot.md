@@ -366,7 +366,23 @@ seconds.
 | D36 | Observed: forced no-SMP reaches reset after initcall level 3 | Reproduced the slot-B reset loop, proving levels 0-3 (`pure` through `arch`) return and selecting levels 4-7 as the unresolved half. |
 | D37 | Observed: no forced no-SMP reset after initcall level 5 | Held the fixed OnePlus logo, selecting levels 4-5 (`subsys`/`fs`) as the unresolved interval. |
 | D38 | Observed: no forced no-SMP reset after initcall level 4 | Held the fixed OnePlus logo, identifying level 4 (`subsys`) as the failing level. R6 found no pstore files because its effective ramoops sub-buffer sizes differed from the mainline DTB. |
-| D39 | Prepared: forced no-SMP reset after subsys entry 69 of 138 | Bisects the failing level and changes only the DTB ramoops sub-buffer sizes to match the effective R6 layout, allowing rollback-side pstore collection. |
+| D39 | Reproduced: no forced no-SMP reset after subsys entry 69 of 138 | Held the fixed OnePlus logo for 90 seconds under the original R6/B workflow, establishing that the blocking initcall is within entries 1-69. |
+| D40 | Observed: no forced no-SMP reset after subsys entry 66 | Held the fixed OnePlus logo for 110 seconds under the same R6/B workflow, narrowing the valid unresolved range to entries 1-66. |
+| D41 | Observed: forced no-SMP reset after subsys entry 33 | Repeated resets exhausted the slot-B attempts and selected R6 on slot A. This proves entries 1-33 return under the reproduced D39 workflow and narrows the valid unresolved range to entries 34-66. |
+| D42 | Observed: no forced no-SMP reset after subsys entry 49 | Held the fixed OnePlus logo for 120 seconds without USB under the same R6/B workflow, narrowing the valid unresolved range to entries 34-49. |
+| D43 | Observed: forced no-SMP reset after subsys entry 41 | Repeated resets were visible on camera before the bootloader selected R6 on slot A. This narrows the valid unresolved range to entries 42-49. |
+| D44 | Observed: forced no-SMP reset after subsys entry 42 | Repeated resets were visible on camera before R6/A started, proving entry 42 returns and narrowing the range to entries 43-49. |
+| D45 | Observed: forced no-SMP reset after subsys entry 43 | Repeated resets were visible on camera before R6/A started, proving entry 43 returns and narrowing the range to entries 44-49. |
+| D46 | Observed: forced no-SMP reset after subsys entry 44 | Repeated resets were visible on camera before R6/A started, proving entry 44 returns and narrowing the range to entries 45-49. |
+| D47 | Observed: forced no-SMP reset after subsys entry 45 | Kernel output was visible, the checkpoint reset fired, and a prearmed watcher restored R6 directly on slot B. This proves entry 45 returns and narrows the range to entries 46-49. |
+| D48 | Observed: forced no-SMP reset after subsys entry 46 | Kernel output was visible and the watcher restored R6 directly on slot B. This proves entry 46 returns and narrows the range to entries 47-49. |
+| D49 | Observed: forced no-SMP reset after subsys entry 47 | Kernel output was visible, then firmware fell back to R6 on slot A. Software `RESTART2(bootloader)` let the prearmed watcher restore R6/B. This proves entry 47 returns and narrows the range to entries 48-49. |
+| D50 | Observed: forced no-SMP reset after subsys entry 48 | Kernel output was visible and the watcher restored R6 directly on slot B. This proves entry 48 returns. Combined with D42, it isolates entry 49, `raid6_select_algo`, as the first blocker. |
+| RAID6 no-benchmark | Prepared, not flashed | Keeps RAID6 enabled, disables only `CONFIG_RAID6_PQ_BENCHMARK`, and retains the checkpoint after entry 49. The AVB image is verified and waits for a supervised test. |
+| Superseded watchdog control | Observed: arm APSS watchdog in MMU-off `primary_entry` | Reset after the programmed 20-second timeout. This proves the physical APSS watchdog works, but does not locate initcall progress. |
+| PON control | Observed through the validated K1 kexec path | PM8150 PON probed with `mode-bootloader = <2>`; `RESTART2(bootloader)` returned directly to host-visible fastboot. |
+| Superseded early-PON series | Negative recovery result | The later PON variants did not expose fastboot without manual recovery. Their one-try slot workflow cannot locate kernel progress. |
+| Superseded one-try series | Invalidated initcall evidence | Former D40-D52 candidates reached the red failure screen with slot B at retry count zero. That state can occur independently of checkpoint execution. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
 | D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
@@ -411,8 +427,29 @@ immediately before `do_initcalls()`, proving the preamble returns. D36 reaches
 its checkpoint after level 3 (`arch`), proving levels 0-3 return. D37 does not
 reach its checkpoint after level 5 (`fs`), limiting the hang to levels 4-5.
 D38 does not reach its checkpoint after level 4 and therefore identifies
-`subsys`. D39 bisects its 138 entries at 69 and aligns the ramoops sub-buffer
-layout with R6 for persistent trace recovery. R6 plus stock
+`subsys`. D39 was reproduced unchanged and does not reach its checkpoint after
+entry 69. Rebased D40 uses the same R6/B transaction and also does not reach a
+checkpoint after entry 66, narrowing the unresolved range to entries 1-66.
+D41 reaches the checkpoint after entry 33; its repeated resets exhaust the
+slot-B attempts and select R6 on slot A, narrowing the unresolved range to
+entries 34-66. D42 does not reach the checkpoint after entry 49, narrowing the
+range to entries 34-49. D43 reaches the checkpoint after entry 41 and falls
+back to R6 on slot A, narrowing the range to entries 42-49. D44 starts an
+ascending checkpoint search. D44 reaches the checkpoint after entry 42, so
+D45-D50 reach entries 43-48. D42 did not reach the checkpoint after entry 49,
+so entry 49, `raid6_select_algo`, is the first blocker. No redundant after-49
+control was launched while the phone was unattended. The function benchmarks
+RAID6 implementations by waiting for `jiffies` to advance, and the tested
+configuration enables `CONFIG_RAID6_PQ_BENCHMARK`; disabling only that benchmark
+is the next prepared hypothesis. The superseded one-try GPT
+series reached the red failure screen with slot B already at retry count zero;
+its apparent checkpoint results remain invalidated. A separate probe established a reliable
+physical timeout from the MMU-off entry path. Retry exhaustion is not a rescue
+mechanism on the tested ABL: slot B remained current at retry count zero and
+firmware stopped at the red failure screen instead of selecting successful
+slot A. A mainline kexec control proved that PM8150 PON bootloader mode does
+return directly to fastboot. D46-D48 did not reproduce that selection early
+enough for direct-boot recovery, so those probes are deferred. R6 plus stock
 DTBO replaces R5 plus D7 as the rollback target so a slow downstream boot
 cannot be killed by the vendor watchdog. Keep the package-built control
 deferred until the early checkpoint ladder identifies D9's first failing stage.
@@ -446,12 +483,11 @@ and the pinned launcher restores it whenever the recovery path appears.
 
 The historical K1-compatible Qualcomm watchdog module was validated after
 mainline userspace, but that result does not validate the r4 or D1-wdt built-in
-driver.
-`RESTART2(bootloader)` still falls back to normal boot with the observed
-`cf63ae...` DTB, which lacks the PON boot-mode mapping. The D1 and D1-pack
-cycles demonstrated that the prearmed watcher can restore R5 when fastboot
-returns. D2 and later persistent controls continue to depend on this recovery
-path rather than on mainline rebooting itself cleanly into fastboot.
+driver. A later K1 kexec control with the PM8150 PON bootloader mapping proved
+that `RESTART2(bootloader)` can return directly to fastboot. This property is
+not yet part of the publishable package DTB. Direct-boot recovery must not rely
+on A/B retry exhaustion: the tested ABL kept the failed B slot active at retry
+count zero and stopped at the red failure screen.
 
 ## Completion criteria
 

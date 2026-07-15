@@ -1,0 +1,4 @@
+# raid6_select_algo() benchmarks against jiffies during subsys init. Direct
+# boot currently reaches that initcall before a usable tick is observed.
+# Keep RAID6 itself enabled and skip only the boot-time benchmark.
+# CONFIG_RAID6_PQ_BENCHMARK is not set
