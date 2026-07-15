@@ -78,7 +78,7 @@ watchdog/breadcrumb instrumentation.
 |---|---|
 | Hardware-tested patch snapshot | `82982736ffd52690cc747887e1bfd5de416a30d804b96efa6947171396fde9b2` |
 | Hardware-tested early-stage patch | `86891ac59e252a8aa0fd9976be313ee5b4235d329eab28ee3adac64900057c08` |
-| Current tracked initcall patch | `dbdde00015965904ca7fcd0b733b8c585fe8eb44729fa3fc90dbcc6ac8003b66` |
+| Current tracked diagnostic patch | `fc260de080e3e769dfa570ca634bd6e55eedaf3f7cd943158636aa0041120206` |
 | Final `.config` | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
 | Original prepared Image | `80c9a8457661aad5bb3d4354462cdb76a212f94fb9e4fd946f73c68a65e16261` |
 | Clean rebuild Image with a fresh CPIO | `4354cb544eaee32b733d074b39665bb91709b9901ae2c73f00f628555db989ed` |
@@ -191,7 +191,7 @@ returning initcall and disarmed only after all levels complete.
 
 | Item | Value |
 |---|---|
-| Source patch SHA256 | `dbdde00015965904ca7fcd0b733b8c585fe8eb44729fa3fc90dbcc6ac8003b66` |
+| Source patch snapshot SHA256 | `dbdde00015965904ca7fcd0b733b8c585fe8eb44729fa3fc90dbcc6ac8003b66` |
 | Final `.config` SHA256 | `03e6c62565ebb2c743204086b2cfb058ee4b7f1ea6d0773bb67ff022d5cbb561` |
 | Breadcrumb format | version 2 |
 | Kernel Image SHA256 | `e372480a634412f0f9ab150eff48b5a8cf5eff7691eaf70b3013b4c0dee60051` |
@@ -272,13 +272,40 @@ format-v2 hardware test.
 
 | Item | Value |
 |---|---|
-| Source patch SHA256 | `dbdde00015965904ca7fcd0b733b8c585fe8eb44729fa3fc90dbcc6ac8003b66` |
+| Source patch snapshot SHA256 | `dbdde00015965904ca7fcd0b733b8c585fe8eb44729fa3fc90dbcc6ac8003b66` |
 | Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
 | Kernel Image SHA256 | `6c42fd0a8fd71c89d66ed399c3a8113f91e98e69e230cdeb68ef96b4de93e453` |
 | Cmdline SHA256 | `e72379faaf011ea3cacca4202a625dc8839ac32187a6b59c8c1784f1d02cc960` |
 | Raw boot image SHA256 | `a1dd3f84bfe264c1c98a7a78a35feb8304722de211b5ff31985d3c13725b74f5` |
 | AVB boot image SHA256 | `fb79f45c8a4e57dc05da5ee66725df568cd1e7981794328f8deac79bf6fc231f` |
 | Breadcrumb physical address | `0x81c0f800` |
+
+### Prepared system-counter handoff test
+
+The two independently observed direct-boot stalls wait on different kernel
+time interfaces: RAID6 waits on `jiffies`, while XOR waits on `ktime_get()`.
+The same Linux 6.17 payload advances normally after kexec. This motivates, but
+does not yet prove, the hypothesis that the direct ABL handoff leaves the
+SM8150 system counter disabled.
+
+The next candidate sets `CNTCR.EN` at the architected SM8150 control base
+`0x17c20000` before enabling the MMU. Breadcrumb format 3 preserves `CNTCR`
+and `CNTVCT_EL0` values from immediately before and after that write, while
+retaining the guarded per-initcall record. A fixed-iteration delay makes the
+counter delta meaningful without depending on the timer being functional.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `fc260de080e3e769dfa570ca634bd6e55eedaf3f7cd943158636aa0041120206` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `9deab9853de910eff797411ac8be07272f09041f7d4d15f638bd6c080858a5c5` |
+| Raw boot image SHA256 | `534876896c13530f45491491d6792139aff8c0f1ae11a43b85881f78185e334a` |
+| AVB boot image SHA256 | `b1210988b470ae0f8595f035b4d5d7c561b4e5fb18f9158532a93bef86a80f5e` |
+| Breadcrumb format | version 3, 80-byte Sahara read |
+| Breadcrumb physical address | `0x81c0f800` |
+
+Payload hashes, extracted component comparison, patch reverse-application,
+and AVB verification passed. Hardware validation is pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 

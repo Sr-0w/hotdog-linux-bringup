@@ -59,6 +59,29 @@ def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
             ),
         }
     )
+    if version < 3:
+        return decoded
+    if len(data) < 0x48:
+        raise ValueError("version-3 early breadcrumb is shorter than 72 bytes")
+
+    counter_control_before, counter_control_after = struct.unpack_from(
+        "<II", data, 0x30
+    )
+    virtual_counter_before, virtual_counter_after = struct.unpack_from(
+        "<QQ", data, 0x38
+    )
+    decoded.update(
+        {
+            "counter_control_before": counter_control_before,
+            "counter_control_after": counter_control_after,
+            "virtual_counter_before": virtual_counter_before,
+            "virtual_counter_after": virtual_counter_after,
+            "virtual_counter_delta": (
+                virtual_counter_after - virtual_counter_before
+            )
+            & 0xFFFFFFFFFFFFFFFF,
+        }
+    )
     return decoded
 
 
@@ -154,7 +177,7 @@ def main() -> int:
         print(f"restart_reason=0x{struct.unpack('<I', restart_reason)[0]:08x}")
 
         if args.early_breadcrumb_address is not None:
-            early = protocol.read_memory(args.early_breadcrumb_address, 0x40)
+            early = protocol.read_memory(args.early_breadcrumb_address, 0x50)
             print(
                 "early_breadcrumb_address="
                 f"0x{args.early_breadcrumb_address:016x}"
@@ -169,6 +192,10 @@ def main() -> int:
                 if field == "magic":
                     print(f"early_breadcrumb_magic=0x{value:08x}")
                 elif field == "initcall_address":
+                    print(f"early_breadcrumb_{field}=0x{value:016x}")
+                elif field.startswith("counter_control"):
+                    print(f"early_breadcrumb_{field}=0x{value:08x}")
+                elif field.startswith("virtual_counter"):
                     print(f"early_breadcrumb_{field}=0x{value:016x}")
                 else:
                     print(f"early_breadcrumb_{field}={value}")
