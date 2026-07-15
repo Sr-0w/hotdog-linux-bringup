@@ -60,3 +60,34 @@ timer-tick problem, but does not independently prove that root cause.
 The configuration workaround is hardware-validated. A normal direct mainline
 userspace boot and the complete r5 package payload remain separate validation
 targets.
+
+## Persistent initcall trace
+
+A later Image-resident trace removed the fixed checkpoint and persisted each
+initcall boundary in memory that Sahara can read after Qualcomm `900e`. It
+reached global initcall 524, level 6, at runtime address
+`0xffffffc0817ff264`. PREL32 resolution with the measured `0x80000` KASLR
+slide identifies `calibrate_xor_blocks()` in `crypto/xor.c`.
+
+That function waits for `ktime_get()` to change before benchmarking. Together
+with the earlier RAID6 loop waiting for `jiffies`, this is strong evidence that
+the direct path lacks advancing kernel time; it does not yet prove why. A
+command-line `initcall_blacklist` experiment reached the same function, so it
+is not used as a recovery mechanism.
+
+The prepared follow-up keeps both benchmark bypasses and tests the narrower
+hardware hypothesis that `CNTCR.EN` is clear on the direct ABL handoff. It
+records `CNTCR` and `CNTVCT_EL0` before and after setting the enable bit:
+
+| Item | Value |
+|---|---|
+| Boot image | `2026-07-15-225249-mainline617-direct-system-counter-enable/boot.img` |
+| Boot image SHA256 | `b1210988b470ae0f8595f035b4d5d7c561b4e5fb18f9158532a93bef86a80f5e` |
+| Kernel Image SHA256 | `9deab9853de910eff797411ac8be07272f09041f7d4d15f638bd6c080858a5c5` |
+| Breadcrumb format | version 3, 80 bytes |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The image passed payload comparison, SHA256 verification, and AVB footer/hash
+verification. It is prepared but not yet hardware-validated; the counter
+hypothesis must remain classified as unproven until the next Sahara record or
+a successful direct boot confirms it.
