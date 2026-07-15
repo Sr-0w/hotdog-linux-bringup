@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | `subsys` initcalls under diagnosis | D38 proves the hang is in level 4 (`subsys`). D39 bisects its 138 entries at 69 and aligns mainline ramoops with R6 so the last initcall trace can survive rollback. |
+| Persistent direct boot | First blocker: subsys entry 49 | D42 held the fixed logo and did not reach entry 49. D43-D50 reached their resets through entry 48. The first blocking initcall is therefore `raid6_select_algo`; a redundant unattended after-49 test was intentionally not launched. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -44,7 +44,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
 | Reboot | Historical module result; r4 untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r4 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
-| Reboot mode | Staging patch only, not hardware-validated | The observed `cf63ae...` DTB and the r4 K1 package do not include PON reboot-mode properties. The separate SM8150 staging patch adds `mode-bootloader = <2>` and `mode-recovery = <1>` and has offline `fdtget` evidence only. This does not prove RESTART2 fastboot works. |
+| Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
 | Firmware packages | Packaging complete, runtime not validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads, all under `/usr/lib/firmware`. This proves package layout, not peripheral operation or redistribution approval. |
 | Wi-Fi/Bluetooth | Not validated | The usrmerged firmware packages exist; runtime loading, enumeration, and connectivity remain pending. |
@@ -154,14 +154,44 @@ Display support can then be developed without losing the remote debug channel.
 33. Keep D35 as proof that `cpuset_init_smp()`, `driver_init()`,
    `init_irq_proc()`, and `do_ctors()` return before `do_initcalls()`.
 34. Keep D36 as proof that initcall levels 0-3 (`pure` through `arch`) return.
-35. Keep D37 as the upper bound: its checkpoint after level 5 (`fs`) was not
-   reached, limiting the hang to levels 4-5.
-36. Keep D38 as proof that the hang is inside level 4 (`subsys`).
-37. Test D39 after subsys entry 69 of 138 and collect the R6-compatible ramoops
-   console after rollback. A reset selects entries 70-138; no reset selects
-   entries 1-69, while pstore should identify the last function reached.
-38. Defer the r4 package-generated direct image until a direct handoff baseline
+35. Keep D37 as the historical upper bound: its checkpoint after level 5
+   (`fs`) was not reached.
+36. Keep D38 and reproduced D39 as proof selecting `subsys` entries 1-69.
+37. Keep rebased D40 as the valid upper bound: its checkpoint after entry 66
+   was not reached under the same R6/B workflow.
+38. Keep D41 as the valid lower bound: its checkpoint after entry 33 reset the
+   phone until the bootloader selected R6 on slot A. The unresolved interval is
+   entries 34-66.
+39. Keep D45 as proof that the pre-MMU APSS watchdog is functional. Its
+   20-second timeout reset the handset, after which ABL displayed the red
+   failure screen.
+40. Do not use A/B retry exhaustion as unattended recovery on the tested ABL.
+   Slot B remained selected at retry count zero despite successful slot A.
+41. Keep the kexec PON control as hardware evidence that PM8150
+   `mode-bootloader = <2>` plus `RESTART2(bootloader)` returns to fastboot.
+42. Treat the superseded early-PON series only as negative recovery experiments;
+   none exposed host-visible fastboot without a manual reset.
+43. Invalidate the superseded one-try D40-D52 series as initcall evidence.
+44. Defer the r4 package-generated direct image until a direct handoff baseline
    works. Record its kernel, installed DTB, raw-image, and AVB hashes without
    reusing the historical r0 identity.
-39. After a direct mainline entry succeeds, test the hotdog-only PON reboot-mode
-   properties and verify RESTART2 bootloader and recovery selection.
+45. After direct boot reaches userspace, integrate the validated PON property
+   in the pmaports DTB and separately verify recovery-mode selection.
+46. Keep D42 as the valid upper bound: its checkpoint after entry 49 was not
+   reached, narrowing the unresolved interval to entries 34-49.
+47. Keep D43 as the valid lower bound: its checkpoint after entry 41 reset the
+   phone until the bootloader selected R6 on slot A. The unresolved interval is
+   entries 42-49.
+48. Starting with D44 after entry 42, test the remaining entries in ascending
+   order while reset-loop candidates can fall back to R6/A unattended.
+49. Keep D44 as proof that entry 42 returns; continue with D45 after entry 43.
+50. Keep D45 as proof that entry 43 returns; continue with D46 after entry 44.
+51. Keep D46 as proof that entry 44 returns; continue with D47 after entry 45.
+52. Keep D47 as proof that entry 45 returns; continue with D48 after entry 46.
+53. Keep D48 as proof that entry 46 returns; continue with D49 after entry 47.
+54. Keep D49 as proof that entry 47 returns; continue with D50 after entry 48.
+55. Keep D50 as proof that entry 48 returns. Together with D42, this isolates
+   entry 49, `raid6_select_algo`. Test with `CONFIG_RAID6_PQ_BENCHMARK=n`
+   before advancing the checkpoint; do not run the blocking control unattended.
+56. The no-benchmark after-49 candidate is built and AVB-verified, but remains
+   deliberately unflashed until physical recovery is available.

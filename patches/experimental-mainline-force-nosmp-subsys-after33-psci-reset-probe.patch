@@ -1,0 +1,84 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 13 Jul 2026 00:00:00 +0000
+Subject: [PATCH] init: hotdog: reset after subsys entry 33
+
+Force setup_max_cpus to zero before secondary CPU bring-up, then request PSCI
+SYSTEM_RESET after subsys initcall 33 of 138 has returned. This bisects the
+valid entries 1-66 interval established by the D39/D40 R6/B workflow.
+
+Do not ship this patch in a normal kernel.
+---
+ init/main.c  | 18 +++++++++++++++++-
+ kernel/smp.c |  1 +
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/init/main.c b/init/main.c
+index 5753e9539..f1730e2c2 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -29,6 +29,7 @@
+ #include <linux/initrd.h>
+ #include <linux/memblock.h>
+ #include <linux/acpi.h>
++#include <linux/arm-smccc.h>
+ #include <linux/bootconfig.h>
+ #include <linux/console.h>
+ #include <linux/nmi.h>
+@@ -102,6 +103,7 @@
+ #include <linux/stackdepot.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/pidfs.h>
++#include <uapi/linux/psci.h>
+ #include <linux/ptdump.h>
+ #include <net/net_namespace.h>
+ 
+@@ -1316,9 +1318,12 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+ 	return 0;
+ }
+ 
++static __init __noreturn void hotdog_subsys_after33_reset(void);
++
+ static void __init do_initcall_level(int level, char *command_line)
+ {
+ 	initcall_entry_t *fn;
++	unsigned int initcall_index = 0;
+ 
+ 	parse_args(initcall_level_names[level],
+ 		   command_line, __start___param,
+@@ -1327,8 +1332,20 @@ static void __init do_initcall_level(int level, char *command_line)
+ 		   NULL, ignore_unknown_bootoption);
+ 
+ 	do_trace_initcall_level(initcall_level_names[level]);
+-	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
++	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
+ 		do_one_initcall(initcall_from_entry(fn));
++		if (level == 4 && ++initcall_index == 33)
++			hotdog_subsys_after33_reset();
++	}
++}
++
++static __init __noreturn void hotdog_subsys_after33_reset(void)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0, 0, 0, 0, 0, &res);
++	for (;;)
++		asm volatile("wfe");
+ }
+ 
+ static void __init do_initcalls(void)
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 56f83aa58..fe4785767 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -999,6 +999,7 @@ void __init smp_init(void)
+ 
+ 	pr_info("Bringing up secondary CPUs ...\n");
+ 
++	setup_max_cpus = 0;
+ 	bringup_nonboot_cpus(setup_max_cpus);
+ 
+ 	num_nodes = num_online_nodes();
+-- 
+2.53.0

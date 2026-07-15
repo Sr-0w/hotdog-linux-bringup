@@ -66,6 +66,13 @@ Before a risky boot:
 The main wrappers use `logs/phone-operation.lock` to serialize device writes.
 Do not delete a live lock to force concurrent flashing operations.
 
+Do not assume A/B retry exhaustion will select a successful alternate slot.
+On the tested OnePlus bootloader, slot B remained current at retry count zero
+and firmware stopped at the red failure screen. An unattended direct-boot test
+needs an independently validated reboot-to-fastboot mechanism; the current
+experimental path combines a pre-MMU APSS watchdog with PM8150 PON bootloader
+mode selection.
+
 ## Reporting a failed test
 
 Include:
