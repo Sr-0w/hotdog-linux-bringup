@@ -87,6 +87,20 @@ whether a logically disabled port still supplies VBUS. Every direct candidate
 that may stall before USB initialization must therefore arm a hardware reset
 path before the first unbounded operation.
 
+On the reference host, the tested HD1913 remained at a fixed boot logo after
+all available host-side recovery controls were exercised: logical disable and
+reenable of the paired USB2/USB3 ports, an xHCI PCI-function reset, and a full
+unbind/rebind of the dedicated xHCI controller. The controller re-enumerated
+its other devices, but the phone produced no USB event and its display did not
+change. This distinguishes a target-side USB PHY that never initialized from a
+stale host-controller association.
+
+For unattended development, add an electrically isolated relay or actuator
+that can reproduce the device's verified `Volume Up + Power` hard-reset
+combination. Control both button contacts independently and keep the normal
+USB data link separate. A remotely switched USB hub or VBUS relay alone is not
+a substitute: the handset remains powered by its battery when VBUS disappears.
+
 If the candidate can still reach postmarketOS USB networking, a second watcher
 can validate its exact kernel and command line before requesting fastboot:
 
