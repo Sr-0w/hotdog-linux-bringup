@@ -22,6 +22,7 @@ BOOT_WAIT_SEC="${BOOT_WAIT_SEC:-420}"
 LOCK_WAIT_SEC="${LOCK_WAIT_SEC:-0}"
 DISABLE_BRIDGE_WATCHDOG=1
 BRIDGE_WATCHDOG_DISABLE_PATH="${BRIDGE_WATCHDOG_DISABLE_PATH:-/sys/devices/platform/soc/17c10000.qcom,wdt/disable}"
+APSS_WDT_CONTROL="${APSS_WDT_CONTROL:-$HOTDOG_ROOT/build/tools/hotdog-apss-wdt-control/hotdog-apss-wdt-control}"
 CAPTURE_MAINLINE_ACM=0
 ACM_COLLECTOR="$HOTDOG_ROOT/scripts/collect-mainline-acm-window.sh"
 ACM_COLLECTOR_PID=""
@@ -309,6 +310,7 @@ start_rescue_watcher() {
 disable_bridge_watchdog() {
   local remote_script=""
   local result=""
+  local remote_tool="$REMOTE_DIR/hotdog-apss-wdt-control"
 
   if [ "$DISABLE_BRIDGE_WATCHDOG" -ne 1 ]; then
     log "Leaving the downstream Qualcomm watchdog enabled by request"
@@ -316,7 +318,7 @@ disable_bridge_watchdog() {
   fi
 
   remote_script="path=$(remote_quote "$BRIDGE_WATCHDOG_DISABLE_PATH")
-[ -r \"\$path\" ] && [ -w \"\$path\" ] || { echo \"watchdog control unavailable: \$path\" >&2; exit 1; }
+[ -r \"\$path\" ] && [ -w \"\$path\" ] || exit 42
 before=\$(cat \"\$path\")
 printf '1\\n' > \"\$path\"
 after=\$(cat \"\$path\")
@@ -324,9 +326,19 @@ printf 'path=%s\\nbefore=%s\\nafter=%s\\n' \"\$path\" \"\$before\" \"\$after\"
 [ \"\$after\" = 1 ]"
 
   log "Disabling the downstream Qualcomm watchdog before kexec"
-  result="$(remote_run "sudo -n sh -c $(remote_quote "$remote_script")")" ||
-    die "Could not disable the downstream Qualcomm watchdog; refusing an inherited-watchdog kexec" 3
-  printf '%s\n' "$result" | tee "$run_dir/bridge-watchdog-disable.txt"
+  if result="$(remote_run "sudo -n sh -c $(remote_quote "$remote_script")")"; then
+    printf '%s\n' "$result" | tee "$run_dir/bridge-watchdog-disable.txt"
+    return 0
+  fi
+
+  [ -s "$APSS_WDT_CONTROL" ] ||
+    die "Watchdog sysfs is unavailable and MMIO helper is missing: $APSS_WDT_CONTROL" 3
+  upload_and_verify "APSS watchdog MMIO helper" "$APSS_WDT_CONTROL" "$remote_tool"
+  remote_run "chmod 700 $(remote_quote "$remote_tool")"
+  result="$(remote_run "sudo -n $(remote_quote "$remote_tool") --disable")" ||
+    die "Could not disable the downstream Qualcomm watchdog through sysfs or MMIO" 3
+  printf 'fallback=apss-mmio\n%s\n' "$result" |
+    tee "$run_dir/bridge-watchdog-disable.txt"
 }
 
 remote_boot_id() {

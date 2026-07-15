@@ -10,10 +10,14 @@ The historical r0 evidence proves that the K1 kernel package path can build.
 The intermediate r3 double-build evidence confirms identical transformed DTB,
 modules, and `modules.builtin`, but not byte-identical APK or `vmlinuz` output:
 the latter differs by 29 bytes from the GNU build ID and three initramfs CPIO
-mtimes, while `.PKGINFO` build dates vary. The current r4 fixes
+mtimes, while `.PKGINFO` build dates vary. Revision r4 fixes
 `SOURCE_DATE_EPOCH=1761609785`; two builds in the tested pmbootstrap environment
 produced byte-identical `27,172,035`-byte APKs with SHA256
 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`.
+The current r5 inherits that reproducibility control and disables the RAID6
+benchmark after a hardware checkpoint validated that config workaround. One r5
+build produced a `27,172,103`-byte APK with SHA256
+`f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`.
 This does not prove cross-toolchain reproducibility, hardware equivalence, a
 clean standard pmaports submission build, or direct boot of the
 package-generated image. See the
@@ -31,7 +35,7 @@ Relevant pmaports policy references are:
 - *kconfigcheck*, section "Enabling the config checks";
 - *Approval Rules*, section "Testing requirements".
 
-## Confirmed blockers on 2026-07-12
+## Confirmed blockers on 2026-07-15
 
 The current package set is a bring-up workspace, not a submission-ready pmaports
 branch. The confirmed blockers are:

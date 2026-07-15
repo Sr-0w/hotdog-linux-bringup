@@ -22,11 +22,11 @@ same payload to Linux correctly.
 
 The kernel tree is based on commit
 `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`. The payload hashes are the
-historical experiment identity. The current r4 package builds offline with a
-built-in Qualcomm watchdog and installs the transformed `cf63ae...` DTB. Two
-builds are byte-identical in the tested pmbootstrap environment, but the r4
-payload has not been tested on hardware and no cross-toolchain reproducibility
-claim is made.
+historical experiment identity. The current r5 package builds offline with a
+built-in Qualcomm watchdog, disables the RAID6 benchmark, and installs the
+transformed `cf63ae...` DTB. The RAID6 delta is checkpoint-tested on hardware,
+but the complete r5 payload has not been booted. Revision r4 remains the latest
+double-build reproducibility evidence; no cross-toolchain claim is made.
 
 The source and generation path is:
 
@@ -80,9 +80,9 @@ its AVB copy SHA256 is
 It has not been tested on hardware.
 
 This standalone debug payload is distinct from the package path. The debug
-payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the current r4 package keeps
-that option disabled and changes only `CONFIG_QCOM_WDT=m` to
-`CONFIG_QCOM_WDT=y` relative to the historical K1 config.
+payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the current r5 package keeps
+that option disabled, changes `CONFIG_QCOM_WDT=m` to `CONFIG_QCOM_WDT=y`, and
+disables `CONFIG_RAID6_PQ_BENCHMARK` relative to the historical K1 config.
 
 An additional control uses the same watchdog config with the unmodified
 upstream EFI-compatible ARM64 header. Its Image SHA256 is
@@ -210,7 +210,7 @@ Across two r3 builds, the DTB, modules, and `modules.builtin` are identical,
 while the APK metadata varies and `vmlinuz` differs by 29 bytes from the GNU
 build ID and three initramfs CPIO mtimes. r3 is therefore not byte-reproducible.
 
-The current r4 fixes the archive epoch at `1761609785`. Two builds in the
+Revision r4 fixes the archive epoch at `1761609785`. Two builds in the
 tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs,
 SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`.
 Their `28,901,384`-byte `boot/vmlinuz` has SHA256
@@ -220,9 +220,10 @@ and their installed hotdog DTB has SHA256
 The exact payload inventory is recorded in
 [the K1 package evidence](evidence/k1-kernel-package.md). This proves
 same-environment package reproducibility only, not hardware behavior or
-cross-toolchain reproducibility. A distinct r4 direct-boot candidate and its
-raw-image and AVB hashes remain to be recorded; none of the r0 hashes above
-identify r3 or r4.
+cross-toolchain reproducibility. Revision r5 inherits the pinned epoch and
+adds the hardware-validated RAID6 benchmark delta. Its first package build is
+recorded in the same evidence document; a full r5 direct-boot image remains to
+be generated and tested.
 
 ## DTB-pack control
 
@@ -378,13 +379,13 @@ seconds.
 | D48 | Observed: forced no-SMP reset after subsys entry 46 | Kernel output was visible and the watcher restored R6 directly on slot B. This proves entry 46 returns and narrows the range to entries 47-49. |
 | D49 | Observed: forced no-SMP reset after subsys entry 47 | Kernel output was visible, then firmware fell back to R6 on slot A. Software `RESTART2(bootloader)` let the prearmed watcher restore R6/B. This proves entry 47 returns and narrows the range to entries 48-49. |
 | D50 | Observed: forced no-SMP reset after subsys entry 48 | Kernel output was visible and the watcher restored R6 directly on slot B. This proves entry 48 returns. Combined with D42, it isolates entry 49, `raid6_select_algo`, as the first blocker. |
-| RAID6 no-benchmark | Prepared, not flashed | Keeps RAID6 enabled, disables only `CONFIG_RAID6_PQ_BENCHMARK`, and retains the checkpoint after entry 49. The AVB image is verified and waits for a supervised test. |
+| RAID6 no-benchmark | Observed: forced no-SMP reset after subsys entry 49 | Kept `CONFIG_RAID6_PQ=y`, disabled only `CONFIG_RAID6_PQ_BENCHMARK`, reached the checkpoint after `raid6_select_algo`, and reset automatically into R6/A. Software fastboot then let the prearmed watcher restore exact R6/B and stock `dtbo_b`. |
 | Superseded watchdog control | Observed: arm APSS watchdog in MMU-off `primary_entry` | Reset after the programmed 20-second timeout. This proves the physical APSS watchdog works, but does not locate initcall progress. |
 | PON control | Observed through the validated K1 kexec path | PM8150 PON probed with `mode-bootloader = <2>`; `RESTART2(bootloader)` returned directly to host-visible fastboot. |
 | Superseded early-PON series | Negative recovery result | The later PON variants did not expose fastboot without manual recovery. Their one-try slot workflow cannot locate kernel progress. |
 | Superseded one-try series | Invalidated initcall evidence | Former D40-D52 candidates reached the red failure screen with slot B at retry count zero. That state can occur independently of checkpoint execution. |
 | D1-wdt | Superseded by D3-wdt | Testing the watchdog kernel with stock DTBO would reintroduce the known overlay mismatch. |
-| D1-pkg | Deferred until a direct handoff works: use the hash-recorded r4 package kernel and installed DTB | Does the pmaports-built payload reproduce a successful direct baseline? |
+| D1-pkg | Next package control: use the hash-recorded r5 kernel and installed DTB | Does the pmaports-built payload continue past the validated RAID6 checkpoint and enter normal userspace? |
 | D4 | Test an alternate non-overlapping kernel placement | Is the bootloader entry address wrong? |
 
 D1 through D4-entry have recorded negative results. The R5 + no-op DTBO
@@ -437,11 +438,12 @@ range to entries 34-49. D43 reaches the checkpoint after entry 41 and falls
 back to R6 on slot A, narrowing the range to entries 42-49. D44 starts an
 ascending checkpoint search. D44 reaches the checkpoint after entry 42, so
 D45-D50 reach entries 43-48. D42 did not reach the checkpoint after entry 49,
-so entry 49, `raid6_select_algo`, is the first blocker. No redundant after-49
-control was launched while the phone was unattended. The function benchmarks
-RAID6 implementations by waiting for `jiffies` to advance, and the tested
-configuration enables `CONFIG_RAID6_PQ_BENCHMARK`; disabling only that benchmark
-is the next prepared hypothesis. The superseded one-try GPT
+so entry 49, `raid6_select_algo`, is the first blocker. The function benchmarks
+RAID6 implementations by waiting for `jiffies` to advance. A supervised
+candidate kept RAID6 enabled, disabled only `CONFIG_RAID6_PQ_BENCHMARK`, reached
+the checkpoint after entry 49, and reset into R6/A. This validates the bypass
+and is compatible with a stalled early timer tick, but does not yet prove the
+timer root cause. The superseded one-try GPT
 series reached the red failure screen with slot B already at retry count zero;
 its apparent checkpoint results remain invalidated. A separate probe established a reliable
 physical timeout from the MMU-off entry path. Retry exhaustion is not a rescue

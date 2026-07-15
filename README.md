@@ -14,7 +14,8 @@ it as HD1911 and expose the `hotdog` project/codename.
 
 Linux 6.17 now reaches the installed postmarketOS root filesystem on real
 hardware. The validated path boots a downstream 4.14 kernel first and uses it
-as a kexec bridge into the exact K1 Linux 6.17 payload.
+as a kexec bridge into the exact K1 Linux 6.17 payload. Direct boot from the
+OnePlus bootloader remains under active bring-up.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -25,8 +26,8 @@ as a kexec bridge into the exact K1 Linux 6.17 payload.
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
-| K1 package | Current r4 build evidence, hardware untested | Two builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. r4 installs the transformed `cf63ae...` DTB and uses `CONFIG_QCOM_WDT=y`; this is not hardware or cross-toolchain reproducibility evidence. |
-| Persistent direct mainline | First blocking initcall isolated | D50 reached its reset after `subsys` entry 48, while D42 did not reach entry 49. The first blocking entry is therefore 49, `raid6_select_algo`. |
+| K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
+| Persistent direct mainline | Second blocker remains | D50 isolated entry 49, `raid6_select_algo`, and disabling its benchmark let that initcall return. A full no-checkpoint candidate with the same workaround then held the fixed OnePlus logo for 480 seconds without USB or SSH. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Partial | Kernel output is visible during early boot. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -73,8 +74,15 @@ returned through R6/A. D45, D46, and D47 then reached entries 43, 44, and 45.
 D47 and D48 were restored directly to R6/B by the prearmed watcher, proving
 entries 45 and 46 return. D49 then fell back to R6/A after entry 47 and was
 recovered through software fastboot. D50 then proved entry 48 returns. Combined
-with D42, this isolates entry 49, `raid6_select_algo`; no redundant blocking
-test was launched while the phone was unattended.
+with D42, this isolates entry 49, `raid6_select_algo`. A supervised follow-up
+kept `CONFIG_RAID6_PQ=y`, disabled only `CONFIG_RAID6_PQ_BENCHMARK`, reached
+the checkpoint after entry 49, and reset into R6/A. R6/B plus the stock DTBO
+were then restored and read back exactly. The workaround is validated; the
+underlying early timer behavior still needs diagnosis. A subsequent direct
+candidate removed the checkpoint, retained the single-CPU and no-benchmark
+workarounds, and added the entry-time watchdog clear that is stable through
+kexec. It still held the fixed OnePlus logo for 480 seconds without USB or
+SSH, proving that another direct-only blocker remains after the RAID6 fix.
 The intervening one-try experiments are superseded because they
 reached the red failure screen with slot B already at retry count zero and do
 not prove checkpoint execution.
@@ -111,7 +119,9 @@ embeds the corrected bridged DTB. The rollback environment is now R6 with the
 stock DTBO: it reached fresh SSH with `watchdog_v2.enable=0`, and strict
 readback matched both images exactly. See the
 [2026-07-12 direct-boot evidence](docs/evidence/2026-07-12-direct-boot.md) and
-[controlled test matrix](docs/direct-boot.md).
+[2026-07-15 RAID6 checkpoint evidence](docs/evidence/2026-07-15-raid6-direct-boot.md),
+the [K1 userspace evidence](docs/evidence/2026-07-15-k1-kexec-userspace.md),
+plus the [controlled test matrix](docs/direct-boot.md).
 
 ## Mainline fixes validated so far
 
@@ -136,9 +146,15 @@ the following bring-up changes:
 9. Capture the short-lived USB ACM console with host echo disabled so the
    collector does not feed bytes back into the target during early boot.
 10. In the historical K1 configuration, load the matching `qcom-wdt.ko` after
-    userspace comes up when a restart-handler probe is required. The current r4
+    userspace comes up when a restart-handler probe is required. The current r5
     package instead builds this driver into the kernel and remains
-    hardware-untested.
+    hardware-untested as a complete package payload.
+11. Keep RAID6 enabled but disable `CONFIG_RAID6_PQ_BENCHMARK`. The benchmark
+    waits for `jiffies` to advance and blocked the forced-single-CPU direct path;
+    the no-benchmark candidate reached the next checkpoint on hardware.
+12. Clear the APSS watchdog enable register in `primary_entry` for the K1 kexec
+    payload. This exact Image reached postmarketOS SSH and remained stable; the
+    direct candidate using the same clear still encountered a later blocker.
 
 These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
 ICE removal, reduced memory map, and timing waits all need proper replacements.
