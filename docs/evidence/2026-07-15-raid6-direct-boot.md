@@ -75,9 +75,10 @@ the direct path lacks advancing kernel time; it does not yet prove why. A
 command-line `initcall_blacklist` experiment reached the same function, so it
 is not used as a recovery mechanism.
 
-The prepared follow-up keeps both benchmark bypasses and tests the narrower
+The first follow-up kept both benchmark bypasses and tested the narrower
 hardware hypothesis that `CNTCR.EN` is clear on the direct ABL handoff. It
-records `CNTCR` and `CNTVCT_EL0` before and after setting the enable bit:
+attempted to record `CNTCR` and `CNTVCT_EL0` before and after setting the
+enable bit:
 
 | Item | Value |
 |---|---|
@@ -88,6 +89,21 @@ records `CNTCR` and `CNTVCT_EL0` before and after setting the enable bit:
 | Breadcrumb physical address | `0x81c0f800` |
 
 The image passed payload comparison, SHA256 verification, and AVB footer/hash
-verification. It is prepared but not yet hardware-validated; the counter
-hypothesis must remain classified as unproven until the next Sahara record or
-a successful direct boot confirms it.
+verification. On hardware it held at the fixed logo without USB and did not
+reach automatic recovery. No counter record was recovered, so this is not
+evidence for or against the timer hypothesis.
+
+The replacement image moves the entire counter probe after watchdog arming
+and normal `ioremap()` setup:
+
+| Item | Value |
+|---|---|
+| Boot image | `2026-07-15-235115-mainline617-direct-system-counter-post-watchdog/boot.img` |
+| Boot image SHA256 | `5434853a155c218b7cc3d74eb7010cf91aa3d69dfdd596999755e730d6046e91` |
+| Kernel Image SHA256 | `b5c767ade9b443150104b66803602541132450c34420563ade56d18a374a3573` |
+| Breadcrumb format | version 3, 80 bytes |
+| Breadcrumb physical address | `0x81c0f800` |
+
+This image is verified offline, including a byte-identical second packaging
+run, but remains hardware-untested. The counter hypothesis stays classified
+as unproven until a guarded record or successful direct boot confirms it.
