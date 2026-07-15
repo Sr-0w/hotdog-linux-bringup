@@ -146,6 +146,44 @@ index ca04b338c..54d390269 100644
 +hotdog_early_breadcrumb:
 +	.space	64
 +	.popsection
+diff --git a/crypto/Kconfig b/crypto/Kconfig
+index 23bd98981..352808313 100644
+--- a/crypto/Kconfig
++++ b/crypto/Kconfig
+@@ -5,6 +5,16 @@
+ config XOR_BLOCKS
+ 	tristate
+ 
++config XOR_BLOCKS_BENCHMARK
++	bool "Automatically choose fastest XOR implementation"
++	depends on XOR_BLOCKS
++	default y
++	help
++	  Benchmark all available XOR implementations during initialization and
++	  choose the fastest one. Disable this to retain the first compatible
++	  implementation registered by the architecture without running the
++	  boot-time throughput calibration.
++
+ #
+ # async_tx api: hardware offloaded memory transfer/transform support
+ #
+diff --git a/crypto/xor.c b/crypto/xor.c
+index f39621a57..045f582b7 100644
+--- a/crypto/xor.c
++++ b/crypto/xor.c
+@@ -126,6 +126,12 @@ calibrate_xor_blocks(void)
+ 		       fastest->name);
+ 		goto out;
+ 	}
++	if (!IS_ENABLED(CONFIG_XOR_BLOCKS_BENCHMARK) && active_template) {
++		fastest = active_template;
++		pr_info("xor: skipped benchmark and selected %s\n",
++			fastest->name);
++		goto out;
++	}
+ 
+ 	b1 = (void *) __get_free_pages(GFP_KERNEL, 2);
+ 	if (!b1) {
 diff --git a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
 index ef6d66229..18211a047 100644
 --- a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
