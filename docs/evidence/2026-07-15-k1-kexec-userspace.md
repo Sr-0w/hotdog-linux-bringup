@@ -326,6 +326,15 @@ counter from `do_initcalls()` context. Breadcrumb stages distinguish mapping,
 read, write, and post-write progress. Any MMIO fault is therefore inside the
 30-second recovery window.
 
+The local Linux driver audit supports this placement. During `time_init()`,
+`arch_timer_mem_find_best_frame()` already maps the same `CNTCTLBase`, reads
+`CNTTIDR`, and writes frame permissions through `CNTACR`; it never accesses
+`CNTCR`. The DT binding has firmware workarounds for counter frequency and CPU
+timer registers, but no property that asks Linux to start the system counter.
+The guarded probe therefore tests an implicit firmware handoff assumption
+after Linux has established normal MMIO mappings. It remains diagnostic code,
+not a proposed generic timer-driver change.
+
 | Item | Value |
 |---|---|
 | Source patch SHA256 | `af31f706d59595dc280b47d2b539f4692acb8f7a59e0d38a53615d6a03ef5bee` |
