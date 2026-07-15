@@ -346,7 +346,41 @@ not a proposed generic timer-driver change.
 
 Extracted payload hashes, `sha256sum -c`, AVB verification, source diff
 checks, and disassembly checks passed. A second clean packaging run reproduced
-both the raw and AVB images byte for byte. Hardware validation is pending.
+both the raw and AVB images byte for byte. On hardware the candidate remained
+at the fixed OnePlus logo, exposed no USB identity, and did not reset after the
+90-second observation window. This does not reach the guarded C probe and
+therefore provides no system-counter evidence.
+
+### Prepared pre-MMU framebuffer checkpoints
+
+The next candidate moves APSS-watchdog arming ahead of the first persistent
+breadcrumb and adds three cumulative visual checkpoints while the MMU is off.
+They write compact white blocks into the bootloader scanout instead of running
+the former userspace RGB test:
+
+1. watchdog and bootloader restart reason armed;
+2. stage-10 Image breadcrumb written and cache maintenance completed;
+3. stage-20 breadcrumb written immediately before `__enable_mmu()`.
+
+The physical framebuffer contract is taken from the hardware-validated
+simplefb path: base `0x9c000000`, 1440x3120, 32 bits per pixel, 5760-byte
+stride. The APSS watchdog is active before the first framebuffer store, so a
+fault in either visual or persistent instrumentation remains within the reset
+window.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `900f9b7f639653f2f9f3cbe9328e3ee8b16c6d11b74430cc650d8080f111fdaf` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `fe4b2cd0d19de29a43b6900457210b34f6e5ab5b8ccda2ab9230d47bda062dc5` |
+| Raw boot image SHA256 | `7cc6af8786d92b87ba29537b262c72992e2a8b357f6e9bba7cb89212ede48a07` |
+| AVB boot image SHA256 | `9c7c62f15fcdd84429f61974d08a3b36228adbf91b0d92901df1f39c116d6374` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The builder verified boot-header v2 metadata, extracted payload identity, the
+partition-sized AVB hash footer, and deterministic component hashes. Hardware
+validation requires one manual return to fastboot from the preceding fixed-logo
+candidate.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 

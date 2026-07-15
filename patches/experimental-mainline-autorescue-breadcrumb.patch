@@ -1,8 +1,8 @@
 diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
-index ca04b338c..82d1241fe 100644
+index ca04b338c..0cf52c578 100644
 --- a/arch/arm64/kernel/head.S
 +++ b/arch/arm64/kernel/head.S
-@@ -42,6 +42,45 @@
+@@ -42,6 +42,76 @@
  #error PAGE_OFFSET must be at least 2MB aligned
  #endif
  
@@ -45,10 +45,41 @@ index ca04b338c..82d1241fe 100644
 +	.endif
 +	.endm
 +
++/*
++ * Draw cumulative white blocks in the bootloader-provided framebuffer. This
++ * runs only while the MMU is off, after the watchdog has been armed, and gives
++ * the camera a useful checkpoint even when neither USB nor fbcon is available.
++ *
++ * The hotdog bootloader exposes a 1440x3120 a8r8g8b8 scanout at 0x9c000000
++ * with a 5760-byte stride. Keep the markers compact so the boot logo remains
++ * recognizable and each later checkpoint leaves the earlier ones intact.
++ */
++	.macro	hotdog_fb_stage slot
++	mov	x11, #0x9c000000
++	movz	x12, #0x16, lsl #16
++	add	x12, x12, #8, lsl #12	// row 256: 0x168000
++	add	x11, x11, x12
++	add	x11, x11, #(\slot * 512)	// 128 pixels per slot
++	movz	w12, #0xffff
++	movk	w12, #0x00ff, lsl #16	// a8r8g8b8 white
++	mov	x13, #64
++.Lhotdog_fb_row\@:
++	mov	x14, #96
++.Lhotdog_fb_pixel\@:
++	str	w12, [x11], #4
++	subs	x14, x14, #1
++	b.ne	.Lhotdog_fb_pixel\@
++	mov	x15, #5376			// stride - 96 * 4
++	add	x11, x11, x15
++	subs	x13, x13, #1
++	b.ne	.Lhotdog_fb_row\@
++	dsb	sy
++	.endm
++
  /*
   * Kernel startup entry point.
   * ---------------------------
-@@ -58,9 +97,14 @@
+@@ -58,9 +128,14 @@
  	/*
  	 * DO NOT MODIFY. Image header expected by Linux boot-loaders.
  	 */
@@ -64,17 +95,16 @@ index ca04b338c..82d1241fe 100644
  	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
  	le64sym	_kernel_flags_le		// Informative flags, little-endian
  	.quad	0				// reserved
-@@ -127,6 +171,40 @@ SYM_CODE_START(primary_entry)
+@@ -127,6 +202,43 @@ SYM_CODE_START(primary_entry)
  	 * the TCR will have been set.
  	 */
  	bl	__cpu_setup			// initialise processor
-+	hotdog_mark_early_stage 10
 +
 +	/*
-+	 * Direct-boot diagnostic safety net. Preserve an exact early-stage
-+	 * breadcrumb, ask the downstream boot chain to enter fastboot after a
-+	 * reset, then arm the APSS watchdog for 30 seconds. init/main.c updates
-+	 * the breadcrumb and clears both safety devices after all initcalls.
++	 * Direct-boot diagnostic safety net. Ask the downstream boot chain to
++	 * enter fastboot after a reset, then arm the APSS watchdog before the
++	 * first persistent breadcrumb or cache-maintenance operation. init/main.c
++	 * updates the breadcrumb and clears both safety devices after all initcalls.
 +	 */
 +	movz	x9, #0xf000
 +	movk	x9, #0xa9bf, lsl #16		// unused tail page of ramoops
@@ -102,10 +132,14 @@ index ca04b338c..82d1241fe 100644
 +	str	w10, [x9, #0x08]		// enable
 +	dsb	sy
 +
++	hotdog_fb_stage 0
++	hotdog_mark_early_stage 10
++	hotdog_fb_stage 1
++
  	b	__primary_switch
  SYM_CODE_END(primary_entry)
  
-@@ -218,6 +296,7 @@ SYM_CODE_END(preserve_boot_args)
+@@ -218,6 +330,7 @@ SYM_CODE_END(preserve_boot_args)
   *   x0 = __pa(KERNEL_START)
   */
  SYM_FUNC_START_LOCAL(__primary_switched)
@@ -113,7 +147,7 @@ index ca04b338c..82d1241fe 100644
  	adr_l	x4, init_task
  	init_cpu_task x4, x5, x6
  
-@@ -243,6 +322,7 @@ SYM_FUNC_START_LOCAL(__primary_switched)
+@@ -243,6 +356,7 @@ SYM_FUNC_START_LOCAL(__primary_switched)
  	mov	x0, x20
  	bl	finalise_el2			// Prefer VHE if possible
  	ldp	x29, x30, [sp], #16
@@ -121,11 +155,12 @@ index ca04b338c..82d1241fe 100644
  	bl	start_kernel
  	ASM_BUG()
  SYM_FUNC_END(__primary_switched)
-@@ -506,9 +586,11 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
+@@ -506,9 +620,12 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
  SYM_FUNC_END(__no_granule_support)
  
  SYM_FUNC_START_LOCAL(__primary_switch)
 +	hotdog_mark_early_stage 20
++	hotdog_fb_stage 2
  	adrp	x1, reserved_pg_dir
  	adrp	x2, __pi_init_idmap_pg_dir
  	bl	__enable_mmu
@@ -133,7 +168,7 @@ index ca04b338c..82d1241fe 100644
  
  	adrp	x1, early_init_stack
  	mov	sp, x1
-@@ -516,8 +598,16 @@ SYM_FUNC_START_LOCAL(__primary_switch)
+@@ -516,8 +633,16 @@ SYM_FUNC_START_LOCAL(__primary_switch)
  	mov	x0, x20				// pass the full boot status
  	mov	x1, x21				// pass the FDT
  	bl	__pi_early_map_kernel		// Map and relocate the kernel
