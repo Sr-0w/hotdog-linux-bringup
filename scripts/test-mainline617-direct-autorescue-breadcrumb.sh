@@ -9,6 +9,7 @@ D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-brid
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
+SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 
 BOOT_SHA=567ec0509b24c67677d3c8dcdd729b1ceb3fd6bd020864a4a692b26faa8f4a00
 EARLY_BREADCRUMB_PHYS=0x81c0f800
@@ -35,7 +36,8 @@ Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
 OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
 and a persistent per-initcall breadcrumb. If Qualcomm 900e appears, both
 records are read automatically. The verified R6 bridge and stock DTBO remain
-the rollback target.
+the rollback target. Set HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX to the exact running
+R6 slot (`_a` or `_b`); the default is `_b`.
 USAGE
 	exit 0
 fi
@@ -43,6 +45,10 @@ fi
 [ "$#" -eq 0 ] || die "This pinned diagnostic launcher accepts no options" 2
 hotdog_require_pmos_password
 hotdog_require_target_serial
+case "$SOURCE_SLOT_SUFFIX" in
+	_a|_b) ;;
+	*) die "HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX must be _a or _b" 2 ;;
+esac
 [ -z "${ANDROID_SERIAL:-}" ] || [ "$ANDROID_SERIAL" = "$HOTDOG_TARGET_SERIAL" ] ||
 	die "ANDROID_SERIAL differs from HOTDOG_TARGET_SERIAL" 2
 
@@ -67,7 +73,7 @@ set +e
 	--from-pmos-ssh --start-rescue-watcher --require-dirty-survival \
 	--expect-source-kernel-prefix 4.14.357-openela-perf \
 	--expect-source-cmdline-token watchdog_v2.enable=0 \
-	--expect-source-cmdline-token androidboot.slot_suffix=_b \
+	--expect-source-cmdline-token "androidboot.slot_suffix=$SOURCE_SLOT_SUFFIX" \
 	--expect-source-cmdline-token "androidboot.serialno=$HOTDOG_TARGET_SERIAL" \
 	--expect-kernel-prefix 6.17.0-sm8150 \
 	--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
