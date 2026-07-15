@@ -20,10 +20,9 @@ The packaging and submission gates are tracked separately in the
   both partition images
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
-- validate a direct image generated from the exact r4 package payload only
-  after a direct handoff baseline exists; r4 is byte-reproducible in the tested
-  pmbootstrap environment, but its direct image and hardware behavior remain
-  unvalidated
+- validate a direct image generated from the exact r5 package payload; its
+  RAID6 config delta passed the hardware checkpoint, while the complete package
+  payload and normal userspace path remain unvalidated
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
 - restore the complete RAM map

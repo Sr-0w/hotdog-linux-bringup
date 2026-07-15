@@ -1,11 +1,13 @@
 # linux-oneplus-hotdog-mainline617-k1
 
 Experimental forensic package derived from the historical OnePlus 7T Pro
-mainline K1 kernel. The source commit and patch inputs are pinned, with one
-intentional config delta for r4: the Qualcomm watchdog is built into the kernel.
+mainline K1 kernel. The source commit and patch inputs are pinned. The r5
+configuration keeps the Qualcomm watchdog built in and disables the RAID6
+implementation benchmark whose `jiffies` wait blocked the tested direct path.
 
-The package-built r4 kernel and DTB are offline reproduction artifacts. This
-README makes no claim that either artifact has been validated on hardware.
+The package-built r5 kernel and DTB remain offline reproduction artifacts. The
+RAID6 config change itself is hardware-validated by a separate direct-boot
+checkpoint image, but the packaged r5 payload is not yet hardware-tested.
 
 ## Historical reference
 
@@ -18,13 +20,18 @@ README makes no claim that either artifact has been validated on hardware.
 - Historical release:
   `6.17.0-sm8150-g379d8fe35c7c-dirty`
 
-## r4 inputs
+## r5 inputs
 
-- The r4 config SHA256 is
-  `dac751c53bb9451fc8c03c3599f2912b544466aa9e9d3901179ff58e841f488d`.
-  It differs intentionally from the historical config at one setting:
-  `CONFIG_QCOM_WDT=m` became `CONFIG_QCOM_WDT=y`. Consequently, `qcom-wdt` is
+- The r5 config differs intentionally from the historical config at two
+  settings. `CONFIG_QCOM_WDT=m` became `CONFIG_QCOM_WDT=y`, so `qcom-wdt` is
   built into the kernel and no `qcom-wdt.ko` module is expected.
+  `CONFIG_RAID6_PQ_BENCHMARK=y` became
+  `CONFIG_RAID6_PQ_BENCHMARK=n`, while `CONFIG_RAID6_PQ=y` remains enabled.
+- The RAID6 delta was selected after direct-boot checkpoints isolated
+  `raid6_select_algo` as the first blocking initcall. A supervised checkpoint
+  image with only the benchmark disabled advanced past that initcall and reset
+  as intended. This confirms the workaround but does not yet explain why the
+  early timer tick is stalled.
 - `0001-arm64-hotdog-use-android-entry-layout.patch` is copied from
   the top-repository patch `patches/experimental-android-kernel-entry-layout.patch`.
 - `0002-input-fts-fix-strict-prototypes.patch` is copied from
@@ -39,6 +46,29 @@ The entry-layout patch provides the non-EFI Android-style arm64 Image header
 used by the K1 direct-boot experiments. The FTS patch is required for LLVM/clang
 strict-prototype builds. The idtp9418 patch adds the missing GPIO consumer API
 include required by `CONFIG_CHARGER_IDTP9418=m`.
+
+## Reproducibility controls and r5 result
+
+One strict pmbootstrap build produced the following r5 payload. Packaging and
+repository indexing completed; pmbootstrap then reported a busy `ccache` mount
+during chroot cleanup. The package has not yet been built twice or booted as a
+complete payload.
+
+- APK: `27,172,103` bytes, SHA256
+  `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`
+- `boot/vmlinuz`: `28,901,384` bytes, SHA256
+  `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`
+- hotdog DTB: `136,159` bytes, SHA256
+  `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`
+- `.PKGINFO`: SHA256
+  `d541852cf41e8a231d526f4a617186af8261749cc461431d5bdd06371134cd7d`
+- package config: SHA256
+  `b41e8d59af26d6f8adfa7cb41d624bd8da63d45b4bc38494849aa77ba8114895`
+
+Extraction of the embedded config confirmed `CONFIG_QCOM_WDT=y`,
+`CONFIG_RAID6_PQ=y`, and `CONFIG_RAID6_PQ_BENCHMARK=n`. The r4 double-build
+evidence below remains the latest completed reproducibility run until r5 is
+built twice.
 
 ## Reproducibility controls and r4 result
 

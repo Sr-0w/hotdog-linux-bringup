@@ -1,9 +1,34 @@
 # K1 kernel package build evidence
 
 > [!IMPORTANT]
-> The r4 section is the current package-build evidence. The r3 section records
-> the intermediate reproducibility diagnosis. All later r0 sizes and hashes are
-> retained as historical facts and must not be attributed to r3 or r4.
+> The r5 section is the current package-build evidence. The r4 section remains
+> the latest double-build reproducibility result. The r3 section records the
+> intermediate diagnosis. Historical r0 facts must not be attributed to later
+> package revisions.
+
+## Current r5 build evidence
+
+One strict `6.17.0-r5` pmbootstrap build completed packaging and repository
+indexing. Pmbootstrap then reported a busy `ccache` mount during strict chroot
+cleanup; this occurred after abuild logged `Build complete` and does not affect
+the APK below. The r5 payload has not yet been booted on hardware or built a
+second time.
+
+| Item | Exact r5 result |
+|---|---|
+| APK | `27,172,103` bytes; SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6` |
+| `boot/vmlinuz` | `28,901,384` bytes; SHA256 `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | `136,159` bytes; SHA256 `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440` |
+| `usr/share/kernel/oneplus-hotdog-mainline617-k1/kernel.release` | `14` bytes; value `6.17.0-sm8150`; SHA256 `19fc01a849ff035de7cf482b0154ea41d7c95e1a1d581aee86a4c875857868c0` |
+| `usr/lib/modules/6.17.0-sm8150/modules.builtin` | `25,109` bytes; SHA256 `b0cbb60effb341e6d542a1c7559c1c4cec7961c73132dc792f20bacf320fc1c0` |
+| `.PKGINFO` | `583` bytes; SHA256 `d541852cf41e8a231d526f4a617186af8261749cc461431d5bdd06371134cd7d`; `builddate = 1761609785` |
+
+The extracted embedded kernel config confirms `CONFIG_QCOM_WDT=y`,
+`CONFIG_RAID6_PQ=y`, and `CONFIG_RAID6_PQ_BENCHMARK=n`. The package config
+SHA256 is `b41e8d59af26d6f8adfa7cb41d624bd8da63d45b4bc38494849aa77ba8114895`.
+A separate direct-boot checkpoint image using the same RAID6 delta reached the
+checkpoint after `raid6_select_algo` on hardware. That validates the config
+workaround, not the complete r5 package payload.
 
 ## Current r4 double-build evidence
 

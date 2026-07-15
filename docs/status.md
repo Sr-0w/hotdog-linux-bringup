@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-07-13
+Last updated: 2026-07-15
 
 ## Tested hardware
 
@@ -26,9 +26,9 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
-| K1 kernel package | Current r4 build evidence, not hardware-tested | Two `6.17.0-r4` builds in the tested pmbootstrap environment produced byte-identical `27,172,035`-byte APKs, SHA256 `74d7cff718be9a06b8858360fe56c1ccd8d1fd7653151546b0480029694d803e`. Their `28,901,384`-byte `vmlinuz` is `7fba453fd960515b526e7f562b9c682078ad800f27e5861db431ad9d7d4532b5`; the installed transformed DTB is `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. This does not establish hardware behavior or reproducibility with another toolchain. |
+| K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | First blocker: subsys entry 49 | D42 held the fixed logo and did not reach entry 49. D43-D50 reached their resets through entry 48. The first blocking initcall is therefore `raid6_select_algo`; a redundant unattended after-49 test was intentionally not launched. |
+| Persistent direct boot | RAID6 blocker bypassed | D42 held the fixed logo at entry 49 after D43-D50 proved entries through 48. A supervised candidate with `CONFIG_RAID6_PQ_BENCHMARK=n` reached the checkpoint after `raid6_select_algo` and reset automatically into R6/A. This validates the workaround, not the underlying timer cause or a complete direct boot. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -43,7 +43,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
-| Reboot | Historical module result; r4 untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r4 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
+| Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
 | Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
 | Firmware packages | Packaging complete, runtime not validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads, all under `/usr/lib/firmware`. This proves package layout, not peripheral operation or redistribution approval. |
@@ -172,9 +172,9 @@ Display support can then be developed without losing the remote debug channel.
 42. Treat the superseded early-PON series only as negative recovery experiments;
    none exposed host-visible fastboot without a manual reset.
 43. Invalidate the superseded one-try D40-D52 series as initcall evidence.
-44. Defer the r4 package-generated direct image until a direct handoff baseline
-   works. Record its kernel, installed DTB, raw-image, and AVB hashes without
-   reusing the historical r0 identity.
+44. Generate the r5 package direct image from its exact kernel and installed
+   DTB. Record kernel, DTB, raw-image, and AVB hashes without reusing the
+   historical r0 identity.
 45. After direct boot reaches userspace, integrate the validated PON property
    in the pmaports DTB and separately verify recovery-mode selection.
 46. Keep D42 as the valid upper bound: its checkpoint after entry 49 was not
@@ -191,7 +191,14 @@ Display support can then be developed without losing the remote debug channel.
 53. Keep D48 as proof that entry 46 returns; continue with D49 after entry 47.
 54. Keep D49 as proof that entry 47 returns; continue with D50 after entry 48.
 55. Keep D50 as proof that entry 48 returns. Together with D42, this isolates
-   entry 49, `raid6_select_algo`. Test with `CONFIG_RAID6_PQ_BENCHMARK=n`
-   before advancing the checkpoint; do not run the blocking control unattended.
-56. The no-benchmark after-49 candidate is built and AVB-verified, but remains
-   deliberately unflashed until physical recovery is available.
+   entry 49, `raid6_select_algo`.
+56. Keep the supervised no-benchmark result as proof that entry 49 returns when
+   `CONFIG_RAID6_PQ_BENCHMARK=n`. The candidate reset into R6/A; software
+   `RESTART2(bootloader)` then let the watcher restore exact R6/B and stock
+   `dtbo_b` without physical input.
+57. Use the r5 package config for the next direct candidate, but continue to
+   investigate why the early `jiffies`-based benchmark stalls before treating
+   benchmark removal as the final timer fix.
+
+Exact timestamps, identities, and restore hashes are recorded in
+[the 2026-07-15 RAID6 checkpoint evidence](evidence/2026-07-15-raid6-direct-boot.md).

@@ -29,11 +29,11 @@ It records the K1 payload hashes, kexec/USB/SSH timeline, no-echo ACM capture,
 exact `qcom-wdt.ko` module load, reboot behavior, and temporary
 `fastboot boot` controls.
 
-This is a historical `CONFIG_QCOM_WDT=m` hardware record. The current r4
+This is a historical `CONFIG_QCOM_WDT=m` hardware record. The current r5
 package uses `CONFIG_QCOM_WDT=y`, contains no `qcom-wdt.ko` payload member, and
-has not been tested on hardware. Two r4 builds are byte-identical in the tested
-pmbootstrap environment; this does not establish cross-toolchain
-reproducibility or hardware behavior.
+has not been tested on hardware as a complete payload. Revision r4 remains the
+latest double-build reproducibility evidence; this does not establish
+cross-toolchain reproducibility or hardware behavior.
 
 Summary:
 

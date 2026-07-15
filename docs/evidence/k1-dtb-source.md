@@ -58,10 +58,10 @@ to the hardware-observed 2026-07-11 kexec cycle:
 
 The final SHA256 is
 `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`.
-The current r4 package applies the same fail-closed transform while packaging
+The current r5 package applies the same fail-closed transform while packaging
 and installs this final DTB instead of the `440525...` base input. Both tested
-r4 builds contain the exact `cf63ae...` result; this package result remains
-hardware-untested.
+r4 builds and the current r5 build contain the exact `cf63ae...` result; the
+complete package payload remains hardware-untested.
 The lowbank and SMMU/ICE removals remain temporary bring-up constraints, not
 upstreamable fixes. PON reboot-mode properties are tracked separately and are
 not part of the exact K1 base.

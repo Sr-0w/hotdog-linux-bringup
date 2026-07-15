@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 15 Jul 2026 00:00:00 +0000
+Subject: [PATCH] arm64: hotdog: disable inherited APSS watchdog at entry
+
+The downstream bridge can enter mainline while the SM8150 APSS watchdog state
+is not owned by a bound Linux driver. Clear WDT0_EN while the MMU is still off
+so a stale firmware/downstream timeout cannot reset a diagnostic kexec boot.
+
+This is bring-up instrumentation. It must not be shipped as a generic arm64
+change; the final implementation belongs in the Qualcomm watchdog handoff.
+---
+ arch/arm64/kernel/head.S | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -137,5 +137,13 @@ SYM_CODE_START(primary_entry)
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
++	/*
++	 * Hotdog diagnostic handoff: prevent an inherited APSS watchdog from
++	 * expiring before the mainline Qualcomm watchdog driver can probe.
++	 */
++	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
++	str	wzr, [x9, #0x08]		// WDT0_EN = 0
++	dsb	sy
++
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)
