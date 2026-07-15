@@ -120,6 +120,15 @@ tracked breadcrumb without dumping all RAM:
 scripts/qualcomm-900e-autorescue.sh inspect
 ```
 
+An exact instrumented Image may also publish the physical address of its
+Image-resident early breadcrumb. Pass that address only with the matching
+Image; it requests one additional bounded 64-byte RAM read:
+
+```bash
+scripts/qualcomm-900e-autorescue.sh inspect \
+  --early-breadcrumb-address 0x81c0f800
+```
+
 The same wrapper can issue a protocol-level SoC reset with the `reset` action.
 On the tested HD1913 this reset is accepted, but a persistently failing boot
 candidate may return to `900e`; it does not alter slots or restore partitions.
