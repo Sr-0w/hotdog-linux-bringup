@@ -429,9 +429,9 @@ checkpoints on 2026-07-28. Direct boot therefore returns from
 immediately before `start_kernel()`. No USB identity appeared during the
 90-second observation window.
 
-### Prepared `start_kernel()` visual trace
+### `start_kernel()` visual-trace result
 
-The next image keeps the validated 11 assembly checkpoints and adds a separate
+This image keeps the validated 11 assembly checkpoints and adds a separate
 33-slot diagnostic band below them. Physical writes remain inside the existing
 2 MiB identity mapping until `cpu_uninstall_idmap()`. The kernel then maps only
 the 256 KiB diagnostic aperture with `early_ioremap()` and continues writing
@@ -467,8 +467,46 @@ breadcrumb recovery are all unavailable.
 The build completed with LLVM, the generated patch applies cleanly to K1
 commit `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`, and boot-header extraction
 confirmed byte-identical kernel, ramdisk, and DTB components. The
-partition-sized AVB footer verifies successfully. Hardware validation is
-pending.
+partition-sized AVB footer verifies successfully.
+
+Hardware displayed C checkpoints 0 through 10. The blocks measured roughly
+59-61 camera pixels high, compared with 44-45 pixels for the assembly-only
+image; this matches the appended 12-pixel diagnostic band and distinguishes it
+from OLED rolling-shutter lines. Direct boot therefore enters
+`start_kernel()`, completes the guarded stage-100 and stage-110 breadcrumbs,
+removes the identity map, establishes the framebuffer fixmap, and returns from
+`arm64_memblock_init()`. Checkpoint 11, which followed `paging_init()` in this
+image, was absent. The current direct-boot regression is inside
+`paging_init()`.
+
+### Prepared `paging_init()` trace
+
+The follow-up changes the C checkpoints to cyan and subdivides
+`paging_init()` and `map_mem()`:
+
+| Slot | Boundary |
+|---:|---|
+| 11 | entry to `paging_init()` |
+| 12-16 | `map_mem()` entry through `memblock_mark_nomap()` and loop entry |
+| 17-18 | immediately before and after each RAM-bank `__map_memblock()` |
+| 19-23 | loop exit, kernel alias mapping, NOMAP clear, and KFENCE mapping |
+| 24-25 | `map_mem()` return and `memblock_allow_resize()` |
+| 26-27 | immediately before and after `create_idmap()` |
+| 28-29 | immediately before and after `declare_kernel_vmas()` |
+| 30 | `paging_init()` returned to `setup_arch()` |
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `5257b7754d63f2650010e312e187897424b0873868612ac0dd61737aafff3d5f` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `71dc40f54dd6bd5de2b6cdb3657120a49907448ac312bf38b3016025062a6b3e` |
+| Raw boot image SHA256 | `c1cb3c7c012be925d3666f86be6b62801a25a75137c0092d573ced8b359940c8` |
+| AVB boot image SHA256 | `87610907d58f22446b9bd6cea4ad9909401a7de233f6b600182a0d8acbc1d7e3` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The AVB footer verifies, extracted kernel/ramdisk/DTB components match their
+inputs byte for byte, and disassembly confirms every checkpoint call around
+the intended page-table operations. Hardware validation is pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 

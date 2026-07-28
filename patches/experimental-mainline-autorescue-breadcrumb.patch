@@ -245,7 +245,7 @@ index 7982788e7..f189447d2 100644
  	return ptep;
  }
 diff --git a/arch/arm64/kernel/setup.c b/arch/arm64/kernel/setup.c
-index 77c7926a4..c95232eff 100644
+index 77c7926a4..21774b3e4 100644
 --- a/arch/arm64/kernel/setup.c
 +++ b/arch/arm64/kernel/setup.c
 @@ -32,6 +32,7 @@
@@ -294,13 +294,13 @@ index 77c7926a4..c95232eff 100644
 +			void __iomem *row = hotdog_fb_diag_map + row_offset;
 +
 +			for (x = 0; x < HOTDOG_FB_DIAG_WIDTH; x++)
-+				writel_relaxed(0x00ffffff, row + x * 4);
++				writel_relaxed(0x0000ffff, row + x * 4);
 +		} else {
 +			volatile u32 *row = (volatile u32 *)
 +				(HOTDOG_FB_DIAG_PHYS + row_offset);
 +
 +			for (x = 0; x < HOTDOG_FB_DIAG_WIDTH; x++)
-+				WRITE_ONCE(row[x], 0x00ffffff);
++				WRITE_ONCE(row[x], 0x0000ffff);
 +			dcache_clean_poc((unsigned long)row,
 +					 (unsigned long)(row +
 +					 HOTDOG_FB_DIAG_WIDTH));
@@ -390,26 +390,107 @@ index 77c7926a4..c95232eff 100644
 +	hotdog_fb_stage_c(10);
  
  	paging_init();
-+	hotdog_fb_stage_c(11);
++	hotdog_fb_stage_c(30);
  
  	acpi_table_upgrade();
  
-@@ -342,12 +433,15 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+@@ -342,10 +433,12 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
  		unflatten_device_tree();
  
  	bootmem_init();
-+	hotdog_fb_stage_c(12);
++	hotdog_fb_stage_c(31);
  
  	kasan_init();
  
  	request_standard_resources();
-+	hotdog_fb_stage_c(13);
++	hotdog_fb_stage_c(32);
  
  	early_ioremap_reset();
+ 
+diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c
+index 183801520..597c39d02 100644
+--- a/arch/arm64/mm/mmu.c
++++ b/arch/arm64/mm/mmu.c
+@@ -643,6 +643,8 @@ static void __init map_mem(pgd_t *pgdp)
+ 	int flags = NO_EXEC_MAPPINGS;
+ 	u64 i;
+ 
++	hotdog_fb_stage_c(12);
++
+ 	/*
+ 	 * Setting hierarchical PXNTable attributes on table entries covering
+ 	 * the linear region is only possible if it is guaranteed that no table
+@@ -657,9 +659,11 @@ static void __init map_mem(pgd_t *pgdp)
+ 		     pgd_index(_PAGE_OFFSET(VA_BITS_MIN)) != PTRS_PER_PGD - 1);
+ 
+ 	early_kfence_pool = arm64_kfence_alloc_pool();
++	hotdog_fb_stage_c(13);
+ 
+ 	if (can_set_direct_map())
+ 		flags |= NO_BLOCK_MAPPINGS | NO_CONT_MAPPINGS;
 +	hotdog_fb_stage_c(14);
  
- 	if (acpi_disabled)
- 		psci_dt_init();
+ 	/*
+ 	 * Take care not to create a writable alias for the
+@@ -668,8 +672,10 @@ static void __init map_mem(pgd_t *pgdp)
+ 	 * the following for-loop
+ 	 */
+ 	memblock_mark_nomap(kernel_start, kernel_end - kernel_start);
++	hotdog_fb_stage_c(15);
+ 
+ 	/* map all the memory banks */
++	hotdog_fb_stage_c(16);
+ 	for_each_mem_range(i, &start, &end) {
+ 		if (start >= end)
+ 			break;
+@@ -678,9 +684,12 @@ static void __init map_mem(pgd_t *pgdp)
+ 		 * if MTE is present. Otherwise, it has the same attributes as
+ 		 * PAGE_KERNEL.
+ 		 */
++		hotdog_fb_stage_c(17);
+ 		__map_memblock(pgdp, start, end, pgprot_tagged(PAGE_KERNEL),
+ 			       flags);
++		hotdog_fb_stage_c(18);
+ 	}
++	hotdog_fb_stage_c(19);
+ 
+ 	/*
+ 	 * Map the linear alias of the [_stext, __init_begin) interval
+@@ -692,10 +701,14 @@ static void __init map_mem(pgd_t *pgdp)
+ 	 * Note that contiguous mappings cannot be remapped in this way,
+ 	 * so we should avoid them here.
+ 	 */
++	hotdog_fb_stage_c(20);
+ 	__map_memblock(pgdp, kernel_start, kernel_end,
+ 		       PAGE_KERNEL, NO_CONT_MAPPINGS);
++	hotdog_fb_stage_c(21);
+ 	memblock_clear_nomap(kernel_start, kernel_end - kernel_start);
++	hotdog_fb_stage_c(22);
+ 	arm64_kfence_map_pool(early_kfence_pool, pgdp);
++	hotdog_fb_stage_c(23);
+ }
+ 
+ void mark_rodata_ro(void)
+@@ -820,12 +833,19 @@ static void __init create_idmap(void)
+ 
+ void __init paging_init(void)
+ {
++	hotdog_fb_stage_c(11);
+ 	map_mem(swapper_pg_dir);
++	hotdog_fb_stage_c(24);
+ 
+ 	memblock_allow_resize();
++	hotdog_fb_stage_c(25);
+ 
++	hotdog_fb_stage_c(26);
+ 	create_idmap();
++	hotdog_fb_stage_c(27);
++	hotdog_fb_stage_c(28);
+ 	declare_kernel_vmas();
++	hotdog_fb_stage_c(29);
+ }
+ 
+ #ifdef CONFIG_MEMORY_HOTPLUG
 diff --git a/crypto/Kconfig b/crypto/Kconfig
 index 23bd98981..352808313 100644
 --- a/crypto/Kconfig

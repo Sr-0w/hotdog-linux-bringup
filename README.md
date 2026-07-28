@@ -27,7 +27,7 @@ OnePlus bootloader remains under active bring-up.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Reaches `start_kernel()` | A reproducible 11-checkpoint framebuffer trace proves that direct boot returns from `__enable_mmu()` and `__pi_early_map_kernel()`, reaches `__primary_switched`, completes `finalise_el2()`, and arrives immediately before `start_kernel()`. The current image adds 33 visual C-entry checkpoints plus an initcall-index barcode. |
+| Persistent direct mainline | Reaches `paging_init()` | Direct boot returns from `__enable_mmu()` and `__pi_early_map_kernel()`, reaches `start_kernel()`, removes the identity map, establishes an early framebuffer fixmap, and completes `arm64_memblock_init()`. The current cyan checkpoint image subdivides `paging_init()` and `map_mem()` around each page-table operation. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU and identity-mapped post-MMU framebuffer writes are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -95,8 +95,11 @@ MMU transition; two additional blocks prove that `__enable_mmu()` returns and
 the guarded stage-30 breadcrumb completes. Hardware displayed all 11 blocks in
 the follow-up, covering `__pi_early_map_kernel()`, the virtual branch to
 `__primary_switched`, `finalise_el2()`, and the final branch to
-`start_kernel()`. The next image continues with 33 C-entry checkpoints and a
-camera-readable initcall index. Exact image hashes and checkpoint meanings are
+`start_kernel()`. A second visual band then proved `start_kernel()`,
+`cpu_uninstall_idmap()`, the framebuffer fixmap, and
+`arm64_memblock_init()`. Its next checkpoint was absent, localizing the current
+regression to `paging_init()`. The prepared cyan trace now brackets each
+`map_mem()` and idmap operation. Exact image hashes and checkpoint meanings are
 recorded in
 the [2026-07-15 K1 evidence](docs/evidence/2026-07-15-k1-kexec-userspace.md).
 
