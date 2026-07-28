@@ -1,3 +1,17 @@
+diff --git a/arch/arm64/include/asm/setup.h b/arch/arm64/include/asm/setup.h
+index ba269a7a3..4bfe7a003 100644
+--- a/arch/arm64/include/asm/setup.h
++++ b/arch/arm64/include/asm/setup.h
+@@ -13,6 +13,9 @@
+ extern phys_addr_t __fdt_pointer __initdata;
+ extern u64 __cacheline_aligned boot_args[4];
+ 
++void hotdog_fb_stage_c(unsigned int slot);
++void hotdog_fb_show_initcall(unsigned int index);
++
+ static inline bool arch_parse_debug_rodata(char *arg)
+ {
+ 	extern bool rodata_enabled;
 diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
 index ca04b338c..2840010cf 100644
 --- a/arch/arm64/kernel/head.S
@@ -230,6 +244,172 @@ index 7982788e7..f189447d2 100644
 +
  	return ptep;
  }
+diff --git a/arch/arm64/kernel/setup.c b/arch/arm64/kernel/setup.c
+index 77c7926a4..c95232eff 100644
+--- a/arch/arm64/kernel/setup.c
++++ b/arch/arm64/kernel/setup.c
+@@ -32,6 +32,7 @@
+ #include <linux/sched/task.h>
+ #include <linux/scs.h>
+ #include <linux/mm.h>
++#include <linux/io.h>
+ 
+ #include <asm/acpi.h>
+ #include <asm/fixmap.h>
+@@ -61,6 +62,85 @@ static struct resource *standard_resources;
+ phys_addr_t __fdt_pointer __initdata;
+ u64 mmu_enabled_at_boot __initdata;
+ 
++#define HOTDOG_FB_DIAG_PHYS		0x9c1c2000ULL
++#define HOTDOG_FB_DIAG_STRIDE		5760
++#define HOTDOG_FB_DIAG_HEIGHT		12
++#define HOTDOG_FB_DIAG_ROW_PITCH	15
++#define HOTDOG_FB_DIAG_COLUMNS		11
++#define HOTDOG_FB_DIAG_SLOT_PITCH	512
++#define HOTDOG_FB_DIAG_WIDTH		96
++#define HOTDOG_FB_DIAG_MAP_SIZE		SZ_256K
++
++static void __iomem *hotdog_fb_diag_map __initdata;
++static bool hotdog_fb_idmap_live __initdata = true;
++
++void __init __no_sanitize_address hotdog_fb_stage_c(unsigned int slot)
++{
++	unsigned int column, row_group, y, x;
++	unsigned long offset;
++
++	if (slot >= 33 || (!hotdog_fb_diag_map && !hotdog_fb_idmap_live))
++		return;
++
++	column = slot % HOTDOG_FB_DIAG_COLUMNS;
++	row_group = slot / HOTDOG_FB_DIAG_COLUMNS;
++	offset = row_group * HOTDOG_FB_DIAG_ROW_PITCH *
++		 HOTDOG_FB_DIAG_STRIDE;
++	offset += column * HOTDOG_FB_DIAG_SLOT_PITCH;
++
++	for (y = 0; y < HOTDOG_FB_DIAG_HEIGHT; y++) {
++		unsigned long row_offset = offset +
++			y * HOTDOG_FB_DIAG_STRIDE;
++
++		if (hotdog_fb_diag_map) {
++			void __iomem *row = hotdog_fb_diag_map + row_offset;
++
++			for (x = 0; x < HOTDOG_FB_DIAG_WIDTH; x++)
++				writel_relaxed(0x00ffffff, row + x * 4);
++		} else {
++			volatile u32 *row = (volatile u32 *)
++				(HOTDOG_FB_DIAG_PHYS + row_offset);
++
++			for (x = 0; x < HOTDOG_FB_DIAG_WIDTH; x++)
++				WRITE_ONCE(row[x], 0x00ffffff);
++			dcache_clean_poc((unsigned long)row,
++					 (unsigned long)(row +
++					 HOTDOG_FB_DIAG_WIDTH));
++		}
++	}
++	wmb();
++}
++
++void __init hotdog_fb_show_initcall(unsigned int index)
++{
++	unsigned int bit, y, x;
++	unsigned long base_offset;
++
++	if (!hotdog_fb_diag_map)
++		return;
++
++	base_offset = 2 * HOTDOG_FB_DIAG_ROW_PITCH *
++		      HOTDOG_FB_DIAG_STRIDE;
++	base_offset += 10 * HOTDOG_FB_DIAG_SLOT_PITCH;
++
++	for (y = 0; y < HOTDOG_FB_DIAG_HEIGHT; y++) {
++		void __iomem *row = hotdog_fb_diag_map + base_offset +
++			y * HOTDOG_FB_DIAG_STRIDE;
++
++		for (bit = 0; bit < 10; bit++) {
++			u32 color = index & BIT(9 - bit) ?
++				0x00ffffff : 0x00000000;
++
++			for (x = 0; x < 7; x++)
++				writel_relaxed(color,
++					      row + (bit * 9 + x) * 4);
++		}
++		for (x = 90; x < HOTDOG_FB_DIAG_WIDTH; x++)
++			writel_relaxed(0x0000ffff, row + x * 4);
++	}
++	wmb();
++}
++
+ /*
+  * Standard memory resources
+  */
+@@ -280,16 +360,19 @@ u64 cpu_logical_map(unsigned int cpu)
+ 
+ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+ {
++	hotdog_fb_stage_c(4);
+ 	setup_initial_init_mm(_stext, _etext, _edata, _end);
+ 
+ 	*cmdline_p = boot_command_line;
+ 
+ 	kaslr_init();
++	hotdog_fb_stage_c(5);
+ 
+ 	early_fixmap_init();
+ 	early_ioremap_init();
+ 
+ 	setup_machine_fdt(__fdt_pointer);
++	hotdog_fb_stage_c(6);
+ 
+ 	/*
+ 	 * Initialise the static keys early as they may be enabled by the
+@@ -299,6 +382,7 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+ 	parse_early_param();
+ 
+ 	dynamic_scs_init();
++	hotdog_fb_stage_c(7);
+ 
+ 	/*
+ 	 * The primary CPU enters the kernel with all DAIF exceptions masked.
+@@ -317,7 +401,12 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+ 	 * TTBR0 is only used for the identity mapping at this stage. Make it
+ 	 * point to zero page to avoid speculatively fetching new entries.
+ 	 */
++	hotdog_fb_stage_c(8);
++	hotdog_fb_idmap_live = false;
+ 	cpu_uninstall_idmap();
++	hotdog_fb_diag_map = early_ioremap(HOTDOG_FB_DIAG_PHYS,
++					  HOTDOG_FB_DIAG_MAP_SIZE);
++	hotdog_fb_stage_c(9);
+ 
+ 	xen_early_init();
+ 	efi_init();
+@@ -330,8 +419,10 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+ 	}
+ 
+ 	arm64_memblock_init();
++	hotdog_fb_stage_c(10);
+ 
+ 	paging_init();
++	hotdog_fb_stage_c(11);
+ 
+ 	acpi_table_upgrade();
+ 
+@@ -342,12 +433,15 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
+ 		unflatten_device_tree();
+ 
+ 	bootmem_init();
++	hotdog_fb_stage_c(12);
+ 
+ 	kasan_init();
+ 
+ 	request_standard_resources();
++	hotdog_fb_stage_c(13);
+ 
+ 	early_ioremap_reset();
++	hotdog_fb_stage_c(14);
+ 
+ 	if (acpi_disabled)
+ 		psci_dt_init();
 diff --git a/crypto/Kconfig b/crypto/Kconfig
 index 23bd98981..352808313 100644
 --- a/crypto/Kconfig
@@ -291,7 +471,7 @@ index ef6d66229..18211a047 100644
  	if (client != NULL)
  		return (struct spi_device *)client;
 diff --git a/init/main.c b/init/main.c
-index 5753e9539..0827ef202 100644
+index 5753e9539..bda1c2bcb 100644
 --- a/init/main.c
 +++ b/init/main.c
 @@ -109,6 +109,7 @@
@@ -362,74 +542,121 @@ index 5753e9539..0827ef202 100644
  /*
   * Debug helper: via this flag we know that we are in 'early bootup code'
   * where only the boot processor is running with IRQ disabled.  This means
-@@ -899,8 +953,10 @@ void start_kernel(void)
+@@ -899,8 +953,13 @@ void start_kernel(void)
  	char *command_line;
  	char *after_dashes;
  
++	hotdog_fb_stage_c(0);
 +	hotdog_mark_start_kernel_stage(100, 0);
++	hotdog_fb_stage_c(1);
  	set_task_stack_end_magic(&init_task);
  	smp_setup_processor_id();
 +	hotdog_mark_start_kernel_stage(110, 0);
++	hotdog_fb_stage_c(2);
  	debug_objects_early_init();
  	init_vmlinux_build_id();
  
-@@ -917,6 +973,7 @@ void start_kernel(void)
+@@ -908,6 +967,7 @@ void start_kernel(void)
+ 
+ 	local_irq_disable();
+ 	early_boot_irqs_disabled = true;
++	hotdog_fb_stage_c(3);
+ 
+ 	/*
+ 	 * Interrupts are still disabled. Do necessary setups, then
+@@ -917,6 +977,9 @@ void start_kernel(void)
  	page_address_init();
  	pr_notice("%s", linux_banner);
  	setup_arch(&command_line);
++	hotdog_fb_stage_c(15);
 +	hotdog_mark_start_kernel_stage(120, 0);
++	hotdog_fb_stage_c(16);
  	/* Static keys and static calls are needed by LSMs */
  	jump_label_init();
  	static_call_init();
-@@ -956,6 +1013,7 @@ void start_kernel(void)
+@@ -943,6 +1006,7 @@ void start_kernel(void)
+ 	if (extra_init_args)
+ 		parse_args("Setting extra init args", extra_init_args,
+ 			   NULL, 0, -1, -1, NULL, set_init_arg);
++	hotdog_fb_stage_c(17);
+ 
+ 	/* Architectural and non-timekeeping rng init, before allocator init */
+ 	random_init_early(command_line);
+@@ -956,6 +1020,8 @@ void start_kernel(void)
  	sort_main_extable();
  	trap_init();
  	mm_core_init();
 +	hotdog_mark_start_kernel_stage(140, 0);
++	hotdog_fb_stage_c(18);
  	maple_tree_init();
  	poking_init();
  	ftrace_init();
-@@ -969,6 +1027,7 @@ void start_kernel(void)
+@@ -969,6 +1035,8 @@ void start_kernel(void)
  	 * time - but meanwhile we still have a functioning scheduler.
  	 */
  	sched_init();
 +	hotdog_mark_start_kernel_stage(150, 0);
++	hotdog_fb_stage_c(19);
  
  	if (WARN(!irqs_disabled(),
  		 "Interrupts were enabled *very* early, fixing it\n"))
-@@ -1009,6 +1068,7 @@ void start_kernel(void)
+@@ -1001,6 +1069,7 @@ void start_kernel(void)
+ 	/* init some links before init_ISA_irqs() */
+ 	early_irq_init();
+ 	init_IRQ();
++	hotdog_fb_stage_c(20);
+ 	tick_init();
+ 	rcu_init_nohz();
+ 	timers_init();
+@@ -1009,6 +1078,8 @@ void start_kernel(void)
  	softirq_init();
  	timekeeping_init();
  	time_init();
 +	hotdog_mark_start_kernel_stage(160, 0);
++	hotdog_fb_stage_c(21);
  
  	/* This must be after timekeeping is initialized */
  	random_init();
-@@ -1024,6 +1084,7 @@ void start_kernel(void)
+@@ -1024,6 +1095,8 @@ void start_kernel(void)
  
  	early_boot_irqs_disabled = false;
  	local_irq_enable();
 +	hotdog_mark_start_kernel_stage(170, 0);
++	hotdog_fb_stage_c(22);
  
  	kmem_cache_init_late();
  
-@@ -1033,6 +1094,7 @@ void start_kernel(void)
+@@ -1033,6 +1106,8 @@ void start_kernel(void)
  	 * this. But we do want output early, in case something goes wrong.
  	 */
  	console_init();
 +	hotdog_mark_start_kernel_stage(180, 0);
++	hotdog_fb_stage_c(23);
  	if (panic_later)
  		panic("Too many boot %s vars at `%s'", panic_later,
  		      panic_param);
-@@ -1094,6 +1156,7 @@ void start_kernel(void)
+@@ -1062,8 +1137,10 @@ void start_kernel(void)
+ 		late_time_init();
+ 	sched_clock_init();
+ 	calibrate_delay();
++	hotdog_fb_stage_c(24);
+ 
+ 	arch_cpu_finalize_init();
++	hotdog_fb_stage_c(25);
+ 
+ 	pid_idr_init();
+ 	anon_vma_init();
+@@ -1094,6 +1171,9 @@ void start_kernel(void)
  	kcsan_init();
  
  	/* Do the rest non-__init'ed, we're now alive */
++	hotdog_fb_stage_c(26);
 +	hotdog_mark_start_kernel_stage(190, 0);
++	hotdog_fb_stage_c(27);
  	rest_init();
  
  	/*
-@@ -1316,9 +1379,133 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+@@ -1316,9 +1396,133 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
  	return 0;
  }
  
@@ -563,7 +790,7 @@ index 5753e9539..0827ef202 100644
  
  	parse_args(initcall_level_names[level],
  		   command_line, __start___param,
-@@ -1327,8 +1514,17 @@ static void __init do_initcall_level(int level, char *command_line)
+@@ -1327,8 +1531,18 @@ static void __init do_initcall_level(int level, char *command_line)
  		   NULL, ignore_unknown_bootoption);
  
  	do_trace_initcall_level(initcall_level_names[level]);
@@ -571,6 +798,7 @@ index 5753e9539..0827ef202 100644
 -		do_one_initcall(initcall_from_entry(fn));
 +	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
 +		call = initcall_from_entry(fn);
++		hotdog_fb_show_initcall(hotdog_initcall_index);
 +		hotdog_mark_diagnostic_stage(300, hotdog_initcall_index, level,
 +						      (unsigned long)call);
 +		hotdog_kick_diagnostic_watchdog();
@@ -583,21 +811,29 @@ index 5753e9539..0827ef202 100644
  }
  
  static void __init do_initcalls(void)
-@@ -1337,6 +1533,9 @@ static void __init do_initcalls(void)
+@@ -1337,9 +1551,16 @@ static void __init do_initcalls(void)
  	size_t len = saved_command_line_len + 1;
  	char *command_line;
  
++	hotdog_fb_stage_c(28);
 +	hotdog_mark_start_kernel_stage(200, 0);
++	hotdog_fb_stage_c(29);
 +	hotdog_prepare_initcall_diagnostics();
++	hotdog_fb_stage_c(30);
 +
  	command_line = kzalloc(len, GFP_KERNEL);
  	if (!command_line)
  		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-@@ -1347,6 +1546,7 @@ static void __init do_initcalls(void)
++	hotdog_fb_stage_c(31);
+ 
+ 	for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++) {
+ 		/* Parser modifies command_line, restore it each time */
+@@ -1347,6 +1568,8 @@ static void __init do_initcalls(void)
  		do_initcall_level(level, command_line);
  	}
  
 +	hotdog_finish_initcall_diagnostics();
++	hotdog_fb_stage_c(32);
  	kfree(command_line);
  }
  

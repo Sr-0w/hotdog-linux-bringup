@@ -403,9 +403,9 @@ begins at `__pi_early_map_kernel()` or a later transition that had no visual
 checkpoint in this image. USB remained absent and the early watchdog again did
 not reset the phone.
 
-### Prepared virtual-flow checkpoints
+### Virtual-flow checkpoint result
 
-The current diagnostic extends the visual trace without changing the DTB,
+This diagnostic extended the visual trace without changing the DTB,
 initramfs, command line, or rollback contract. Checkpoints 6 and 7 bracket
 `__pi_early_map_kernel()` and stage 40. Checkpoints 8 and 9 bracket the first
 stage-50 breadcrumb after branching to `__primary_switched`. Checkpoints 10 and
@@ -422,7 +422,53 @@ stage-50 breadcrumb after branching to `__primary_switched`. Checkpoints 10 and
 | Breadcrumb physical address | `0x81c0f800` |
 
 The builder verified header-v2 metadata, extracted payload identity, component
-hashes, and the partition-sized AVB footer. Hardware validation is pending.
+hashes, and the partition-sized AVB footer. Hardware displayed all 11
+checkpoints on 2026-07-28. Direct boot therefore returns from
+`__pi_early_map_kernel()`, reaches `__primary_switched`, completes
+`finalise_el2()`, writes the stage-60 breadcrumb, and reaches the instruction
+immediately before `start_kernel()`. No USB identity appeared during the
+90-second observation window.
+
+### Prepared `start_kernel()` visual trace
+
+The next image keeps the validated 11 assembly checkpoints and adds a separate
+33-slot diagnostic band below them. Physical writes remain inside the existing
+2 MiB identity mapping until `cpu_uninstall_idmap()`. The kernel then maps only
+the 256 KiB diagnostic aperture with `early_ioremap()` and continues writing
+through the fixmap mapping. This avoids relying on a framebuffer driver or
+console.
+
+| Slots | Covered boundary |
+|---:|---|
+| 0-3 | `start_kernel()` entry through early CPU and IRQ state |
+| 4-8 | `setup_arch()` entry through FDT and early parameters |
+| 9 | identity map removed and framebuffer fixmap established |
+| 10-14 | memblock, paging, bootmem, resources, and early-ioremap reset |
+| 15-17 | `setup_arch()` return, stage 120, and command-line parsing |
+| 18-23 | memory core, scheduler, IRQ, timers, IRQ enable, and console |
+| 24-27 | delay calibration, architecture finalization, and `rest_init()` |
+| 28-31 | `do_initcalls()` entry, stage 200, diagnostics, and allocation |
+| 32 | all initcalls completed |
+
+Before each initcall, slot 32 becomes a 10-bit visual barcode containing the
+global initcall index, with a cyan guard at its right edge. This retains a
+camera-readable failure index even when USB, watchdog reset, and persistent
+breadcrumb recovery are all unavailable.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `74b63dec67abcdbf31051621ff10a07ec20655e387c64f4d3ae6fe474b59cdcb` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `827e98830b9bd61ee66e178a030e39d469480a85c99f2bc4c435652e8d3a8920` |
+| Raw boot image SHA256 | `218365918189c6332061de7051f022a28bb575e86ce7a423e99a1f463a91ad06` |
+| AVB boot image SHA256 | `e2cad6d85727e68820e92fa73413d2f8d5cdff4b0041f5d42c5a408a3d73350e` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The build completed with LLVM, the generated patch applies cleanly to K1
+commit `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`, and boot-header extraction
+confirmed byte-identical kernel, ramdisk, and DTB components. The
+partition-sized AVB footer verifies successfully. Hardware validation is
+pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 
