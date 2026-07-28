@@ -482,7 +482,14 @@ image, was absent. The current direct-boot regression is inside
 ### Prepared `paging_init()` trace
 
 The follow-up changes the C checkpoints to cyan and subdivides
-`paging_init()` and `map_mem()`:
+`paging_init()` and `map_mem()`. The first prepared build retained an
+`early_ioremap()` device mapping for the diagnostic aperture. It was
+superseded before flashing: the splash reservation is part of the DT memory
+range and `map_mem()` creates a Normal linear alias for it, so retaining a
+Device alias across that operation would make the diagnostic itself unsafe.
+The final candidate uses `early_memremap()` with `PAGE_KERNEL` attributes and
+explicit cache cleaning, matching both the initial identity mapping and the
+later linear map.
 
 | Slot | Boundary |
 |---:|---|
@@ -497,11 +504,11 @@ The follow-up changes the C checkpoints to cyan and subdivides
 
 | Item | Value |
 |---|---|
-| Source patch SHA256 | `5257b7754d63f2650010e312e187897424b0873868612ac0dd61737aafff3d5f` |
+| Source patch SHA256 | `00565c5f77df9a759fc30b2ad243ac5b190f8638b89791fad6808cf3763a97b8` |
 | Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
-| Kernel Image SHA256 | `71dc40f54dd6bd5de2b6cdb3657120a49907448ac312bf38b3016025062a6b3e` |
-| Raw boot image SHA256 | `c1cb3c7c012be925d3666f86be6b62801a25a75137c0092d573ced8b359940c8` |
-| AVB boot image SHA256 | `87610907d58f22446b9bd6cea4ad9909401a7de233f6b600182a0d8acbc1d7e3` |
+| Kernel Image SHA256 | `a2bd558f62954a0d31f42cc8e76f40ca904715104699ceffb24229a84656ee01` |
+| Raw boot image SHA256 | `cd815d044e38bd8fe04b49ec22ba13f3fd5f8f5976a71d83127922c902c16a10` |
+| AVB boot image SHA256 | `869931aac5cf2de397ba2e466465d87d22177b30ff1b855c030cbd825c781dd6` |
 | Breadcrumb physical address | `0x81c0f800` |
 
 The AVB footer verifies, extracted kernel/ramdisk/DTB components match their
