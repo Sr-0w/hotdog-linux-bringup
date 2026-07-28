@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-28-234500-mainline617-direct-paging-normal-fbcheckpoints/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-29-002000-mainline617-direct-early-exception-barcodes/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=869931aac5cf2de397ba2e466465d87d22177b30ff1b855c030cbd825c781dd6
+BOOT_SHA=a2ab9df8c3fd0412d4c669f6c12b341ec823e9868ee1e7b72318e3ae9665c714
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -37,8 +37,10 @@ Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
 OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
 three pre-MMU framebuffer checkpoints, identity-mapped checkpoints through the
 early virtual-address transition, and cyan C-entry checkpoints that subdivide
-`paging_init()` and `map_mem()`. Later checkpoints retain the visual
-initcall-index barcode and persistent per-initcall breadcrumb. If Qualcomm 900e
+`paging_init()` and `map_mem()`. Early EL1 synchronous aborts and SErrors are
+captured as a red or magenta marker plus ESR/FAR/PC framebuffer barcodes.
+Later checkpoints retain the visual initcall-index barcode and persistent
+per-initcall breadcrumb. If Qualcomm 900e
 appears, the stage and raw counter samples are read automatically. The verified
 R6 bridge and stock DTBO remain the rollback target. Set
 HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX to the exact running R6 slot (`_a` or `_b`);

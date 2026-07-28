@@ -513,7 +513,36 @@ later linear map.
 
 The AVB footer verifies, extracted kernel/ramdisk/DTB components match their
 inputs byte for byte, and disassembly confirms every checkpoint call around
-the intended page-table operations. Hardware validation is pending.
+the intended page-table operations. Hardware again displayed cyan slots 0
+through 10 but no second-row slot 11. This rules out the previous
+Device-versus-Normal diagnostic alias as the reason the trace stopped. Since
+the disassembly has only the direct branch from the returning slot-10 helper
+to `paging_init()`, the unresolved interval is now the branch/prologue/first
+checkpoint call rather than the body of `map_mem()`.
+
+### Early EL1 exception capture
+
+The next candidate keeps the Normal framebuffer mapping and installs a
+one-shot diagnostic at the start of the existing EL1 synchronous and SError
+handlers. A synchronous exception paints slot 31 red; an SError paints slot 32
+magenta. Three additional 64-bit barcodes encode, in order, `ESR_EL1`,
+`FAR_EL1`, and the saved PC. Set bits are red and clear bits are black, with
+12-pixel bits and four-pixel separators for webcam readability. The capture
+disarms itself before drawing so a diagnostic fault cannot recurse through
+the same path indefinitely.
+
+| Item | Value |
+|---|---|
+| Source patch SHA256 | `0094c7657698ba9809d98ff2f59cb2339d935e37907d2913706e5da6f4f7db1c` |
+| Final `.config` SHA256 | `25fbb9ed629241471b32c8390cab039d4da7825cdd60b525691299a2494017c7` |
+| Kernel Image SHA256 | `7560571fd1b340c8ebef3da2d3638b8a21ac8213af4e3635120e4a7d90f460f4` |
+| Raw boot image SHA256 | `5e3291f9ea48ee431ff756ec5efe6ee78fd92855a3c9bde0f1441620733c3182` |
+| AVB boot image SHA256 | `a2ab9df8c3fd0412d4c669f6c12b341ec823e9868ee1e7b72318e3ae9665c714` |
+| Breadcrumb physical address | `0x81c0f800` |
+
+The kernel builds cleanly with LLVM. AVB verification succeeds, and unpacking
+the image reproduces the kernel, ramdisk, and DTB byte for byte. Hardware
+validation is pending.
 
 If the candidate returns to `900e`, read both records without dumping RAM:
 

@@ -98,9 +98,12 @@ the follow-up, covering `__pi_early_map_kernel()`, the virtual branch to
 `start_kernel()`. A second visual band then proved `start_kernel()`,
 `cpu_uninstall_idmap()`, the framebuffer fixmap, and
 `arm64_memblock_init()`. Its next checkpoint was absent, localizing the current
-regression to `paging_init()`. The prepared cyan trace now brackets each
-`map_mem()` and idmap operation. Exact image hashes and checkpoint meanings are
-recorded in
+regression to the call into `paging_init()`. A hardware run with Normal-memory
+cyan diagnostics again stopped after slot 10, before the slot-11
+`paging_init()` entry marker. The current follow-up captures early EL1
+synchronous aborts and SErrors in the framebuffer, including barcodes for
+`ESR_EL1`, `FAR_EL1`, and the faulting PC. Exact image hashes and checkpoint
+meanings are recorded in
 the [2026-07-15 K1 evidence](docs/evidence/2026-07-15-k1-kexec-userspace.md).
 
 Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
