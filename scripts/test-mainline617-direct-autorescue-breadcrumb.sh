@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-29-002000-mainline617-direct-early-exception-barcodes/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-010517-mainline617-direct-rdinit-first511-restart2/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=a2ab9df8c3fd0412d4c669f6c12b341ec823e9868ee1e7b72318e3ae9665c714
+BOOT_SHA=9109085d764c64f246c78624653d2faf63e9c863640e462200aaeea2c7299784
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -36,11 +36,29 @@ Usage: test-mainline617-direct-autorescue-breadcrumb.sh
 Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
 OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
 three pre-MMU framebuffer checkpoints, identity-mapped checkpoints through the
-early virtual-address transition, and cyan C-entry checkpoints that subdivide
-`paging_init()` and `map_mem()`. Early EL1 synchronous aborts and SErrors are
+early virtual-address transition, and C-entry checkpoints that subdivide
+`paging_init()` and `map_mem()`. The diagnostic band is cleared at entry, then
+reuses the same proven pixels in yellow (slots 0-10), cyan (11-21), and magenta
+(22-32). Early EL1 synchronous aborts and SErrors are
 captured as a red or magenta marker plus ESR/FAR/PC framebuffer barcodes.
-Later checkpoints retain the visual initcall-index barcode and persistent
-per-initcall breadcrumb. If Qualcomm 900e
+After the initcall trace, eleven large outlined cells replace the compact band
+and fill sequentially through the end of kernel_init_freeable. A second row of
+twelve larger cells then traces the post-init path. Cell 0 marks entry into the
+global async wait; cell 1 means it completed normally. If that wait is still
+blocked after 15 seconds, cell 11 fills instead, the first row becomes a
+16-bit geometric code for the pending callback, init memory is deliberately
+retained, and boot continues for diagnosis. Cells 2-10 trace initmem handling,
+PTI, RCU, sysctl, rdinit entry, and successful kernel_execve.
+Their state is readable by geometry without relying on camera color accuracy.
+The diagnostic wrapper then paints four large static white bands at userspace
+entry, before `/init`, after pmOS USB setup, and after mounting the rootfs.
+The first two bands come from a static AArch64 wrapper with raw syscalls, while
+three kernel bands bracket the initial EL1-to-EL0 return and the first EL0
+synchronous event is captured as a framebuffer barcode. Eight large syscall
+cells then report PID 1's first EL0 SVC entry/return, an initial openat,
+successful framebuffer open, second SVC, framebuffer I/O, fallback execve,
+and sustained userspace activity.
+Later checkpoints retain the persistent per-initcall breadcrumb. If Qualcomm 900e
 appears, the stage and raw counter samples are read automatically. The verified
 R6 bridge and stock DTBO remain the rollback target. Set
 HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX to the exact running R6 slot (`_a` or `_b`);
@@ -97,9 +115,12 @@ set +e
 	--reboot-helper "$REBOOT_HELPER" --reboot-helper-sha256 "$REBOOT_HELPER_SHA" \
 	--serial "$HOTDOG_TARGET_SERIAL" --expected-product 'msmnile hotdog' \
 	"${start_args[@]}" --start-rescue-watcher --require-dirty-survival \
-	--expect-kernel-prefix 6.17.0-sm8150 \
-	--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
-	--restore-after system --boot-wait 90 --poll 1 --fastboot-timeout 15 \
+		--expect-kernel-prefix 6.17.0-sm8150 \
+		--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
+		--expect-cmdline-token hotdog_wrapper_settle_sec=0 \
+		--expect-cmdline-token hotdog_rescue_watchdog_sec=300 \
+		--expect-cmdline-token initramfs_async=0 \
+		--restore-after system --boot-wait 240 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
 test_status=$?
 set -e

@@ -12,10 +12,11 @@ it as HD1911 and expose the `hotdog` project/codename.
 
 ## Project status
 
-Linux 6.17 now reaches the installed postmarketOS root filesystem on real
-hardware. The validated path boots a downstream 4.14 kernel first and uses it
-as a kexec bridge into the exact K1 Linux 6.17 payload. Direct boot from the
-OnePlus bootloader remains under active bring-up.
+Linux 6.17 reaches the installed postmarketOS root filesystem on real hardware
+through the validated downstream 4.14 kexec bridge. A persistent image launched
+directly by the OnePlus bootloader now completes kernel initialization, executes
+PID 1 from the initramfs, and sustains EL0 syscalls. Direct rootfs and USB access
+remain under active bring-up.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -27,9 +28,9 @@ OnePlus bootloader remains under active bring-up.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Reaches `paging_init()` | Direct boot returns from `__enable_mmu()` and `__pi_early_map_kernel()`, reaches `start_kernel()`, removes the identity map, establishes an early framebuffer fixmap, and completes `arm64_memblock_init()`. The current cyan checkpoint image subdivides `paging_init()` and `map_mem()` around each page-table operation. |
+| Persistent direct mainline | Active PID 1 userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, and executes more than 16 PID 1 syscalls. No direct-boot USB identity or rootfs handoff has been observed yet. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
-| Early display output | Working for diagnostics | Direct pre-MMU and identity-mapped post-MMU framebuffer writes are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
+| Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
 | Touch, Wi-Fi, Bluetooth, audio, modem, cameras | Not validated | These remain bring-up work. |
@@ -87,24 +88,25 @@ The intervening one-try experiments are superseded because they
 reached the red failure screen with slot B already at retry count zero and do
 not prove checkpoint execution.
 
-The current direct-entry trace no longer depends on slot retry behavior or a
-working kernel console. Three cumulative blocks prove execution immediately
-before `__enable_mmu()`. An initial 2 MiB identity mapping for the inherited
-bootloader framebuffer then keeps the diagnostic surface available across the
-MMU transition; two additional blocks prove that `__enable_mmu()` returns and
-the guarded stage-30 breadcrumb completes. Hardware displayed all 11 blocks in
-the follow-up, covering `__pi_early_map_kernel()`, the virtual branch to
-`__primary_switched`, `finalise_el2()`, and the final branch to
-`start_kernel()`. A second visual band then proved `start_kernel()`,
-`cpu_uninstall_idmap()`, the framebuffer fixmap, and
-`arm64_memblock_init()`. Its next checkpoint was absent, localizing the current
-regression to the call into `paging_init()`. A hardware run with Normal-memory
-cyan diagnostics again stopped after slot 10, before the slot-11
-`paging_init()` entry marker. The current follow-up captures early EL1
-synchronous aborts and SErrors in the framebuffer, including barcodes for
-`ESR_EL1`, `FAR_EL1`, and the faulting PC. Exact image hashes and checkpoint
-meanings are recorded in
-the [2026-07-15 K1 evidence](docs/evidence/2026-07-15-k1-kexec-userspace.md).
+The direct-entry trace no longer depends on slot retry behavior or a working
+kernel console. It first proved the MMU transition, `start_kernel()`, and
+`paging_init()`. A later failure was traced to retaining an `early_memremap()`
+pointer after `early_ioremap_reset()`. Replacing that pointer with the normal
+arm64 linear mapping after `paging_init()` exposed the complete post-init row:
+the global async wait returned, init memory was released, `kernel_execve()`
+succeeded, and all three EL1-to-EL0 transition markers appeared. A PID 1-only
+syscall row then showed a first syscall entry and return, a second syscall, and
+at least 16 total syscalls.
+
+That PID 1 trace also exposed an Android boot-image contract issue. The tested
+HD1913 bootloader ignores header-v2 `extra_cmdline` and copies only 511
+characters from the primary 512-byte field. The diagnostic `rdinit=` token had
+been stored beyond that boundary, so Linux correctly ran the original
+postmarketOS `/init` instead of the static wrapper. The direct-image builder now
+rejects longer command lines, and the next hash-pinned candidate places every
+boot-critical token in the accepted field. Exact hashes and marker meanings are
+recorded in the
+[2026-07-30 direct PID 1 evidence](docs/evidence/2026-07-30-direct-pid1.md).
 
 Persistent `boot_b` testing on 2026-07-12 established a working R5 rescue
 baseline and three negative mainline handoff results. D1 AVB
@@ -174,6 +176,12 @@ the following bring-up changes:
 12. Clear the APSS watchdog enable register in `primary_entry` for the K1 kexec
     payload. This exact Image reached postmarketOS SSH and remained stable; the
     direct candidate using the same clear still encountered a later blocker.
+13. Release the diagnostic `early_memremap()` mapping before
+    `early_ioremap_reset()` and use `phys_to_virt()` only after `paging_init()`.
+    This is a diagnostic framebuffer lifetime fix, not a proposed display
+    driver.
+14. Keep direct-boot command lines at 511 characters or fewer. The tested ABL
+    drops byte 512 and ignores the header-v2 `extra_cmdline` field.
 
 These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
 ICE removal, reduced memory map, and timing waits all need proper replacements.

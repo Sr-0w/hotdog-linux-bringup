@@ -126,6 +126,19 @@ produces a raw image for a temporary test and a partition-sized `boot.img`
 with an AVB `NONE` footer for structural validation. It also verifies that
 footer with `avbtool verify_image`. It never communicates with the phone.
 
+Although Android boot header v2 defines a 1024-byte `extra_cmdline` field, the
+tested HD1913 bootloader ignored it and copied at most 511 characters from the
+512-byte `cmdline` field before adding a terminator. This was confirmed by
+comparing the image metadata with `/proc/cmdline`: byte 512 was absent and the
+bootloader-supplied `lk_version=V1.0` token followed immediately. The builder
+therefore rejects command lines longer than 511 characters. Put boot-critical
+parameters first and keep the complete line within that limit; otherwise Linux
+can silently boot with a truncated token or without parameters stored in
+`extra_cmdline`.
+
+The runtime comparison and the first PID 1 trace are recorded in
+[the 2026-07-30 direct PID 1 evidence](evidence/2026-07-30-direct-pid1.md).
+
 The default `100663296`-byte partition size is the value observed on the
 tested HD1913. It is not permission to flash another device: verify that
 device's partition geometry and recovery path independently.

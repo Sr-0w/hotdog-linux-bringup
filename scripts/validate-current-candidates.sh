@@ -327,18 +327,48 @@ validate_acm_collector() {
 validate_reproducible_builder_guards() {
   local direct_builder="$HOTDOG_ROOT/scripts/build-mainline-direct-bootimg.sh"
   local dtb_chain="$HOTDOG_ROOT/scripts/build-mainline-k1-dtb-chain.sh"
+  local wrapper_builder="$HOTDOG_ROOT/scripts/build-mainline-pmos-wrapper-initramfs.sh"
+  local wrapper_binary_builder="$HOTDOG_ROOT/scripts/build-hotdog-mainline-el0-wrapper.sh"
+  local wrapper_source="$HOTDOG_ROOT/helpers/hotdog-mainline-el0-wrapper.S"
+  local long_cmdline="$tmpdir/direct-builder-512-byte-cmdline.txt"
+  local long_cmdline_log="$tmpdir/direct-builder-512-byte-cmdline.log"
+  local rejected_outdir="$HOTDOG_ROOT/images/pmos-experiments/validate-cmdline-limit-$$"
 
   require_file "$direct_builder"
   require_file "$dtb_chain"
-  bash -n "$direct_builder" "$dtb_chain"
+  require_file "$wrapper_builder"
+  require_file "$wrapper_binary_builder"
+  require_file "$wrapper_source"
+  bash -n "$direct_builder" "$dtb_chain" "$wrapper_builder" "$wrapper_binary_builder"
   require_text "direct builder rejects undersized FDT entries" "$direct_builder" "invalid FDT totalsize"
   require_text "direct builder bounds FDT entry size" "$direct_builder" "entry_size > remaining"
   require_text "direct builder pins source DTB pack" "$direct_builder" "components/source-dtb-pack"
   require_text "direct builder pins original DTB entry" "$direct_builder" "components/original-entry.dtb"
+  printf '%0512d\n' 0 > "$long_cmdline"
+  if "$direct_builder" \
+      --kernel "$direct_builder" \
+      --dtb "$direct_builder" \
+      --ramdisk "$direct_builder" \
+      --cmdline-file "$long_cmdline" \
+      --outdir "$rejected_outdir" > "$long_cmdline_log" 2>&1; then
+    fail "direct builder accepted a 512-byte command line"
+  fi
+  grep -q 'only forwards 511 characters from the 512-byte header field' "$long_cmdline_log" ||
+    fail "direct builder did not report the hotdog 511-character command-line limit"
+  [ ! -e "$rejected_outdir" ] ||
+    fail "direct builder created output before rejecting a 512-byte command line"
+  require_text "EL0 wrapper builder uses tracked source" "$wrapper_binary_builder" \
+    'SOURCE="$HOTDOG_ROOT/helpers/hotdog-mainline-el0-wrapper.S"'
+  require_text "initramfs builder supports RESTART2 rescue" "$wrapper_builder" \
+    "--reboot-mode-helper"
+  require_text "initramfs builder validates gen_init_cpio diagnostics" "$wrapper_builder" \
+    "gen-init-cpio.txt"
+  grep -q 'HOTDOG_EL0_STATIC_WRAPPER' "$wrapper_source" ||
+    fail "tracked EL0 wrapper source lacks its identity marker"
   require_text "K1 chain documents unpinned opt-in" "$dtb_chain" "--allow-unpinned-base"
   require_text "K1 chain rejects unpinned base by default" "$dtb_chain" "K1 base DTB hash mismatch"
   require_text "K1 chain normalizes relative output paths" "$dtb_chain" 'OUTDIR="$(readlink -m "$OUTDIR")"'
-  log "direct-boot and K1 DTB builder guards validated"
+  log "direct-boot command-line, payload, and K1 DTB builder guards validated"
 }
 
 validate_direct_d1_artifacts_and_launcher() {

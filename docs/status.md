@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-07-15
+Last updated: 2026-07-30
 
 ## Tested hardware
 
@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Reaches level-6 initcalls; pre-MMU visual checkpoints prepared | A guarded Image-resident trace reached global initcall 524, level 6, and stopped inside `calibrate_xor_blocks()`. Its `do_xor_speed()` waits for `ktime_get()` to advance, matching the earlier RAID6 timing-loop failure. Both system-counter probes held at the fixed logo without yielding counter evidence. The next image arms the watchdog before the persistent breadcrumb and framebuffer diagnostics, then draws cumulative checkpoints before the first breadcrumb and before `__enable_mmu()`. The timer hypothesis remains unproven. |
+| Persistent direct boot | Active PID 1 userspace | The current trace completes `kernel_init_freeable()`, the global async wait, init-memory release, `kernel_execve()`, and the EL1-to-EL0 return. A PID 1-only trace records more than 16 syscalls. Direct USB and rootfs handoff remain unobserved. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -36,9 +36,9 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | OpenRC userspace | Working | Core boot, NetworkManager, SSH, and local services start. |
 | USB NCM | Working | The device is reachable at `172.16.42.1`. |
 | USB ACM | Working | A serial shell is exposed on `ttyGS0`. |
-| Early console | Partial | Kernel text is visible before the display path is lost. |
+| Early console | Diagnostic markers only | The inherited splash framebuffer carries pre-MMU, post-MMU, post-init, EL0-transition, exception, and PID 1 syscall markers. A normal console is not retained. |
 | DRM/panel | Not working | Mainline display clocks and the panel pipeline are not enabled. |
-| Framebuffer | Not working | `simple-framebuffer` fails to reserve its memory with `-12`. |
+| Framebuffer | Diagnostic only | The kernel can write the inherited splash buffer directly. A working userspace fbdev or DRM device has not been demonstrated in direct boot. |
 | RAM | Partial | Approximately 448 MiB is available with the low-bank map. |
 | Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
@@ -68,8 +68,9 @@ possible.
 ## Definition of the next milestone
 
 The next milestone is a reproducible pmaports build that boots mainline without
-the downstream kexec bridge, exposes the complete RAM map, and retains USB SSH.
-Display support can then be developed without losing the remote debug channel.
+the downstream kexec bridge, mounts the postmarketOS rootfs, and retains USB
+SSH. Complete RAM and display support can then be developed without losing the
+remote debug channel.
 
 ## Current validation queue
 
@@ -199,6 +200,21 @@ Display support can then be developed without losing the remote debug channel.
 57. Use the r5 package config for the next direct candidate, but continue to
    investigate why the early `jiffies`-based benchmark stalls before treating
    benchmark removal as the final timer fix.
+58. Keep the post-`paging_init()` mapping result as proof that a surviving
+    `early_memremap()` pointer was invalid after `early_ioremap_reset()`. The
+    normal linear mapping makes the post-init markers reliable.
+59. Keep the PID 1-only syscall result as proof of active direct-boot EL0
+    userspace. It recorded entry and return from the first syscall, a second
+    syscall, and at least 16 calls without exposing USB.
+60. Enforce the observed HD1913 bootloader limit of 511 command-line
+    characters. The previous `rdinit=` lived in ignored `extra_cmdline`, so its
+    syscall trace described the original `/init`, not the static wrapper.
+61. Test the hash-pinned compact-cmdline candidate with the same kernel and DTB.
+    It adds only an effective `rdinit=` and a watchdog fallback that requests
+    `RESTART2(bootloader)` before attempting a normal reboot.
 
-Exact timestamps, identities, and restore hashes are recorded in
-[the 2026-07-15 RAID6 checkpoint evidence](evidence/2026-07-15-raid6-direct-boot.md).
+Exact timestamps, identities, and restore hashes for the checkpoint search are
+recorded in
+[the 2026-07-15 RAID6 evidence](evidence/2026-07-15-raid6-direct-boot.md).
+The later mapping, PID 1, and command-line results are recorded in
+[the 2026-07-30 direct PID 1 evidence](evidence/2026-07-30-direct-pid1.md).

@@ -174,7 +174,9 @@ esac
 cmdline="$(tr '\n' ' ' < "$cmdline_file" | awk '{$1=$1; print}')"
 [ -n "$cmdline" ] || die "kernel command line is empty"
 cmdline_size="$(printf '%s' "$cmdline" | wc -c | tr -d ' ')"
-[ "$cmdline_size" -le 1536 ] || die "kernel command line is $cmdline_size bytes; header v2 allows 1536"
+[ "$cmdline_size" -le 511 ] || {
+	die "kernel command line is $cmdline_size bytes; the hotdog bootloader only forwards 511 characters from the 512-byte header field"
+}
 
 components_dir="$outdir/components"
 verify_dir="$outdir/verify-unpack"
