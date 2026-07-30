@@ -582,7 +582,10 @@ validate_current_direct_dwc3_noop_candidate() {
   local image_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-193500-mainline617-direct-source-init2-dwc3-probe"
   local boot_image="$image_dir/boot.img"
   local embedded_dtb="$image_dir/components/dtb"
+  local embedded_kernel="$image_dir/components/kernel"
   local kexec_reference_dtb="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/components/dtb"
+  local extract_ikconfig="$HOTDOG_ROOT/src/kernel/linux-sm8150-mainline/scripts/extract-ikconfig"
+  local embedded_config="$tmpdir/current-direct-kernel.config"
   local noop_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo"
   local noop_dtbo="$noop_dir/dtbo_b-d3-entry5-noop.img"
   local noop_overlay="$noop_dir/components/noop-entry5.dtbo"
@@ -596,6 +599,8 @@ validate_current_direct_dwc3_noop_candidate() {
     "fa26b3668d3fc043936d13dadca6b34dc56a1bbc54d0ea92243cd128ec3324c2"
   check_sha "current direct embedded DTB" "$embedded_dtb" \
     "040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c"
+  check_sha "current direct embedded kernel" "$embedded_kernel" \
+    "906c86e037023a33d26b5b2de4341372c652d8897e9a964cf879873ab3196986"
   check_sha "known-good kexec DTB reference" "$kexec_reference_dtb" \
     "cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440"
   check_sha "current direct D3 no-op dtbo_b" "$noop_dtbo" \
@@ -608,6 +613,22 @@ validate_current_direct_dwc3_noop_candidate() {
     'CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"'
   require_text "current direct launcher pins D3 no-op hash" "$launcher" \
     "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+
+  require_file "$extract_ikconfig"
+  "$extract_ikconfig" "$embedded_kernel" > "$embedded_config"
+  for builtin in \
+    CONFIG_CONFIGFS_FS=y \
+    CONFIG_PHY_QCOM_USB_HS=y \
+    CONFIG_USB_DWC3=y \
+    CONFIG_USB_DWC3_QCOM=y \
+    CONFIG_USB_GADGET=y \
+    CONFIG_USB_LIBCOMPOSITE=y \
+    CONFIG_USB_CONFIGFS=y \
+    CONFIG_USB_CONFIGFS_ACM=y \
+    CONFIG_USB_CONFIGFS_NCM=y; do
+    grep -Fqx "$builtin" "$embedded_config" ||
+      fail "current direct kernel is missing built-in USB prerequisite: $builtin"
+  done
 
   fdtoverlay -i "$embedded_dtb" -o "$noop_merged" "$noop_overlay"
   cmp "$embedded_dtb" "$noop_merged" ||
@@ -628,7 +649,7 @@ validate_current_direct_dwc3_noop_candidate() {
     fail "D7 replay no longer reproduces the /soc@0 address-cell mutation"
   [ "$(fdtget -t i "$d7_merged" /soc@0 '#size-cells')" = "1" ] ||
     fail "D7 replay no longer reproduces the /soc@0 size-cell mutation"
-  log "current direct D3 no-op DTBO contract validated"
+  log "current direct D3 no-op DTBO and built-in USB contract validated"
 }
 
 validate_direct_followup_artifacts_and_launchers() {

@@ -99,7 +99,9 @@ That makes the unchanged four-cell mainline `reg` properties malformed and
 explains why the expected `a6f8800.usb` platform entry was absent. The next
 candidate keeps the same boot image and uses the D3 no-op DTBO, whose offline
 application leaves the embedded DTB byte-identical. The resulting DWC3 wrapper
-and HS-PHY subtrees match the known-good mainline kexec DTB property-for-property.
+and HS-PHY subtrees match the known-good mainline kexec DTB property-for-property,
+and every driver needed to expose the configfs NCM/ACM gadget is built into the
+exact candidate kernel.
 A detached host supervisor still
 restores and verifies R6 whenever Fastboot becomes visible.
 
