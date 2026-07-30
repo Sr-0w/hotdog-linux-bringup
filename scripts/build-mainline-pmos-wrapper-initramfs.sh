@@ -39,9 +39,9 @@ Options:
                         rescue watchdog request bootloader mode before its
                         normal-reboot fallback.
   --apss-wdt-helper FILE
-                        Add the static APSS watchdog helper. Arm a bootloader
-                        fallback 30 seconds beyond the initramfs deadline and
-                        disarm it only after the configured success marker.
+                        Add the static APSS watchdog helper. Keep a 32-second
+                        bootloader fallback alive until the initramfs deadline
+                        and disarm it only after the configured success marker.
 	--userspace-stage-helper FILE
 	                        Add the static stage helper and replace /init plus
 	                        /init_2nd.sh with instrumented copies that mark the
@@ -147,7 +147,7 @@ if [ -n "$APSS_WDT_HELPER" ]; then
 			"$APSS_WDT_HELPER" >&2
 		exit 2
 	}
-	grep -a -q 'HOTDOG_APSS_WDT_CONTROL_V2' "$APSS_WDT_HELPER" || {
+	grep -a -q 'HOTDOG_APSS_WDT_CONTROL_V3' "$APSS_WDT_HELPER" || {
 		printf 'APSS watchdog helper marker is missing: %s\n' \
 			"$APSS_WDT_HELPER" >&2
 		exit 2
@@ -632,13 +632,26 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 				print "\treturn 1"
 				print "}"
 				print ""
+				print "hotdog_rescue_watchdog_kick_hardware() {"
+				print "\t[ -e /tmp/hotdog_apss_wdt.armed ] || return 0"
+				print "\tif /hotdog-apss-wdt-control --kick >/dev/null 2>&1; then"
+				print "\t\treturn 0"
+				print "\tfi"
+				print "\tif [ ! -e /tmp/hotdog_apss_wdt.kick-failed ]; then"
+				print "\t\t: > /tmp/hotdog_apss_wdt.kick-failed 2>/dev/null || true"
+				print "\t\thotdog_rescue_watchdog_log \"APSS hardware fallback kick failed\""
+				print "\tfi"
+				print "\treturn 1"
+				print "}"
+				print ""
 				print
 				disarm_function = 1
+				kick_function = 1
 				next
 			}
 
 			/^[[:space:]]*local pid sec[[:space:]]*$/ && !hardware_local {
-				print "\tlocal pid sec hardware_sec"
+				print "\tlocal pid sec"
 				hardware_local = 1
 				next
 			}
@@ -647,10 +660,9 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 					!armed {
 				print
 				print "\tmkdir -p /tmp 2>/dev/null || true"
-				print "\thardware_sec=$((sec + 30))"
-				print "\tif /hotdog-apss-wdt-control --arm-bootloader \"$hardware_sec\"; then"
+				print "\tif /hotdog-apss-wdt-control --arm-bootloader 32; then"
 				print "\t\tif : > /tmp/hotdog_apss_wdt.armed 2>/dev/null; then"
-				print "\t\t\thotdog_rescue_watchdog_log \"APSS hardware fallback armed for ${hardware_sec}s\""
+				print "\t\t\thotdog_rescue_watchdog_log \"APSS hardware fallback armed for 32s with periodic kicks\""
 				print "\t\telse"
 				print "\t\t\thotdog_rescue_watchdog_log \"APSS hardware marker failed; disarming fallback\""
 				print "\t\t\t/hotdog-apss-wdt-control --disarm || true"
@@ -659,6 +671,14 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 				print "\t\thotdog_rescue_watchdog_log \"APSS hardware fallback unavailable\""
 				print "\tfi"
 				armed = 1
+				next
+			}
+
+			/^[[:space:]]*while \[ "\$slept" -lt "\$sec" \]; do[[:space:]]*$/ &&
+					!kick_loop {
+				print
+				print "\t\t\thotdog_rescue_watchdog_kick_hardware || true"
+				kick_loop = 1
 				next
 			}
 
@@ -683,7 +703,8 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 			{ print }
 
 			END {
-				if (!(disarm_function && hardware_local && armed &&
+				if (!(disarm_function && kick_function && hardware_local &&
+				      armed && kick_loop &&
 				      success == 2 && skipped == 2))
 					exit 42
 			}
@@ -803,6 +824,7 @@ if [ -n "$APSS_WDT_HELPER" ]; then
 	grep -qx 'hotdog-apss-wdt-control' "$OUTDIR/overlay-contents.txt"
 	grep -q 'APSS hardware fallback armed' "$watchdog_override"
 	grep -q '/hotdog-apss-wdt-control --arm-bootloader' "$watchdog_override"
+	grep -q '/hotdog-apss-wdt-control --kick' "$watchdog_override"
 	grep -q '/hotdog-apss-wdt-control --disarm' "$watchdog_override"
 fi
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then

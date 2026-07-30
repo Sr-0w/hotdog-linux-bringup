@@ -19,7 +19,7 @@
 #define RESTART_REASON_NORMAL 0x77665501U
 #define WDT_RATE 32764U
 #define MIN_TIMEOUT_SEC 10U
-#define MAX_TIMEOUT_SEC 3600U
+#define MAX_TIMEOUT_SEC 32U
 #define WDT_RST 0x04
 #define WDT_EN 0x08
 #define WDT_STS 0x0c
@@ -30,6 +30,7 @@ enum operation {
 	OP_SHOW,
 	OP_DISABLE,
 	OP_DISARM,
+	OP_KICK,
 	OP_ARM_BOOTLOADER,
 };
 
@@ -57,7 +58,8 @@ static void show_registers(volatile uint8_t *base, const char *label)
 static void usage(const char *name)
 {
 	fprintf(stderr,
-		"usage: %s [--disable | --disarm | --arm-bootloader SECONDS]\n",
+		"usage: %s [--disable | --disarm | --kick | "
+		"--arm-bootloader SECONDS]\n",
 		name);
 }
 
@@ -97,6 +99,8 @@ int main(int argc, char **argv)
 		operation = OP_DISABLE;
 	} else if (argc == 2 && strcmp(argv[1], "--disarm") == 0) {
 		operation = OP_DISARM;
+	} else if (argc == 2 && strcmp(argv[1], "--kick") == 0) {
+		operation = OP_KICK;
 	} else if (argc == 3 &&
 		   strcmp(argv[1], "--arm-bootloader") == 0 &&
 		   parse_timeout(argv[2], &timeout_sec)) {
@@ -141,7 +145,7 @@ int main(int argc, char **argv)
 		imem = imem_mapping;
 	}
 
-	printf("HOTDOG_APSS_WDT_CONTROL_V2\n");
+	printf("HOTDOG_APSS_WDT_CONTROL_V3\n");
 	show_registers(wdt, "before");
 	if (operation == OP_DISABLE || operation == OP_DISARM) {
 		write_reg(wdt, WDT_EN, 0);
@@ -156,6 +160,9 @@ int main(int argc, char **argv)
 			close(fd);
 			return 7;
 		}
+	} else if (operation == OP_KICK) {
+		write_reg(wdt, WDT_RST, 1);
+		show_registers(wdt, "after");
 	} else if (operation == OP_ARM_BOOTLOADER) {
 		ticks = timeout_sec * WDT_RATE;
 		write_reg(imem, imem_offset, RESTART_REASON_BOOTLOADER);

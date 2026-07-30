@@ -17,10 +17,11 @@ through the validated downstream 4.14 kexec bridge. A persistent image launched
 directly by the OnePlus bootloader now completes kernel initialization, executes
 PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
 postmarketOS stage-two init. It currently stalls inside `setup_udev`. Direct
-rootfs and USB access remain under active bring-up. A repeat run exposed a
-separate 30-second diagnostic-watchdog race after all 986 initcalls; the next
-hash-pinned image raises that early deadline to 120 seconds and disables it
-before recording the final breadcrumb.
+rootfs and USB access remain under active bring-up. Repeat runs exposed two
+timeout overflows after all 986 initcalls: first in the early kernel watchdog,
+then in the PID 1 fallback. The current hash-pinned image disables the former
+before its final breadcrumb and keeps the latter alive with repeated
+hardware-safe 32-second intervals.
 
 | Component | Status | Notes |
 |---|---|---|

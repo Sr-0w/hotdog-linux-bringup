@@ -226,16 +226,23 @@ remote debug channel.
     returns from `udevd`, `udevadm trigger`, and `udevadm settle`, and return
     from `setup_usb_network`. A udev command still blocked after 15 seconds
     leaves its cell hollow while stage two continues. Its PID 1 rescue path
-    also arms the APSS watchdog for 330 seconds with a bootloader restart
-    reason, so a full userspace wedge should return to host-visible Fastboot
-    without exhausting slot retries. Both the bounded progression and the
-    userspace APSS integration remain pending hardware validation.
+    also arms the APSS watchdog for 32 seconds with a bootloader restart
+    reason, kicks it once per second until the 300-second logical deadline,
+    and then stops feeding it. A full userspace wedge should therefore return
+    to host-visible Fastboot without exhausting slot retries. Both the bounded
+    progression and the userspace APSS integration remain pending hardware
+    validation.
 65. Keep the first bounded-udev launch as evidence for an independent early
     watchdog race. Two Sahara captures after separate boots both reported
     valid stage 400/detail 986: every initcall had returned, but the 30-second
-    APSS watchdog bit before its following disable completed. The superseding
-    image uses a 120-second early deadline and disables it before recording
-    stage 400; all later userspace inputs remain byte-identical.
+    APSS watchdog bit before its following disable completed. A 120-second
+    attempt wrapped the hardware's 20-bit timeout field to about 24 seconds.
+    It still reached stage 400/detail 986 before entering `900e`, proving the
+    kernel-side disable completed and exposing a second overflow: PID 1's old
+    330-second request wrapped to about 10 seconds. The superseding image uses
+    the maximum non-wrapping 32-second kernel deadline, disables it before
+    stage 400, and feeds a separate 32-second PID 1 watchdog until the logical
+    rescue deadline.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

@@ -112,9 +112,11 @@ it to the wrapper:
   --apss-wdt-helper build/tools/hotdog-apss-wdt-control/hotdog-apss-wdt-control
 ```
 
-The generated rescue script arms the APSS watchdog 30 seconds beyond
-`hotdog_rescue_watchdog_sec`, requests bootloader mode in IMEM, and disarms the
-hardware only after the configured success marker. This path is a bring-up
+The generated rescue script arms the APSS watchdog for the hardware-safe
+32-second maximum, requests bootloader mode in IMEM, and kicks it once per
+second until `hotdog_rescue_watchdog_sec` expires. It disarms the hardware only
+after the configured success marker; at the logical deadline it stops feeding
+the watchdog while attempting the normal reboot paths. This is a bring-up
 safety mechanism, not part of the intended production package.
 
 ## Promoting a new artifact
