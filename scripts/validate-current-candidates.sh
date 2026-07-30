@@ -332,6 +332,8 @@ validate_reproducible_builder_guards() {
   local wrapper_source="$HOTDOG_ROOT/helpers/hotdog-mainline-el0-wrapper.S"
   local stage_builder="$HOTDOG_ROOT/scripts/build-hotdog-userspace-stage.sh"
   local stage_source="$HOTDOG_ROOT/helpers/hotdog-userspace-stage.S"
+  local rescue_supervisor_builder="$HOTDOG_ROOT/scripts/build-hotdog-rescue-supervisor.sh"
+  local rescue_supervisor_source="$HOTDOG_ROOT/helpers/hotdog-rescue-supervisor.c"
   local long_cmdline="$tmpdir/direct-builder-512-byte-cmdline.txt"
   local long_cmdline_log="$tmpdir/direct-builder-512-byte-cmdline.log"
   local rejected_outdir="$HOTDOG_ROOT/images/pmos-experiments/validate-cmdline-limit-$$"
@@ -343,8 +345,10 @@ validate_reproducible_builder_guards() {
   require_file "$wrapper_source"
   require_file "$stage_builder"
   require_file "$stage_source"
+  require_file "$rescue_supervisor_builder"
+  require_file "$rescue_supervisor_source"
   bash -n "$direct_builder" "$dtb_chain" "$wrapper_builder" \
-    "$wrapper_binary_builder" "$stage_builder"
+    "$wrapper_binary_builder" "$stage_builder" "$rescue_supervisor_builder"
   require_text "direct builder rejects undersized FDT entries" "$direct_builder" "invalid FDT totalsize"
   require_text "direct builder bounds FDT entry size" "$direct_builder" "entry_size > remaining"
   require_text "direct builder pins source DTB pack" "$direct_builder" "components/source-dtb-pack"
@@ -384,8 +388,12 @@ validate_reproducible_builder_guards() {
     'udevadm settle'
   require_text "initramfs builder supports bounded udev tracing" "$wrapper_builder" \
     "udev-bounded"
+  require_text "initramfs builder supports deep bounded udev tracing" "$wrapper_builder" \
+    "udev-bounded-deep"
   require_text "bounded udev tracing records timeouts" "$wrapper_builder" \
     "HOTDOG_USERSPACE_STAGE_TIMEOUT="
+  require_text "initramfs builder supports static rescue supervision" "$wrapper_builder" \
+    "--rescue-supervisor"
   require_text "initramfs builder validates all stage markers" "$wrapper_builder" \
     'grep -c '\''^/hotdog-userspace-stage '\'''
   require_text "initramfs builder validates gen_init_cpio diagnostics" "$wrapper_builder" \
@@ -396,6 +404,10 @@ validate_reproducible_builder_guards() {
     fail "tracked EL0 wrapper source lacks its identity marker"
   grep -q 'HOTDOG_USERSPACE_STAGE_V1' "$stage_source" ||
     fail "tracked userspace-stage source lacks its identity marker"
+  require_text "rescue supervisor builder uses tracked source" "$rescue_supervisor_builder" \
+    'SOURCE="$HOTDOG_ROOT/helpers/hotdog-rescue-supervisor.c"'
+  grep -q 'HOTDOG_RESCUE_SUPERVISOR_V1' "$rescue_supervisor_source" ||
+    fail "tracked rescue supervisor source lacks its identity marker"
   require_text "K1 chain documents unpinned opt-in" "$dtb_chain" "--allow-unpinned-base"
   require_text "K1 chain rejects unpinned base by default" "$dtb_chain" "K1 base DTB hash mismatch"
   require_text "K1 chain normalizes relative output paths" "$dtb_chain" 'OUTDIR="$(readlink -m "$OUTDIR")"'

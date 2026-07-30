@@ -281,10 +281,46 @@ validate_k1_aport_inputs() {
 		"expected $((source_count - tar_count)) K1 local inputs, found $local_count"
 }
 
+validate_rescue_supervisor_source() {
+	local source="helpers/hotdog-rescue-supervisor.c"
+	local builder="scripts/build-hotdog-rescue-supervisor.sh"
+	local initramfs_builder="scripts/build-mainline-pmos-wrapper-initramfs.sh"
+
+	[ -f "$source" ] || die "missing rescue supervisor source: $source"
+	[ -x "$builder" ] || die "missing executable rescue supervisor builder: $builder"
+	[ -x "$initramfs_builder" ] ||
+		die "missing executable initramfs builder: $initramfs_builder"
+
+	log "static rescue supervisor source contract"
+	cc -std=c11 -Wall -Wextra -Werror -fsyntax-only "$source"
+	grep -q 'HOTDOG_RESCUE_SUPERVISOR_V1' "$source" ||
+		die "rescue supervisor identity marker is missing"
+	grep -q 'CLOCK_MONOTONIC' "$source" ||
+		die "rescue supervisor does not use a monotonic clock"
+	grep -q 'LINUX_REBOOT_CMD_RESTART2' "$source" ||
+		die "rescue supervisor lacks RESTART2"
+	grep -q 'RESTART_REASON_BOOTLOADER' "$source" ||
+		die "rescue supervisor lacks the bootloader restart reason"
+	grep -q 'WDT_TIMEOUT_SEC 32U' "$source" ||
+		die "rescue supervisor APSS fallback is not bounded to 32 seconds"
+	if grep -Eq '(^|[^[:alnum:]_])sync[[:space:]]*\(' "$source"; then
+		die "rescue supervisor deadline path must not block in sync()"
+	fi
+
+	grep -q 'zig cc -target aarch64-linux-musl -static' "$builder" ||
+		die "rescue supervisor builder does not pin a static AArch64 target"
+	grep -q 'qemu-aarch64 "$OUTPUT" --self-test' "$builder" ||
+		die "rescue supervisor builder lacks its QEMU self-test"
+	grep -q -- '--rescue-supervisor FILE' "$initramfs_builder" ||
+		die "initramfs builder does not document --rescue-supervisor"
+	grep -q 'hotdog-rescue-supervisor' "$initramfs_builder" ||
+		die "initramfs builder does not package the rescue supervisor"
+}
+
 main() {
 	local command_name
 
-	for command_name in bash cmp find git python3 sha512sum shellcheck sort; do
+	for command_name in bash cc cmp find git python3 sha512sum shellcheck sort; do
 		require_command "$command_name"
 	done
 
@@ -297,6 +333,7 @@ main() {
 	validate_public_markers
 	validate_k1_patch_copies
 	validate_k1_aport_inputs
+	validate_rescue_supervisor_source
 
 	log "all checks passed"
 }

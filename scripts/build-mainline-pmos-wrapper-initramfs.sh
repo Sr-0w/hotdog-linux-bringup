@@ -12,6 +12,7 @@ USERSPACE_FB_MARKER=0
 WRAPPER_BINARY=""
 REBOOT_MODE_HELPER=""
 APSS_WDT_HELPER=""
+RESCUE_SUPERVISOR=""
 USERSPACE_STAGE_HELPER=""
 USERSPACE_STAGE_PROFILE="handoff"
 SOURCE_INIT_2ND=0
@@ -43,17 +44,25 @@ Options:
                         Add the static APSS watchdog helper. Keep a 32-second
                         bootloader fallback alive until the initramfs deadline
                         and disarm it only after the configured success marker.
-	--userspace-stage-helper FILE
-	                        Add the static stage helper and replace /init plus
-	                        /init_2nd.sh with instrumented copies that mark the
-	                        stage-one handoff and early stage-two setup.
+  --rescue-supervisor FILE
+                        Replace the shell watchdog worker with a static
+                        monotonic-deadline supervisor. It performs RESTART2
+                        directly and keeps a 32-second APSS fallback armed.
+  --userspace-stage-helper FILE
+                        Add the static stage helper and replace /init plus
+                        /init_2nd.sh with instrumented copies that mark the
+                        stage-one handoff and early stage-two setup.
   --userspace-stage-profile PROFILE
-                        Select stage-two checkpoints: handoff (default) or
-                        udev (udevd, trigger, settle, and USB networking).
+                        Select stage-two checkpoints: handoff (default),
+                        handoff-deep, udev, udev-bounded, or
+                        udev-bounded-deep.
                         handoff-deep separates both sourced function files,
                         watchdog return, and entry into setup_udev.
-                        udev-bounded keeps those checkpoints but moves past a
-                        command that is still blocked after 15 seconds.
+                        udev-bounded reports each udev command and moves past
+                        one that is still blocked after 15 seconds.
+                        udev-bounded-deep reports init_2nd entry, function
+                        sources, watchdog return, bounded setup_udev return,
+                        and USB networking return.
   --source-init-2nd     Source /init_2nd.sh at the first stage handoff instead
                         of executing it. This diagnostic mode isolates a
                         blocked second execve while preserving PID 1.
@@ -71,6 +80,7 @@ while [ "$#" -gt 0 ]; do
 		--wrapper-binary) WRAPPER_BINARY="$2"; shift ;;
 		--reboot-mode-helper) REBOOT_MODE_HELPER="$2"; shift ;;
 		--apss-wdt-helper) APSS_WDT_HELPER="$2"; shift ;;
+		--rescue-supervisor) RESCUE_SUPERVISOR="$2"; shift ;;
 		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
 		--userspace-stage-profile) USERSPACE_STAGE_PROFILE="$2"; shift ;;
 		--source-init-2nd) SOURCE_INIT_2ND=1 ;;
@@ -119,7 +129,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|handoff-deep|udev|udev-bounded) ;;
+	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -165,7 +175,32 @@ if [ -n "$APSS_WDT_HELPER" ]; then
 		exit 2
 	}
 fi
+if [ -n "$RESCUE_SUPERVISOR" ]; then
+	[ -z "$REBOOT_MODE_HELPER" ] && [ -z "$APSS_WDT_HELPER" ] || {
+		printf '%s is mutually exclusive with %s and %s\n' \
+			"--rescue-supervisor" "--reboot-mode-helper" \
+			"--apss-wdt-helper" >&2
+		exit 2
+	}
+	[ -x "$RESCUE_SUPERVISOR" ] || {
+		printf 'Missing executable rescue supervisor: %s\n' \
+			"$RESCUE_SUPERVISOR" >&2
+		exit 2
+	}
+	file "$RESCUE_SUPERVISOR" |
+		grep -q 'ELF 64-bit LSB executable, ARM aarch64' || {
+		printf 'Rescue supervisor is not an AArch64 executable: %s\n' \
+			"$RESCUE_SUPERVISOR" >&2
+		exit 2
+	}
+	grep -a -q 'HOTDOG_RESCUE_SUPERVISOR_V1' "$RESCUE_SUPERVISOR" || {
+		printf 'Rescue supervisor marker is missing: %s\n' \
+			"$RESCUE_SUPERVISOR" >&2
+		exit 2
+	}
+fi
 if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ] ||
+		[ -n "$RESCUE_SUPERVISOR" ] ||
 		[ -n "$USERSPACE_STAGE_HELPER" ]; then
 	[ -x "$HOTDOG_ROOT/scripts/extract-last-newc-member.py" ] || {
 		printf 'Missing newc extractor: %s\n' \
@@ -451,6 +486,56 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 					exit 42
 			}
 		' "$init_2nd_original" > "$init_2nd_override"
+	elif [ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
+		awk '
+				function marker(stage) {
+					print "/hotdog-userspace-stage " stage
+				}
+
+				/^#!\/bin\/busybox ash$/ && !stage6 {
+					print
+					marker(6)
+					stage6 = 1
+					next
+				}
+
+				/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
+						!stage7 {
+					print
+					marker(7)
+					stage7 = 1
+					next
+				}
+
+				/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
+						!stage8 {
+					print
+					marker(8)
+					stage8 = 1
+					next
+				}
+
+				/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
+					print
+					marker(9)
+					stage9 = 1
+					next
+				}
+
+				/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage10 {
+					print
+					marker(10)
+					stage10 = 1
+					next
+				}
+
+				{ print }
+
+				END {
+					if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+						exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
 	else
 		awk '
 			function marker(stage) {
@@ -478,7 +563,11 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 					exit 42
 			}
 		' "$init_2nd_original" > "$init_2nd_override"
+	fi
 
+	if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
 		"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 			"$BASE_CPIO" init_functions_2nd.sh \
 			> "$init_functions_2nd_original"
@@ -519,7 +608,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 				}
 			' "$init_functions_2nd_original" > "$init_functions_2nd_override"
 		else
-			awk '
+			awk -v deep="$([ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] && printf 1 || printf 0)" '
 				/^setup_udev\(\)[[:space:]]*\{/ && !runner {
 					print "hotdog_stage_run() {"
 					print "\tlocal stage=\"$1\" pid remaining=15 status=0"
@@ -533,7 +622,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 					print "\tif ! kill -0 \"$pid\" 2>/dev/null; then"
 					print "\t\twait \"$pid\""
 					print "\t\tstatus=$?"
-					print "\t\t/hotdog-userspace-stage \"$stage\""
+					print "\t\t[ \"$stage\" = \"-\" ] || /hotdog-userspace-stage \"$stage\""
 					print "\t\treturn \"$status\""
 					print "\tfi"
 					print "\tprintf \"<4>HOTDOG_USERSPACE_STAGE_TIMEOUT=%s\\n\" \"$stage\" > /dev/kmsg 2>/dev/null || true"
@@ -550,20 +639,26 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 
 				/^[[:space:]]*udevd -d --resolve-names=never[[:space:]]*$/ &&
 						!stage7 {
-					print "\thotdog_stage_run 7 udevd -d --resolve-names=never"
+					print deep ?
+						"\thotdog_stage_run - udevd -d --resolve-names=never" :
+						"\thotdog_stage_run 7 udevd -d --resolve-names=never"
 					stage7 = 1
 					next
 				}
 
 				/^[[:space:]]*udevadm trigger --type=devices --action=add[[:space:]]*$/ &&
 						!stage8 {
-					print "\thotdog_stage_run 8 udevadm trigger --type=devices --action=add"
+					print deep ?
+						"\thotdog_stage_run - udevadm trigger --type=devices --action=add" :
+						"\thotdog_stage_run 8 udevadm trigger --type=devices --action=add"
 					stage8 = 1
 					next
 				}
 
 				/^[[:space:]]*udevadm settle[[:space:]]*$/ && !stage9 {
-					print "\thotdog_stage_run 9 udevadm settle"
+					print deep ?
+						"\thotdog_stage_run - udevadm settle" :
+						"\thotdog_stage_run 9 udevadm settle"
 					stage9 = 1
 					next
 				}
@@ -664,12 +759,46 @@ file /hooks-cleanup/01-hotdog-userspace-root-marker.sh $fb_marker_cleanup_hook 0
 EOF
 fi
 
-if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ] ||
+		[ -n "$RESCUE_SUPERVISOR" ]; then
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 		"$BASE_CPIO" hotdog_rescue_watchdog.sh > "$watchdog_original"
-	watchdog_input="$watchdog_original"
-	if [ -n "$REBOOT_MODE_HELPER" ]; then
-			awk '
+	if [ -n "$RESCUE_SUPERVISOR" ]; then
+		cp "$watchdog_original" "$watchdog_override"
+		cat >> "$watchdog_override" <<'SUPERVISOR_OVERRIDE'
+
+# Static monotonic supervisor override. This later definition intentionally
+# replaces the inherited shell-loop implementation above.
+hotdog_rescue_watchdog_start() {
+	local stage="$1"
+	local pid sec
+
+	if [ -e /tmp/hotdog_rescue_watchdog.started ]; then
+		if [ -r /tmp/hotdog_rescue_watchdog.pid ]; then
+			pid="$(cat /tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true)"
+			[ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+		fi
+		hotdog_rescue_watchdog_log "stale supervisor marker at $stage; rearming"
+		rm -f /tmp/hotdog_rescue_watchdog.started \
+			/tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true
+	fi
+
+	sec="$(hotdog_rescue_watchdog_cmdline_sec)" || return 0
+	mkdir -p /tmp 2>/dev/null || true
+	: > /tmp/hotdog_rescue_watchdog.started 2>/dev/null || true
+	hotdog_rescue_watchdog_log \
+		"static monotonic supervisor armed at $stage for ${sec}s"
+	/hotdog-rescue-supervisor \
+		--deadline "$sec" \
+		--success-file /tmp/hotdog_rescue_watchdog.root-mounted \
+		> /tmp/hotdog_rescue_supervisor.log 2>&1 &
+	echo $! > /tmp/hotdog_rescue_watchdog.pid 2>/dev/null || true
+}
+SUPERVISOR_OVERRIDE
+	else
+		watchdog_input="$watchdog_original"
+		if [ -n "$REBOOT_MODE_HELPER" ]; then
+		awk '
 			/sync 2>\/dev\/null \|\| true/ && !inserted {
 				print
 				print "\t\t\thotdog_rescue_watchdog_log \"requesting bootloader through RESTART2\""
@@ -685,10 +814,10 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 				if (!inserted)
 					exit 42
 			}
-		' "$watchdog_input" > "$watchdog_restart2_override"
-		watchdog_input="$watchdog_restart2_override"
-	fi
-	if [ -n "$APSS_WDT_HELPER" ]; then
+			' "$watchdog_input" > "$watchdog_restart2_override"
+			watchdog_input="$watchdog_restart2_override"
+		fi
+		if [ -n "$APSS_WDT_HELPER" ]; then
 		awk '
 			/^hotdog_rescue_watchdog_start\(\)[[:space:]]*\{/ &&
 					!disarm_function {
@@ -779,9 +908,10 @@ if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 				      success == 2 && skipped == 2))
 					exit 42
 			}
-		' "$watchdog_input" > "$watchdog_override"
-	else
-		cp "$watchdog_input" "$watchdog_override"
+			' "$watchdog_input" > "$watchdog_override"
+		else
+			cp "$watchdog_input" "$watchdog_override"
+		fi
 	fi
 	chmod 0755 "$watchdog_override"
 	cat >> "$list_file" <<EOF
@@ -794,6 +924,10 @@ EOF
 	if [ -n "$APSS_WDT_HELPER" ]; then
 		printf 'file /hotdog-apss-wdt-control %s 0755 0 0\n' \
 			"$APSS_WDT_HELPER" >> "$list_file"
+	fi
+	if [ -n "$RESCUE_SUPERVISOR" ]; then
+		printf 'file /hotdog-rescue-supervisor %s 0755 0 0\n' \
+			"$RESCUE_SUPERVISOR" >> "$list_file"
 	fi
 fi
 
@@ -883,7 +1017,8 @@ if [ "$USERSPACE_FB_MARKER" -eq 1 ]; then
 	grep -a -q 'wrapper-entry' "$wrapper"
 	grep -a -q 'wrapper-exec-init' "$wrapper"
 fi
-if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ] ||
+		[ -n "$RESCUE_SUPERVISOR" ]; then
 	grep -qx 'hotdog_rescue_watchdog.sh' "$OUTDIR/overlay-contents.txt"
 fi
 if [ -n "$REBOOT_MODE_HELPER" ]; then
@@ -898,6 +1033,13 @@ if [ -n "$APSS_WDT_HELPER" ]; then
 	grep -q '/hotdog-apss-wdt-control --kick' "$watchdog_override"
 	grep -q '/hotdog-apss-wdt-control --disarm' "$watchdog_override"
 fi
+if [ -n "$RESCUE_SUPERVISOR" ]; then
+	grep -qx 'hotdog-rescue-supervisor' "$OUTDIR/overlay-contents.txt"
+	grep -q 'static monotonic supervisor armed' "$watchdog_override"
+	grep -q '/hotdog-rescue-supervisor' "$watchdog_override"
+	grep -q -- '--success-file /tmp/hotdog_rescue_watchdog.root-mounted' \
+		"$watchdog_override"
+fi
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	grep -qx 'hotdog-userspace-stage' "$OUTDIR/overlay-contents.txt"
 	grep -qx 'init' "$OUTDIR/overlay-contents.txt"
@@ -907,7 +1049,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	done
 	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_override")" -eq 11 ]
 	if [ "$USERSPACE_STAGE_PROFILE" = handoff ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = handoff-deep ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = handoff-deep ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
 		for stage in $(seq 6 10); do
 			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
 		done
@@ -916,25 +1059,34 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -qx '/hotdog-userspace-stage 6' "$init_2nd_override"
 		grep -qx '/hotdog-userspace-stage 10' "$init_2nd_override"
 		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
-		if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
-			for stage in $(seq 7 9); do
-				grep -qx "	/hotdog-userspace-stage $stage" \
-					"$init_functions_2nd_override"
+		fi
+		if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||
+				[ "$USERSPACE_STAGE_PROFILE" = udev-bounded ] ||
+				[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
+			grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
+			if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+				for stage in $(seq 7 9); do
+					grep -qx "	/hotdog-userspace-stage $stage" \
+						"$init_functions_2nd_override"
 			done
 			[ "$(grep -c '^[[:space:]]*/hotdog-userspace-stage ' \
 				"$init_functions_2nd_override")" -eq 3 ]
-		else
-			for stage in $(seq 7 9); do
-				grep -q "hotdog_stage_run $stage " \
+			elif [ "$USERSPACE_STAGE_PROFILE" = udev-bounded ]; then
+				for stage in $(seq 7 9); do
+					grep -q "hotdog_stage_run $stage " \
+						"$init_functions_2nd_override"
+				done
+			else
+				[ "$(grep -c 'hotdog_stage_run - ' \
+					"$init_functions_2nd_override")" -eq 3 ]
+			fi
+			if [ "$USERSPACE_STAGE_PROFILE" != udev ]; then
+				grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
 					"$init_functions_2nd_override"
-			done
-			grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
-				"$init_functions_2nd_override"
-			grep -q 'remaining=15' "$init_functions_2nd_override"
+				grep -q 'remaining=15' "$init_functions_2nd_override"
+			fi
 		fi
-		grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
 	fi
-fi
 file "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/file-report.txt"
 sha256sum "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/SHA256SUMS"
 
@@ -946,6 +1098,7 @@ printf 'Large userspace framebuffer marker: %s\n' "$USERSPACE_FB_MARKER"
 printf 'Prebuilt wrapper binary: %s\n' "${WRAPPER_BINARY:-none}"
 printf 'RESTART2 rescue helper: %s\n' "${REBOOT_MODE_HELPER:-none}"
 printf 'APSS watchdog helper: %s\n' "${APSS_WDT_HELPER:-none}"
+printf 'Static rescue supervisor: %s\n' "${RESCUE_SUPERVISOR:-none}"
 printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
 printf 'Userspace stage profile: %s\n' "$USERSPACE_STAGE_PROFILE"
 printf 'Source init_2nd handoff: %s\n' "$SOURCE_INIT_2ND"

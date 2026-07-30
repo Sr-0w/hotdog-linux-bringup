@@ -22,7 +22,10 @@ timeout overflows after all 986 initcalls: first in the early kernel watchdog,
 then in the PID 1 fallback. The corrected image disables the former before its
 final breadcrumb and reaches PID 1 with hardware-safe 32-second intervals.
 The periodic PID 1 watchdog did not produce a host-visible Fastboot return at
-its logical deadline, so unattended direct-boot recovery remains unresolved.
+its logical deadline. A standalone static supervisor now replaces that shell
+worker, uses a monotonic deadline, issues `RESTART2(bootloader)` itself, and
+keeps a 32-second APSS fallback armed. Its build and initramfs integration are
+validated offline; recovery from a real direct boot is still pending.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -64,11 +67,12 @@ and displayed the red failure screen instead of selecting successful slot A.
 The PM8150 PON bootloader reason works from a mainline kexec boot, but D46-D48
 did not make it a dependable pre-MMU recovery path. Current direct-boot tests
 therefore keep a verified R6 restore image, place one candidate on slot B, and
-classify the result from the display. The next bounded-udev candidate also arms
-the APSS watchdog from PID 1 with the bootloader restart reason. Hardware
-reached the postmarketOS stage-two handoff, but the userspace integration did
-not return the phone to Fastboot after its deadline. A detached host supervisor
-still restores and verifies R6 whenever Fastboot becomes visible.
+classify the result from the display. The tested bounded-udev candidate armed
+the APSS watchdog from PID 1 with the bootloader restart reason. That hardware
+test reached the postmarketOS stage-two handoff, but its shell worker did not
+return the phone to Fastboot after the logical deadline. The prepared follow-up
+uses the standalone static supervisor described above. A detached host
+supervisor still restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint

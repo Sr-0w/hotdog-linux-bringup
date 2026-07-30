@@ -101,23 +101,30 @@ waiting on it, its return marker stays hollow, and stage two continues toward
 USB and the rootfs. This profile is intended only for bring-up; it does not
 turn a skipped udev event into a supported production boot path.
 
-For a hardware-backed recovery deadline, build the tracked APSS helper and add
-it to the wrapper:
+The `udev-bounded-deep` profile keeps the same 15-second command limits but
+uses cells 6-10 for `init_2nd.sh` entry, function-source return, watchdog
+return, aggregate `setup_udev` return, and USB-network return. It is useful
+when the per-command profile never reaches its first udev marker.
+
+For a recovery deadline that does not depend on a shell loop, build the tracked
+static supervisor and add it to the wrapper:
 
 ```bash
-./scripts/build-hotdog-apss-wdt-control.sh
+./scripts/build-hotdog-rescue-supervisor.sh
 ./scripts/build-mainline-pmos-wrapper-initramfs.sh \
   --base-cpio build/path/to/initramfs-pmos.cpio \
-  --reboot-mode-helper build/hotdog-reboot-mode-aarch64 \
-  --apss-wdt-helper build/tools/hotdog-apss-wdt-control/hotdog-apss-wdt-control
+  --rescue-supervisor \
+    build/tools/hotdog-rescue-supervisor/hotdog-rescue-supervisor
 ```
 
-The generated rescue script arms the APSS watchdog for the hardware-safe
-32-second maximum, requests bootloader mode in IMEM, and kicks it once per
-second until `hotdog_rescue_watchdog_sec` expires. It disarms the hardware only
-after the configured success marker; at the logical deadline it stops feeding
-the watchdog while attempting the normal reboot paths. This is a bring-up
-safety mechanism, not part of the intended production package.
+The static process uses `CLOCK_MONOTONIC`, arms the APSS watchdog for the
+hardware-safe 32-second maximum, requests bootloader mode in IMEM, and kicks
+the hardware until `hotdog_rescue_watchdog_sec` expires. It disarms only after
+the rootfs marker. At the logical deadline it calls `RESTART2(bootloader)`
+directly; if that syscall returns, it stops feeding the hardware fallback.
+This option is mutually exclusive with the older split RESTART2 and APSS
+helpers. It remains a bring-up safety mechanism, not part of the intended
+production package.
 
 ## Promoting a new artifact
 

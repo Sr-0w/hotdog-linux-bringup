@@ -1,0 +1,287 @@
+#define _GNU_SOURCE
+
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <linux/reboot.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <time.h>
+#include <unistd.h>
+
+#ifndef DEVMEM_PATH
+#define DEVMEM_PATH "/dev/mem"
+#endif
+
+#define SUPERVISOR_MARKER "HOTDOG_RESCUE_SUPERVISOR_V1"
+#define APSS_WDT_PHYS 0x17c10000UL
+#define IMEM_RESTART_REASON_PHYS 0x146bf65cUL
+#define RESTART_REASON_BOOTLOADER 0x77665500U
+#define RESTART_REASON_NORMAL 0x77665501U
+#define WDT_RATE 32764U
+#define WDT_TIMEOUT_SEC 32U
+#define WDT_RST 0x04
+#define WDT_EN 0x08
+#define WDT_BARK_TIME 0x10
+#define WDT_BITE_TIME 0x14
+#define MIN_DEADLINE_SEC 10U
+#define MAX_DEADLINE_SEC 86400U
+
+struct hardware {
+	long page_size;
+	int fd;
+	void *wdt_mapping;
+	void *imem_mapping;
+	volatile uint8_t *wdt;
+	volatile uint8_t *imem;
+	size_t imem_offset;
+	bool armed;
+};
+
+static void usage(const char *name)
+{
+	fprintf(stderr,
+		"usage: %s --deadline SECONDS --success-file PATH\n"
+		"       %s --self-test\n",
+		name, name);
+}
+
+static bool parse_deadline(const char *value, uint32_t *seconds)
+{
+	char *end = NULL;
+	unsigned long parsed;
+
+	errno = 0;
+	parsed = strtoul(value, &end, 10);
+	if (errno != 0 || end == value || *end != '\0' ||
+	    parsed < MIN_DEADLINE_SEC || parsed > MAX_DEADLINE_SEC)
+		return false;
+
+	*seconds = (uint32_t)parsed;
+	return true;
+}
+
+static uint32_t read_reg(volatile uint8_t *base, size_t offset)
+{
+	return *(volatile uint32_t *)(base + offset);
+}
+
+static void write_reg(volatile uint8_t *base, size_t offset, uint32_t value)
+{
+	*(volatile uint32_t *)(base + offset) = value;
+	__sync_synchronize();
+}
+
+static void hardware_close(struct hardware *hardware)
+{
+	if (hardware->imem_mapping != MAP_FAILED)
+		munmap(hardware->imem_mapping, (size_t)hardware->page_size);
+	if (hardware->wdt_mapping != MAP_FAILED)
+		munmap(hardware->wdt_mapping, (size_t)hardware->page_size);
+	if (hardware->fd >= 0)
+		close(hardware->fd);
+}
+
+static bool hardware_open(struct hardware *hardware)
+{
+	unsigned long imem_page;
+
+	memset(hardware, 0, sizeof(*hardware));
+	hardware->fd = -1;
+	hardware->wdt_mapping = MAP_FAILED;
+	hardware->imem_mapping = MAP_FAILED;
+	hardware->page_size = sysconf(_SC_PAGESIZE);
+	if (hardware->page_size <= 0 ||
+	    APSS_WDT_PHYS % (unsigned long)hardware->page_size != 0) {
+		fprintf(stderr, "unsupported page size: %ld\n",
+			hardware->page_size);
+		return false;
+	}
+
+	imem_page = IMEM_RESTART_REASON_PHYS &
+		~((unsigned long)hardware->page_size - 1);
+	hardware->imem_offset =
+		(size_t)(IMEM_RESTART_REASON_PHYS - imem_page);
+	hardware->fd = open(DEVMEM_PATH, O_RDWR | O_SYNC);
+	if (hardware->fd < 0) {
+		fprintf(stderr, "open %s: %s\n", DEVMEM_PATH,
+			strerror(errno));
+		return false;
+	}
+
+	hardware->wdt_mapping =
+		mmap(NULL, (size_t)hardware->page_size,
+		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->fd,
+		     (off_t)APSS_WDT_PHYS);
+	if (hardware->wdt_mapping == MAP_FAILED) {
+		fprintf(stderr, "mmap watchdog 0x%lx: %s\n", APSS_WDT_PHYS,
+			strerror(errno));
+		hardware_close(hardware);
+		return false;
+	}
+
+	hardware->imem_mapping =
+		mmap(NULL, (size_t)hardware->page_size,
+		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->fd,
+		     (off_t)imem_page);
+	if (hardware->imem_mapping == MAP_FAILED) {
+		fprintf(stderr, "mmap restart reason 0x%lx: %s\n", imem_page,
+			strerror(errno));
+		hardware_close(hardware);
+		return false;
+	}
+
+	hardware->wdt = hardware->wdt_mapping;
+	hardware->imem = hardware->imem_mapping;
+	return true;
+}
+
+static bool hardware_arm(struct hardware *hardware)
+{
+	const uint32_t ticks = WDT_TIMEOUT_SEC * WDT_RATE;
+
+	write_reg(hardware->imem, hardware->imem_offset,
+		  RESTART_REASON_BOOTLOADER);
+	write_reg(hardware->wdt, WDT_EN, 0);
+	write_reg(hardware->wdt, WDT_RST, 1);
+	write_reg(hardware->wdt, WDT_BARK_TIME, ticks);
+	write_reg(hardware->wdt, WDT_BITE_TIME, ticks);
+	write_reg(hardware->wdt, WDT_EN, 1);
+	if ((read_reg(hardware->wdt, WDT_EN) & 1U) == 0 ||
+	    read_reg(hardware->wdt, WDT_BITE_TIME) != ticks) {
+		fprintf(stderr, "APSS watchdog did not arm as requested\n");
+		return false;
+	}
+
+	hardware->armed = true;
+	return true;
+}
+
+static void hardware_kick(struct hardware *hardware)
+{
+	if (hardware->armed)
+		write_reg(hardware->wdt, WDT_RST, 1);
+}
+
+static void hardware_disarm(struct hardware *hardware)
+{
+	if (!hardware->armed)
+		return;
+
+	write_reg(hardware->wdt, WDT_EN, 0);
+	write_reg(hardware->imem, hardware->imem_offset,
+		  RESTART_REASON_NORMAL);
+	hardware->armed = false;
+}
+
+static int sleep_one_second(void)
+{
+	struct timespec remaining = {
+		.tv_sec = 1,
+		.tv_nsec = 0,
+	};
+
+	while (nanosleep(&remaining, &remaining) < 0) {
+		if (errno != EINTR)
+			return -1;
+	}
+	return 0;
+}
+
+static int self_test(void)
+{
+	struct timespec before;
+	struct timespec after;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &before) < 0)
+		return 1;
+	if (sleep_one_second() < 0)
+		return 1;
+	if (clock_gettime(CLOCK_MONOTONIC, &after) < 0)
+		return 1;
+	if (after.tv_sec < before.tv_sec + 1)
+		return 1;
+
+	printf("%s SELF_TEST_OK\n", SUPERVISOR_MARKER);
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	struct hardware hardware;
+	const char *success_file = NULL;
+	uint32_t deadline_sec = 0;
+	uint32_t elapsed;
+	bool hardware_available;
+	long rc;
+	int i;
+
+	if (argc == 2 && strcmp(argv[1], "--self-test") == 0)
+		return self_test();
+
+	for (i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--deadline") == 0 && i + 1 < argc) {
+			if (!parse_deadline(argv[++i], &deadline_sec)) {
+				fprintf(stderr, "invalid deadline: %s\n", argv[i]);
+				return 2;
+			}
+		} else if (strcmp(argv[i], "--success-file") == 0 &&
+			   i + 1 < argc) {
+			success_file = argv[++i];
+		} else {
+			usage(argv[0]);
+			return 2;
+		}
+	}
+	if (deadline_sec == 0 || success_file == NULL ||
+	    success_file[0] != '/') {
+		usage(argv[0]);
+		return 2;
+	}
+
+	printf("%s deadline=%" PRIu32 " success=%s\n", SUPERVISOR_MARKER,
+	       deadline_sec, success_file);
+	hardware_available = hardware_open(&hardware);
+	if (hardware_available && !hardware_arm(&hardware)) {
+		hardware_close(&hardware);
+		hardware_available = false;
+	}
+
+	for (elapsed = 0; elapsed < deadline_sec; elapsed++) {
+		if (access(success_file, F_OK) == 0) {
+			if (hardware_available) {
+				hardware_disarm(&hardware);
+				hardware_close(&hardware);
+			}
+			printf("%s SUCCESS\n", SUPERVISOR_MARKER);
+			return 0;
+		}
+		if (hardware_available)
+			hardware_kick(&hardware);
+		if (sleep_one_second() < 0) {
+			fprintf(stderr, "nanosleep: %s\n", strerror(errno));
+			break;
+		}
+	}
+
+	fprintf(stderr, "%s DEADLINE_RESTART2\n", SUPERVISOR_MARKER);
+	rc = syscall(SYS_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+		     LINUX_REBOOT_CMD_RESTART2, "bootloader");
+	fprintf(stderr, "reboot(bootloader) returned: %s\n",
+		rc < 0 ? strerror(errno) : "unexpected success");
+
+	if (hardware_available) {
+		/*
+		 * Keep the watchdog armed and stop kicking it. If RESTART2 is
+		 * unavailable, the hardware fallback will fire within 32 seconds.
+		 */
+		hardware_close(&hardware);
+	}
+	return 1;
+}

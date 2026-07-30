@@ -14,7 +14,8 @@ Core requirements include:
   `unpack_bootimg`
 - Python 3 and postmarketOS `pmbootstrap`
 - OpenSSH, `sshpass`, and `socat` or `telnet` for diagnostic channels
-- QEMU user-mode AArch64 support for offline helper validation
+- Zig and QEMU user-mode AArch64 support for building and validating static
+  rescue helpers
 - ShellCheck for script validation
 
 Run the repository check to identify missing commands:
