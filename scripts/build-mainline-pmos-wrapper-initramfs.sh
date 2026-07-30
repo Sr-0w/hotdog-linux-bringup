@@ -44,6 +44,8 @@ Options:
   --userspace-stage-profile PROFILE
                         Select stage-two checkpoints: handoff (default) or
                         udev (udevd, trigger, settle, and USB networking).
+                        udev-bounded keeps those checkpoints but moves past a
+                        command that is still blocked after 15 seconds.
   -h, --help            Show this help.
 USAGE
 }
@@ -104,7 +106,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|udev) ;;
+	handoff|udev|udev-bounded) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -387,41 +389,100 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 			"$BASE_CPIO" init_functions_2nd.sh \
 			> "$init_functions_2nd_original"
-		awk '
-			function marker(stage) {
-				print "\t/hotdog-userspace-stage " stage
-			}
+		if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+			awk '
+				function marker(stage) {
+					print "\t/hotdog-userspace-stage " stage
+				}
 
-			/^[[:space:]]*udevd -d --resolve-names=never[[:space:]]*$/ &&
-					!stage7 {
-				print
-				marker(7)
-				stage7 = 1
-				next
-			}
+				/^[[:space:]]*udevd -d --resolve-names=never[[:space:]]*$/ &&
+						!stage7 {
+					print
+					marker(7)
+					stage7 = 1
+					next
+				}
 
-			/^[[:space:]]*udevadm trigger --type=devices --action=add[[:space:]]*$/ &&
-					!stage8 {
-				print
-				marker(8)
-				stage8 = 1
-				next
-			}
+				/^[[:space:]]*udevadm trigger --type=devices --action=add[[:space:]]*$/ &&
+						!stage8 {
+					print
+					marker(8)
+					stage8 = 1
+					next
+				}
 
-			/^[[:space:]]*udevadm settle[[:space:]]*$/ && !stage9 {
-				print
-				marker(9)
-				stage9 = 1
-				next
-			}
+				/^[[:space:]]*udevadm settle[[:space:]]*$/ && !stage9 {
+					print
+					marker(9)
+					stage9 = 1
+					next
+				}
 
-			{ print }
+				{ print }
 
-			END {
-				if (!(stage7 && stage8 && stage9))
-					exit 42
-			}
-		' "$init_functions_2nd_original" > "$init_functions_2nd_override"
+				END {
+					if (!(stage7 && stage8 && stage9))
+						exit 42
+				}
+			' "$init_functions_2nd_original" > "$init_functions_2nd_override"
+		else
+			awk '
+				/^setup_udev\(\)[[:space:]]*\{/ && !runner {
+					print "hotdog_stage_run() {"
+					print "\tlocal stage=\"$1\" pid remaining=15 status=0"
+					print "\tshift"
+					print "\t\"$@\" &"
+					print "\tpid=$!"
+					print "\twhile kill -0 \"$pid\" 2>/dev/null && [ \"$remaining\" -gt 0 ]; do"
+					print "\t\tsleep 1"
+					print "\t\tremaining=$((remaining - 1))"
+					print "\tdone"
+					print "\tif ! kill -0 \"$pid\" 2>/dev/null; then"
+					print "\t\twait \"$pid\""
+					print "\t\tstatus=$?"
+					print "\t\t/hotdog-userspace-stage \"$stage\""
+					print "\t\treturn \"$status\""
+					print "\tfi"
+					print "\tprintf \"<4>HOTDOG_USERSPACE_STAGE_TIMEOUT=%s\\n\" \"$stage\" > /dev/kmsg 2>/dev/null || true"
+					print "\tkill -TERM \"$pid\" 2>/dev/null || true"
+					print "\tsleep 1"
+					print "\tkill -KILL \"$pid\" 2>/dev/null || true"
+					print "\treturn 124"
+					print "}"
+					print ""
+					print
+					runner = 1
+					next
+				}
+
+				/^[[:space:]]*udevd -d --resolve-names=never[[:space:]]*$/ &&
+						!stage7 {
+					print "\thotdog_stage_run 7 udevd -d --resolve-names=never"
+					stage7 = 1
+					next
+				}
+
+				/^[[:space:]]*udevadm trigger --type=devices --action=add[[:space:]]*$/ &&
+						!stage8 {
+					print "\thotdog_stage_run 8 udevadm trigger --type=devices --action=add"
+					stage8 = 1
+					next
+				}
+
+				/^[[:space:]]*udevadm settle[[:space:]]*$/ && !stage9 {
+					print "\thotdog_stage_run 9 udevadm settle"
+					stage9 = 1
+					next
+				}
+
+				{ print }
+
+				END {
+					if (!(runner && stage7 && stage8 && stage9))
+						exit 42
+				}
+			' "$init_functions_2nd_original" > "$init_functions_2nd_override"
+		fi
 		chmod 0644 "$init_functions_2nd_override"
 	fi
 	chmod 0755 "$init_2nd_override"
@@ -430,7 +491,7 @@ file /hotdog-userspace-stage $USERSPACE_STAGE_HELPER 0755 0 0
 file /init $init_override 0755 0 0
 file /init_2nd.sh $init_2nd_override 0755 0 0
 EOF
-	if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+	if [ "$USERSPACE_STAGE_PROFILE" != handoff ]; then
 		cat >> "$list_file" <<EOF
 file /init_functions_2nd.sh $init_functions_2nd_override 0644 0 0
 EOF
@@ -641,12 +702,22 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -qx '/hotdog-userspace-stage 6' "$init_2nd_override"
 		grep -qx '/hotdog-userspace-stage 10' "$init_2nd_override"
 		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
-		for stage in $(seq 7 9); do
-			grep -qx "	/hotdog-userspace-stage $stage" \
+		if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+			for stage in $(seq 7 9); do
+				grep -qx "	/hotdog-userspace-stage $stage" \
+					"$init_functions_2nd_override"
+			done
+			[ "$(grep -c '^[[:space:]]*/hotdog-userspace-stage ' \
+				"$init_functions_2nd_override")" -eq 3 ]
+		else
+			for stage in $(seq 7 9); do
+				grep -q "hotdog_stage_run $stage " \
+					"$init_functions_2nd_override"
+			done
+			grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
 				"$init_functions_2nd_override"
-		done
-		[ "$(grep -c '^[[:space:]]*/hotdog-userspace-stage ' \
-			"$init_functions_2nd_override")" -eq 3 ]
+			grep -q 'remaining=15' "$init_functions_2nd_override"
+		fi
 		grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
 	fi
 fi

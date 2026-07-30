@@ -221,10 +221,11 @@ remote debug channel.
     function libraries, returns from the watchdog call, and enters
     `setup_udev`. Cells 0-9 filled while cell 10 remained hollow, so that
     function did not return during the observation window.
-64. Test the hash-pinned udev-substep candidate. It keeps the proven kernel,
+64. Test the hash-pinned bounded-udev candidate. It keeps the proven kernel,
     DTB, and command line, then reuses cells 6-10 for `setup_udev` entry,
     returns from `udevd`, `udevadm trigger`, and `udevadm settle`, and return
-    from `setup_usb_network`.
+    from `setup_usb_network`. A udev command still blocked after 15 seconds
+    leaves its cell hollow while stage two continues.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

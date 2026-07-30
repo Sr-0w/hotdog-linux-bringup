@@ -378,6 +378,10 @@ validate_reproducible_builder_guards() {
     'file /init_functions_2nd.sh $init_functions_2nd_override 0644 0 0'
   require_text "initramfs builder traces udev settle" "$wrapper_builder" \
     'udevadm settle'
+  require_text "initramfs builder supports bounded udev tracing" "$wrapper_builder" \
+    "udev-bounded"
+  require_text "bounded udev tracing records timeouts" "$wrapper_builder" \
+    "HOTDOG_USERSPACE_STAGE_TIMEOUT="
   require_text "initramfs builder validates all stage markers" "$wrapper_builder" \
     'grep -c '\''^/hotdog-userspace-stage '\'''
   require_text "initramfs builder validates gen_init_cpio diagnostics" "$wrapper_builder" \

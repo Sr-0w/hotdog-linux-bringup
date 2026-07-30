@@ -95,6 +95,12 @@ It overlays instrumented copies of `init_2nd.sh` and
 `udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
 return from `setup_usb_network`.
 
+The `udev-bounded` profile uses the same markers but gives each udev command
+15 seconds. A command that remains blocked is signaled and left behind without
+waiting on it, its return marker stays hollow, and stage two continues toward
+USB and the rootfs. This profile is intended only for bring-up; it does not
+turn a skipped udev event into a supported production boot path.
+
 ## Promoting a new artifact
 
 A newly generated file is not validated merely because it builds. Promotion
