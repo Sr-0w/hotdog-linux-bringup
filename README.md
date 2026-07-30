@@ -15,8 +15,9 @@ it as HD1911 and expose the `hotdog` project/codename.
 Linux 6.17 reaches the installed postmarketOS root filesystem on real hardware
 through the validated downstream 4.14 kexec bridge. A persistent image launched
 directly by the OnePlus bootloader now completes kernel initialization, executes
-PID 1 from the initramfs, and sustains EL0 syscalls. Direct rootfs and USB access
-remain under active bring-up.
+PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
+postmarketOS stage-two handoff. Direct rootfs and USB access remain under active
+bring-up.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -28,7 +29,7 @@ remain under active bring-up.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active PID 1 userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, and executes more than 16 PID 1 syscalls. No direct-boot USB identity or rootfs handoff has been observed yet. |
+| Persistent direct mainline | Active PID 1 userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and reaches the first `jump_init_2nd`. No direct-boot USB identity or mounted rootfs has been observed yet. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |

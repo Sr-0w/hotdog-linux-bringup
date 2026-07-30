@@ -330,6 +330,8 @@ validate_reproducible_builder_guards() {
   local wrapper_builder="$HOTDOG_ROOT/scripts/build-mainline-pmos-wrapper-initramfs.sh"
   local wrapper_binary_builder="$HOTDOG_ROOT/scripts/build-hotdog-mainline-el0-wrapper.sh"
   local wrapper_source="$HOTDOG_ROOT/helpers/hotdog-mainline-el0-wrapper.S"
+  local stage_builder="$HOTDOG_ROOT/scripts/build-hotdog-userspace-stage.sh"
+  local stage_source="$HOTDOG_ROOT/helpers/hotdog-userspace-stage.S"
   local long_cmdline="$tmpdir/direct-builder-512-byte-cmdline.txt"
   local long_cmdline_log="$tmpdir/direct-builder-512-byte-cmdline.log"
   local rejected_outdir="$HOTDOG_ROOT/images/pmos-experiments/validate-cmdline-limit-$$"
@@ -339,7 +341,10 @@ validate_reproducible_builder_guards() {
   require_file "$wrapper_builder"
   require_file "$wrapper_binary_builder"
   require_file "$wrapper_source"
-  bash -n "$direct_builder" "$dtb_chain" "$wrapper_builder" "$wrapper_binary_builder"
+  require_file "$stage_builder"
+  require_file "$stage_source"
+  bash -n "$direct_builder" "$dtb_chain" "$wrapper_builder" \
+    "$wrapper_binary_builder" "$stage_builder"
   require_text "direct builder rejects undersized FDT entries" "$direct_builder" "invalid FDT totalsize"
   require_text "direct builder bounds FDT entry size" "$direct_builder" "entry_size > remaining"
   require_text "direct builder pins source DTB pack" "$direct_builder" "components/source-dtb-pack"
@@ -361,10 +366,22 @@ validate_reproducible_builder_guards() {
     'SOURCE="$HOTDOG_ROOT/helpers/hotdog-mainline-el0-wrapper.S"'
   require_text "initramfs builder supports RESTART2 rescue" "$wrapper_builder" \
     "--reboot-mode-helper"
+  require_text "initramfs builder supports visible init stages" "$wrapper_builder" \
+    "--userspace-stage-helper"
+  require_text "initramfs builder replaces init for stage tracing" "$wrapper_builder" \
+    'file /init $init_override 0755 0 0'
+  require_text "initramfs builder replaces init_2nd for stage tracing" "$wrapper_builder" \
+    'file /init_2nd.sh $init_2nd_override 0755 0 0'
+  require_text "initramfs builder validates all stage markers" "$wrapper_builder" \
+    'grep -c '\''^/hotdog-userspace-stage '\'''
   require_text "initramfs builder validates gen_init_cpio diagnostics" "$wrapper_builder" \
     "gen-init-cpio.txt"
+  require_text "stage helper builder uses tracked source" "$stage_builder" \
+    'SOURCE="$HOTDOG_ROOT/helpers/hotdog-userspace-stage.S"'
   grep -q 'HOTDOG_EL0_STATIC_WRAPPER' "$wrapper_source" ||
     fail "tracked EL0 wrapper source lacks its identity marker"
+  grep -q 'HOTDOG_USERSPACE_STAGE_V1' "$stage_source" ||
+    fail "tracked userspace-stage source lacks its identity marker"
   require_text "K1 chain documents unpinned opt-in" "$dtb_chain" "--allow-unpinned-base"
   require_text "K1 chain rejects unpinned base by default" "$dtb_chain" "K1 base DTB hash mismatch"
   require_text "K1 chain normalizes relative output paths" "$dtb_chain" 'OUTDIR="$(readlink -m "$OUTDIR")"'

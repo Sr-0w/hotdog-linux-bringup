@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Active PID 1 userspace | The current trace completes `kernel_init_freeable()`, the global async wait, init-memory release, `kernel_execve()`, and the EL1-to-EL0 return. A PID 1-only trace records more than 16 syscalls. Direct USB and rootfs handoff remain unobserved. |
+| Persistent direct boot | Active PID 1 userspace | The current trace completes `kernel_init_freeable()`, the global async wait, init-memory release, `kernel_execve()`, and the EL1-to-EL0 return. PID 1 records more than 16 syscalls, mounts the early pseudo-filesystems, arms the rescue watchdog, and reaches the first `jump_init_2nd`. Direct USB and a mounted rootfs remain unobserved. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -209,9 +209,17 @@ remote debug channel.
 60. Enforce the observed HD1913 bootloader limit of 511 command-line
     characters. The previous `rdinit=` lived in ignored `extra_cmdline`, so its
     syscall trace described the original `/init`, not the static wrapper.
-61. Test the hash-pinned compact-cmdline candidate with the same kernel and DTB.
-    It adds only an effective `rdinit=` and a watchdog fallback that requests
-    `RESTART2(bootloader)` before attempting a normal reboot.
+61. Keep the compact-cmdline result as proof that the static wrapper really
+    runs. Its PID 1 cells showed successful `openat()`, failed framebuffer
+    access, successful `execve("/init")`, and sustained initramfs activity.
+62. Keep the first eleven-cell stage result as proof that `/init` returns from
+    `mount_proc_sys_dev`, arms the rescue watchdog, parses the command line, and
+    reaches the first `jump_init_2nd`. Cells 0-5 filled while 6-10 remained
+    hollow. Because that call executes `/init_2nd.sh` without returning on
+    success, the remaining stall is after the stage-two handoff.
+63. Test the hash-pinned stage-two candidate. It reuses cells 6-10 for
+    `/init_2nd.sh` entry, function sourcing, watchdog continuity, and
+    entry/return around `setup_udev`, without changing the proven kernel or DTB.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
 BASE_CPIO="$HOTDOG_ROOT/build/experiments/2026-07-11-110300-mainline617-pmos-r5-raw-initramfs/initramfs-pmos-r5.cpio"
@@ -10,6 +11,7 @@ SUPPRESS_FB_PAINT=1
 USERSPACE_FB_MARKER=0
 WRAPPER_BINARY=""
 REBOOT_MODE_HELPER=""
+USERSPACE_STAGE_HELPER=""
 
 usage() {
 	cat <<'USAGE'
@@ -34,6 +36,10 @@ Options:
                         Add a static RESTART2 helper and make the inherited
                         rescue watchdog request bootloader mode before its
                         normal-reboot fallback.
+	--userspace-stage-helper FILE
+	                        Add the static stage helper and replace /init plus
+	                        /init_2nd.sh with instrumented copies that mark the
+	                        stage-one handoff and early stage-two setup.
   -h, --help            Show this help.
 USAGE
 }
@@ -47,6 +53,7 @@ while [ "$#" -gt 0 ]; do
 		--large-fb-marker) USERSPACE_FB_MARKER=1 ;;
 		--wrapper-binary) WRAPPER_BINARY="$2"; shift ;;
 		--reboot-mode-helper) REBOOT_MODE_HELPER="$2"; shift ;;
+		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -73,6 +80,24 @@ if [ -n "$WRAPPER_BINARY" ]; then
 		exit 2
 	}
 fi
+if [ -n "$USERSPACE_STAGE_HELPER" ]; then
+	[ -x "$USERSPACE_STAGE_HELPER" ] || {
+		printf 'Missing executable userspace-stage helper: %s\n' \
+			"$USERSPACE_STAGE_HELPER" >&2
+		exit 2
+	}
+	file "$USERSPACE_STAGE_HELPER" |
+		grep -q 'ELF 64-bit LSB executable, ARM aarch64' || {
+		printf 'Userspace-stage helper is not an AArch64 executable: %s\n' \
+			"$USERSPACE_STAGE_HELPER" >&2
+		exit 2
+	}
+	grep -a -q 'HOTDOG_USERSPACE_STAGE_V1' "$USERSPACE_STAGE_HELPER" || {
+		printf 'Userspace-stage helper marker is missing: %s\n' \
+			"$USERSPACE_STAGE_HELPER" >&2
+		exit 2
+	}
+fi
 if [ -n "$REBOOT_MODE_HELPER" ]; then
 	[ -x "$REBOOT_MODE_HELPER" ] || {
 		printf 'Missing executable reboot-mode helper: %s\n' "$REBOOT_MODE_HELPER" >&2
@@ -82,6 +107,8 @@ if [ -n "$REBOOT_MODE_HELPER" ]; then
 		printf 'Reboot-mode helper is not an AArch64 executable: %s\n' "$REBOOT_MODE_HELPER" >&2
 		exit 2
 	}
+fi
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	[ -x "$HOTDOG_ROOT/scripts/extract-last-newc-member.py" ] || {
 		printf 'Missing newc extractor: %s\n' \
 			"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" >&2
@@ -100,6 +127,10 @@ fb_marker="$OUTDIR/hotdog-userspace-fb-marker"
 fb_marker_hook="$OUTDIR/01-hotdog-userspace-fb-marker.sh"
 fb_marker_cleanup_hook="$OUTDIR/01-hotdog-userspace-root-marker.sh"
 watchdog_override="$OUTDIR/hotdog_rescue_watchdog.sh"
+init_original="$OUTDIR/init.original"
+init_override="$OUTDIR/init.instrumented"
+init_2nd_original="$OUTDIR/init_2nd.original"
+init_2nd_override="$OUTDIR/init_2nd.instrumented"
 list_file="$OUTDIR/wrapper.list"
 overlay="$OUTDIR/wrapper-overlay.cpio"
 output="$OUTDIR/initramfs-pmos-wrapped.cpio"
@@ -171,6 +202,145 @@ chmod 0755 "$wrapper"
 cat > "$list_file" <<EOF
 file /hotdog-mainline-wrapper $wrapper 0755 0 0
 EOF
+
+if [ -n "$USERSPACE_STAGE_HELPER" ]; then
+	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
+		"$BASE_CPIO" init > "$init_original"
+	awk '
+		function marker(stage) {
+			print "/hotdog-userspace-stage " stage
+		}
+
+		/^[[:space:]]*set -a[[:space:]]*$/ && !stage0 {
+			print
+			marker(0)
+			stage0 = 1
+			next
+		}
+
+		/^[[:space:]]*mount_proc_sys_dev[[:space:]]*$/ && !stage1 {
+			marker(1)
+			print
+			marker(2)
+			stage1 = stage2 = 1
+			next
+		}
+
+		/^[[:space:]]*hotdog_rescue_watchdog_start stage1[[:space:]]*$/ &&
+				!stage3 {
+			print
+			marker(3)
+			stage3 = 1
+			next
+		}
+
+		/^[[:space:]]*setup_log[[:space:]]*$/ && !stage4 {
+			print
+			marker(4)
+			stage4 = 1
+			next
+		}
+
+		/^[[:space:]]*jump_init_2nd[[:space:]]*$/ && !stage5 {
+			marker(5)
+			print
+			marker(6)
+			stage5 = stage6 = 1
+			next
+		}
+
+		/^[[:space:]]*setup_mdev[[:space:]]*$/ && !stage7 {
+			print
+			marker(7)
+			stage7 = 1
+			next
+		}
+
+		/^[[:space:]]*load_modules \/lib\/modules\/initramfs\.load[[:space:]]*$/ &&
+				!stage8 {
+			print
+			marker(8)
+			stage8 = 1
+			next
+		}
+
+		/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage9 {
+			print
+			marker(9)
+			stage9 = 1
+			next
+		}
+
+		/^[[:space:]]*start_unudhcpd[[:space:]]*$/ && !stage10 {
+			print
+			marker(10)
+			stage10 = 1
+			next
+		}
+
+		{ print }
+
+		END {
+			if (!(stage0 && stage1 && stage2 && stage3 && stage4 &&
+			      stage5 && stage6 && stage7 && stage8 && stage9 &&
+			      stage10))
+				exit 42
+		}
+	' "$init_original" > "$init_override"
+	chmod 0755 "$init_override"
+
+	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
+		"$BASE_CPIO" init_2nd.sh > "$init_2nd_original"
+	awk '
+		function marker(stage) {
+			print "/hotdog-userspace-stage " stage
+		}
+
+		/^#!\/bin\/busybox ash$/ && !stage6 {
+			print
+			marker(6)
+			stage6 = 1
+			next
+		}
+
+		/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
+				!stage7 {
+			print
+			marker(7)
+			stage7 = 1
+			next
+		}
+
+		/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
+				!stage8 {
+			print
+			marker(8)
+			stage8 = 1
+			next
+		}
+
+		/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
+			marker(9)
+			print
+			marker(10)
+			stage9 = stage10 = 1
+			next
+		}
+
+		{ print }
+
+		END {
+			if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+				exit 42
+		}
+	' "$init_2nd_original" > "$init_2nd_override"
+	chmod 0755 "$init_2nd_override"
+	cat >> "$list_file" <<EOF
+file /hotdog-userspace-stage $USERSPACE_STAGE_HELPER 0755 0 0
+file /init $init_override 0755 0 0
+file /init_2nd.sh $init_2nd_override 0755 0 0
+EOF
+fi
 
 if [ "$USERSPACE_FB_MARKER" -eq 1 ]; then
 	cat > "$fb_marker" <<'FB_MARKER'
@@ -359,6 +529,19 @@ if [ -n "$REBOOT_MODE_HELPER" ]; then
 	grep -q 'requesting bootloader through RESTART2' "$watchdog_override"
 	grep -q '/hotdog-reboot-mode bootloader' "$watchdog_override"
 fi
+if [ -n "$USERSPACE_STAGE_HELPER" ]; then
+	grep -qx 'hotdog-userspace-stage' "$OUTDIR/overlay-contents.txt"
+	grep -qx 'init' "$OUTDIR/overlay-contents.txt"
+	grep -qx 'init_2nd.sh' "$OUTDIR/overlay-contents.txt"
+	for stage in $(seq 0 10); do
+		grep -qx "/hotdog-userspace-stage $stage" "$init_override"
+	done
+	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_override")" -eq 11 ]
+	for stage in $(seq 6 10); do
+		grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
+	done
+	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 5 ]
+fi
 file "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/file-report.txt"
 sha256sum "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/SHA256SUMS"
 
@@ -369,5 +552,6 @@ printf 'Inherited framebuffer paint probe suppressed: %s\n' "$SUPPRESS_FB_PAINT"
 printf 'Large userspace framebuffer marker: %s\n' "$USERSPACE_FB_MARKER"
 printf 'Prebuilt wrapper binary: %s\n' "${WRAPPER_BINARY:-none}"
 printf 'RESTART2 rescue helper: %s\n' "${REBOOT_MODE_HELPER:-none}"
+printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
 printf 'Raw size: %s bytes\n' "$(stat -c %s "$output")"
 cat "$OUTDIR/SHA256SUMS"
