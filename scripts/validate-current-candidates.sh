@@ -116,6 +116,41 @@ check_size() {
   log "$label size OK: $actual"
 }
 
+compare_fdt_subtree() {
+  local label="$1"
+  local reference="$2"
+  local candidate="$3"
+  local node="$4"
+  local reference_children=""
+  local candidate_children=""
+  local reference_properties=""
+  local candidate_properties=""
+  local property=""
+  local child=""
+
+  reference_children="$(fdtget -l "$reference" "$node" | LC_ALL=C sort)"
+  candidate_children="$(fdtget -l "$candidate" "$node" | LC_ALL=C sort)"
+  [ "$candidate_children" = "$reference_children" ] ||
+    fail "$label child-node mismatch at $node"
+
+  reference_properties="$(fdtget -p "$reference" "$node" | LC_ALL=C sort)"
+  candidate_properties="$(fdtget -p "$candidate" "$node" | LC_ALL=C sort)"
+  [ "$candidate_properties" = "$reference_properties" ] ||
+    fail "$label property-name mismatch at $node"
+
+  while IFS= read -r property; do
+    [ -n "$property" ] || continue
+    [ "$(fdtget -t bx "$candidate" "$node" "$property")" = \
+      "$(fdtget -t bx "$reference" "$node" "$property")" ] ||
+      fail "$label property mismatch at $node:$property"
+  done <<<"$reference_properties"
+
+  while IFS= read -r child; do
+    [ -n "$child" ] || continue
+    compare_fdt_subtree "$label" "$reference" "$candidate" "$node/$child"
+  done <<<"$reference_children"
+}
+
 require_text() {
   local label="$1"
   local path="$2"
@@ -547,6 +582,7 @@ validate_current_direct_dwc3_noop_candidate() {
   local image_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-193500-mainline617-direct-source-init2-dwc3-probe"
   local boot_image="$image_dir/boot.img"
   local embedded_dtb="$image_dir/components/dtb"
+  local kexec_reference_dtb="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-150002-mainline617-direct-repro-clean-c/components/dtb"
   local noop_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo"
   local noop_dtbo="$noop_dir/dtbo_b-d3-entry5-noop.img"
   local noop_overlay="$noop_dir/components/noop-entry5.dtbo"
@@ -560,6 +596,8 @@ validate_current_direct_dwc3_noop_candidate() {
     "fa26b3668d3fc043936d13dadca6b34dc56a1bbc54d0ea92243cd128ec3324c2"
   check_sha "current direct embedded DTB" "$embedded_dtb" \
     "040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c"
+  check_sha "known-good kexec DTB reference" "$kexec_reference_dtb" \
+    "cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440"
   check_sha "current direct D3 no-op dtbo_b" "$noop_dtbo" \
     "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
   check_sha "current direct D3 no-op entry" "$noop_overlay" \
@@ -580,6 +618,10 @@ validate_current_direct_dwc3_noop_candidate() {
     fail "D3 no-op runtime DTB does not preserve /soc@0 #size-cells = 2"
   [ "$(fdtget -t s "$noop_merged" /soc@0/usb@a6f8800 status)" = "okay" ] ||
     fail "D3 no-op runtime DTB does not keep the QCOM USB wrapper enabled"
+  compare_fdt_subtree "QCOM USB wrapper versus known-good kexec DTB" \
+    "$kexec_reference_dtb" "$noop_merged" /soc@0/usb@a6f8800
+  compare_fdt_subtree "QCOM HS PHY versus known-good kexec DTB" \
+    "$kexec_reference_dtb" "$noop_merged" /soc@0/phy@88e2000
 
   fdtoverlay -i "$embedded_dtb" -o "$d7_merged" "$d7_overlay"
   [ "$(fdtget -t i "$d7_merged" /soc@0 '#address-cells')" = "1" ] ||

@@ -280,7 +280,8 @@ remote debug channel.
     that D7 changes `/soc@0` address and size cells from mainline `2/2` to
     downstream `1/1` without rewriting the four-cell child `reg` properties.
     Retest the unchanged boot image with the D3 no-op DTBO, which preserves the
-    embedded mainline DTB byte-for-byte.
+    embedded mainline DTB byte-for-byte. Its DWC3 wrapper and HS-PHY subtrees
+    match the DTB from the successful mainline kexec boot property-for-property.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

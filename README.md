@@ -98,7 +98,8 @@ D7 changed `/soc@0` from `#address-cells = 2`, `#size-cells = 2` to `1/1`.
 That makes the unchanged four-cell mainline `reg` properties malformed and
 explains why the expected `a6f8800.usb` platform entry was absent. The next
 candidate keeps the same boot image and uses the D3 no-op DTBO, whose offline
-application leaves the embedded DTB byte-identical.
+application leaves the embedded DTB byte-identical. The resulting DWC3 wrapper
+and HS-PHY subtrees match the known-good mainline kexec DTB property-for-property.
 A detached host supervisor still
 restores and verifies R6 whenever Fastboot becomes visible.
 
