@@ -370,6 +370,10 @@ validate_reproducible_builder_guards() {
     "--userspace-stage-helper"
   require_text "initramfs builder supports stage profiles" "$wrapper_builder" \
     "--userspace-stage-profile"
+  require_text "initramfs builder supports sourced second-stage handoff" "$wrapper_builder" \
+    "--source-init-2nd"
+  require_text "initramfs builder supports deep handoff tracing" "$wrapper_builder" \
+    "handoff-deep"
   require_text "initramfs builder replaces init for stage tracing" "$wrapper_builder" \
     'file /init $init_override 0755 0 0'
   require_text "initramfs builder replaces init_2nd for stage tracing" "$wrapper_builder" \

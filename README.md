@@ -19,9 +19,10 @@ PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
 postmarketOS stage-two init. It currently stalls inside `setup_udev`. Direct
 rootfs and USB access remain under active bring-up. Repeat runs exposed two
 timeout overflows after all 986 initcalls: first in the early kernel watchdog,
-then in the PID 1 fallback. The current hash-pinned image disables the former
-before its final breadcrumb and keeps the latter alive with repeated
-hardware-safe 32-second intervals.
+then in the PID 1 fallback. The corrected image disables the former before its
+final breadcrumb and reaches PID 1 with hardware-safe 32-second intervals.
+The periodic PID 1 watchdog did not produce a host-visible Fastboot return at
+its logical deadline, so unattended direct-boot recovery remains unresolved.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -64,10 +65,10 @@ The PM8150 PON bootloader reason works from a mainline kexec boot, but D46-D48
 did not make it a dependable pre-MMU recovery path. Current direct-boot tests
 therefore keep a verified R6 restore image, place one candidate on slot B, and
 classify the result from the display. The next bounded-udev candidate also arms
-the proven APSS watchdog from PID 1 with the bootloader restart reason; that
-userspace integration is built and offline-validated but not yet hardware
-validated. A detached host supervisor restores and verifies R6 after Fastboot
-returns.
+the APSS watchdog from PID 1 with the bootloader restart reason. Hardware
+reached the postmarketOS stage-two handoff, but the userspace integration did
+not return the phone to Fastboot after its deadline. A detached host supervisor
+still restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint
