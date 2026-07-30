@@ -1427,7 +1427,7 @@ index 5753e9539..7d2732221 100644
 +#define HOTDOG_APSS_WDT_PHYS		0x17c10000
 +#define HOTDOG_APSS_WDT_SIZE		0x1000
 +#define HOTDOG_APSS_WDT_RATE		32764
-+#define HOTDOG_APSS_WDT_TIMEOUT_SEC	30
++#define HOTDOG_APSS_WDT_TIMEOUT_SEC	120
 +#define HOTDOG_APSS_WDT_RST		0x04
 +#define HOTDOG_APSS_WDT_ENABLE		0x08
 +#define HOTDOG_APSS_WDT_BARK_TIME	0x10
@@ -1533,8 +1533,6 @@ index 5753e9539..7d2732221 100644
 +
 +static void __init hotdog_finish_initcall_diagnostics(void)
 +{
-+	hotdog_mark_start_kernel_stage(400, hotdog_initcall_index);
-+
 +	if (hotdog_apss_wdt_base) {
 +		writel(0, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_ENABLE);
 +		wmb();
@@ -1543,6 +1541,8 @@ index 5753e9539..7d2732221 100644
 +		writel(0x77665501, hotdog_imem_reason);
 +		wmb();
 +	}
++
++	hotdog_mark_start_kernel_stage(400, hotdog_initcall_index);
 +
 +	pr_emerg("HOTDOG: initcalls completed; diagnostic watchdog disarmed\n");
 +}

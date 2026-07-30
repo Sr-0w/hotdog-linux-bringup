@@ -230,6 +230,12 @@ remote debug channel.
     reason, so a full userspace wedge should return to host-visible Fastboot
     without exhausting slot retries. Both the bounded progression and the
     userspace APSS integration remain pending hardware validation.
+65. Keep the first bounded-udev launch as evidence for an independent early
+    watchdog race. Two Sahara captures after separate boots both reported
+    valid stage 400/detail 986: every initcall had returned, but the 30-second
+    APSS watchdog bit before its following disable completed. The superseding
+    image uses a 120-second early deadline and disables it before recording
+    stage 400; all later userspace inputs remain byte-identical.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

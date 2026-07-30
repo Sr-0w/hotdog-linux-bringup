@@ -9,6 +9,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifndef DEVMEM_PATH
+#define DEVMEM_PATH "/dev/mem"
+#endif
+
 #define APSS_WDT_PHYS 0x17c10000UL
 #define IMEM_RESTART_REASON_PHYS 0x146bf65cUL
 #define RESTART_REASON_BOOTLOADER 0x77665500U
@@ -106,9 +110,10 @@ int main(int argc, char **argv)
 		return 3;
 	}
 
-	fd = open("/dev/mem", write_access ? O_RDWR | O_SYNC : O_RDONLY | O_SYNC);
+	fd = open(DEVMEM_PATH,
+		  write_access ? O_RDWR | O_SYNC : O_RDONLY | O_SYNC);
 	if (fd < 0) {
-		fprintf(stderr, "open /dev/mem: %s\n", strerror(errno));
+		fprintf(stderr, "open %s: %s\n", DEVMEM_PATH, strerror(errno));
 		return 4;
 	}
 	wdt_mapping = mmap(NULL, (size_t)page_size,

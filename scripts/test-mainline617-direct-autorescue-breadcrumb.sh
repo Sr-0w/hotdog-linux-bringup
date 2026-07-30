@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-105300-mainline617-direct-udev-bounded-apss/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-111500-mainline617-direct-udev-bounded-apss-wdt120/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=d5e2fa33acc19085e282194b186202f29e05a35c1f02d637f33da4be4002b1b4
+BOOT_SHA=96dffe323bfaa74257699fe7d63ed5d9c0f69364a38d2a667a406ae487709827
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -33,7 +33,7 @@ if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
 	cat <<'USAGE'
 Usage: test-mainline617-direct-autorescue-breadcrumb.sh
 
-Test the K1 direct-boot path with a 30-second APSS watchdog, a downstream
+Test the K1 direct-boot path with a 120-second early APSS watchdog, a downstream
 OnePlus fastboot restart marker, an Image-resident early-stage breadcrumb,
 three pre-MMU framebuffer checkpoints, identity-mapped checkpoints through the
 early virtual-address transition, and C-entry checkpoints that subdivide
