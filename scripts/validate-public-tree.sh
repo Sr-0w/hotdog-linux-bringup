@@ -285,11 +285,14 @@ validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
 	local initramfs_builder="scripts/build-mainline-pmos-wrapper-initramfs.sh"
+	local dtb_builder="scripts/build-mainline-pmos-boot-dtb.sh"
 
 	[ -f "$source" ] || die "missing rescue supervisor source: $source"
 	[ -x "$builder" ] || die "missing executable rescue supervisor builder: $builder"
 	[ -x "$initramfs_builder" ] ||
 		die "missing executable initramfs builder: $initramfs_builder"
+	[ -x "$dtb_builder" ] ||
+		die "missing executable mainline boot DTB builder: $dtb_builder"
 
 	log "static rescue supervisor source contract"
 	cc -std=c11 -Wall -Wextra -Werror -fsyntax-only "$source"
@@ -303,6 +306,10 @@ validate_rescue_supervisor_source() {
 		die "rescue supervisor lacks the bootloader restart reason"
 	grep -q 'WDT_TIMEOUT_SEC 32U' "$source" ||
 		die "rescue supervisor APSS fallback is not bounded to 32 seconds"
+	grep -q 'WATCHDOG_PATH "/dev/watchdog0"' "$source" ||
+		die "rescue supervisor does not prefer the Linux watchdog device"
+	grep -q 'WDIOC_SETTIMEOUT' "$source" ||
+		die "rescue supervisor does not bound the Linux watchdog timeout"
 	if grep -Eq '(^|[^[:alnum:]_])sync[[:space:]]*\(' "$source"; then
 		die "rescue supervisor deadline path must not block in sync()"
 	fi
@@ -315,6 +322,10 @@ validate_rescue_supervisor_source() {
 		die "initramfs builder does not document --rescue-supervisor"
 	grep -q 'hotdog-rescue-supervisor' "$initramfs_builder" ||
 		die "initramfs builder does not package the rescue supervisor"
+	grep -q 'mode-bootloader 2' "$dtb_builder" ||
+		die "mainline boot DTB builder lacks the PM8150 Fastboot mode"
+	grep -q 'mode-recovery 1' "$dtb_builder" ||
+		die "mainline boot DTB builder lacks the PM8150 recovery mode"
 }
 
 validate_bounded_exec_source() {

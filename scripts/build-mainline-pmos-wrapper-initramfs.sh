@@ -47,8 +47,9 @@ Options:
                         and disarm it only after the configured success marker.
   --rescue-supervisor FILE
                         Replace the shell watchdog worker with a static
-                        monotonic-deadline supervisor. It performs RESTART2
-                        directly and keeps a 32-second APSS fallback armed.
+                        monotonic-deadline supervisor. It prefers the Linux
+                        watchdog device, performs RESTART2 directly, and keeps
+                        an APSS MMIO fallback when no watchdog device exists.
   --bounded-exec-helper FILE
                         Use a static fork/exec supervisor for bounded udev
                         commands so a blocked child exec cannot suspend ash.

@@ -1227,7 +1227,7 @@ index 19b778d08..42f76fcb3 100644
  extern void async_synchronize_cookie_domain(async_cookie_t cookie,
  					    struct async_domain *domain);
 diff --git a/init/main.c b/init/main.c
-index 5753e9539..7d2732221 100644
+index 5753e9539..2a8b64d75 100644
 --- a/init/main.c
 +++ b/init/main.c
 @@ -78,6 +78,7 @@
@@ -1420,7 +1420,7 @@ index 5753e9539..7d2732221 100644
  	rest_init();
  
  	/*
-@@ -1316,9 +1397,133 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
+@@ -1316,9 +1397,130 @@ static int __init ignore_unknown_bootoption(char *param, char *val,
  	return 0;
  }
  
@@ -1537,14 +1537,11 @@ index 5753e9539..7d2732221 100644
 +		writel(0, hotdog_apss_wdt_base + HOTDOG_APSS_WDT_ENABLE);
 +		wmb();
 +	}
-+	if (hotdog_imem_reason) {
-+		writel(0x77665501, hotdog_imem_reason);
-+		wmb();
-+	}
 +
 +	hotdog_mark_start_kernel_stage(400, hotdog_initcall_index);
 +
-+	pr_emerg("HOTDOG: initcalls completed; diagnostic watchdog disarmed\n");
++	pr_emerg("HOTDOG: initcalls completed; watchdog disarmed, "
++		 "bootloader restart reason retained\n");
 +}
 +
  static void __init do_initcall_level(int level, char *command_line)
@@ -1554,7 +1551,7 @@ index 5753e9539..7d2732221 100644
  
  	parse_args(initcall_level_names[level],
  		   command_line, __start___param,
-@@ -1327,8 +1532,18 @@ static void __init do_initcall_level(int level, char *command_line)
+@@ -1327,8 +1529,18 @@ static void __init do_initcall_level(int level, char *command_line)
  		   NULL, ignore_unknown_bootoption);
  
  	do_trace_initcall_level(initcall_level_names[level]);
@@ -1575,7 +1572,7 @@ index 5753e9539..7d2732221 100644
  }
  
  static void __init do_initcalls(void)
-@@ -1337,6 +1552,9 @@ static void __init do_initcalls(void)
+@@ -1337,6 +1549,9 @@ static void __init do_initcalls(void)
  	size_t len = saved_command_line_len + 1;
  	char *command_line;
  
@@ -1585,7 +1582,7 @@ index 5753e9539..7d2732221 100644
  	command_line = kzalloc(len, GFP_KERNEL);
  	if (!command_line)
  		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-@@ -1347,6 +1565,7 @@ static void __init do_initcalls(void)
+@@ -1347,6 +1562,7 @@ static void __init do_initcalls(void)
  		do_initcall_level(level, command_line);
  	}
  
@@ -1593,7 +1590,7 @@ index 5753e9539..7d2732221 100644
  	kfree(command_line);
  }
  
-@@ -1378,6 +1597,7 @@ static void __init do_pre_smp_initcalls(void)
+@@ -1378,6 +1594,7 @@ static void __init do_pre_smp_initcalls(void)
  static int run_init_process(const char *init_filename)
  {
  	const char *const *p;
@@ -1601,7 +1598,7 @@ index 5753e9539..7d2732221 100644
  
  	argv_init[0] = init_filename;
  	pr_info("Run %s as init process\n", init_filename);
-@@ -1387,7 +1607,11 @@ static int run_init_process(const char *init_filename)
+@@ -1387,7 +1604,11 @@ static int run_init_process(const char *init_filename)
  	pr_debug("  with environment:\n");
  	for (p = envp_init; *p; p++)
  		pr_debug("    %s\n", *p);
@@ -1614,7 +1611,7 @@ index 5753e9539..7d2732221 100644
  }
  
  static int try_to_run_init_process(const char *init_filename)
-@@ -1459,6 +1683,10 @@ void __weak free_initmem(void)
+@@ -1459,6 +1680,10 @@ void __weak free_initmem(void)
  
  static int __ref kernel_init(void *unused)
  {
@@ -1625,7 +1622,7 @@ index 5753e9539..7d2732221 100644
  	int ret;
  
  	/*
-@@ -1467,29 +1695,51 @@ static int __ref kernel_init(void *unused)
+@@ -1467,29 +1692,51 @@ static int __ref kernel_init(void *unused)
  	wait_for_completion(&kthreadd_done);
  
  	kernel_init_freeable();
@@ -1685,7 +1682,7 @@ index 5753e9539..7d2732221 100644
  
  	if (ramdisk_execute_command) {
  		ret = run_init_process(ramdisk_execute_command);
-@@ -1551,6 +1801,8 @@ static noinline void __init kernel_init_freeable(void)
+@@ -1551,6 +1798,8 @@ static noinline void __init kernel_init_freeable(void)
  {
  	/* Now the scheduler is fully set up and can do blocking allocations */
  	gfp_allowed_mask = __GFP_BITS_MASK;
@@ -1694,7 +1691,7 @@ index 5753e9539..7d2732221 100644
  
  	/*
  	 * init can allocate pages on any node
-@@ -1570,6 +1822,7 @@ static noinline void __init kernel_init_freeable(void)
+@@ -1570,6 +1819,7 @@ static noinline void __init kernel_init_freeable(void)
  
  	smp_init();
  	sched_init_smp();
@@ -1702,7 +1699,7 @@ index 5753e9539..7d2732221 100644
  
  	workqueue_init_topology();
  	async_init();
-@@ -1577,11 +1830,14 @@ static noinline void __init kernel_init_freeable(void)
+@@ -1577,11 +1827,14 @@ static noinline void __init kernel_init_freeable(void)
  	page_alloc_init_late();
  
  	do_basic_setup();
@@ -1717,7 +1714,7 @@ index 5753e9539..7d2732221 100644
  
  	/*
  	 * check if there is an early userspace init.  If yes, let it do all
-@@ -1589,12 +1845,14 @@ static noinline void __init kernel_init_freeable(void)
+@@ -1589,12 +1842,14 @@ static noinline void __init kernel_init_freeable(void)
  	 */
  	int ramdisk_command_access;
  	ramdisk_command_access = init_eaccess(ramdisk_execute_command);
@@ -1732,7 +1729,7 @@ index 5753e9539..7d2732221 100644
  
  	/*
  	 * Ok, we have completed the initial bootup, and
-@@ -1606,4 +1864,5 @@ static noinline void __init kernel_init_freeable(void)
+@@ -1606,4 +1861,5 @@ static noinline void __init kernel_init_freeable(void)
  	 */
  
  	integrity_load_keys();

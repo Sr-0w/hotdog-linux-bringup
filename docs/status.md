@@ -282,6 +282,15 @@ remote debug channel.
     Retest the unchanged boot image with the D3 no-op DTBO, which preserves the
     embedded mainline DTB byte-for-byte. Its DWC3 wrapper and HS-PHY subtrees
     match the DTB from the successful mainline kexec boot property-for-property.
+72. Keep the repeated 7/11 D7 result as confirmation that the missing QCOM USB
+    platform device is deterministic. The prepared D3 guarded candidate changes
+    the overlay variable while retaining the same DWC3 trace. It also builds
+    `CONFIG_QCOM_WDT=y`, adds PM8150 `mode-bootloader = <2>` and
+    `mode-recovery = <1>`, and packages the static supervisor so a failed
+    300-second run can request Fastboot and receive a two-second hardware
+    watchdog fallback. Its AVB image SHA256 is
+    `c5ade1ffaa458fe6943fda13c208c5e6df9ce3f5e2af8dec8cc7c599fc72ea30`;
+    hardware validation is pending.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

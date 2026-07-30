@@ -13,7 +13,8 @@ Usage: build-mainline-pmos-boot-dtb.sh [options]
 Build the current postmarketOS boot DTB. The input must already reserve the
 validated firmware gap, bypass Apps SMMU for UFS/QUP, and make ICE optional.
 This final step removes the DWC3 Apps SMMU link so USB probes before the pmOS
-initramfs performs its one-shot gadget setup.
+initramfs performs its one-shot gadget setup. It also adds the standard PM8150
+reboot-mode values used by Linux to request Fastboot or recovery.
 
 Options:
   --input-dtb FILE  Validated UFS-capable mainline DTB.
@@ -37,6 +38,8 @@ OUTPUT_DTB="$OUTDIR/sm8150-oneplus-hotdog-mainline-pmos-boot.dtb"
 UFS_NODE="/soc@0/ufshc@1d84000"
 QUP_NODE="/soc@0/geniqup@ac0000"
 DWC3_NODE="/soc@0/usb@a6f8800/usb@a600000"
+PON_NODE="/soc@0/spmi@c440000/pmic@0/pon@800"
+DWC3_INPUT_IOMMUS=""
 
 for command_name in dtc fdtget fdtput sha256sum; do
 	command -v "$command_name" >/dev/null 2>&1 || {
@@ -46,10 +49,13 @@ for command_name in dtc fdtget fdtput sha256sum; do
 done
 [ -s "$INPUT_DTB" ] || { printf 'Missing input DTB: %s\n' "$INPUT_DTB" >&2; exit 2; }
 
-[ "$(fdtget -t x "$INPUT_DTB" "$DWC3_NODE" iommus)" = "2b 140 0" ] || {
-	printf 'Unexpected DWC3 iommus property\n' >&2
-	exit 2
-}
+if fdtget "$INPUT_DTB" "$DWC3_NODE" iommus >/dev/null 2>&1; then
+	DWC3_INPUT_IOMMUS="$(fdtget -t x "$INPUT_DTB" "$DWC3_NODE" iommus)"
+	[ "$DWC3_INPUT_IOMMUS" = "2b 140 0" ] || {
+		printf 'Unexpected DWC3 iommus property\n' >&2
+		exit 2
+	}
+fi
 [ "$(fdtget -t x "$INPUT_DTB" /reserved-memory/hotdog-removed-gap@89d00000 reg)" = "0 89d00000 0 1a00000" ] || {
 	printf 'Input DTB is missing the validated firmware gap reservation\n' >&2
 	exit 2
@@ -67,17 +73,31 @@ fi
 
 mkdir -p "$OUTDIR"
 cp "$INPUT_DTB" "$OUTPUT_DTB"
-fdtput -d "$OUTPUT_DTB" "$DWC3_NODE" iommus
+if [ -n "$DWC3_INPUT_IOMMUS" ]; then
+	fdtput -d "$OUTPUT_DTB" "$DWC3_NODE" iommus
+fi
+fdtput -t x "$OUTPUT_DTB" "$PON_NODE" mode-bootloader 2
+fdtput -t x "$OUTPUT_DTB" "$PON_NODE" mode-recovery 1
 
 if fdtget "$OUTPUT_DTB" "$DWC3_NODE" iommus >/dev/null 2>&1; then
 	printf 'DWC3 iommus property still exists after patch\n' >&2
 	exit 3
 fi
+[ "$(fdtget -t x "$OUTPUT_DTB" "$PON_NODE" mode-bootloader)" = "2" ] || {
+	printf 'Fastboot reboot mode is missing after patch\n' >&2
+	exit 3
+}
+[ "$(fdtget -t x "$OUTPUT_DTB" "$PON_NODE" mode-recovery)" = "1" ] || {
+	printf 'Recovery reboot mode is missing after patch\n' >&2
+	exit 3
+}
 
 dtc -I dtb -O dts -o "$OUTDIR/verify.dts" "$OUTPUT_DTB" 2> "$OUTDIR/dtc-warnings.txt"
 {
-	printf 'input_dwc3_iommus=2b 140 0\n'
+	printf 'input_dwc3_iommus=%s\n' "${DWC3_INPUT_IOMMUS:-already-absent}"
 	printf 'output_dwc3_iommus=removed\n'
+	printf 'mode_bootloader=2\n'
+	printf 'mode_recovery=1\n'
 	printf 'required_cmdline=arm-smmu.disable_bypass=0\n'
 } > "$OUTDIR/changes.txt"
 sha256sum "$INPUT_DTB" "$OUTPUT_DTB" > "$OUTDIR/SHA256SUMS"

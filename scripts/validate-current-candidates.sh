@@ -17,7 +17,8 @@ Checks:
   - selected Android DTB pack entry 12 contains the hotdog simplefb wiring
   - generated initramfs/rootfs helper scripts pass shell syntax checks
   - pinned D1/D1-pack artifacts, launchers, SSH identity guards, and ACM collector
-  - current direct DWC3 candidate preserves the embedded DTB with D3 no-op
+  - current direct DWC3 candidates preserve the embedded DTB with D3 no-op
+  - guarded D3 candidate has built-in QCOM watchdog and PM8150 reboot modes
 
 Optional historical RGB controls, validated only when explicitly named:
   fbcon-only, r4-fbwait, r4-ttykmsg, splash-ttykmsg, fbtest-pstore,
@@ -652,6 +653,100 @@ validate_current_direct_dwc3_noop_candidate() {
   log "current direct D3 no-op DTBO and built-in USB contract validated"
 }
 
+validate_guarded_direct_d3_dwc3_candidate() {
+  local launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d3-guarded-dwc3.sh"
+  local image_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-221000-mainline617-direct-d3-guarded-dwc3"
+  local build_dir="$HOTDOG_ROOT/build/experiments/2026-07-30-220400-mainline617-pmos-dwc3-watchdog-v2"
+  local boot_image="$image_dir/boot.img"
+  local raw_image="$image_dir/boot-mainline617-direct-d3-guarded-dwc3.img"
+  local embedded_kernel="$image_dir/components/kernel"
+  local embedded_dtb="$image_dir/components/dtb"
+  local embedded_ramdisk="$image_dir/components/ramdisk"
+  local wrapper_overlay="$build_dir/wrapper-overlay.cpio"
+  local supervisor="$HOTDOG_ROOT/build/tools/hotdog-rescue-supervisor-v2/hotdog-rescue-supervisor"
+  local noop_overlay="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/components/noop-entry5.dtbo"
+  local extract_ikconfig="$HOTDOG_ROOT/src/kernel/linux-sm8150-mainline/scripts/extract-ikconfig"
+  local embedded_config="$tmpdir/guarded-direct-kernel.config"
+  local noop_merged="$tmpdir/guarded-direct-plus-noop.dtb"
+  local overlay_list="$tmpdir/guarded-wrapper-overlay.txt"
+
+  require_file "$launcher"
+  bash -n "$launcher"
+  check_sha "guarded D3 AVB boot image" "$boot_image" \
+    "c5ade1ffaa458fe6943fda13c208c5e6df9ce3f5e2af8dec8cc7c599fc72ea30"
+  check_sha "guarded D3 raw boot image" "$raw_image" \
+    "6dfcf4cac3b4d5136634bf4eaa1edc3c8fa3d1b29482abdc100e464b0b86af8d"
+  check_size "guarded D3 AVB boot image" "$boot_image" "100663296"
+  check_size "guarded D3 raw boot image" "$raw_image" "50417664"
+  check_sha "guarded D3 kernel" "$embedded_kernel" \
+    "c6a0d933de3daa2798a52cb60c97d68e7eedf352816041c5cba6599d5547f506"
+  check_sha "guarded D3 DTB" "$embedded_dtb" \
+    "c5753f44ba3b942a7a4678b8407b2ac76c9ad503cb0e12cfd2e508610bd49a31"
+  check_sha "guarded D3 ramdisk" "$embedded_ramdisk" \
+    "dd3e92366f13007b71662593c363093a612502c1c3869fca50dab7e537be7a18"
+  check_sha "guarded D3 wrapper overlay" "$wrapper_overlay" \
+    "7f5601f5471fa93548539de5da95c17f84816f7c92625a255fee936631a80a8c"
+  check_sha "guarded D3 rescue supervisor" "$supervisor" \
+    "a6c12c47c4b10b2cb22e711ef11dd634df3999183990fc11447f296ba15ca7d7"
+  require_text "guarded D3 AVB verification" "$image_dir/avb-verify.txt" \
+    "Successfully verified sha256 hash of boot.img"
+
+  require_text "guarded D3 launcher pins AVB image" "$launcher" \
+    'BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-221000-mainline617-direct-d3-guarded-dwc3/boot.img"'
+  require_text "guarded D3 launcher pins AVB hash" "$launcher" \
+    "c5ade1ffaa458fe6943fda13c208c5e6df9ce3f5e2af8dec8cc7c599fc72ea30"
+  require_text "guarded D3 launcher pins no-op DTBO" "$launcher" \
+    'CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"'
+  require_text "guarded D3 launcher pins R6 restore" "$launcher" \
+    "e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369"
+  require_text "guarded D3 launcher uses dual transaction" "$launcher" \
+    "--dual-partition-transaction"
+  require_text "guarded D3 launcher starts rescue watcher" "$launcher" \
+    "--start-rescue-watcher"
+  require_text "guarded D3 launcher refuses overrides" "$launcher" \
+    "accepts no options"
+
+  require_file "$extract_ikconfig"
+  "$extract_ikconfig" "$embedded_kernel" > "$embedded_config"
+  for builtin in \
+    CONFIG_WATCHDOG_SYSFS=y \
+    CONFIG_QCOM_WDT=y \
+    CONFIG_CONFIGFS_FS=y \
+    CONFIG_PHY_QCOM_USB_HS=y \
+    CONFIG_USB_DWC3=y \
+    CONFIG_USB_DWC3_QCOM=y \
+    CONFIG_USB_GADGET=y \
+    CONFIG_USB_LIBCOMPOSITE=y \
+    CONFIG_USB_CONFIGFS=y \
+    CONFIG_USB_CONFIGFS_ACM=y \
+    CONFIG_USB_CONFIGFS_NCM=y; do
+    grep -Fqx "$builtin" "$embedded_config" ||
+      fail "guarded direct kernel is missing built-in prerequisite: $builtin"
+  done
+
+  [ "$(fdtget -t i "$embedded_dtb" /soc@0 '#address-cells')" = "2" ] ||
+    fail "guarded D3 DTB does not preserve /soc@0 #address-cells = 2"
+  [ "$(fdtget -t i "$embedded_dtb" /soc@0 '#size-cells')" = "2" ] ||
+    fail "guarded D3 DTB does not preserve /soc@0 #size-cells = 2"
+  [ "$(fdtget -t x "$embedded_dtb" /soc@0/spmi@c440000/pmic@0/pon@800 mode-bootloader)" = "2" ] ||
+    fail "guarded D3 DTB lacks PM8150 mode-bootloader = 2"
+  [ "$(fdtget -t x "$embedded_dtb" /soc@0/spmi@c440000/pmic@0/pon@800 mode-recovery)" = "1" ] ||
+    fail "guarded D3 DTB lacks PM8150 mode-recovery = 1"
+  fdtoverlay -i "$embedded_dtb" -o "$noop_merged" "$noop_overlay"
+  cmp "$embedded_dtb" "$noop_merged" ||
+    fail "D3 no-op entry changes the guarded direct embedded DTB"
+
+  cpio -it < "$wrapper_overlay" > "$overlay_list"
+  grep -Fqx "hotdog-rescue-supervisor" "$overlay_list" ||
+    fail "guarded wrapper overlay lacks hotdog-rescue-supervisor"
+  grep -Fqx "hotdog-userspace-stage" "$overlay_list" ||
+    fail "guarded wrapper overlay lacks hotdog-userspace-stage"
+  grep -Fqx "hotdog-mainline-wrapper" "$overlay_list" ||
+    fail "guarded wrapper overlay lacks hotdog-mainline-wrapper"
+
+  log "guarded direct D3 DWC3 candidate and recovery contract validated"
+}
+
 validate_direct_followup_artifacts_and_launchers() {
   local d2_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-140000-mainline617-direct-exact-header0"
   local d2_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d2-header0.sh"
@@ -931,6 +1026,7 @@ main() {
   validate_direct_d1_pack_artifacts_and_launcher
   validate_direct_d3_dual_launcher
   validate_current_direct_dwc3_noop_candidate
+  validate_guarded_direct_d3_dwc3_candidate
   validate_direct_followup_artifacts_and_launchers
   validate_kernel_prefix_tester_guards
   validate_d1_safety_offline

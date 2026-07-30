@@ -4,11 +4,13 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <linux/reboot.h>
+#include <linux/watchdog.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -19,6 +21,10 @@
 #define DEVMEM_PATH "/dev/mem"
 #endif
 
+#ifndef WATCHDOG_PATH
+#define WATCHDOG_PATH "/dev/watchdog0"
+#endif
+
 #define SUPERVISOR_MARKER "HOTDOG_RESCUE_SUPERVISOR_V1"
 #define APSS_WDT_PHYS 0x17c10000UL
 #define IMEM_RESTART_REASON_PHYS 0x146bf65cUL
@@ -26,6 +32,7 @@
 #define RESTART_REASON_NORMAL 0x77665501U
 #define WDT_RATE 32764U
 #define WDT_TIMEOUT_SEC 32U
+#define WDT_DEADLINE_TIMEOUT_SEC 2U
 #define WDT_RST 0x04
 #define WDT_EN 0x08
 #define WDT_BARK_TIME 0x10
@@ -35,12 +42,14 @@
 
 struct hardware {
 	long page_size;
-	int fd;
+	int devmem_fd;
+	int watchdog_fd;
 	void *wdt_mapping;
 	void *imem_mapping;
 	volatile uint8_t *wdt;
 	volatile uint8_t *imem;
 	size_t imem_offset;
+	bool watchdog_device;
 	bool armed;
 };
 
@@ -80,22 +89,63 @@ static void write_reg(volatile uint8_t *base, size_t offset, uint32_t value)
 
 static void hardware_close(struct hardware *hardware)
 {
+	if (hardware->watchdog_fd >= 0)
+		close(hardware->watchdog_fd);
 	if (hardware->imem_mapping != MAP_FAILED)
 		munmap(hardware->imem_mapping, (size_t)hardware->page_size);
 	if (hardware->wdt_mapping != MAP_FAILED)
 		munmap(hardware->wdt_mapping, (size_t)hardware->page_size);
-	if (hardware->fd >= 0)
-		close(hardware->fd);
+	if (hardware->devmem_fd >= 0)
+		close(hardware->devmem_fd);
 }
 
-static bool hardware_open(struct hardware *hardware)
+static void watchdog_device_stop(int fd)
+{
+	int options = WDIOS_DISABLECARD;
+	const char magic_close = 'V';
+
+	(void)ioctl(fd, WDIOC_SETOPTIONS, &options);
+	(void)write(fd, &magic_close, sizeof(magic_close));
+}
+
+static bool watchdog_device_open(struct hardware *hardware)
+{
+	int timeout = WDT_TIMEOUT_SEC;
+
+	hardware->watchdog_fd = open(WATCHDOG_PATH, O_WRONLY | O_CLOEXEC);
+	if (hardware->watchdog_fd < 0) {
+		fprintf(stderr, "open %s: %s\n", WATCHDOG_PATH,
+			strerror(errno));
+		return false;
+	}
+	if (ioctl(hardware->watchdog_fd, WDIOC_SETTIMEOUT, &timeout) < 0) {
+		fprintf(stderr, "WDIOC_SETTIMEOUT on %s: %s\n", WATCHDOG_PATH,
+			strerror(errno));
+		watchdog_device_stop(hardware->watchdog_fd);
+		close(hardware->watchdog_fd);
+		hardware->watchdog_fd = -1;
+		return false;
+	}
+	if (ioctl(hardware->watchdog_fd, WDIOC_KEEPALIVE, 0) < 0) {
+		fprintf(stderr, "WDIOC_KEEPALIVE on %s: %s\n", WATCHDOG_PATH,
+			strerror(errno));
+		watchdog_device_stop(hardware->watchdog_fd);
+		close(hardware->watchdog_fd);
+		hardware->watchdog_fd = -1;
+		return false;
+	}
+
+	hardware->watchdog_device = true;
+	hardware->armed = true;
+	fprintf(stderr, "armed %s with timeout %d seconds\n",
+		WATCHDOG_PATH, timeout);
+	return true;
+}
+
+static bool mmio_hardware_open(struct hardware *hardware)
 {
 	unsigned long imem_page;
 
-	memset(hardware, 0, sizeof(*hardware));
-	hardware->fd = -1;
-	hardware->wdt_mapping = MAP_FAILED;
-	hardware->imem_mapping = MAP_FAILED;
 	hardware->page_size = sysconf(_SC_PAGESIZE);
 	if (hardware->page_size <= 0 ||
 	    APSS_WDT_PHYS % (unsigned long)hardware->page_size != 0) {
@@ -108,8 +158,8 @@ static bool hardware_open(struct hardware *hardware)
 		~((unsigned long)hardware->page_size - 1);
 	hardware->imem_offset =
 		(size_t)(IMEM_RESTART_REASON_PHYS - imem_page);
-	hardware->fd = open(DEVMEM_PATH, O_RDWR | O_SYNC);
-	if (hardware->fd < 0) {
+	hardware->devmem_fd = open(DEVMEM_PATH, O_RDWR | O_SYNC);
+	if (hardware->devmem_fd < 0) {
 		fprintf(stderr, "open %s: %s\n", DEVMEM_PATH,
 			strerror(errno));
 		return false;
@@ -117,7 +167,7 @@ static bool hardware_open(struct hardware *hardware)
 
 	hardware->wdt_mapping =
 		mmap(NULL, (size_t)hardware->page_size,
-		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->fd,
+		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->devmem_fd,
 		     (off_t)APSS_WDT_PHYS);
 	if (hardware->wdt_mapping == MAP_FAILED) {
 		fprintf(stderr, "mmap watchdog 0x%lx: %s\n", APSS_WDT_PHYS,
@@ -128,26 +178,42 @@ static bool hardware_open(struct hardware *hardware)
 
 	hardware->imem_mapping =
 		mmap(NULL, (size_t)hardware->page_size,
-		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->fd,
+		     PROT_READ | PROT_WRITE, MAP_SHARED, hardware->devmem_fd,
 		     (off_t)imem_page);
 	if (hardware->imem_mapping == MAP_FAILED) {
-		fprintf(stderr, "mmap restart reason 0x%lx: %s\n", imem_page,
-			strerror(errno));
-		hardware_close(hardware);
-		return false;
+		fprintf(stderr,
+			"mmap optional restart reason 0x%lx: %s; "
+			"continuing with watchdog only\n",
+			imem_page, strerror(errno));
+		hardware->imem = NULL;
+	} else {
+		hardware->imem = hardware->imem_mapping;
 	}
 
 	hardware->wdt = hardware->wdt_mapping;
-	hardware->imem = hardware->imem_mapping;
 	return true;
 }
 
-static bool hardware_arm(struct hardware *hardware)
+static bool hardware_open(struct hardware *hardware)
+{
+	memset(hardware, 0, sizeof(*hardware));
+	hardware->devmem_fd = -1;
+	hardware->watchdog_fd = -1;
+	hardware->wdt_mapping = MAP_FAILED;
+	hardware->imem_mapping = MAP_FAILED;
+
+	if (watchdog_device_open(hardware))
+		return true;
+	return mmio_hardware_open(hardware);
+}
+
+static bool hardware_arm_mmio(struct hardware *hardware)
 {
 	const uint32_t ticks = WDT_TIMEOUT_SEC * WDT_RATE;
 
-	write_reg(hardware->imem, hardware->imem_offset,
-		  RESTART_REASON_BOOTLOADER);
+	if (hardware->imem)
+		write_reg(hardware->imem, hardware->imem_offset,
+			  RESTART_REASON_BOOTLOADER);
 	write_reg(hardware->wdt, WDT_EN, 0);
 	write_reg(hardware->wdt, WDT_RST, 1);
 	write_reg(hardware->wdt, WDT_BARK_TIME, ticks);
@@ -165,7 +231,11 @@ static bool hardware_arm(struct hardware *hardware)
 
 static void hardware_kick(struct hardware *hardware)
 {
-	if (hardware->armed)
+	if (!hardware->armed)
+		return;
+	if (hardware->watchdog_device)
+		(void)ioctl(hardware->watchdog_fd, WDIOC_KEEPALIVE, 0);
+	else
 		write_reg(hardware->wdt, WDT_RST, 1);
 }
 
@@ -174,10 +244,42 @@ static void hardware_disarm(struct hardware *hardware)
 	if (!hardware->armed)
 		return;
 
-	write_reg(hardware->wdt, WDT_EN, 0);
-	write_reg(hardware->imem, hardware->imem_offset,
-		  RESTART_REASON_NORMAL);
+	if (hardware->watchdog_device) {
+		watchdog_device_stop(hardware->watchdog_fd);
+	} else {
+		write_reg(hardware->wdt, WDT_EN, 0);
+		if (hardware->imem)
+			write_reg(hardware->imem, hardware->imem_offset,
+				  RESTART_REASON_NORMAL);
+	}
 	hardware->armed = false;
+}
+
+static void hardware_prepare_deadline(struct hardware *hardware)
+{
+	const uint32_t ticks = WDT_DEADLINE_TIMEOUT_SEC * WDT_RATE;
+
+	if (!hardware->armed)
+		return;
+	if (hardware->watchdog_device) {
+		int timeout = WDT_DEADLINE_TIMEOUT_SEC;
+
+		if (ioctl(hardware->watchdog_fd, WDIOC_SETTIMEOUT,
+			  &timeout) < 0)
+			fprintf(stderr, "deadline WDIOC_SETTIMEOUT: %s\n",
+				strerror(errno));
+		(void)ioctl(hardware->watchdog_fd, WDIOC_KEEPALIVE, 0);
+		return;
+	}
+
+	if (hardware->imem)
+		write_reg(hardware->imem, hardware->imem_offset,
+			  RESTART_REASON_BOOTLOADER);
+	write_reg(hardware->wdt, WDT_EN, 0);
+	write_reg(hardware->wdt, WDT_RST, 1);
+	write_reg(hardware->wdt, WDT_BARK_TIME, ticks);
+	write_reg(hardware->wdt, WDT_BITE_TIME, ticks);
+	write_reg(hardware->wdt, WDT_EN, 1);
 }
 
 static int sleep_one_second(void)
@@ -248,7 +350,8 @@ int main(int argc, char **argv)
 	printf("%s deadline=%" PRIu32 " success=%s\n", SUPERVISOR_MARKER,
 	       deadline_sec, success_file);
 	hardware_available = hardware_open(&hardware);
-	if (hardware_available && !hardware_arm(&hardware)) {
+	if (hardware_available && !hardware.watchdog_device &&
+	    !hardware_arm_mmio(&hardware)) {
 		hardware_close(&hardware);
 		hardware_available = false;
 	}
@@ -271,6 +374,8 @@ int main(int argc, char **argv)
 	}
 
 	fprintf(stderr, "%s DEADLINE_RESTART2\n", SUPERVISOR_MARKER);
+	if (hardware_available)
+		hardware_prepare_deadline(&hardware);
 	rc = syscall(SYS_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
 		     LINUX_REBOOT_CMD_RESTART2, "bootloader");
 	fprintf(stderr, "reboot(bootloader) returned: %s\n",
@@ -279,7 +384,9 @@ int main(int argc, char **argv)
 	if (hardware_available) {
 		/*
 		 * Keep the watchdog armed and stop kicking it. If RESTART2 is
-		 * unavailable, the hardware fallback will fire within 32 seconds.
+		 * unavailable, it normally bites after the requested two seconds.
+		 * A driver that rejects the shorter timeout retains the 32-second
+		 * armed fallback.
 		 */
 		hardware_close(&hardware);
 	}

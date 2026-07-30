@@ -193,6 +193,20 @@ static supervisor and add it to the wrapper:
     build/tools/hotdog-rescue-supervisor/hotdog-rescue-supervisor
 ```
 
+The supervisor prefers `/dev/watchdog0`; build `CONFIG_QCOM_WDT=y` so that
+device is available before the wrapper starts. Before its deadline it keeps a
+32-second watchdog alive. At the deadline it requests
+`RESTART2("bootloader")`, shortens the watchdog to two seconds, and stops
+feeding it. The direct DTB must also carry the standard PM8150 restart values:
+
+```dts
+mode-bootloader = <0x2>;
+mode-recovery = <0x1>;
+```
+
+`build-mainline-pmos-boot-dtb.sh` adds and validates those properties while
+removing the temporary DWC3 Apps SMMU dependency.
+
 The static process uses `CLOCK_MONOTONIC`, arms the APSS watchdog for the
 hardware-safe 32-second maximum, requests bootloader mode in IMEM, and kicks
 the hardware until `hotdog_rescue_watchdog_sec` expires. It disarms only after

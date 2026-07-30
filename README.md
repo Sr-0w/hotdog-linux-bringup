@@ -25,8 +25,13 @@ The periodic PID 1 watchdog did not produce a host-visible Fastboot return at
 its logical deadline. A standalone static supervisor then replaced that shell
 worker, used a monotonic deadline, issued `RESTART2(bootloader)` itself, and
 kept a 32-second APSS fallback armed. The hardware test still did not return to
-host-visible Fastboot. The same run reached the static-supervisor return and
-then stalled inside `setup_udev`. A new static fork/exec helper now bounds each
+host-visible Fastboot. Offline reconstruction found that the direct DTB lacked
+the PM8150 bootloader restart mode and that the QCOM watchdog was a module
+outside the initramfs. The prepared guarded candidate adds both, prefers
+`/dev/watchdog0`, and shortens the hardware timeout to two seconds before its
+restart request. Hardware validation is pending. The earlier run reached the
+static-supervisor return and then stalled inside `setup_udev`. A new static
+fork/exec helper now bounds each
 udev command independently without relying on BusyBox ash background-job
 behavior. Its first hardware run still left the aggregate `setup_udev` return
 cell hollow. A per-command hardware trace then filled cells 0-6 and left 7-10
@@ -35,13 +40,14 @@ did not return, even after its nominal 15-second deadline. Bypassing udev let
 the USB and DHCP helpers return and filled all 11 cells, but no host USB
 identity appeared. The USB prerequisite trace then filled 8/11 cells:
 configfs and libcomposite are available, but `/sys/class/udc` is empty. The
-first DWC3 diagnostic filled 7/11 cells: stage two reached the probe, but the
+first DWC3 diagnostic repeatedly filled 7/11 cells: stage two reached the probe, but the
 expected QCOM platform device was absent. Offline replay then found that D7
 overwrites `/soc@0` from the mainline two-cell address and size format to the
 downstream one-cell format while leaving mainline `reg` properties unchanged.
 The next single-variable test replaces D7 with the validated no-op DTBO so the
-embedded mainline DTB reaches Linux byte-for-byte unchanged. These bypasses
-gather evidence; they are not production fixes.
+embedded mainline DTB reaches Linux byte-for-byte unchanged. The guarded image
+keeps the same DWC3 probe while adding bounded automatic recovery. These
+bypasses gather evidence; they are not production fixes.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -51,9 +57,9 @@ gather evidence; they are not production fixes.
 | USB networking | Working | NCM gadget, host address `172.16.42.2`, device address `172.16.42.1`. |
 | SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
-| Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
+| Mainline reboot | Working through kexec; guarded direct candidate prepared | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe produced a physical reset during direct boot. The guarded direct image now combines the PON mode, built-in `CONFIG_QCOM_WDT=y`, and a static watchdog supervisor; hardware validation remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. With udev bypassed, configfs exists but no UDC registers. No direct-boot USB or mounted rootfs has been observed yet. |
+| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. With udev bypassed, configfs exists but no UDC registers. The D7 run stops at 7/11 before QCOM USB platform-device creation; the D3 no-op retest is prepared. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -97,11 +103,12 @@ the next boundary at UDC registration. Its DWC3 successor reached 7/11 because
 D7 changed `/soc@0` from `#address-cells = 2`, `#size-cells = 2` to `1/1`.
 That makes the unchanged four-cell mainline `reg` properties malformed and
 explains why the expected `a6f8800.usb` platform entry was absent. The next
-candidate keeps the same boot image and uses the D3 no-op DTBO, whose offline
-application leaves the embedded DTB byte-identical. The resulting DWC3 wrapper
-and HS-PHY subtrees match the known-good mainline kexec DTB property-for-property,
-and every driver needed to expose the configfs NCM/ACM gadget is built into the
-exact candidate kernel.
+candidate uses the D3 no-op DTBO, whose offline application leaves the embedded
+DTB byte-identical. It also builds the QCOM watchdog into the kernel, retains
+the PM8150 Fastboot restart mode after initcalls, and packages the static rescue
+supervisor. The resulting DWC3 wrapper and HS-PHY subtrees match the known-good
+mainline kexec DTB property-for-property, and every driver needed to expose the
+configfs NCM/ACM gadget is built into the exact candidate kernel.
 A detached host supervisor still
 restores and verifies R6 whenever Fastboot becomes visible.
 
