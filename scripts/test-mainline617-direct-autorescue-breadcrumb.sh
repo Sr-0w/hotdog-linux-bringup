@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-185900-mainline617-direct-source-init2-usb-probe/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-193500-mainline617-direct-source-init2-dwc3-probe/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=df96936ab5b47a7cf01840d62e5c91dd2f7f992b28abfeac1f194051ec3b7982
+BOOT_SHA=fa26b3668d3fc043936d13dadca6b34dc56a1bbc54d0ea92243cd128ec3324c2
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -64,9 +64,11 @@ sources `init_2nd.sh` in PID 1 to isolate the observed blocked second execve.
 The sourced script uses a diagnostic udev bypass after the per-command
 fork/exec candidate proved that the first `udevd` launch never returned. The
 first bypass run reached 11/11 without exposing USB because the pmOS helper
-soft-fails when prerequisites are absent. Cells 6-10 now report diagnostic
-entry, configfs availability, UDC availability, a non-empty gadget UDC
-binding, and network-interface creation. A separate static supervisor uses a
+soft-fails when prerequisites are absent. The USB prerequisite probe then
+reached 8/11: configfs and libcomposite are available, but no UDC registered.
+Cells 6-10 now report diagnostic entry, the QCOM USB platform device, QCOM
+wrapper binding, HS PHY binding, and DWC3 core binding. `consoleblank=0` keeps
+the result visible for remote observation. A separate static supervisor uses a
 monotonic 300-second deadline, requests
 `RESTART2(bootloader)` directly, and keeps a hardware-safe 32-second APSS
 fallback armed between periodic kicks. The rootfs success marker disarms that
@@ -135,6 +137,7 @@ set +e
 		--expect-cmdline-token hotdog_wrapper_settle_sec=0 \
 		--expect-cmdline-token hotdog_rescue_watchdog_sec=300 \
 		--expect-cmdline-token initramfs_async=0 \
+		--expect-cmdline-token consoleblank=0 \
 		--restore-after system --boot-wait 390 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
 test_status=$?

@@ -367,6 +367,8 @@ validate_bounded_exec_source() {
 		die "initramfs builder lacks the diagnostic udev bypass"
 	grep -q 'usb-probe' "$initramfs_builder" ||
 		die "initramfs builder lacks USB prerequisite tracing"
+	grep -q 'dwc3-probe' "$initramfs_builder" ||
+		die "initramfs builder lacks DWC3 binding tracing"
 	grep -q 'profile retained setup_udev' "$initramfs_builder" ||
 		die "diagnostic udev bypass lacks its negative setup_udev guard"
 }

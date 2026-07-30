@@ -16,8 +16,8 @@ Linux 6.17 reaches the installed postmarketOS root filesystem on real hardware
 through the validated downstream 4.14 kexec bridge. A persistent image launched
 directly by the OnePlus bootloader now completes kernel initialization, executes
 PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
-postmarketOS stage-two init. It currently stalls inside `setup_udev`. Direct
-rootfs and USB access remain under active bring-up. Repeat runs exposed two
+postmarketOS stage-two init. Direct rootfs and USB access remain under active
+bring-up. Repeat runs exposed two
 timeout overflows after all 986 initcalls: first in the early kernel watchdog,
 then in the PID 1 fallback. The corrected image disables the former before its
 final breadcrumb and reaches PID 1 with hardware-safe 32-second intervals.
@@ -33,9 +33,11 @@ cell hollow. A per-command hardware trace then filled cells 0-6 and left 7-10
 hollow: stage two entered `setup_udev`, but the first bounded `udevd` launch
 did not return, even after its nominal 15-second deadline. Bypassing udev let
 the USB and DHCP helpers return and filled all 11 cells, but no host USB
-identity appeared. The current diagnostic maps configfs, UDC, gadget binding,
-and interface availability separately. These bypasses gather evidence; they
-are not production fixes.
+identity appeared. The USB prerequisite trace then filled 8/11 cells:
+configfs and libcomposite are available, but `/sys/class/udc` is empty. The
+current diagnostic maps the QCOM wrapper, HS PHY, and DWC3 core driver
+bindings separately. These bypasses gather evidence; they are not production
+fixes.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -47,7 +49,7 @@ are not production fixes.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. The first `udevd` launch blocks; with udev bypassed, the USB helpers return but expose no host identity. No direct-boot USB or mounted rootfs has been observed yet. |
+| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. With udev bypassed, configfs exists but no UDC registers. No direct-boot USB or mounted rootfs has been observed yet. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -85,9 +87,11 @@ used the standalone static supervisor described above, reached
 `setup_udev`, and likewise failed to expose Fastboot after the deadline. The
 static fork/exec candidate gave the same aggregate 9/11 result. Its
 per-command follow-up stopped at 7/11, isolating the first bounded `udevd`
-launch. The udev-bypass follow-up reached 11/11 without exposing USB. The
-superseding diagnostic traces configfs, UDC, gadget binding, and network
-interface availability with cells 6-10. A detached host supervisor still
+launch. The udev-bypass follow-up reached 11/11 without exposing USB. The USB
+prerequisite diagnostic reached 8/11, proving configfs availability and placing
+the next boundary at UDC registration. Its successor traces the QCOM USB
+platform device, QCOM wrapper, HS PHY, and DWC3 core bindings with cells 6-10.
+A detached host supervisor still
 restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot

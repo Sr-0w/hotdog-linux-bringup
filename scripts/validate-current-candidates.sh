@@ -399,6 +399,8 @@ validate_reproducible_builder_guards() {
     "udev-skip"
   require_text "initramfs builder supports USB prerequisite tracing" "$wrapper_builder" \
     "usb-probe"
+  require_text "initramfs builder supports DWC3 binding tracing" "$wrapper_builder" \
+    "dwc3-probe"
   require_text "diagnostic udev bypass rejects retained setup_udev" "$wrapper_builder" \
     "profile retained setup_udev"
   require_text "bounded udev tracing records timeouts" "$wrapper_builder" \

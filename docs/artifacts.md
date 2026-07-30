@@ -155,6 +155,21 @@ Cells 6-10 report diagnostic entry, configfs availability, UDC availability,
 a non-empty gadget UDC binding, and network-interface creation. The profile
 also omits udev and is diagnostic-only.
 
+If configfs is present but no UDC registers, use `dwc3-probe` to locate the
+driver-binding boundary:
+
+```bash
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --userspace-stage-helper build/path/to/hotdog-userspace-stage \
+  --userspace-stage-profile dwc3-probe
+```
+
+Cells 6-10 report diagnostic entry, the `a6f8800.usb` platform device, its QCOM
+wrapper-driver binding, the `88e2000.phy` HS-PHY binding, and the
+`a600000.usb` DWC3-core binding. This profile also omits udev and remains a
+bring-up diagnostic.
+
 For a recovery deadline that does not depend on a shell loop, build the tracked
 static supervisor and add it to the wrapper:
 

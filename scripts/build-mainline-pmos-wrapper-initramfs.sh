@@ -59,7 +59,8 @@ Options:
   --userspace-stage-profile PROFILE
                         Select stage-two checkpoints: handoff (default),
                         handoff-deep, udev, udev-bounded,
-                        udev-bounded-deep, udev-skip, or usb-probe.
+                        udev-bounded-deep, udev-skip, usb-probe, or
+                        dwc3-probe.
                         handoff-deep separates both sourced function files,
                         watchdog return, and entry into setup_udev.
                         udev-bounded reports each udev command and moves past
@@ -71,6 +72,9 @@ Options:
                         plus DHCP startup. It is diagnostic-only.
                         usb-probe omits setup_udev and reports configfs, UDC,
                         gadget binding, and network-interface availability.
+                        dwc3-probe omits setup_udev and reports the QCOM USB
+                        platform device, QCOM wrapper binding, HS PHY binding,
+                        and DWC3 core binding.
   --source-init-2nd     Source /init_2nd.sh at the first stage handoff instead
                         of executing it. This diagnostic mode isolates a
                         blocked second execve while preserving PID 1.
@@ -138,7 +142,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip|usb-probe) ;;
+	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip|usb-probe|dwc3-probe) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -657,6 +661,37 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 				print "fi"
 				print "unset hotdog_usb_probe_iface"
 				stage10 = 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+					exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
+	elif [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
+		awk '
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage6 {
+				marker(6)
+				print "if [ -e /sys/bus/platform/devices/a6f8800.usb ]; then"
+				marker(7)
+				print "fi"
+				print "if [ -L /sys/bus/platform/devices/a6f8800.usb/driver ]; then"
+				marker(8)
+				print "fi"
+				print "if [ -L /sys/bus/platform/devices/88e2000.phy/driver ]; then"
+				marker(9)
+				print "fi"
+				print "if [ -L /sys/bus/platform/devices/a600000.usb/driver ]; then"
+				marker(10)
+				print "fi"
+				stage6 = stage7 = stage8 = stage9 = stage10 = 1
 				next
 			}
 
@@ -1206,7 +1241,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 			[ "$USERSPACE_STAGE_PROFILE" = handoff-deep ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
 		for stage in $(seq 6 10); do
 			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
 		done
@@ -1217,7 +1253,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
 		if grep -qx '[[:space:]]*setup_udev[[:space:]]*' \
 				"$init_2nd_override"; then
 			printf '%s profile retained setup_udev\n' \
@@ -1233,6 +1270,16 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -q '/sys/class/udc' "$init_2nd_override"
 		grep -q '\$CONFIGFS/g1/UDC' "$init_2nd_override"
 		grep -q '/sys/class/net/\$hotdog_usb_probe_iface' \
+			"$init_2nd_override"
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
+		grep -q '/sys/bus/platform/devices/a6f8800.usb' \
+			"$init_2nd_override"
+		grep -q '/sys/bus/platform/devices/a6f8800.usb/driver' \
+			"$init_2nd_override"
+		grep -q '/sys/bus/platform/devices/88e2000.phy/driver' \
+			"$init_2nd_override"
+		grep -q '/sys/bus/platform/devices/a600000.usb/driver' \
 			"$init_2nd_override"
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||

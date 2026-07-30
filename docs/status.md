@@ -264,10 +264,14 @@ remote debug channel.
 69. Keep the `udev-skip` hardware result as proof that both
     `setup_usb_network` and `start_unudhcpd` return when udev is omitted. All
     11 cells filled for the complete 390-second observation, but no host USB
-    identity, network interface, or automatic Fastboot return appeared. Test
-    the deterministic `usb-probe` profile next. Cells 6-10 report diagnostic
-    entry, configfs availability, UDC availability, gadget binding, and network
-    interface creation, exposing the pmOS helper's soft-failure path.
+    identity, network interface, or automatic Fastboot return appeared.
+70. Keep the `usb-probe` hardware result as proof that configfs and
+    libcomposite are present during direct mainline stage two. Cells 0-7 filled
+    while 8-10 remained hollow for the complete 390-second observation. No UDC,
+    host USB identity, network interface, or automatic Fastboot return
+    appeared. Test `dwc3-probe` next: cells 6-10 report diagnostic entry, the
+    QCOM USB platform device, QCOM wrapper binding, HS PHY binding, and DWC3
+    core binding.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in
