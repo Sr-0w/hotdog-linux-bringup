@@ -243,6 +243,13 @@ remote debug channel.
     the maximum non-wrapping 32-second kernel deadline, disables it before
     stage 400, and feeds a separate 32-second PID 1 watchdog until the logical
     rescue deadline.
+66. Keep the deep bounded-udev result as proof that PID 1 enters the sourced
+    second stage, returns from both function-library sources and the static
+    rescue-supervisor call, then stops inside `setup_udev`. Cells 0-8 filled
+    while 9-10 remained hollow. The static rescue supervisor did not expose
+    Fastboot during the 390-second host observation. The next candidate keeps
+    the exact kernel, DTB, and command line but replaces ash background launches
+    with a static `fork()`/`execvp()` helper and a monotonic 15-second timeout.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

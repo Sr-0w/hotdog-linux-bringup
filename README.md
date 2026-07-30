@@ -22,10 +22,14 @@ timeout overflows after all 986 initcalls: first in the early kernel watchdog,
 then in the PID 1 fallback. The corrected image disables the former before its
 final breadcrumb and reaches PID 1 with hardware-safe 32-second intervals.
 The periodic PID 1 watchdog did not produce a host-visible Fastboot return at
-its logical deadline. A standalone static supervisor now replaces that shell
-worker, uses a monotonic deadline, issues `RESTART2(bootloader)` itself, and
-keeps a 32-second APSS fallback armed. Its build and initramfs integration are
-validated offline; recovery from a real direct boot is still pending.
+its logical deadline. A standalone static supervisor then replaced that shell
+worker, used a monotonic deadline, issued `RESTART2(bootloader)` itself, and
+kept a 32-second APSS fallback armed. The hardware test still did not return to
+host-visible Fastboot. The same run reached the static-supervisor return and
+then stalled inside `setup_udev`. A new static fork/exec helper now bounds each
+udev command independently without relying on BusyBox ash background-job
+behavior. Its build, timeout behavior, and initramfs integration are validated
+offline; hardware validation is next.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -71,8 +75,11 @@ classify the result from the display. The tested bounded-udev candidate armed
 the APSS watchdog from PID 1 with the bootloader restart reason. That hardware
 test reached the postmarketOS stage-two handoff, but its shell worker did not
 return the phone to Fastboot after the logical deadline. The prepared follow-up
-uses the standalone static supervisor described above. A detached host
-supervisor still restores and verifies R6 whenever Fastboot becomes visible.
+used the standalone static supervisor described above, reached
+`setup_udev`, and likewise failed to expose Fastboot after the deadline. The
+current candidate moves each potentially blocked udev launch into a static
+fork/exec helper with a monotonic 15-second timeout. A detached host supervisor
+still restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint

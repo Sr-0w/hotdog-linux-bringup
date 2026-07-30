@@ -317,6 +317,54 @@ validate_rescue_supervisor_source() {
 		die "initramfs builder does not package the rescue supervisor"
 }
 
+validate_bounded_exec_source() {
+	local source="helpers/hotdog-bounded-exec.c"
+	local builder="scripts/build-hotdog-bounded-exec.sh"
+	local initramfs_builder="scripts/build-mainline-pmos-wrapper-initramfs.sh"
+
+	[ -f "$source" ] || die "missing bounded exec source: $source"
+	[ -x "$builder" ] || die "missing executable bounded exec builder: $builder"
+	[ -x "$initramfs_builder" ] ||
+		die "missing executable initramfs builder: $initramfs_builder"
+
+	log "static bounded exec source contract"
+	cc -std=c11 -Wall -Wextra -Werror -fsyntax-only "$source"
+	grep -q 'HOTDOG_BOUNDED_EXEC_V1' "$source" ||
+		die "bounded exec identity marker is missing"
+	grep -q 'CLOCK_MONOTONIC' "$source" ||
+		die "bounded exec does not use a monotonic clock"
+	grep -q 'pid = fork()' "$source" ||
+		die "bounded exec does not use fork"
+	if grep -Eq '(^|[^[:alnum:]_])vfork[[:space:]]*\(' "$source"; then
+		die "bounded exec must not use vfork"
+	fi
+	grep -q 'execvp(command\[0\], command)' "$source" ||
+		die "bounded exec does not execute the requested command"
+	grep -q 'kill(-pid, SIGTERM)' "$source" ||
+		die "bounded exec does not terminate the child process group"
+	grep -q 'kill(-pid, SIGKILL)' "$source" ||
+		die "bounded exec lacks its forced termination fallback"
+	grep -q 'return 124' "$source" ||
+		die "bounded exec lacks the timeout status contract"
+
+	grep -q 'zig cc -target aarch64-linux-musl -static' "$builder" ||
+		die "bounded exec builder does not pin a static AArch64 target"
+	grep -q 'qemu-aarch64 "$OUTPUT" --self-test' "$builder" ||
+		die "bounded exec builder lacks its QEMU self-test"
+	grep -q 'expect_status 0 --timeout 2 -- /bin/true' "$builder" ||
+		die "bounded exec builder does not test command success"
+	grep -q 'expect_status 37 --timeout 2 -- /bin/sh' "$builder" ||
+		die "bounded exec builder does not test exit propagation"
+	grep -q 'expect_status 124 --timeout 1 -- /bin/sleep 30' "$builder" ||
+		die "bounded exec builder does not test a real timeout"
+	grep -q -- '--bounded-exec-helper FILE' "$initramfs_builder" ||
+		die "initramfs builder does not document --bounded-exec-helper"
+	grep -q 'file /hotdog-bounded-exec' "$initramfs_builder" ||
+		die "initramfs builder does not package bounded exec"
+	grep -q '/hotdog-bounded-exec --timeout 15 -- "$@"' "$initramfs_builder" ||
+		die "bounded udev does not invoke the static helper"
+}
+
 main() {
 	local command_name
 
@@ -334,6 +382,7 @@ main() {
 	validate_k1_patch_copies
 	validate_k1_aport_inputs
 	validate_rescue_supervisor_source
+	validate_bounded_exec_source
 
 	log "all checks passed"
 }

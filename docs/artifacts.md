@@ -96,15 +96,34 @@ It overlays instrumented copies of `init_2nd.sh` and
 return from `setup_usb_network`.
 
 The `udev-bounded` profile uses the same markers but gives each udev command
-15 seconds. A command that remains blocked is signaled and left behind without
-waiting on it, its return marker stays hollow, and stage two continues toward
-USB and the rootfs. This profile is intended only for bring-up; it does not
-turn a skipped udev event into a supported production boot path.
+15 seconds. Without an explicit helper it uses the original shell-based
+diagnostic runner. That path is retained for reproducing older artifacts, but
+it may itself stop before ash returns the background child PID.
 
 The `udev-bounded-deep` profile keeps the same 15-second command limits but
 uses cells 6-10 for `init_2nd.sh` entry, function-source return, watchdog
 return, aggregate `setup_udev` return, and USB-network return. It is useful
 when the per-command profile never reaches its first udev marker.
+
+For a bounded launch that does not depend on ash background-job behavior, build
+the tracked static fork/exec helper and add it to either bounded profile:
+
+```bash
+./scripts/build-hotdog-bounded-exec.sh
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --userspace-stage-helper build/path/to/hotdog-userspace-stage \
+  --userspace-stage-profile udev-bounded-deep \
+  --bounded-exec-helper \
+    build/tools/hotdog-bounded-exec/hotdog-bounded-exec
+```
+
+The helper forks before `execvp()`, measures a monotonic 15-second deadline,
+terminates the child process group with `SIGTERM` and then `SIGKILL`, and
+returns status 124 to stage two. Its builder tests successful execution, exact
+exit-status propagation, and a real timeout under QEMU. This remains a
+bring-up diagnostic: continuing after a failed udev command is not the final
+production policy.
 
 For a recovery deadline that does not depend on a shell loop, build the tracked
 static supervisor and add it to the wrapper:

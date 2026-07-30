@@ -13,6 +13,7 @@ WRAPPER_BINARY=""
 REBOOT_MODE_HELPER=""
 APSS_WDT_HELPER=""
 RESCUE_SUPERVISOR=""
+BOUNDED_EXEC_HELPER=""
 USERSPACE_STAGE_HELPER=""
 USERSPACE_STAGE_PROFILE="handoff"
 SOURCE_INIT_2ND=0
@@ -48,6 +49,9 @@ Options:
                         Replace the shell watchdog worker with a static
                         monotonic-deadline supervisor. It performs RESTART2
                         directly and keeps a 32-second APSS fallback armed.
+  --bounded-exec-helper FILE
+                        Use a static fork/exec supervisor for bounded udev
+                        commands so a blocked child exec cannot suspend ash.
   --userspace-stage-helper FILE
                         Add the static stage helper and replace /init plus
                         /init_2nd.sh with instrumented copies that mark the
@@ -81,6 +85,7 @@ while [ "$#" -gt 0 ]; do
 		--reboot-mode-helper) REBOOT_MODE_HELPER="$2"; shift ;;
 		--apss-wdt-helper) APSS_WDT_HELPER="$2"; shift ;;
 		--rescue-supervisor) RESCUE_SUPERVISOR="$2"; shift ;;
+		--bounded-exec-helper) BOUNDED_EXEC_HELPER="$2"; shift ;;
 		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
 		--userspace-stage-profile) USERSPACE_STAGE_PROFILE="$2"; shift ;;
 		--source-init-2nd) SOURCE_INIT_2ND=1 ;;
@@ -199,8 +204,40 @@ if [ -n "$RESCUE_SUPERVISOR" ]; then
 		exit 2
 	}
 fi
+if [ -n "$BOUNDED_EXEC_HELPER" ]; then
+	case "$USERSPACE_STAGE_PROFILE" in
+		udev-bounded|udev-bounded-deep) ;;
+		*)
+			printf '%s requires a bounded udev stage profile\n' \
+				"--bounded-exec-helper" >&2
+			exit 2
+			;;
+	esac
+	[ -x "$BOUNDED_EXEC_HELPER" ] || {
+		printf 'Missing executable bounded exec helper: %s\n' \
+			"$BOUNDED_EXEC_HELPER" >&2
+		exit 2
+	}
+	file "$BOUNDED_EXEC_HELPER" |
+		grep -q 'ELF 64-bit LSB executable, ARM aarch64' || {
+		printf 'Bounded exec helper is not an AArch64 executable: %s\n' \
+			"$BOUNDED_EXEC_HELPER" >&2
+		exit 2
+	}
+	file "$BOUNDED_EXEC_HELPER" | grep -q 'statically linked' || {
+		printf 'Bounded exec helper is not statically linked: %s\n' \
+			"$BOUNDED_EXEC_HELPER" >&2
+		exit 2
+	}
+	grep -a -q 'HOTDOG_BOUNDED_EXEC_V1' "$BOUNDED_EXEC_HELPER" || {
+		printf 'Bounded exec helper marker is missing: %s\n' \
+			"$BOUNDED_EXEC_HELPER" >&2
+		exit 2
+	}
+fi
 if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ] ||
 		[ -n "$RESCUE_SUPERVISOR" ] ||
+		[ -n "$BOUNDED_EXEC_HELPER" ] ||
 		[ -n "$USERSPACE_STAGE_HELPER" ]; then
 	[ -x "$HOTDOG_ROOT/scripts/extract-last-newc-member.py" ] || {
 		printf 'Missing newc extractor: %s\n' \
@@ -299,6 +336,11 @@ chmod 0755 "$wrapper"
 cat > "$list_file" <<EOF
 file /hotdog-mainline-wrapper $wrapper 0755 0 0
 EOF
+
+if [ -n "$BOUNDED_EXEC_HELPER" ]; then
+	printf 'file /hotdog-bounded-exec %s 0755 0 0\n' \
+		"$BOUNDED_EXEC_HELPER" >> "$list_file"
+fi
 
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
@@ -608,9 +650,28 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 				}
 			' "$init_functions_2nd_original" > "$init_functions_2nd_override"
 		else
-			awk -v deep="$([ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] && printf 1 || printf 0)" '
+			awk \
+				-v deep="$([ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] && printf 1 || printf 0)" \
+				-v bounded_exec="$([ -n "$BOUNDED_EXEC_HELPER" ] && printf 1 || printf 0)" '
 				/^setup_udev\(\)[[:space:]]*\{/ && !runner {
 					print "hotdog_stage_run() {"
+					if (bounded_exec) {
+						print "\tlocal stage=\"$1\" status=0"
+						print "\tshift"
+						print "\t/hotdog-bounded-exec --timeout 15 -- \"$@\""
+						print "\tstatus=$?"
+						print "\tif [ \"$status\" -eq 124 ]; then"
+						print "\t\tprintf \"<4>HOTDOG_USERSPACE_STAGE_TIMEOUT=%s\\n\" \"$stage\" > /dev/kmsg 2>/dev/null || true"
+						print "\t\treturn 124"
+						print "\tfi"
+						print "\t[ \"$stage\" = \"-\" ] || /hotdog-userspace-stage \"$stage\""
+						print "\treturn \"$status\""
+						print "}"
+						print ""
+						print
+						runner = 1
+						next
+					}
 					print "\tlocal stage=\"$1\" pid remaining=15 status=0"
 					print "\tshift"
 					print "\t\"$@\" &"
@@ -1040,6 +1101,11 @@ if [ -n "$RESCUE_SUPERVISOR" ]; then
 	grep -q -- '--success-file /tmp/hotdog_rescue_watchdog.root-mounted' \
 		"$watchdog_override"
 fi
+if [ -n "$BOUNDED_EXEC_HELPER" ]; then
+	grep -qx 'hotdog-bounded-exec' "$OUTDIR/overlay-contents.txt"
+	grep -q '/hotdog-bounded-exec --timeout 15 -- "$@"' \
+		"$init_functions_2nd_override"
+fi
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	grep -qx 'hotdog-userspace-stage' "$OUTDIR/overlay-contents.txt"
 	grep -qx 'init' "$OUTDIR/overlay-contents.txt"
@@ -1083,7 +1149,12 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 			if [ "$USERSPACE_STAGE_PROFILE" != udev ]; then
 				grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
 					"$init_functions_2nd_override"
-				grep -q 'remaining=15' "$init_functions_2nd_override"
+				if [ -n "$BOUNDED_EXEC_HELPER" ]; then
+					grep -q '/hotdog-bounded-exec --timeout 15 --' \
+						"$init_functions_2nd_override"
+				else
+					grep -q 'remaining=15' "$init_functions_2nd_override"
+				fi
 			fi
 		fi
 	fi
@@ -1099,6 +1170,7 @@ printf 'Prebuilt wrapper binary: %s\n' "${WRAPPER_BINARY:-none}"
 printf 'RESTART2 rescue helper: %s\n' "${REBOOT_MODE_HELPER:-none}"
 printf 'APSS watchdog helper: %s\n' "${APSS_WDT_HELPER:-none}"
 printf 'Static rescue supervisor: %s\n' "${RESCUE_SUPERVISOR:-none}"
+printf 'Static bounded exec helper: %s\n' "${BOUNDED_EXEC_HELPER:-none}"
 printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
 printf 'Userspace stage profile: %s\n' "$USERSPACE_STAGE_PROFILE"
 printf 'Source init_2nd handoff: %s\n' "$SOURCE_INIT_2ND"
