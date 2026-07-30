@@ -202,7 +202,14 @@ The current launcher pins:
 - the Linux 6.17 Image
 - the final hotdog DTB
 - the wrapped postmarketOS initramfs
+- the D3 no-op candidate DTBO, which preserves the embedded mainline DTB
+- the stock DTBO restored before the recovery boot image
 - the downstream no-paint bridge used for recovery
+
+D7 remains useful as downstream bring-up evidence, but must not be paired with
+the current mainline DTB: its `/soc@0` fragment replaces the mainline `2/2`
+address and size cells with downstream `1/1` values without translating child
+`reg` properties.
 
 Generated artifacts are intentionally not committed. See
 [artifacts.md](artifacts.md) for the expected local layout and verification

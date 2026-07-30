@@ -272,6 +272,15 @@ remote debug channel.
     appeared. Test `dwc3-probe` next: cells 6-10 report diagnostic entry, the
     QCOM USB platform device, QCOM wrapper binding, HS PHY binding, and DWC3
     core binding.
+71. Keep the `dwc3-probe` hardware result as proof that the sourced second
+    stage reaches the DWC3 diagnostic, but the expected
+    `/sys/bus/platform/devices/a6f8800.usb` entry is absent. Cells 0-6 filled
+    while 7-10 remained hollow for the complete 390-second observation. No host
+    USB identity or automatic Fastboot return appeared. Offline replay found
+    that D7 changes `/soc@0` address and size cells from mainline `2/2` to
+    downstream `1/1` without rewriting the four-cell child `reg` properties.
+    Retest the unchanged boot image with the D3 no-op DTBO, which preserves the
+    embedded mainline DTB byte-for-byte.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

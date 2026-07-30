@@ -5,7 +5,7 @@ set -Eeuo pipefail
 source "$(dirname "$0")/env.sh"
 
 BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-193500-mainline617-direct-source-init2-dwc3-probe/boot.img"
-D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
+CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
 REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
@@ -14,7 +14,7 @@ START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
 BOOT_SHA=fa26b3668d3fc043936d13dadca6b34dc56a1bbc54d0ea92243cd128ec3324c2
 EARLY_BREADCRUMB_PHYS=0x81c0f800
-D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
+CANDIDATE_DTBO_SHA=339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
 RESTORE_BOOT_SHA=e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369
 REBOOT_HELPER_SHA=045a3d9d696ddee6922e1ce506aeb82a77c261978ea6a3220fd114751952d711
@@ -66,9 +66,13 @@ fork/exec candidate proved that the first `udevd` launch never returned. The
 first bypass run reached 11/11 without exposing USB because the pmOS helper
 soft-fails when prerequisites are absent. The USB prerequisite probe then
 reached 8/11: configfs and libcomposite are available, but no UDC registered.
-Cells 6-10 now report diagnostic entry, the QCOM USB platform device, QCOM
-wrapper binding, HS PHY binding, and DWC3 core binding. `consoleblank=0` keeps
-the result visible for remote observation. A separate static supervisor uses a
+The first DWC3 trace reached 7/11 with D7 and exposed a malformed runtime
+`/soc@0`: D7 replaced the mainline two-cell address and size format with the
+downstream one-cell format. This candidate changes only `dtbo_b`, using the
+validated D3 no-op entry so the embedded mainline DTB reaches Linux unchanged.
+Cells 6-10 report diagnostic entry, the QCOM USB platform device, QCOM wrapper
+binding, HS PHY binding, and DWC3 core binding. `consoleblank=0` keeps the
+result visible for remote observation. A separate static supervisor uses a
 monotonic 300-second deadline, requests
 `RESTART2(bootloader)` directly, and keeps a hardware-safe 32-second APSS
 fallback armed between periodic kicks. The rootfs success marker disarms that
@@ -102,7 +106,7 @@ esac
 	die "ANDROID_SERIAL differs from HOTDOG_TARGET_SERIAL" 2
 
 check_sha "direct mainline diagnostic image" "$BOOT_IMAGE" "$BOOT_SHA"
-check_sha "D7 candidate dtbo_b" "$D7_DTBO" "$D7_DTBO_SHA"
+check_sha "D3 no-op candidate dtbo_b" "$CANDIDATE_DTBO" "$CANDIDATE_DTBO_SHA"
 check_sha "stock restore dtbo_b" "$RESTORE_DTBO" "$RESTORE_DTBO_SHA"
 check_sha "R6 restore boot_b" "$RESTORE_BOOT" "$RESTORE_BOOT_SHA"
 check_sha "R6 bootloader reboot helper" "$REBOOT_HELPER" "$REBOOT_HELPER_SHA"
@@ -126,7 +130,8 @@ set +e
 "$HOTDOG_ROOT/scripts/test-boot-b-image.sh" \
 	--image "$BOOT_IMAGE" --image-sha256 "$BOOT_SHA" \
 	--dual-partition-transaction \
-	--candidate-dtbo-b "$D7_DTBO" --candidate-dtbo-b-sha256 "$D7_DTBO_SHA" \
+	--candidate-dtbo-b "$CANDIDATE_DTBO" \
+		--candidate-dtbo-b-sha256 "$CANDIDATE_DTBO_SHA" \
 	--restore-dtbo-b "$RESTORE_DTBO" --restore-dtbo-b-sha256 "$RESTORE_DTBO_SHA" \
 	--restore-boot-b "$RESTORE_BOOT" --restore-boot-b-sha256 "$RESTORE_BOOT_SHA" \
 	--reboot-helper "$REBOOT_HELPER" --reboot-helper-sha256 "$REBOOT_HELPER_SHA" \

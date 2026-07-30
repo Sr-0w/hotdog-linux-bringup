@@ -35,9 +35,13 @@ did not return, even after its nominal 15-second deadline. Bypassing udev let
 the USB and DHCP helpers return and filled all 11 cells, but no host USB
 identity appeared. The USB prerequisite trace then filled 8/11 cells:
 configfs and libcomposite are available, but `/sys/class/udc` is empty. The
-current diagnostic maps the QCOM wrapper, HS PHY, and DWC3 core driver
-bindings separately. These bypasses gather evidence; they are not production
-fixes.
+first DWC3 diagnostic filled 7/11 cells: stage two reached the probe, but the
+expected QCOM platform device was absent. Offline replay then found that D7
+overwrites `/soc@0` from the mainline two-cell address and size format to the
+downstream one-cell format while leaving mainline `reg` properties unchanged.
+The next single-variable test replaces D7 with the validated no-op DTBO so the
+embedded mainline DTB reaches Linux byte-for-byte unchanged. These bypasses
+gather evidence; they are not production fixes.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -89,8 +93,12 @@ static fork/exec candidate gave the same aggregate 9/11 result. Its
 per-command follow-up stopped at 7/11, isolating the first bounded `udevd`
 launch. The udev-bypass follow-up reached 11/11 without exposing USB. The USB
 prerequisite diagnostic reached 8/11, proving configfs availability and placing
-the next boundary at UDC registration. Its successor traces the QCOM USB
-platform device, QCOM wrapper, HS PHY, and DWC3 core bindings with cells 6-10.
+the next boundary at UDC registration. Its DWC3 successor reached 7/11 because
+D7 changed `/soc@0` from `#address-cells = 2`, `#size-cells = 2` to `1/1`.
+That makes the unchanged four-cell mainline `reg` properties malformed and
+explains why the expected `a6f8800.usb` platform entry was absent. The next
+candidate keeps the same boot image and uses the D3 no-op DTBO, whose offline
+application leaves the embedded DTB byte-identical.
 A detached host supervisor still
 restores and verifies R6 whenever Fastboot becomes visible.
 

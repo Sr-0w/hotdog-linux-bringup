@@ -17,6 +17,7 @@ Checks:
   - selected Android DTB pack entry 12 contains the hotdog simplefb wiring
   - generated initramfs/rootfs helper scripts pass shell syntax checks
   - pinned D1/D1-pack artifacts, launchers, SSH identity guards, and ACM collector
+  - current direct DWC3 candidate preserves the embedded DTB with D3 no-op
 
 Optional historical RGB controls, validated only when explicitly named:
   fbcon-only, r4-fbwait, r4-ttykmsg, splash-ttykmsg, fbtest-pstore,
@@ -541,6 +542,53 @@ validate_direct_d3_dual_launcher() {
   log "D3 dual-partition launcher and artifacts validated"
 }
 
+validate_current_direct_dwc3_noop_candidate() {
+  local launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-autorescue-breadcrumb.sh"
+  local image_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-193500-mainline617-direct-source-init2-dwc3-probe"
+  local boot_image="$image_dir/boot.img"
+  local embedded_dtb="$image_dir/components/dtb"
+  local noop_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo"
+  local noop_dtbo="$noop_dir/dtbo_b-d3-entry5-noop.img"
+  local noop_overlay="$noop_dir/components/noop-entry5.dtbo"
+  local d7_overlay="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/components/filtered-entry5.dtbo"
+  local noop_merged="$tmpdir/current-direct-plus-noop.dtb"
+  local d7_merged="$tmpdir/current-direct-plus-d7.dtb"
+
+  require_file "$launcher"
+  bash -n "$launcher"
+  check_sha "current direct DWC3-probe boot image" "$boot_image" \
+    "fa26b3668d3fc043936d13dadca6b34dc56a1bbc54d0ea92243cd128ec3324c2"
+  check_sha "current direct embedded DTB" "$embedded_dtb" \
+    "040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c"
+  check_sha "current direct D3 no-op dtbo_b" "$noop_dtbo" \
+    "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+  check_sha "current direct D3 no-op entry" "$noop_overlay" \
+    "5328cb639beafb2a18c6657ccee31b52d585d5e1e63111455c041795a868e0a4"
+  require_file "$d7_overlay"
+
+  require_text "current direct launcher pins D3 no-op dtbo_b" "$launcher" \
+    'CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-160925-d3-noop-dtbo/dtbo_b-d3-entry5-noop.img"'
+  require_text "current direct launcher pins D3 no-op hash" "$launcher" \
+    "339e55adaf591f114d8a39a86cb0a0e664e26bc7c7b7f2227e0bee794d10c5fb"
+
+  fdtoverlay -i "$embedded_dtb" -o "$noop_merged" "$noop_overlay"
+  cmp "$embedded_dtb" "$noop_merged" ||
+    fail "D3 no-op entry changes the current direct embedded DTB"
+  [ "$(fdtget -t i "$noop_merged" /soc@0 '#address-cells')" = "2" ] ||
+    fail "D3 no-op runtime DTB does not preserve /soc@0 #address-cells = 2"
+  [ "$(fdtget -t i "$noop_merged" /soc@0 '#size-cells')" = "2" ] ||
+    fail "D3 no-op runtime DTB does not preserve /soc@0 #size-cells = 2"
+  [ "$(fdtget -t s "$noop_merged" /soc@0/usb@a6f8800 status)" = "okay" ] ||
+    fail "D3 no-op runtime DTB does not keep the QCOM USB wrapper enabled"
+
+  fdtoverlay -i "$embedded_dtb" -o "$d7_merged" "$d7_overlay"
+  [ "$(fdtget -t i "$d7_merged" /soc@0 '#address-cells')" = "1" ] ||
+    fail "D7 replay no longer reproduces the /soc@0 address-cell mutation"
+  [ "$(fdtget -t i "$d7_merged" /soc@0 '#size-cells')" = "1" ] ||
+    fail "D7 replay no longer reproduces the /soc@0 size-cell mutation"
+  log "current direct D3 no-op DTBO contract validated"
+}
+
 validate_direct_followup_artifacts_and_launchers() {
   local d2_dir="$HOTDOG_ROOT/images/pmos-experiments/2026-07-11-140000-mainline617-direct-exact-header0"
   local d2_launcher="$HOTDOG_ROOT/scripts/test-mainline617-direct-d2-header0.sh"
@@ -819,6 +867,7 @@ main() {
   validate_direct_d1_artifacts_and_launcher
   validate_direct_d1_pack_artifacts_and_launcher
   validate_direct_d3_dual_launcher
+  validate_current_direct_dwc3_noop_candidate
   validate_direct_followup_artifacts_and_launchers
   validate_kernel_prefix_tester_guards
   validate_d1_safety_offline

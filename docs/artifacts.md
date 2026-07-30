@@ -170,6 +170,18 @@ wrapper-driver binding, the `88e2000.phy` HS-PHY binding, and the
 `a600000.usb` DWC3-core binding. This profile also omits udev and remains a
 bring-up diagnostic.
 
+The first direct hardware run reached only diagnostic entry because the D7
+overlay changed `/soc@0` from mainline `2/2` address and size cells to the
+downstream `1/1` format. Pair the current DWC3 probe with the reproducible D3
+no-op DTBO when testing the embedded mainline DTB without that mutation:
+
+```bash
+./scripts/build-d3-noop-dtbo.sh \
+  --stock-dtbo logs/path/to/stock-dtbo_b.img \
+  --k1-dtb build/path/to/pinned-k1.dtb \
+  --out build/path/to/d3-noop
+```
+
 For a recovery deadline that does not depend on a shell loop, build the tracked
 static supervisor and add it to the wrapper:
 
