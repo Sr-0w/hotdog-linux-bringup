@@ -125,6 +125,21 @@ exit-status propagation, and a real timeout under QEMU. This remains a
 bring-up diagnostic: continuing after a failed udev command is not the final
 production policy.
 
+The diagnostic-only `udev-skip` profile omits `setup_udev`, marks that bypass
+in cells 6-7, brackets `setup_usb_network` with cells 8-9, and marks return
+from `start_unudhcpd` with cell 10:
+
+```bash
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --userspace-stage-helper build/path/to/hotdog-userspace-stage \
+  --userspace-stage-profile udev-skip
+```
+
+The builder rejects the profile if the generated second stage still contains
+an executable `setup_udev` line. This profile only separates USB bring-up from
+the udev stall; it must not become the normal boot policy.
+
 For a recovery deadline that does not depend on a shell loop, build the tracked
 static supervisor and add it to the wrapper:
 

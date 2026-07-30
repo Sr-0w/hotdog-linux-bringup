@@ -363,6 +363,10 @@ validate_bounded_exec_source() {
 		die "initramfs builder does not package bounded exec"
 	grep -q '/hotdog-bounded-exec --timeout 15 -- "$@"' "$initramfs_builder" ||
 		die "bounded udev does not invoke the static helper"
+	grep -q 'udev-skip' "$initramfs_builder" ||
+		die "initramfs builder lacks the diagnostic udev bypass"
+	grep -q 'udev-skip profile retained setup_udev' "$initramfs_builder" ||
+		die "diagnostic udev bypass lacks its negative setup_udev guard"
 }
 
 main() {

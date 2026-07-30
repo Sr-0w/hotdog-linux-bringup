@@ -29,9 +29,11 @@ host-visible Fastboot. The same run reached the static-supervisor return and
 then stalled inside `setup_udev`. A new static fork/exec helper now bounds each
 udev command independently without relying on BusyBox ash background-job
 behavior. Its first hardware run still left the aggregate `setup_udev` return
-cell hollow. The current image preserves the helper but assigns separate
-visible cells to the return from `udevd`, `udevadm trigger`, and
-`udevadm settle`, so the next run can identify the exact blocked operation.
+cell hollow. A per-command hardware trace then filled cells 0-6 and left 7-10
+hollow: stage two entered `setup_udev`, but the first bounded `udevd` launch
+did not return, even after its nominal 15-second deadline. The current
+diagnostic image bypasses udev only long enough to test USB gadget setup and
+DHCP independently. This bypass is evidence-gathering, not a production fix.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -79,11 +81,11 @@ test reached the postmarketOS stage-two handoff, but its shell worker did not
 return the phone to Fastboot after the logical deadline. The prepared follow-up
 used the standalone static supervisor described above, reached
 `setup_udev`, and likewise failed to expose Fastboot after the deadline. The
-current candidate moves each potentially blocked udev launch into a static
-fork/exec helper with a monotonic 15-second timeout. Its aggregate hardware
-trace again stopped at 9/11. The superseding trace gives each udev command its
-own return cell. A detached host supervisor still restores and verifies R6
-whenever Fastboot becomes visible.
+static fork/exec candidate gave the same aggregate 9/11 result. Its
+per-command follow-up stopped at 7/11, isolating the first bounded `udevd`
+launch. The superseding diagnostic skips only `setup_udev` and traces USB
+gadget setup plus DHCP startup with cells 6-10. A detached host supervisor
+still restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint

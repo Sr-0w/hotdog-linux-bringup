@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-175700-mainline617-direct-source-init2-udev-bounded-forkexec/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-182900-mainline617-direct-source-init2-udev-skip/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=4895b69044b5ff22e6b7e81cfe8f9ebae36226b372aeb2e38ce5b13c1e9e5ae4
+BOOT_SHA=27d9a94cd77689f3e0efbfb03034a6dd3b47171fb1698a3205caa7e1377bac16
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -61,13 +61,12 @@ and sustained userspace activity. A final row of eleven large cells traces
 init entry, entry/return around `mount_proc_sys_dev`, watchdog arming,
 command-line parsing, and entry into the first `jump_init_2nd`. This candidate
 sources `init_2nd.sh` in PID 1 to isolate the observed blocked second execve.
-The sourced script reuses cells 6-10 for `setup_udev` entry, return from
-`udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
-return from `setup_usb_network`. Each udev command is launched by a static
-fork/exec helper with a 15-second monotonic deadline. The helper terminates a
-blocked child process group and returns to the PID 1 shell without relying on
-ash background-job behavior. A separate static supervisor uses a monotonic
-300-second deadline, requests
+The sourced script uses a diagnostic udev bypass after the per-command
+fork/exec candidate proved that the first `udevd` launch never returned.
+Cells 6-10 report the udev bypass entry and completion, USB gadget setup entry
+and return, and DHCP startup return. This isolates whether USB can provide a
+live diagnostic channel before udev is repaired. A separate static supervisor
+uses a monotonic 300-second deadline, requests
 `RESTART2(bootloader)` directly, and keeps a hardware-safe 32-second APSS
 fallback armed between periodic kicks. The rootfs success marker disarms that
 fallback. The observation window includes both the logical deadline and the

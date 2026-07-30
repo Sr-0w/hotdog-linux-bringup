@@ -58,8 +58,8 @@ Options:
                         stage-one handoff and early stage-two setup.
   --userspace-stage-profile PROFILE
                         Select stage-two checkpoints: handoff (default),
-                        handoff-deep, udev, udev-bounded, or
-                        udev-bounded-deep.
+                        handoff-deep, udev, udev-bounded,
+                        udev-bounded-deep, or udev-skip.
                         handoff-deep separates both sourced function files,
                         watchdog return, and entry into setup_udev.
                         udev-bounded reports each udev command and moves past
@@ -67,6 +67,8 @@ Options:
                         udev-bounded-deep reports init_2nd entry, function
                         sources, watchdog return, bounded setup_udev return,
                         and USB networking return.
+                        udev-skip omits setup_udev and traces USB gadget setup
+                        plus DHCP startup. It is diagnostic-only.
   --source-init-2nd     Source /init_2nd.sh at the first stage handoff instead
                         of executing it. This diagnostic mode isolates a
                         blocked second execve while preserving PID 1.
@@ -134,7 +136,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep) ;;
+	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -530,52 +532,87 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		' "$init_2nd_original" > "$init_2nd_override"
 	elif [ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
 		awk '
-				function marker(stage) {
-					print "/hotdog-userspace-stage " stage
-				}
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
 
-				/^#!\/bin\/busybox ash$/ && !stage6 {
-					print
-					marker(6)
-					stage6 = 1
-					next
-				}
+			/^#!\/bin\/busybox ash$/ && !stage6 {
+				print
+				marker(6)
+				stage6 = 1
+				next
+			}
 
-				/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
-						!stage7 {
-					print
-					marker(7)
-					stage7 = 1
-					next
-				}
+			/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
+					!stage7 {
+				print
+				marker(7)
+				stage7 = 1
+				next
+			}
 
-				/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
-						!stage8 {
-					print
-					marker(8)
-					stage8 = 1
-					next
-				}
+			/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
+					!stage8 {
+				print
+				marker(8)
+				stage8 = 1
+				next
+			}
 
-				/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
-					print
-					marker(9)
-					stage9 = 1
-					next
-				}
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
+				print
+				marker(9)
+				stage9 = 1
+				next
+			}
 
-				/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage10 {
-					print
-					marker(10)
-					stage10 = 1
-					next
-				}
+			/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage10 {
+				print
+				marker(10)
+				stage10 = 1
+				next
+			}
 
-				{ print }
+			{ print }
 
-				END {
-					if (!(stage6 && stage7 && stage8 && stage9 && stage10))
-						exit 42
+			END {
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+					exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
+	elif [ "$USERSPACE_STAGE_PROFILE" = udev-skip ]; then
+		awk '
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage6 {
+				marker(6)
+				marker(7)
+				stage6 = stage7 = 1
+				next
+			}
+
+			/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage8 {
+				marker(8)
+				print
+				marker(9)
+				stage8 = stage9 = 1
+				next
+			}
+
+			/^[[:space:]]*start_unudhcpd[[:space:]]*$/ && !stage10 {
+				print
+				marker(10)
+				stage10 = 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+					exit 42
 			}
 		' "$init_2nd_original" > "$init_2nd_override"
 	else
@@ -740,8 +777,7 @@ file /hotdog-userspace-stage $USERSPACE_STAGE_HELPER 0755 0 0
 file /init $init_override 0755 0 0
 file /init_2nd.sh $init_2nd_override 0755 0 0
 EOF
-	if [ "$USERSPACE_STAGE_PROFILE" != handoff ] &&
-			[ "$USERSPACE_STAGE_PROFILE" != handoff-deep ]; then
+	if [ -s "$init_functions_2nd_override" ]; then
 		cat >> "$list_file" <<EOF
 file /init_functions_2nd.sh $init_functions_2nd_override 0644 0 0
 EOF
@@ -1116,7 +1152,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_override")" -eq 11 ]
 	if [ "$USERSPACE_STAGE_PROFILE" = handoff ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = handoff-deep ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-skip ]; then
 		for stage in $(seq 6 10); do
 			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
 		done
@@ -1125,39 +1162,50 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -qx '/hotdog-userspace-stage 6' "$init_2nd_override"
 		grep -qx '/hotdog-userspace-stage 10' "$init_2nd_override"
 		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ]; then
+		if grep -qx '[[:space:]]*setup_udev[[:space:]]*' \
+				"$init_2nd_override"; then
+			printf 'udev-skip profile retained setup_udev\n' >&2
+			exit 1
 		fi
-		if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||
-				[ "$USERSPACE_STAGE_PROFILE" = udev-bounded ] ||
-				[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
-			grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
-			if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
-				for stage in $(seq 7 9); do
-					grep -qx "	/hotdog-userspace-stage $stage" \
-						"$init_functions_2nd_override"
+		grep -qx '[[:space:]]*setup_usb_network[[:space:]]*' \
+			"$init_2nd_override"
+		grep -qx '[[:space:]]*start_unudhcpd[[:space:]]*' \
+			"$init_2nd_override"
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ]; then
+		grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
+		if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+			for stage in $(seq 7 9); do
+				grep -qx "	/hotdog-userspace-stage $stage" \
+					"$init_functions_2nd_override"
 			done
 			[ "$(grep -c '^[[:space:]]*/hotdog-userspace-stage ' \
 				"$init_functions_2nd_override")" -eq 3 ]
-			elif [ "$USERSPACE_STAGE_PROFILE" = udev-bounded ]; then
-				for stage in $(seq 7 9); do
-					grep -q "hotdog_stage_run $stage " \
-						"$init_functions_2nd_override"
-				done
-			else
-				[ "$(grep -c 'hotdog_stage_run - ' \
-					"$init_functions_2nd_override")" -eq 3 ]
-			fi
-			if [ "$USERSPACE_STAGE_PROFILE" != udev ]; then
-				grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
+		elif [ "$USERSPACE_STAGE_PROFILE" = udev-bounded ]; then
+			for stage in $(seq 7 9); do
+				grep -q "hotdog_stage_run $stage " \
 					"$init_functions_2nd_override"
-				if [ -n "$BOUNDED_EXEC_HELPER" ]; then
-					grep -q '/hotdog-bounded-exec --timeout 15 --' \
-						"$init_functions_2nd_override"
-				else
-					grep -q 'remaining=15' "$init_functions_2nd_override"
-				fi
+			done
+		else
+			[ "$(grep -c 'hotdog_stage_run - ' \
+				"$init_functions_2nd_override")" -eq 3 ]
+		fi
+		if [ "$USERSPACE_STAGE_PROFILE" != udev ]; then
+			grep -q 'HOTDOG_USERSPACE_STAGE_TIMEOUT=' \
+				"$init_functions_2nd_override"
+			if [ -n "$BOUNDED_EXEC_HELPER" ]; then
+				grep -q '/hotdog-bounded-exec --timeout 15 --' \
+					"$init_functions_2nd_override"
+			else
+				grep -q 'remaining=15' "$init_functions_2nd_override"
 			fi
 		fi
 	fi
+fi
 file "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/file-report.txt"
 sha256sum "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/SHA256SUMS"
 
