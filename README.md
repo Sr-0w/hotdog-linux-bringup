@@ -31,9 +31,11 @@ udev command independently without relying on BusyBox ash background-job
 behavior. Its first hardware run still left the aggregate `setup_udev` return
 cell hollow. A per-command hardware trace then filled cells 0-6 and left 7-10
 hollow: stage two entered `setup_udev`, but the first bounded `udevd` launch
-did not return, even after its nominal 15-second deadline. The current
-diagnostic image bypasses udev only long enough to test USB gadget setup and
-DHCP independently. This bypass is evidence-gathering, not a production fix.
+did not return, even after its nominal 15-second deadline. Bypassing udev let
+the USB and DHCP helpers return and filled all 11 cells, but no host USB
+identity appeared. The current diagnostic maps configfs, UDC, gadget binding,
+and interface availability separately. These bypasses gather evidence; they
+are not production fixes.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -45,7 +47,7 @@ DHCP independently. This bypass is evidence-gathering, not a production fix.
 | USB serial | Working | ACM console is exposed on `ttyGS0`. |
 | Mainline reboot | Working in the validated kexec environment | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe also produced a physical reset during direct boot. Integration into the publishable kernel and DTB remains pending. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, enters `init_2nd.sh`, and reaches `setup_udev`. The tested stage-two image did not return from that function, and no direct-boot USB identity or mounted rootfs has been observed yet. |
+| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. The first `udevd` launch blocks; with udev bypassed, the USB helpers return but expose no host identity. No direct-boot USB or mounted rootfs has been observed yet. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
@@ -83,9 +85,10 @@ used the standalone static supervisor described above, reached
 `setup_udev`, and likewise failed to expose Fastboot after the deadline. The
 static fork/exec candidate gave the same aggregate 9/11 result. Its
 per-command follow-up stopped at 7/11, isolating the first bounded `udevd`
-launch. The superseding diagnostic skips only `setup_udev` and traces USB
-gadget setup plus DHCP startup with cells 6-10. A detached host supervisor
-still restores and verifies R6 whenever Fastboot becomes visible.
+launch. The udev-bypass follow-up reached 11/11 without exposing USB. The
+superseding diagnostic traces configfs, UDC, gadget binding, and network
+interface availability with cells 6-10. A detached host supervisor still
+restores and verifies R6 whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint

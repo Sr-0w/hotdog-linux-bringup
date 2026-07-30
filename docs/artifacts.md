@@ -140,6 +140,21 @@ The builder rejects the profile if the generated second stage still contains
 an executable `setup_udev` line. This profile only separates USB bring-up from
 the udev stall; it must not become the normal boot policy.
 
+After a bypass run reaches all return checkpoints without exposing a host USB
+identity, use `usb-probe` to distinguish the soft-failure paths inside the pmOS
+gadget helper:
+
+```bash
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --userspace-stage-helper build/path/to/hotdog-userspace-stage \
+  --userspace-stage-profile usb-probe
+```
+
+Cells 6-10 report diagnostic entry, configfs availability, UDC availability,
+a non-empty gadget UDC binding, and network-interface creation. The profile
+also omits udev and is diagnostic-only.
+
 For a recovery deadline that does not depend on a shell loop, build the tracked
 static supervisor and add it to the wrapper:
 

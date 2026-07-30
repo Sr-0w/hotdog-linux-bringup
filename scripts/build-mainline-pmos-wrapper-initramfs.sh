@@ -59,7 +59,7 @@ Options:
   --userspace-stage-profile PROFILE
                         Select stage-two checkpoints: handoff (default),
                         handoff-deep, udev, udev-bounded,
-                        udev-bounded-deep, or udev-skip.
+                        udev-bounded-deep, udev-skip, or usb-probe.
                         handoff-deep separates both sourced function files,
                         watchdog return, and entry into setup_udev.
                         udev-bounded reports each udev command and moves past
@@ -69,6 +69,8 @@ Options:
                         and USB networking return.
                         udev-skip omits setup_udev and traces USB gadget setup
                         plus DHCP startup. It is diagnostic-only.
+                        usb-probe omits setup_udev and reports configfs, UDC,
+                        gadget binding, and network-interface availability.
   --source-init-2nd     Source /init_2nd.sh at the first stage handoff instead
                         of executing it. This diagnostic mode isolates a
                         blocked second execve while preserving PID 1.
@@ -136,7 +138,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip) ;;
+	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip|usb-probe) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -604,6 +606,56 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 			/^[[:space:]]*start_unudhcpd[[:space:]]*$/ && !stage10 {
 				print
 				marker(10)
+				stage10 = 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+					exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
+	elif [ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
+		awk '
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage6 {
+				marker(6)
+				print "if [ -d \"$CONFIGFS\" ]; then"
+				marker(7)
+				print "fi"
+				print "if [ -n \"$(ls -A /sys/class/udc 2>/dev/null)\" ]; then"
+				marker(8)
+				print "fi"
+				stage6 = stage7 = stage8 = 1
+				next
+			}
+
+			/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage9 {
+				print
+				print "if [ -n \"$(cat \"$CONFIGFS/g1/UDC\" 2>/dev/null)\" ]; then"
+				marker(9)
+				print "fi"
+				stage9 = 1
+				next
+			}
+
+			/^[[:space:]]*start_unudhcpd[[:space:]]*$/ && !stage10 {
+				print
+				print "hotdog_usb_probe_iface=\"$("
+				print "\tcat \"$CONFIGFS/g1/functions/ncm.usb0/ifname\" 2>/dev/null ||"
+				print "\tcat \"$CONFIGFS/g1/functions/rndis.usb0/ifname\" 2>/dev/null ||"
+				print "\techo \"\""
+				print ")\""
+				print "if [ -n \"$hotdog_usb_probe_iface\" ] &&"
+				print "\t\t[ -e \"/sys/class/net/$hotdog_usb_probe_iface\" ]; then"
+				marker(10)
+				print "fi"
+				print "unset hotdog_usb_probe_iface"
 				stage10 = 1
 				next
 			}
@@ -1153,7 +1205,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	if [ "$USERSPACE_STAGE_PROFILE" = handoff ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = handoff-deep ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = udev-skip ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
 		for stage in $(seq 6 10); do
 			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
 		done
@@ -1163,15 +1216,23 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -qx '/hotdog-userspace-stage 10' "$init_2nd_override"
 		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
 	fi
-	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ]; then
+	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
 		if grep -qx '[[:space:]]*setup_udev[[:space:]]*' \
 				"$init_2nd_override"; then
-			printf 'udev-skip profile retained setup_udev\n' >&2
+			printf '%s profile retained setup_udev\n' \
+				"$USERSPACE_STAGE_PROFILE" >&2
 			exit 1
 		fi
 		grep -qx '[[:space:]]*setup_usb_network[[:space:]]*' \
 			"$init_2nd_override"
-		grep -qx '[[:space:]]*start_unudhcpd[[:space:]]*' \
+			grep -qx '[[:space:]]*start_unudhcpd[[:space:]]*' \
+				"$init_2nd_override"
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
+		grep -q '/sys/class/udc' "$init_2nd_override"
+		grep -q '\$CONFIGFS/g1/UDC' "$init_2nd_override"
+		grep -q '/sys/class/net/\$hotdog_usb_probe_iface' \
 			"$init_2nd_override"
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||

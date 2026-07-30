@@ -365,7 +365,9 @@ validate_bounded_exec_source() {
 		die "bounded udev does not invoke the static helper"
 	grep -q 'udev-skip' "$initramfs_builder" ||
 		die "initramfs builder lacks the diagnostic udev bypass"
-	grep -q 'udev-skip profile retained setup_udev' "$initramfs_builder" ||
+	grep -q 'usb-probe' "$initramfs_builder" ||
+		die "initramfs builder lacks USB prerequisite tracing"
+	grep -q 'profile retained setup_udev' "$initramfs_builder" ||
 		die "diagnostic udev bypass lacks its negative setup_udev guard"
 }
 

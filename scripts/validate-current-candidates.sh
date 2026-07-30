@@ -397,8 +397,10 @@ validate_reproducible_builder_guards() {
     "udev-bounded-deep"
   require_text "initramfs builder supports diagnostic udev bypass" "$wrapper_builder" \
     "udev-skip"
+  require_text "initramfs builder supports USB prerequisite tracing" "$wrapper_builder" \
+    "usb-probe"
   require_text "diagnostic udev bypass rejects retained setup_udev" "$wrapper_builder" \
-    "udev-skip profile retained setup_udev"
+    "profile retained setup_udev"
   require_text "bounded udev tracing records timeouts" "$wrapper_builder" \
     "HOTDOG_USERSPACE_STAGE_TIMEOUT="
   require_text "initramfs builder supports static rescue supervision" "$wrapper_builder" \
