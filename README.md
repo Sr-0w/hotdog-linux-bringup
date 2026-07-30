@@ -28,8 +28,10 @@ kept a 32-second APSS fallback armed. The hardware test still did not return to
 host-visible Fastboot. The same run reached the static-supervisor return and
 then stalled inside `setup_udev`. A new static fork/exec helper now bounds each
 udev command independently without relying on BusyBox ash background-job
-behavior. Its build, timeout behavior, and initramfs integration are validated
-offline; hardware validation is next.
+behavior. Its first hardware run still left the aggregate `setup_udev` return
+cell hollow. The current image preserves the helper but assigns separate
+visible cells to the return from `udevd`, `udevadm trigger`, and
+`udevadm settle`, so the next run can identify the exact blocked operation.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -78,8 +80,10 @@ return the phone to Fastboot after the logical deadline. The prepared follow-up
 used the standalone static supervisor described above, reached
 `setup_udev`, and likewise failed to expose Fastboot after the deadline. The
 current candidate moves each potentially blocked udev launch into a static
-fork/exec helper with a monotonic 15-second timeout. A detached host supervisor
-still restores and verifies R6 whenever Fastboot becomes visible.
+fork/exec helper with a monotonic 15-second timeout. Its aggregate hardware
+trace again stopped at 9/11. The superseding trace gives each udev command its
+own return cell. A detached host supervisor still restores and verifies R6
+whenever Fastboot becomes visible.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint

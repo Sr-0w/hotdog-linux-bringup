@@ -250,6 +250,13 @@ remote debug channel.
     Fastboot during the 390-second host observation. The next candidate keeps
     the exact kernel, DTB, and command line but replaces ash background launches
     with a static `fork()`/`execvp()` helper and a monotonic 15-second timeout.
+67. Keep the first static fork/exec hardware run as a second 9/11 result.
+    Cells 0-8 filled while the aggregate `setup_udev` and USB cells remained
+    hollow; no USB or automatic Fastboot return appeared. The follow-up keeps
+    the same helper and remaps cells 6-10 to `setup_udev` entry, return from
+    `udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
+    return from USB setup. This distinguishes the three child commands without
+    changing the kernel, DTB, command line, or timeout policy.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in
