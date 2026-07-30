@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-101248-mainline617-direct-udev-bounded/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-105300-mainline617-direct-udev-bounded-apss/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=f13d6a66bede9a8e50a3f4827bb8aa7c9e6aebb1a488b457736f12dea0b81e6c
+BOOT_SHA=d5e2fa33acc19085e282194b186202f29e05a35c1f02d637f33da4be4002b1b4
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -64,7 +64,9 @@ command-line parsing, and entry into the first `jump_init_2nd`. The executed
 `udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
 return from `setup_usb_network`. Each udev command gets 15 seconds; a command
 that remains blocked leaves its cell hollow and is detached so stage two can
-continue toward USB and the rootfs.
+continue toward USB and the rootfs. At stage one, a raw APSS watchdog is armed
+for 330 seconds with a bootloader restart reason. It is disarmed only after the
+rootfs success marker, so a fully wedged userspace still returns to Fastboot.
 Later checkpoints retain the persistent per-initcall breadcrumb. If Qualcomm 900e
 appears, the stage and raw counter samples are read automatically. The verified
 R6 bridge and stock DTBO remain the rollback target. Set

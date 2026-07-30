@@ -11,6 +11,7 @@ SUPPRESS_FB_PAINT=1
 USERSPACE_FB_MARKER=0
 WRAPPER_BINARY=""
 REBOOT_MODE_HELPER=""
+APSS_WDT_HELPER=""
 USERSPACE_STAGE_HELPER=""
 USERSPACE_STAGE_PROFILE="handoff"
 
@@ -37,6 +38,10 @@ Options:
                         Add a static RESTART2 helper and make the inherited
                         rescue watchdog request bootloader mode before its
                         normal-reboot fallback.
+  --apss-wdt-helper FILE
+                        Add the static APSS watchdog helper. Arm a bootloader
+                        fallback 30 seconds beyond the initramfs deadline and
+                        disarm it only after the configured success marker.
 	--userspace-stage-helper FILE
 	                        Add the static stage helper and replace /init plus
 	                        /init_2nd.sh with instrumented copies that mark the
@@ -59,6 +64,7 @@ while [ "$#" -gt 0 ]; do
 		--large-fb-marker) USERSPACE_FB_MARKER=1 ;;
 		--wrapper-binary) WRAPPER_BINARY="$2"; shift ;;
 		--reboot-mode-helper) REBOOT_MODE_HELPER="$2"; shift ;;
+		--apss-wdt-helper) APSS_WDT_HELPER="$2"; shift ;;
 		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
 		--userspace-stage-profile) USERSPACE_STAGE_PROFILE="$2"; shift ;;
 		-h|--help) usage; exit 0 ;;
@@ -129,7 +135,26 @@ if [ -n "$REBOOT_MODE_HELPER" ]; then
 		exit 2
 	}
 fi
-if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$USERSPACE_STAGE_HELPER" ]; then
+if [ -n "$APSS_WDT_HELPER" ]; then
+	[ -x "$APSS_WDT_HELPER" ] || {
+		printf 'Missing executable APSS watchdog helper: %s\n' \
+			"$APSS_WDT_HELPER" >&2
+		exit 2
+	}
+	file "$APSS_WDT_HELPER" |
+		grep -q 'ELF 64-bit LSB executable, ARM aarch64' || {
+		printf 'APSS watchdog helper is not an AArch64 executable: %s\n' \
+			"$APSS_WDT_HELPER" >&2
+		exit 2
+	}
+	grep -a -q 'HOTDOG_APSS_WDT_CONTROL_V2' "$APSS_WDT_HELPER" || {
+		printf 'APSS watchdog helper marker is missing: %s\n' \
+			"$APSS_WDT_HELPER" >&2
+		exit 2
+	}
+fi
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ] ||
+		[ -n "$USERSPACE_STAGE_HELPER" ]; then
 	[ -x "$HOTDOG_ROOT/scripts/extract-last-newc-member.py" ] || {
 		printf 'Missing newc extractor: %s\n' \
 			"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" >&2
@@ -148,6 +173,8 @@ fb_marker="$OUTDIR/hotdog-userspace-fb-marker"
 fb_marker_hook="$OUTDIR/01-hotdog-userspace-fb-marker.sh"
 fb_marker_cleanup_hook="$OUTDIR/01-hotdog-userspace-root-marker.sh"
 watchdog_override="$OUTDIR/hotdog_rescue_watchdog.sh"
+watchdog_original="$OUTDIR/hotdog_rescue_watchdog.original"
+watchdog_restart2_override="$OUTDIR/hotdog_rescue_watchdog.restart2"
 init_original="$OUTDIR/init.original"
 init_override="$OUTDIR/init.instrumented"
 init_2nd_original="$OUTDIR/init_2nd.original"
@@ -566,10 +593,12 @@ file /hooks-cleanup/01-hotdog-userspace-root-marker.sh $fb_marker_cleanup_hook 0
 EOF
 fi
 
-if [ -n "$REBOOT_MODE_HELPER" ]; then
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
-		"$BASE_CPIO" hotdog_rescue_watchdog.sh |
-		awk '
+		"$BASE_CPIO" hotdog_rescue_watchdog.sh > "$watchdog_original"
+	watchdog_input="$watchdog_original"
+	if [ -n "$REBOOT_MODE_HELPER" ]; then
+			awk '
 			/sync 2>\/dev\/null \|\| true/ && !inserted {
 				print
 				print "\t\t\thotdog_rescue_watchdog_log \"requesting bootloader through RESTART2\""
@@ -585,12 +614,95 @@ if [ -n "$REBOOT_MODE_HELPER" ]; then
 				if (!inserted)
 					exit 42
 			}
-		' > "$watchdog_override"
+		' "$watchdog_input" > "$watchdog_restart2_override"
+		watchdog_input="$watchdog_restart2_override"
+	fi
+	if [ -n "$APSS_WDT_HELPER" ]; then
+		awk '
+			/^hotdog_rescue_watchdog_start\(\)[[:space:]]*\{/ &&
+					!disarm_function {
+				print "hotdog_rescue_watchdog_disarm_hardware() {"
+				print "\t[ -e /tmp/hotdog_apss_wdt.armed ] || return 0"
+				print "\tif /hotdog-apss-wdt-control --disarm; then"
+				print "\t\trm -f /tmp/hotdog_apss_wdt.armed 2>/dev/null || true"
+				print "\t\thotdog_rescue_watchdog_log \"APSS hardware fallback disarmed\""
+				print "\t\treturn 0"
+				print "\tfi"
+				print "\thotdog_rescue_watchdog_log \"APSS hardware fallback disarm failed\""
+				print "\treturn 1"
+				print "}"
+				print ""
+				print
+				disarm_function = 1
+				next
+			}
+
+			/^[[:space:]]*local pid sec[[:space:]]*$/ && !hardware_local {
+				print "\tlocal pid sec hardware_sec"
+				hardware_local = 1
+				next
+			}
+
+			/^[[:space:]]*sec="\$\(hotdog_rescue_watchdog_cmdline_sec\)" \|\| return 0[[:space:]]*$/ &&
+					!armed {
+				print
+				print "\tmkdir -p /tmp 2>/dev/null || true"
+				print "\thardware_sec=$((sec + 30))"
+				print "\tif /hotdog-apss-wdt-control --arm-bootloader \"$hardware_sec\"; then"
+				print "\t\tif : > /tmp/hotdog_apss_wdt.armed 2>/dev/null; then"
+				print "\t\t\thotdog_rescue_watchdog_log \"APSS hardware fallback armed for ${hardware_sec}s\""
+				print "\t\telse"
+				print "\t\t\thotdog_rescue_watchdog_log \"APSS hardware marker failed; disarming fallback\""
+				print "\t\t\t/hotdog-apss-wdt-control --disarm || true"
+				print "\t\tfi"
+				print "\telse"
+				print "\t\thotdog_rescue_watchdog_log \"APSS hardware fallback unavailable\""
+				print "\tfi"
+				armed = 1
+				next
+			}
+
+			/success marker seen (before deadline|at deadline)/ {
+				print
+				if ($0 ~ /before deadline/)
+					indent = "\t\t\t\t"
+				else
+					indent = "\t\t\t"
+				print indent "if hotdog_rescue_watchdog_disarm_hardware; then"
+				print indent "\texit 0"
+				print indent "fi"
+				success = success + 1
+				next
+			}
+
+			/^[[:space:]]*exit 0[[:space:]]*$/ && success > skipped {
+				skipped = skipped + 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(disarm_function && hardware_local && armed &&
+				      success == 2 && skipped == 2))
+					exit 42
+			}
+		' "$watchdog_input" > "$watchdog_override"
+	else
+		cp "$watchdog_input" "$watchdog_override"
+	fi
 	chmod 0755 "$watchdog_override"
 	cat >> "$list_file" <<EOF
-file /hotdog-reboot-mode $REBOOT_MODE_HELPER 0755 0 0
 file /hotdog_rescue_watchdog.sh $watchdog_override 0755 0 0
 EOF
+	if [ -n "$REBOOT_MODE_HELPER" ]; then
+		printf 'file /hotdog-reboot-mode %s 0755 0 0\n' \
+			"$REBOOT_MODE_HELPER" >> "$list_file"
+	fi
+	if [ -n "$APSS_WDT_HELPER" ]; then
+		printf 'file /hotdog-apss-wdt-control %s 0755 0 0\n' \
+			"$APSS_WDT_HELPER" >> "$list_file"
+	fi
 fi
 
 if [ "$SUPPRESS_FB_PAINT" -eq 1 ]; then
@@ -679,11 +791,19 @@ if [ "$USERSPACE_FB_MARKER" -eq 1 ]; then
 	grep -a -q 'wrapper-entry' "$wrapper"
 	grep -a -q 'wrapper-exec-init' "$wrapper"
 fi
+if [ -n "$REBOOT_MODE_HELPER" ] || [ -n "$APSS_WDT_HELPER" ]; then
+	grep -qx 'hotdog_rescue_watchdog.sh' "$OUTDIR/overlay-contents.txt"
+fi
 if [ -n "$REBOOT_MODE_HELPER" ]; then
 	grep -qx 'hotdog-reboot-mode' "$OUTDIR/overlay-contents.txt"
-	grep -qx 'hotdog_rescue_watchdog.sh' "$OUTDIR/overlay-contents.txt"
 	grep -q 'requesting bootloader through RESTART2' "$watchdog_override"
 	grep -q '/hotdog-reboot-mode bootloader' "$watchdog_override"
+fi
+if [ -n "$APSS_WDT_HELPER" ]; then
+	grep -qx 'hotdog-apss-wdt-control' "$OUTDIR/overlay-contents.txt"
+	grep -q 'APSS hardware fallback armed' "$watchdog_override"
+	grep -q '/hotdog-apss-wdt-control --arm-bootloader' "$watchdog_override"
+	grep -q '/hotdog-apss-wdt-control --disarm' "$watchdog_override"
 fi
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	grep -qx 'hotdog-userspace-stage' "$OUTDIR/overlay-contents.txt"
@@ -731,6 +851,7 @@ printf 'Inherited framebuffer paint probe suppressed: %s\n' "$SUPPRESS_FB_PAINT"
 printf 'Large userspace framebuffer marker: %s\n' "$USERSPACE_FB_MARKER"
 printf 'Prebuilt wrapper binary: %s\n' "${WRAPPER_BINARY:-none}"
 printf 'RESTART2 rescue helper: %s\n' "${REBOOT_MODE_HELPER:-none}"
+printf 'APSS watchdog helper: %s\n' "${APSS_WDT_HELPER:-none}"
 printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
 printf 'Userspace stage profile: %s\n' "$USERSPACE_STAGE_PROFILE"
 printf 'Raw size: %s bytes\n' "$(stat -c %s "$output")"

@@ -225,7 +225,11 @@ remote debug channel.
     DTB, and command line, then reuses cells 6-10 for `setup_udev` entry,
     returns from `udevd`, `udevadm trigger`, and `udevadm settle`, and return
     from `setup_usb_network`. A udev command still blocked after 15 seconds
-    leaves its cell hollow while stage two continues.
+    leaves its cell hollow while stage two continues. Its PID 1 rescue path
+    also arms the APSS watchdog for 330 seconds with a bootloader restart
+    reason, so a full userspace wedge should return to host-visible Fastboot
+    without exhausting slot retries. Both the bounded progression and the
+    userspace APSS integration remain pending hardware validation.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

@@ -101,6 +101,22 @@ waiting on it, its return marker stays hollow, and stage two continues toward
 USB and the rootfs. This profile is intended only for bring-up; it does not
 turn a skipped udev event into a supported production boot path.
 
+For a hardware-backed recovery deadline, build the tracked APSS helper and add
+it to the wrapper:
+
+```bash
+./scripts/build-hotdog-apss-wdt-control.sh
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --reboot-mode-helper build/hotdog-reboot-mode-aarch64 \
+  --apss-wdt-helper build/tools/hotdog-apss-wdt-control/hotdog-apss-wdt-control
+```
+
+The generated rescue script arms the APSS watchdog 30 seconds beyond
+`hotdog_rescue_watchdog_sec`, requests bootloader mode in IMEM, and disarms the
+hardware only after the configured success marker. This path is a bring-up
+safety mechanism, not part of the intended production package.
+
 ## Promoting a new artifact
 
 A newly generated file is not validated merely because it builds. Promotion

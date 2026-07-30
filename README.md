@@ -58,9 +58,12 @@ known-good A slot: after slot B reached retry count zero, firmware kept B active
 and displayed the red failure screen instead of selecting successful slot A.
 The PM8150 PON bootloader reason works from a mainline kexec boot, but D46-D48
 did not make it a dependable pre-MMU recovery path. Current direct-boot tests
-therefore keep verified R6 on slot A, place one candidate on slot B, classify
-the result from the display, and use manual fastboot only after the candidate
-has stopped. A detached host supervisor then restores and verifies R6/A.
+therefore keep a verified R6 restore image, place one candidate on slot B, and
+classify the result from the display. The next bounded-udev candidate also arms
+the proven APSS watchdog from PID 1 with the bootloader restart reason; that
+userspace integration is built and offline-validated but not yet hardware
+validated. A detached host supervisor restores and verifies R6 after Fastboot
+returns.
 
 D39 was reproduced unchanged with the original R6/B transaction, seven slot
 retries, and a fixed logo for 90 seconds. Rebased D40 changes only the checkpoint
