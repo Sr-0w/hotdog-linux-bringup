@@ -12,6 +12,7 @@ USERSPACE_FB_MARKER=0
 WRAPPER_BINARY=""
 REBOOT_MODE_HELPER=""
 USERSPACE_STAGE_HELPER=""
+USERSPACE_STAGE_PROFILE="handoff"
 
 usage() {
 	cat <<'USAGE'
@@ -40,6 +41,9 @@ Options:
 	                        Add the static stage helper and replace /init plus
 	                        /init_2nd.sh with instrumented copies that mark the
 	                        stage-one handoff and early stage-two setup.
+  --userspace-stage-profile PROFILE
+                        Select stage-two checkpoints: handoff (default) or
+                        udev (udevd, trigger, settle, and USB networking).
   -h, --help            Show this help.
 USAGE
 }
@@ -54,6 +58,7 @@ while [ "$#" -gt 0 ]; do
 		--wrapper-binary) WRAPPER_BINARY="$2"; shift ;;
 		--reboot-mode-helper) REBOOT_MODE_HELPER="$2"; shift ;;
 		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
+		--userspace-stage-profile) USERSPACE_STAGE_PROFILE="$2"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -98,6 +103,20 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		exit 2
 	}
 fi
+case "$USERSPACE_STAGE_PROFILE" in
+	handoff|udev) ;;
+	*)
+		printf 'Unknown userspace stage profile: %s\n' \
+			"$USERSPACE_STAGE_PROFILE" >&2
+		exit 2
+		;;
+esac
+if [ -z "$USERSPACE_STAGE_HELPER" ] &&
+		[ "$USERSPACE_STAGE_PROFILE" != handoff ]; then
+	printf '%s requires --userspace-stage-helper\n' \
+		"--userspace-stage-profile=$USERSPACE_STAGE_PROFILE" >&2
+	exit 2
+fi
 if [ -n "$REBOOT_MODE_HELPER" ]; then
 	[ -x "$REBOOT_MODE_HELPER" ] || {
 		printf 'Missing executable reboot-mode helper: %s\n' "$REBOOT_MODE_HELPER" >&2
@@ -131,6 +150,8 @@ init_original="$OUTDIR/init.original"
 init_override="$OUTDIR/init.instrumented"
 init_2nd_original="$OUTDIR/init_2nd.original"
 init_2nd_override="$OUTDIR/init_2nd.instrumented"
+init_functions_2nd_original="$OUTDIR/init_functions_2nd.original"
+init_functions_2nd_override="$OUTDIR/init_functions_2nd.instrumented"
 list_file="$OUTDIR/wrapper.list"
 overlay="$OUTDIR/wrapper-overlay.cpio"
 output="$OUTDIR/initramfs-pmos-wrapped.cpio"
@@ -291,55 +312,129 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 		"$BASE_CPIO" init_2nd.sh > "$init_2nd_original"
-	awk '
-		function marker(stage) {
-			print "/hotdog-userspace-stage " stage
-		}
+	if [ "$USERSPACE_STAGE_PROFILE" = handoff ]; then
+		awk '
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
 
-		/^#!\/bin\/busybox ash$/ && !stage6 {
-			print
-			marker(6)
-			stage6 = 1
-			next
-		}
+			/^#!\/bin\/busybox ash$/ && !stage6 {
+				print
+				marker(6)
+				stage6 = 1
+				next
+			}
 
-		/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
-				!stage7 {
-			print
-			marker(7)
-			stage7 = 1
-			next
-		}
+			/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
+					!stage7 {
+				print
+				marker(7)
+				stage7 = 1
+				next
+			}
 
-		/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
-				!stage8 {
-			print
-			marker(8)
-			stage8 = 1
-			next
-		}
+			/^[[:space:]]*hotdog_rescue_watchdog_start stage2[[:space:]]*$/ &&
+					!stage8 {
+				print
+				marker(8)
+				stage8 = 1
+				next
+			}
 
-		/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
-			marker(9)
-			print
-			marker(10)
-			stage9 = stage10 = 1
-			next
-		}
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage9 {
+				marker(9)
+				print
+				marker(10)
+				stage9 = stage10 = 1
+				next
+			}
 
-		{ print }
+			{ print }
 
-		END {
-			if (!(stage6 && stage7 && stage8 && stage9 && stage10))
-				exit 42
-		}
-	' "$init_2nd_original" > "$init_2nd_override"
+			END {
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+					exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
+	else
+		awk '
+			function marker(stage) {
+				print "/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage6 {
+				marker(6)
+				print
+				stage6 = 1
+				next
+			}
+
+			/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !stage10 {
+				print
+				marker(10)
+				stage10 = 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(stage6 && stage10))
+					exit 42
+			}
+		' "$init_2nd_original" > "$init_2nd_override"
+
+		"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
+			"$BASE_CPIO" init_functions_2nd.sh \
+			> "$init_functions_2nd_original"
+		awk '
+			function marker(stage) {
+				print "\t/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*udevd -d --resolve-names=never[[:space:]]*$/ &&
+					!stage7 {
+				print
+				marker(7)
+				stage7 = 1
+				next
+			}
+
+			/^[[:space:]]*udevadm trigger --type=devices --action=add[[:space:]]*$/ &&
+					!stage8 {
+				print
+				marker(8)
+				stage8 = 1
+				next
+			}
+
+			/^[[:space:]]*udevadm settle[[:space:]]*$/ && !stage9 {
+				print
+				marker(9)
+				stage9 = 1
+				next
+			}
+
+			{ print }
+
+			END {
+				if (!(stage7 && stage8 && stage9))
+					exit 42
+			}
+		' "$init_functions_2nd_original" > "$init_functions_2nd_override"
+		chmod 0644 "$init_functions_2nd_override"
+	fi
 	chmod 0755 "$init_2nd_override"
 	cat >> "$list_file" <<EOF
 file /hotdog-userspace-stage $USERSPACE_STAGE_HELPER 0755 0 0
 file /init $init_override 0755 0 0
 file /init_2nd.sh $init_2nd_override 0755 0 0
 EOF
+	if [ "$USERSPACE_STAGE_PROFILE" = udev ]; then
+		cat >> "$list_file" <<EOF
+file /init_functions_2nd.sh $init_functions_2nd_override 0644 0 0
+EOF
+	fi
 fi
 
 if [ "$USERSPACE_FB_MARKER" -eq 1 ]; then
@@ -537,10 +632,23 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		grep -qx "/hotdog-userspace-stage $stage" "$init_override"
 	done
 	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_override")" -eq 11 ]
-	for stage in $(seq 6 10); do
-		grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
-	done
-	[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 5 ]
+	if [ "$USERSPACE_STAGE_PROFILE" = handoff ]; then
+		for stage in $(seq 6 10); do
+			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
+		done
+		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 5 ]
+	else
+		grep -qx '/hotdog-userspace-stage 6' "$init_2nd_override"
+		grep -qx '/hotdog-userspace-stage 10' "$init_2nd_override"
+		[ "$(grep -c '^/hotdog-userspace-stage ' "$init_2nd_override")" -eq 2 ]
+		for stage in $(seq 7 9); do
+			grep -qx "	/hotdog-userspace-stage $stage" \
+				"$init_functions_2nd_override"
+		done
+		[ "$(grep -c '^[[:space:]]*/hotdog-userspace-stage ' \
+			"$init_functions_2nd_override")" -eq 3 ]
+		grep -qx 'init_functions_2nd.sh' "$OUTDIR/overlay-contents.txt"
+	fi
 fi
 file "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/file-report.txt"
 sha256sum "$BASE_CPIO" "$overlay" "$output" "$output_gzip" > "$OUTDIR/SHA256SUMS"
@@ -553,5 +661,6 @@ printf 'Large userspace framebuffer marker: %s\n' "$USERSPACE_FB_MARKER"
 printf 'Prebuilt wrapper binary: %s\n' "${WRAPPER_BINARY:-none}"
 printf 'RESTART2 rescue helper: %s\n' "${REBOOT_MODE_HELPER:-none}"
 printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
+printf 'Userspace stage profile: %s\n' "$USERSPACE_STAGE_PROFILE"
 printf 'Raw size: %s bytes\n' "$(stat -c %s "$output")"
 cat "$OUTDIR/SHA256SUMS"

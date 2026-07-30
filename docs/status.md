@@ -28,7 +28,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working through kexec | The 4.14 bridge loads and executes Linux 6.17. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Active PID 1 userspace | The current trace completes `kernel_init_freeable()`, the global async wait, init-memory release, `kernel_execve()`, and the EL1-to-EL0 return. PID 1 records more than 16 syscalls, mounts the early pseudo-filesystems, arms the rescue watchdog, and reaches the first `jump_init_2nd`. Direct USB and a mounted rootfs remain unobserved. |
+| Persistent direct boot | Active stage-two userspace | The current trace completes `kernel_init_freeable()`, the global async wait, init-memory release, `kernel_execve()`, and the EL1-to-EL0 return. PID 1 records more than 16 syscalls, mounts the early pseudo-filesystems, arms the rescue watchdog, enters `init_2nd.sh`, and reaches `setup_udev`. The tested stage-two image did not return from that function. Direct USB and a mounted rootfs remain unobserved. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
 | postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
@@ -217,9 +217,14 @@ remote debug channel.
     reaches the first `jump_init_2nd`. Cells 0-5 filled while 6-10 remained
     hollow. Because that call executes `/init_2nd.sh` without returning on
     success, the remaining stall is after the stage-two handoff.
-63. Test the hash-pinned stage-two candidate. It reuses cells 6-10 for
-    `/init_2nd.sh` entry, function sourcing, watchdog continuity, and
-    entry/return around `setup_udev`, without changing the proven kernel or DTB.
+63. Keep the stage-two result as proof that `/init_2nd.sh` enters, sources both
+    function libraries, returns from the watchdog call, and enters
+    `setup_udev`. Cells 0-9 filled while cell 10 remained hollow, so that
+    function did not return during the observation window.
+64. Test the hash-pinned udev-substep candidate. It keeps the proven kernel,
+    DTB, and command line, then reuses cells 6-10 for `setup_udev` entry,
+    returns from `udevd`, `udevadm trigger`, and `udevadm settle`, and return
+    from `setup_usb_network`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

@@ -368,10 +368,16 @@ validate_reproducible_builder_guards() {
     "--reboot-mode-helper"
   require_text "initramfs builder supports visible init stages" "$wrapper_builder" \
     "--userspace-stage-helper"
+  require_text "initramfs builder supports stage profiles" "$wrapper_builder" \
+    "--userspace-stage-profile"
   require_text "initramfs builder replaces init for stage tracing" "$wrapper_builder" \
     'file /init $init_override 0755 0 0'
   require_text "initramfs builder replaces init_2nd for stage tracing" "$wrapper_builder" \
     'file /init_2nd.sh $init_2nd_override 0755 0 0'
+  require_text "initramfs builder can instrument stage-two functions" "$wrapper_builder" \
+    'file /init_functions_2nd.sh $init_functions_2nd_override 0644 0 0'
+  require_text "initramfs builder traces udev settle" "$wrapper_builder" \
+    'udevadm settle'
   require_text "initramfs builder validates all stage markers" "$wrapper_builder" \
     'grep -c '\''^/hotdog-userspace-stage '\'''
   require_text "initramfs builder validates gen_init_cpio diagnostics" "$wrapper_builder" \

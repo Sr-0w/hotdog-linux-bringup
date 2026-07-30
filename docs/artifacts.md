@@ -79,6 +79,22 @@ The default output replaces the framebuffer paint helper with a wait-only
 helper. `--keep-fb-paint` exists only for historical comparison and should not
 be used for the normal mainline cycle.
 
+When a static stage helper is supplied, the default `handoff` profile traces
+the transition from `/init` into `init_2nd.sh`. The `udev` profile narrows a
+stage-two stall without changing the kernel or DTB:
+
+```bash
+./scripts/build-mainline-pmos-wrapper-initramfs.sh \
+  --base-cpio build/path/to/initramfs-pmos.cpio \
+  --userspace-stage-helper build/path/to/hotdog-userspace-stage \
+  --userspace-stage-profile udev
+```
+
+It overlays instrumented copies of `init_2nd.sh` and
+`init_functions_2nd.sh`. Cells 6-10 report `setup_udev` entry, return from
+`udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
+return from `setup_usb_network`.
+
 ## Promoting a new artifact
 
 A newly generated file is not validated merely because it builds. Promotion

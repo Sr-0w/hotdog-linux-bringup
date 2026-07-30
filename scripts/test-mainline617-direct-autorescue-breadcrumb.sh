@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-093404-mainline617-direct-init2-udev-stage11/boot.img"
+BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-07-30-095350-mainline617-direct-udev-substeps/boot.img"
 D7_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-220500-d7-ufs-gdsc-bridge-dtbo/dtbo_b-d7-ufs-gdsc-bridge-filtered.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +12,7 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=202f8c60044258dbed4a0fca5c891d2113075accb94fb97e30a7e3ce60454336
+BOOT_SHA=4908b40e553e5af444a9d5fba3ab953da407774068180689e44730ac30b92314
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 D7_DTBO_SHA=c7b22d3c2b8d9d09d95ee9ef8f3ead91dae2d7ec85e259c03b44bc3b2afa8978
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -59,9 +59,10 @@ cells then report PID 1's first EL0 SVC entry/return, an initial openat,
 successful framebuffer open, second SVC, framebuffer I/O, fallback execve,
 and sustained userspace activity. A final row of eleven large cells traces
 init entry, entry/return around `mount_proc_sys_dev`, watchdog arming,
-command-line parsing, and entry into the first `jump_init_2nd`. Cells 6-10
-are then reused by the executed `init_2nd.sh` to trace second-stage entry,
-function sourcing, watchdog continuity, and entry/return around `setup_udev`.
+command-line parsing, and entry into the first `jump_init_2nd`. The executed
+`init_2nd.sh` reuses cells 6-10 for entry into `setup_udev`, return from
+`udevd`, return from `udevadm trigger`, return from `udevadm settle`, and
+return from `setup_usb_network`.
 Later checkpoints retain the persistent per-initcall breadcrumb. If Qualcomm 900e
 appears, the stage and raw counter samples are read automatically. The verified
 R6 bridge and stock DTBO remain the rollback target. Set
