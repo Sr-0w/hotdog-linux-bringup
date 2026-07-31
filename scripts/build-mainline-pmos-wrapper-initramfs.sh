@@ -17,6 +17,7 @@ BOUNDED_EXEC_HELPER=""
 USERSPACE_STAGE_HELPER=""
 USERSPACE_STAGE_PROFILE="handoff"
 SOURCE_INIT_2ND=0
+FAILURE_PANIC_SEC=""
 
 usage() {
 	cat <<'USAGE'
@@ -60,8 +61,8 @@ Options:
   --userspace-stage-profile PROFILE
                         Select stage-two checkpoints: handoff (default),
                         handoff-deep, udev, udev-bounded,
-                        udev-bounded-deep, udev-skip, usb-probe, or
-                        dwc3-probe.
+                        udev-bounded-deep, udev-skip, usb-probe,
+                        dwc3-probe, or dwc3-passive-probe.
                         handoff-deep separates both sourced function files,
                         watchdog return, and entry into setup_udev.
                         udev-bounded reports each udev command and moves past
@@ -76,9 +77,20 @@ Options:
                         dwc3-probe omits setup_udev and reports the QCOM USB
                         platform device, QCOM wrapper binding, HS PHY binding,
                         and DWC3 core binding.
+                        dwc3-passive-probe keeps those DWC3 checks but skips
+                        USB gadget setup and DHCP so boot can continue without
+                        writing the gadget UDC binding. It also overrides the
+                        inherited failure handler so a rootfs failure cannot
+                        export logs through USB mass storage; the independent
+                        rescue supervisor remains responsible for returning
+                        to bootloader mode.
   --source-init-2nd     Source /init_2nd.sh at the first stage handoff instead
                         of executing it. This diagnostic mode isolates a
                         blocked second execve while preserving PID 1.
+  --failure-panic-sec N Arm a controlled panic N seconds after /init starts.
+                        The worker exits without firing when the root-mounted
+                        watchdog marker appears, preserving only failed boots
+                        in ramoops.
   -h, --help            Show this help.
 USAGE
 }
@@ -98,6 +110,7 @@ while [ "$#" -gt 0 ]; do
 		--userspace-stage-helper) USERSPACE_STAGE_HELPER="$2"; shift ;;
 		--userspace-stage-profile) USERSPACE_STAGE_PROFILE="$2"; shift ;;
 		--source-init-2nd) SOURCE_INIT_2ND=1 ;;
+		--failure-panic-sec) FAILURE_PANIC_SEC="$2"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -143,7 +156,7 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	}
 fi
 case "$USERSPACE_STAGE_PROFILE" in
-	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip|usb-probe|dwc3-probe) ;;
+	handoff|handoff-deep|udev|udev-bounded|udev-bounded-deep|udev-skip|usb-probe|dwc3-probe|dwc3-passive-probe) ;;
 	*)
 		printf 'Unknown userspace stage profile: %s\n' \
 			"$USERSPACE_STAGE_PROFILE" >&2
@@ -160,6 +173,20 @@ if [ "$SOURCE_INIT_2ND" -eq 1 ] && [ -z "$USERSPACE_STAGE_HELPER" ]; then
 	printf '%s requires --userspace-stage-helper\n' \
 		"--source-init-2nd" >&2
 	exit 2
+fi
+if [ -n "$FAILURE_PANIC_SEC" ]; then
+	case "$FAILURE_PANIC_SEC" in
+		''|*[!0-9]*|0)
+			printf '%s must be a positive integer\n' \
+				"--failure-panic-sec" >&2
+			exit 2
+			;;
+	esac
+	[ -n "$USERSPACE_STAGE_HELPER" ] || {
+		printf '%s requires --userspace-stage-helper\n' \
+			"--failure-panic-sec" >&2
+		exit 2
+	}
 fi
 if [ -n "$REBOOT_MODE_HELPER" ]; then
 	[ -x "$REBOOT_MODE_HELPER" ] || {
@@ -354,7 +381,8 @@ fi
 if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 		"$BASE_CPIO" init > "$init_original"
-	awk -v source_init_2nd="$SOURCE_INIT_2ND" '
+	awk -v source_init_2nd="$SOURCE_INIT_2ND" \
+			-v failure_panic_sec="$FAILURE_PANIC_SEC" '
 		function marker(stage) {
 			print "/hotdog-userspace-stage " stage
 		}
@@ -385,6 +413,24 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		/^[[:space:]]*setup_log[[:space:]]*$/ && !stage4 {
 			print
 			marker(4)
+			if (failure_panic_sec != "") {
+				print "("
+				print "\thotdog_failure_capture_elapsed=0"
+				print "\tprintf '\''<6>HOTDOG_FAILURE_PANIC_ARMED=" failure_panic_sec "\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				print "\twhile [ \"$hotdog_failure_capture_elapsed\" -lt " failure_panic_sec " ]; do"
+				print "\t\tif [ -e /tmp/hotdog_rescue_watchdog.root-mounted ]; then"
+				print "\t\t\tprintf '\''<6>HOTDOG_FAILURE_PANIC_CANCELLED_ROOT\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				print "\t\t\texit 0"
+				print "\t\tfi"
+				print "\t\tsleep 1"
+				print "\t\thotdog_failure_capture_elapsed=$((hotdog_failure_capture_elapsed + 1))"
+				print "\tdone"
+				print "\tprintf '\''<0>HOTDOG_FAILURE_PANIC_TRIGGER=" failure_panic_sec "\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				print "\tsync 2>/dev/null || true"
+				print "\tprintf '\''1\\n'\'' >/proc/sys/kernel/sysrq 2>/dev/null || true"
+				print "\tprintf '\''c\\n'\'' >/proc/sysrq-trigger 2>/dev/null || true"
+				print ") &"
+			}
 			stage4 = 1
 			next
 		}
@@ -439,6 +485,14 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 		}
 	' "$init_original" > "$init_override"
 	chmod 0755 "$init_override"
+	if [ -n "$FAILURE_PANIC_SEC" ]; then
+		grep -q "HOTDOG_FAILURE_PANIC_ARMED=$FAILURE_PANIC_SEC" \
+			"$init_override"
+		grep -q "HOTDOG_FAILURE_PANIC_TRIGGER=$FAILURE_PANIC_SEC" \
+			"$init_override"
+		grep -q 'HOTDOG_FAILURE_PANIC_CANCELLED_ROOT' "$init_override"
+		grep -q '/tmp/hotdog_rescue_watchdog.root-mounted' "$init_override"
+	fi
 
 	"$HOTDOG_ROOT/scripts/extract-last-newc-member.py" \
 		"$BASE_CPIO" init_2nd.sh > "$init_2nd_original"
@@ -672,10 +726,26 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 					exit 42
 			}
 		' "$init_2nd_original" > "$init_2nd_override"
-	elif [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
-		awk '
+	elif [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
+		passive_usb=0
+		if [ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
+			passive_usb=1
+		fi
+		awk -v passive_usb="$passive_usb" '
 			function marker(stage) {
 				print "/hotdog-userspace-stage " stage
+			}
+
+			/^[[:space:]]*\. \/init_functions_2nd\.sh[[:space:]]*$/ &&
+					passive_usb && !passive_fail_override {
+				print
+				print "fail_halt_boot() {"
+				print "\tprintf '\''<0>HOTDOG_DWC3_PASSIVE_FAIL_NO_USB_GADGET\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				print "\twhile :; do sleep 1; done"
+				print "}"
+				passive_fail_override = 1
+				next
 			}
 
 			/^[[:space:]]*setup_udev[[:space:]]*$/ && !stage6 {
@@ -696,10 +766,30 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 				next
 			}
 
+			/^[[:space:]]*setup_usb_network[[:space:]]*$/ && !usb_setup {
+				if (passive_usb)
+					print "printf '\''<6>HOTDOG_DWC3_PASSIVE_USB_SETUP_SKIPPED\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				else
+					print
+				usb_setup = 1
+				next
+			}
+
+			/^[[:space:]]*start_unudhcpd[[:space:]]*$/ && !dhcp {
+				if (passive_usb)
+					print "printf '\''<6>HOTDOG_DWC3_PASSIVE_DHCP_SKIPPED\\n'\'' >/dev/kmsg 2>/dev/null || true"
+				else
+					print
+				dhcp = 1
+				next
+			}
+
 			{ print }
 
 			END {
-				if (!(stage6 && stage7 && stage8 && stage9 && stage10))
+				if (!(stage6 && stage7 && stage8 && stage9 && stage10 &&
+				      usb_setup && dhcp &&
+				      (!passive_usb || passive_fail_override)))
 					exit 42
 			}
 		' "$init_2nd_original" > "$init_2nd_override"
@@ -1243,7 +1333,8 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded-deep ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
 		for stage in $(seq 6 10); do
 			grep -qx "/hotdog-userspace-stage $stage" "$init_2nd_override"
 		done
@@ -1255,25 +1346,34 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ] ||
-			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
 		if grep -qx '[[:space:]]*setup_udev[[:space:]]*' \
 				"$init_2nd_override"; then
 			printf '%s profile retained setup_udev\n' \
 				"$USERSPACE_STAGE_PROFILE" >&2
 			exit 1
 		fi
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = udev-skip ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = usb-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
 		grep -qx '[[:space:]]*setup_usb_network[[:space:]]*' \
-			"$init_2nd_override"
+				"$init_2nd_override"
 			grep -qx '[[:space:]]*start_unudhcpd[[:space:]]*' \
 				"$init_2nd_override"
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = usb-probe ]; then
 		grep -q '/sys/class/udc' "$init_2nd_override"
+		# Match variables in the generated init script, not this build shell.
+		# shellcheck disable=SC2016
 		grep -q '\$CONFIGFS/g1/UDC' "$init_2nd_override"
+		# shellcheck disable=SC2016
 		grep -q '/sys/class/net/\$hotdog_usb_probe_iface' \
 			"$init_2nd_override"
 	fi
-	if [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ]; then
+	if [ "$USERSPACE_STAGE_PROFILE" = dwc3-probe ] ||
+			[ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
 		grep -q '/sys/bus/platform/devices/a6f8800.usb' \
 			"$init_2nd_override"
 		grep -q '/sys/bus/platform/devices/a6f8800.usb/driver' \
@@ -1282,6 +1382,26 @@ if [ -n "$USERSPACE_STAGE_HELPER" ]; then
 			"$init_2nd_override"
 		grep -q '/sys/bus/platform/devices/a600000.usb/driver' \
 			"$init_2nd_override"
+	fi
+	if [ "$USERSPACE_STAGE_PROFILE" = dwc3-passive-probe ]; then
+		if grep -qx '[[:space:]]*setup_usb_network[[:space:]]*' \
+				"$init_2nd_override" ||
+				grep -qx '[[:space:]]*start_unudhcpd[[:space:]]*' \
+					"$init_2nd_override"; then
+			printf 'dwc3-passive-probe retained active USB setup\n' >&2
+			exit 1
+		fi
+		grep -q 'HOTDOG_DWC3_PASSIVE_USB_SETUP_SKIPPED' \
+			"$init_2nd_override"
+		grep -q 'HOTDOG_DWC3_PASSIVE_DHCP_SKIPPED' \
+			"$init_2nd_override"
+		grep -q 'HOTDOG_DWC3_PASSIVE_FAIL_NO_USB_GADGET' \
+			"$init_2nd_override"
+		if grep -q '^[[:space:]]*export_logs[[:space:]]*$' \
+				"$init_2nd_override"; then
+			printf 'dwc3-passive-probe retained direct export_logs call\n' >&2
+			exit 1
+		fi
 	fi
 	if [ "$USERSPACE_STAGE_PROFILE" = udev ] ||
 			[ "$USERSPACE_STAGE_PROFILE" = udev-bounded ] ||
@@ -1331,5 +1451,6 @@ printf 'Static bounded exec helper: %s\n' "${BOUNDED_EXEC_HELPER:-none}"
 printf 'Userspace stage helper: %s\n' "${USERSPACE_STAGE_HELPER:-none}"
 printf 'Userspace stage profile: %s\n' "$USERSPACE_STAGE_PROFILE"
 printf 'Source init_2nd handoff: %s\n' "$SOURCE_INIT_2ND"
+printf 'Failure panic timeout: %s\n' "${FAILURE_PANIC_SEC:-disabled}"
 printf 'Raw size: %s bytes\n' "$(stat -c %s "$output")"
 cat "$OUTDIR/SHA256SUMS"

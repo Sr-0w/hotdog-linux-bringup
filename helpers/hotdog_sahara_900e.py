@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import struct
 import sys
+import time
 from pathlib import Path
 
 
@@ -15,6 +17,15 @@ def physical_address(value: str) -> int:
     if not 0 <= address <= 0xFFFFFFFFFFFFFFFF:
         raise argparse.ArgumentTypeError("physical address is outside u64 range")
     return address
+
+
+def bounded_memory_length(value: str) -> int:
+    length = int(value, 0)
+    if not 1 <= length <= 0x01000000:
+        raise argparse.ArgumentTypeError(
+            "memory length must be between 1 byte and 16 MiB"
+        )
+    return length
 
 
 def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
@@ -87,11 +98,32 @@ def decode_early_breadcrumb(data: bytes) -> dict[str, int]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("inspect", "reset"))
+    parser.add_argument(
+        "action", choices=("inspect", "reset", "state-reset", "recover")
+    )
     parser.add_argument("--edl-source", type=Path, required=True)
     parser.add_argument("--serial", required=True)
     parser.add_argument("--early-breadcrumb-address", type=physical_address)
-    return parser.parse_args()
+    parser.add_argument("--memory-address", type=physical_address)
+    parser.add_argument("--memory-length", type=bounded_memory_length)
+    parser.add_argument("--memory-output", type=Path)
+    args = parser.parse_args()
+
+    memory_options = (
+        args.memory_address,
+        args.memory_length,
+        args.memory_output,
+    )
+    if any(option is not None for option in memory_options) and not all(
+        option is not None for option in memory_options
+    ):
+        parser.error(
+            "--memory-address, --memory-length, and --memory-output "
+            "must be provided together"
+        )
+    if args.action != "inspect" and args.memory_address is not None:
+        parser.error("physical memory reads require the inspect action")
+    return args
 
 
 def main() -> int:
@@ -136,6 +168,38 @@ def main() -> int:
             accepted = protocol.cmd_reset()
             print(f"sahara_reset_response={int(accepted)}")
             return 0 if accepted else 5
+
+        if args.action == "state-reset":
+            accepted = protocol.cmd_reset_state_machine()
+            print(f"sahara_state_reset_sent={int(accepted)}")
+            return 0 if accepted else 5
+
+        if args.action == "recover":
+            accepted = protocol.cmd_reset_state_machine()
+            print(f"sahara_state_reset_sent={int(accepted)}")
+            if not accepted:
+                return 5
+
+            time.sleep(0.5)
+            refreshed = protocol.connect()
+            print(f"sahara_recovery_mode={refreshed.get('mode')}")
+            print(f"sahara_recovery_command={refreshed.get('cmd')}")
+            if (
+                refreshed.get("mode") == "sahara"
+                and refreshed.get("cmd") == cmd_t.SAHARA_HELLO_REQ
+            ):
+                version = refreshed["data"].version
+                if not protocol.cmd_hello(
+                    sahara_mode_t.SAHARA_MODE_MEMORY_DEBUG, version=version
+                ):
+                    print("error=recovery-memory-debug-hello-failed", file=sys.stderr)
+                    return 12
+                response = protocol.get_rsp()
+                print(f"sahara_recovery_response={response.get('cmd')}")
+
+            accepted = protocol.cmd_reset()
+            print(f"sahara_recovery_reset_response={int(accepted)}")
+            return 0 if accepted else 13
 
         if (
             state.get("mode") != "sahara"
@@ -199,6 +263,29 @@ def main() -> int:
                     print(f"early_breadcrumb_{field}=0x{value:016x}")
                 else:
                     print(f"early_breadcrumb_{field}={value}")
+
+        if args.memory_address is not None:
+            args.memory_output.parent.mkdir(parents=True, exist_ok=True)
+            print(
+                "memory_read_address="
+                f"0x{args.memory_address:016x}"
+            )
+            print(f"memory_read_length=0x{args.memory_length:x}")
+            print(f"memory_read_output={args.memory_output}")
+            with args.memory_output.open("wb") as output:
+                result = protocol.read_memory(
+                    args.memory_address,
+                    args.memory_length,
+                    display=True,
+                    wf=output,
+                )
+                output.flush()
+                os.fsync(output.fileno())
+                bytes_written = output.tell()
+            print(f"memory_read_bytes={bytes_written}")
+            if result is None or bytes_written != args.memory_length:
+                print("error=short-bounded-memory-read", file=sys.stderr)
+                return 11
         return 0
     finally:
         cdc.close()

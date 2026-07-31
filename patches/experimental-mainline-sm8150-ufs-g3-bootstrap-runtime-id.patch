@@ -1,0 +1,77 @@
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+index 9574fdc2b..e6e7bddc3 100644
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -481,6 +481,19 @@ static u32 ufs_qcom_get_hs_gear(struct ufs_hba *hba)
+ 	return UFS_HS_G3;
+ }
+ 
++static bool ufs_qcom_is_hotdog(void)
++{
++	u32 dtsi_no;
++
++	if (of_machine_is_compatible("oneplus,hotdog"))
++		return true;
++
++	/* The selected downstream DTBO replaces the mainline root compatible. */
++	return of_machine_is_compatible("qcom,sm8150-mtp") &&
++		!of_property_read_u32(of_root, "oplus,dtsi_no", &dtsi_no) &&
++		dtsi_no == 0x4d59;
++}
++
+ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
+ {
+ 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+@@ -503,6 +516,13 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
+ 
+ 	mode = host_params->hs_rate == PA_HS_MODE_B ? PHY_MODE_UFS_HS_B : PHY_MODE_UFS_HS_A;
+ 
++	if (ufs_qcom_is_hotdog())
++		dev_info(hba->dev,
++			 "HOTDOG_UFS_PHY_START hw=%u.%u.%u gear=%u rate=%c\n",
++			 host->hw_ver.major, host->hw_ver.minor,
++			 host->hw_ver.step, host->phy_gear,
++			 host_params->hs_rate == PA_HS_MODE_B ? 'B' : 'A');
++
+ 	/* Reset UFS Host Controller and PHY */
+ 	ret = ufs_qcom_host_reset(hba);
+ 	if (ret)
+@@ -1100,11 +1120,26 @@ static void ufs_qcom_set_host_params(struct ufs_hba *hba)
+ {
+ 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+ 	struct ufs_host_params *host_params = &host->host_params;
++	u32 controller_max_gear;
+ 
+ 	ufshcd_init_host_params(host_params);
+ 
+ 	/* This driver only supports symmetic gear setting i.e., hs_tx_gear == hs_rx_gear */
+-	host_params->hs_tx_gear = host_params->hs_rx_gear = ufs_qcom_get_hs_gear(hba);
++	controller_max_gear = ufs_qcom_get_hs_gear(hba);
++	host_params->hs_tx_gear = host_params->hs_rx_gear = controller_max_gear;
++
++	/*
++	 * The downstream SM8150 driver brings the link up at HS-G3 before
++	 * reading the device descriptor and optionally reinitialising at HS-G4.
++	 * Keep this first mainline validation at the known-good bootstrap gear.
++	 */
++	if (ufs_qcom_is_hotdog()) {
++		host_params->hs_tx_gear = UFS_HS_G3;
++		host_params->hs_rx_gear = UFS_HS_G3;
++		dev_info(hba->dev,
++			 "HOTDOG_UFS_BOOTSTRAP controller_max_gear=%u host_max_gear=%u\n",
++			 controller_max_gear, host_params->hs_tx_gear);
++	}
+ }
+ 
+ static void ufs_qcom_set_host_caps(struct ufs_hba *hba)
+@@ -1320,6 +1355,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
+ 
+ 	ufs_qcom_get_controller_revision(hba, &host->hw_ver.major,
+ 		&host->hw_ver.minor, &host->hw_ver.step);
++	if (ufs_qcom_is_hotdog())
++		dev_info(dev, "HOTDOG_UFS_HW_REVISION=%u.%u.%u\n",
++			 host->hw_ver.major, host->hw_ver.minor,
++			 host->hw_ver.step);
+ 
+ 	host->dev_ref_clk_ctrl_mmio = hba->mmio_base + REG_UFS_CFG1;
+ 	host->dev_ref_clk_en_mask = BIT(26);

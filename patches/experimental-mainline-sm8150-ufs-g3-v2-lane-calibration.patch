@@ -1,0 +1,44 @@
+diff --git a/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c b/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c
+--- a/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c
++++ b/drivers/phy/qualcomm/phy-qcom-qmp-ufs.c
+@@ -498,6 +498,10 @@ static const struct qmp_phy_init_tbl sm8150_ufsphy_tx[] = {
+ 	QMP_PHY_INIT_CFG(QSERDES_V4_TX_TRAN_DRVR_EMP_EN, 0x0c),
+ };
+ 
++static const struct qmp_phy_init_tbl sm8150_ufsphy_hs_g3_tx[] = {
++	QMP_PHY_INIT_CFG(QSERDES_V4_TX_LANE_MODE_1, 0x35),
++};
++
+ static const struct qmp_phy_init_tbl sm8150_ufsphy_hs_g4_tx[] = {
+ 	QMP_PHY_INIT_CFG(QSERDES_V4_TX_LANE_MODE_1, 0x75),
+ };
+@@ -539,6 +543,15 @@ static const struct qmp_phy_init_tbl sm8150_ufsphy_rx[] = {
+ 	QMP_PHY_INIT_CFG(QSERDES_V4_RX_RX_MODE_10_HIGH4, 0xb1),
+ };
+ 
++static const struct qmp_phy_init_tbl sm8150_ufsphy_hs_g3_rx[] = {
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_UCDR_SO_SATURATION_AND_ENABLE, 0x5a),
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_UCDR_FO_GAIN, 0x0e),
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_RX_MODE_00_LOW, 0x6d),
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_RX_MODE_00_HIGH, 0x6d),
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_RX_MODE_00_HIGH2, 0xed),
++	QMP_PHY_INIT_CFG(QSERDES_V4_RX_RX_MODE_00_HIGH4, 0x3c),
++};
++
+ static const struct qmp_phy_init_tbl sm8150_ufsphy_hs_g4_rx[] = {
+ 	QMP_PHY_INIT_CFG(QSERDES_V4_RX_UCDR_SO_SATURATION_AND_ENABLE, 0x5a),
+ 	QMP_PHY_INIT_CFG(QSERDES_V4_RX_UCDR_PI_CTRL2, 0x81),
+@@ -1421,6 +1434,13 @@ static const struct qmp_phy_cfg sm8150_ufsphy_cfg = {
+ 		.serdes_num	= ARRAY_SIZE(sm8150_ufsphy_hs_b_serdes),
+ 	},
+ 	.tbls_hs_overlay[0] = {
++		.tx		= sm8150_ufsphy_hs_g3_tx,
++		.tx_num		= ARRAY_SIZE(sm8150_ufsphy_hs_g3_tx),
++		.rx		= sm8150_ufsphy_hs_g3_rx,
++		.rx_num		= ARRAY_SIZE(sm8150_ufsphy_hs_g3_rx),
++		.max_gear	= UFS_HS_G3,
++	},
++	.tbls_hs_overlay[1] = {
+ 		.tx		= sm8150_ufsphy_hs_g4_tx,
+ 		.tx_num		= ARRAY_SIZE(sm8150_ufsphy_hs_g4_tx),
+ 		.rx		= sm8150_ufsphy_hs_g4_rx,

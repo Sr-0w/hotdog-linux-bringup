@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import re
 import struct
 import sys
+import zlib
 from pathlib import Path
 
 
 PERSISTENT_RAM_SIG = 0x43474244
 HEADER_SIZE = 12
+PSTORE_RECORD_HEADER = re.compile(br"^====[^\n]*-([A-Z])\n")
 
 
 def parse_int(value: str) -> int:
@@ -30,6 +33,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="scan the complete ramoops reservation and emit every populated zone",
     )
+    parser.add_argument(
+        "--raw-pstore",
+        action="store_true",
+        help="leave compressed pstore payloads untouched",
+    )
     return parser.parse_args()
 
 
@@ -48,6 +56,21 @@ def extract_zone(zone: bytes) -> bytes:
     if size < capacity:
         return data[:size]
     return data[start:] + data[:start]
+
+
+def decode_pstore_payload(payload: bytes, *, raw: bool) -> bytes:
+    if raw:
+        return payload
+
+    match = PSTORE_RECORD_HEADER.match(payload)
+    if not match or match.group(1) != b"C":
+        return payload
+
+    compressed = payload[match.end() :]
+    try:
+        return zlib.decompress(compressed, -zlib.MAX_WBITS)
+    except zlib.error as error:
+        raise ValueError(f"unable to decompress pstore record: {error}") from error
 
 
 def scan_reservation(args: argparse.Namespace) -> int:
@@ -76,7 +99,10 @@ def scan_reservation(args: argparse.Namespace) -> int:
             break
         zone = reservation[offset : offset + args.zone_size]
         try:
-            payload = extract_zone(zone)
+            payload = decode_pstore_payload(
+                extract_zone(zone),
+                raw=args.raw_pstore,
+            )
         except ValueError:
             offset += 1
             continue
@@ -114,7 +140,12 @@ def main() -> int:
         )
 
     try:
-        sys.stdout.buffer.write(extract_zone(zone))
+        sys.stdout.buffer.write(
+            decode_pstore_payload(
+                extract_zone(zone),
+                raw=args.raw_pstore,
+            )
+        )
     except ValueError as error:
         raise SystemExit(str(error)) from error
     return 0

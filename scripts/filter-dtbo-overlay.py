@@ -47,6 +47,27 @@ def delete_property(dtb, path, prop):
         command("fdtput", "-d", dtb, path, prop)
 
 
+def fragment_path(value):
+    name = value.removeprefix("/")
+    if not name.startswith("fragment@") or "/" in name:
+        raise RuntimeError(
+            f"invalid fragment name {value!r}; expected fragment@N"
+        )
+    return "/" + name
+
+
+def drop_explicit_fragments(overlay, fragments):
+    removed = 0
+    for value in dict.fromkeys(fragments):
+        path = fragment_path(value)
+        if not node_exists(overlay, path):
+            raise RuntimeError(f"requested fragment does not exist: {path}")
+        delete_node(overlay, path)
+        delete_node(overlay, LOCAL_FIXUPS + path)
+        removed += 1
+    return removed
+
+
 def set_strings(dtb, path, prop, values):
     command("fdtput", "-t", "s", dtb, path, prop, *values)
 
@@ -203,14 +224,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--overlay", required=True)
     parser.add_argument("--base", required=True)
+    parser.add_argument(
+        "--drop-fragment",
+        action="append",
+        default=[],
+        metavar="fragment@N",
+        help="remove one root overlay fragment before reference filtering",
+    )
     args = parser.parse_args()
 
+    explicitly_removed = drop_explicit_fragments(
+        args.overlay, args.drop_fragment
+    )
     fragments, properties_removed = remove_unresolved_external_fixups(
         args.overlay, args.base
     )
     local_removed = prune_undefined_local_references(args.overlay)
     stale_symbols = prune_stale_symbols(args.overlay)
     validate_metadata(args.overlay)
+    print(f"explicitly dropped fragments: {explicitly_removed}")
     print(f"removed fragments: {fragments}")
     print(f"removed external-reference properties: {properties_removed}")
     print(f"removed undefined local-reference properties: {local_removed}")

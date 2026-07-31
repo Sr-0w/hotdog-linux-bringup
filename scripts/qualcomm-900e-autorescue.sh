@@ -13,13 +13,20 @@ HELPER="$HOTDOG_ROOT/helpers/hotdog_sahara_900e.py"
 usage() {
 	cat <<'USAGE'
 Usage: qualcomm-900e-autorescue.sh inspect [--early-breadcrumb-address ADDRESS]
+       [--read-memory ADDRESS LENGTH]
+       qualcomm-900e-autorescue.sh recover
+       qualcomm-900e-autorescue.sh state-reset
        qualcomm-900e-autorescue.sh reset
 
 Operate on the configured hotdog target only while Qualcomm 05c6:900e is
 visible. "inspect" reads the experimental breadcrumb and restart reason from
-physical memory. "reset" sends SAHARA_RESET_REQ. Neither action reads or
-writes phone storage. ADDRESS accepts decimal or a 0x-prefixed physical
-address and reads one additional 64-byte diagnostic record.
+physical memory. "recover" resets the Sahara state machine and follows its
+fresh handshake with SAHARA_RESET_REQ. "state-reset" sends only
+SAHARA_RESET_STATE_MACHINE_ID and "reset" sends only SAHARA_RESET_REQ. None
+of these actions reads or writes phone storage. ADDRESS accepts decimal or a
+0x-prefixed physical address and reads one additional 64-byte diagnostic
+record. --read-memory stores one bounded physical-memory range (maximum 16
+MiB) in the new run directory without resetting the target.
 USAGE
 }
 
@@ -42,7 +49,7 @@ case "${1:-}" in
 		usage
 		exit 0
 		;;
-	inspect|reset)
+	inspect|reset|state-reset|recover)
 		action="$1"
 		;;
 	*)
@@ -53,6 +60,8 @@ esac
 shift
 
 early_breadcrumb_address="${HOTDOG_EARLY_BREADCRUMB_PHYS:-}"
+memory_address=""
+memory_length=""
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--early-breadcrumb-address)
@@ -60,6 +69,13 @@ while [ "$#" -gt 0 ]; do
 			[ "$#" -ge 2 ] || die "Missing value for $1" 2
 			early_breadcrumb_address="$2"
 			shift 2
+			;;
+		--read-memory)
+			[ "$action" = inspect ] || die "Physical memory reads require inspect" 2
+			[ "$#" -ge 3 ] || die "Missing address or length for $1" 2
+			memory_address="$2"
+			memory_length="$3"
+			shift 3
 			;;
 		*)
 			die "Unknown argument: $1" 2
@@ -93,6 +109,15 @@ helper_args=(
 if [ "$action" = inspect ] && [ -n "$early_breadcrumb_address" ]; then
 	helper_args+=(--early-breadcrumb-address "$early_breadcrumb_address")
 	log "Additional early breadcrumb: $early_breadcrumb_address (64 bytes)"
+fi
+if [ "$action" = inspect ] && [ -n "$memory_address" ]; then
+	memory_output="$run_dir/physical-memory.bin"
+	helper_args+=(
+		--memory-address "$memory_address"
+		--memory-length "$memory_length"
+		--memory-output "$memory_output"
+	)
+	log "Bounded physical read: $memory_address + $memory_length -> $memory_output"
 fi
 
 "$PYTHON_BIN" -u "$HELPER" "${helper_args[@]}"

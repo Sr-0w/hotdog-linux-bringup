@@ -7,6 +7,7 @@ K1_DTB=""
 OUT=""
 UFS_SYMBOL_BRIDGE=0
 UFS_GDSC_BRIDGE=0
+DROP_FRAGMENTS=()
 
 STOCK_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
 STOCK_BASE_DTB_SHA=44a22657c1dd751ba062060941af02758a7ae8a656e5cd4e8ac1f2a164c04ee9
@@ -19,7 +20,8 @@ SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 usage() {
   cat <<'USAGE'
 Usage: build-d5-filtered-dtbo.sh --stock-dtbo FILE --stock-base-dtb FILE \
-  --k1-dtb FILE --out DIR [--ufs-symbol-bridge | --ufs-gdsc-bridge]
+  --k1-dtb FILE --out DIR [--ufs-symbol-bridge | --ufs-gdsc-bridge] \
+  [--drop-fragment fragment@N]...
 
 Build a stock-derived DTBO partition whose selected entry retains only overlay
 fragments and references that resolve against the pinned K1 mainline DTB. The
@@ -28,6 +30,10 @@ DTBs. With --ufs-symbol-bridge, the K1 DTB receives vendor-compatible aliases
 for the UFS controller, PHY, and their regulators before filtering. With
 --ufs-gdsc-bridge, it also receives an always-on fixed regulator for the vendor
 UFS PHY GDSC supply. No phone command is executed.
+
+--drop-fragment removes a known-incompatible root overlay fragment after the
+base-specific filter has been selected. The option is repeatable and the
+resulting variant name records every explicit removal.
 USAGE
 }
 
@@ -52,6 +58,7 @@ while [ "$#" -gt 0 ]; do
     --out) OUT="$2"; shift 2 ;;
     --ufs-symbol-bridge) UFS_SYMBOL_BRIDGE=1; shift ;;
     --ufs-gdsc-bridge) UFS_SYMBOL_BRIDGE=1; UFS_GDSC_BRIDGE=1; shift ;;
+    --drop-fragment) DROP_FRAGMENTS+=("$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1" 2 ;;
   esac
@@ -108,8 +115,20 @@ EOF
     fdtput -t s "$FILTER_BASE" /__symbols__ ufs_phy_gdsc /ufs-phy-gdsc-supply
   fi
 fi
-python3 "$SCRIPT_DIR/filter-dtbo-overlay.py" \
-  --overlay "$OUT/components/filtered-entry5.dtbo" --base "$FILTER_BASE" \
+filter_args=(
+  --overlay "$OUT/components/filtered-entry5.dtbo"
+  --base "$FILTER_BASE"
+)
+for fragment in "${DROP_FRAGMENTS[@]}"; do
+  fragment_name="${fragment#/}"
+  case "$fragment_name" in
+    fragment@*) ;;
+    *) die "Invalid --drop-fragment value: $fragment" 2 ;;
+  esac
+  filter_args+=(--drop-fragment "$fragment_name")
+  VARIANT="$VARIANT-drop-${fragment_name//@/-}"
+done
+python3 "$SCRIPT_DIR/filter-dtbo-overlay.py" "${filter_args[@]}" \
   | tee "$OUT/verify/filter-summary.txt"
 
 fdtoverlay -i "$STOCK_BASE_DTB" -o "$OUT/verify/downstream-plus-filtered.dtb" \

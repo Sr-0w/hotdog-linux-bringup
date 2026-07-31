@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-07-30
+Last updated: 2026-07-31
 
 ## Tested hardware
 
@@ -30,12 +30,12 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
 | Persistent direct boot | Active stage-two userspace | The current trace completes `kernel_init_freeable()`, the bounded global async wait, `kernel_execve()`, and the EL1-to-EL0 return. PID 1 records more than 16 syscalls, mounts the early pseudo-filesystems, arms the rescue watchdog, and enters `init_2nd.sh`. A per-command trace stopped in the first `udevd` launch; bypassing udev let both USB setup helpers return, but no direct USB identity appeared. A mounted rootfs remains unobserved. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
-| UFS | Working | Samsung UFS controller probes and exposes all Android partitions. |
-| postmarketOS root | Working | Nested `pmOS_root` mounts read-write as `/dev/loop1`. |
-| postmarketOS boot | Working | Nested `pmOS_boot` mounts as `/dev/loop0`. |
-| OpenRC userspace | Working | Core boot, NetworkManager, SSH, and local services start. |
-| USB NCM | Working | The device is reachable at `172.16.42.1`. |
-| USB ACM | Working | A serial shell is exposed on `ttyGS0`. |
+| UFS | Working through the 4.14 bridge; direct boot incomplete | The kexec path exposes all Android partitions. Direct Linux 6.17 now binds the native SM8150 PHY and host but the first device-init NOP times out with `-EAGAIN`; no block device appears. |
+| postmarketOS root | Working through the bridge | Nested `pmOS_root` mounts read-write as `/dev/loop1`; direct-mainline mounting remains blocked by UFS link startup. |
+| postmarketOS boot | Working through the bridge | Nested `pmOS_boot` mounts as `/dev/loop0`. |
+| OpenRC userspace | Working through the bridge | Core boot, NetworkManager, SSH, and local services start. |
+| USB NCM | Working through the bridge | The device is reachable at `172.16.42.1`. Direct-mainline gadget registration remains incomplete. |
+| USB ACM | Working through the bridge | A serial shell is exposed on `ttyGS0`. Direct-mainline ACM remains incomplete. |
 | Early console | Diagnostic markers only | The inherited splash framebuffer carries pre-MMU, post-MMU, post-init, EL0-transition, exception, and PID 1 syscall markers. A normal console is not retained. |
 | DRM/panel | Not working | Mainline display clocks and the panel pipeline are not enabled. |
 | Framebuffer | Diagnostic only | The kernel can write the inherited splash buffer directly. A working userspace fbdev or DRM device has not been demonstrated in direct boot. |
@@ -291,9 +291,36 @@ remote debug channel.
     watchdog fallback. Its AVB image SHA256 is
     `c5ade1ffaa458fe6943fda13c208c5e6df9ce3f5e2af8dec8cc7c599fc72ea30`;
     hardware validation is pending.
+73. Keep the native-mainline UFS baseline as proof that removing vendor DTBO
+    fragments 46, 59, and 60 preserves the mainline `qcom,sm8150-qmp-ufs-phy`
+    and `qcom,ufshc` nodes. Both drivers bind, but device initialization stops
+    at the first NOP and no UFS block device appears.
+74. Keep native-UFS D10 as a controlled negative calibration result. Seven
+    downstream PCS Gear 3 values compile and execute without regressing the
+    diagnostic path, but `ufshcd_verify_dev_init()` still reports
+    `NOP OUT failed -11`.
+75. Treat raw UFS MMIO reads from the R6 rescue environment as unsafe. A
+    read-only module stopped at the first host-register access while the UFS
+    clock domain was gated. The replacement diagnostic brackets one supported
+    controller read with the native UFS hold/release API.
+76. Keep native-UFS D11 as proof that the first HS-G3 bootstrap guard did not
+    match the runtime tree. Its ramoops log contains no `HOTDOG_UFS_*` marker
+    and still reports `NOP OUT failed -11`; the selected DTBO replaced the root
+    identity with `qcom,sm8150-mtp` while retaining OnePlus
+    `dtsi_no = 0x4d59`.
+77. Test native-UFS D12 next. It accepts that exact runtime identity, limits
+    initial UFS negotiation to HS-G3, and emits controller-revision,
+    bootstrap-gear, and PHY-start messages. Its AVB image SHA256 is
+    `595b8ac4ad1d3e02726d6ecc9778347a1d656767afce23f680bce01d36d01601`.
+78. Keep native-UFS D13 gated behind D12. It adds the downstream revision-2
+    Gear 3 TX/RX lane calibration as a native mainline gear overlay. Two
+    package builds reproduced AVB SHA256
+    `1efe20d49953d32409091db1ef2b461236dd5f88f22fc524cc5b154dc9a6d7d7`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in
 [the 2026-07-15 RAID6 evidence](evidence/2026-07-15-raid6-direct-boot.md).
 The later mapping, PID 1, and command-line results are recorded in
 [the 2026-07-30 direct PID 1 evidence](evidence/2026-07-30-direct-pid1.md).
+The native UFS calibration sequence is recorded in
+[the 2026-07-31 direct native UFS evidence](evidence/2026-07-31-direct-native-ufs.md).

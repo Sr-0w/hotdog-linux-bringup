@@ -1,0 +1,64 @@
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+index 9574fdc2b..92b114d34 100644
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -125,6 +125,8 @@ static void ufs_qcom_get_default_testbus_cfg(struct ufs_qcom_host *host);
+ static unsigned long ufs_qcom_opp_freq_to_clk_freq(struct ufs_hba *hba,
+ 						   unsigned long freq, char *name);
+ static int ufs_qcom_set_core_clk_ctrl(struct ufs_hba *hba, bool is_scale_up, unsigned long freq);
++static void ufs_qcom_device_reset_ctrl(struct ufs_hba *hba, bool asserted);
++static int ufs_qcom_hotdog_after_host_reset_device_reset(struct ufs_hba *hba);
+ 
+ static struct ufs_qcom_host *rcdev_to_ufs_host(struct reset_controller_dev *rcd)
+ {
+@@ -598,6 +600,10 @@ static int ufs_qcom_hce_enable_notify(struct ufs_hba *hba,
+ 		if (err)
+ 			return err;
+ 
++		err = ufs_qcom_hotdog_after_host_reset_device_reset(hba);
++		if (err)
++			return err;
++
+ 		/*
+ 		 * The PHY PLL output is the source of tx/rx lane symbol
+ 		 * clocks, hence, enable the lane clocks only after PHY
+@@ -728,6 +734,39 @@ static void ufs_qcom_device_reset_ctrl(struct ufs_hba *hba, bool asserted)
+ 	gpiod_set_value_cansleep(host->device_reset, asserted);
+ }
+ 
++static int ufs_qcom_hotdog_after_host_reset_device_reset(struct ufs_hba *hba)
++{
++	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
++
++	if (!of_device_is_compatible(hba->dev->of_node, "qcom,sm8150-ufshc"))
++		return 0;
++
++	if (!host->device_reset) {
++		dev_err(hba->dev,
++			"HOTDOG_UFS_AFTER_HOST_RESET missing reset GPIO\n");
++		return -ENODEV;
++	}
++
++	dev_info(hba->dev,
++		 "HOTDOG_UFS_AFTER_HOST_RESET begin cfg1=%#x hcs=%#x reset=%d\n",
++		 ufshcd_readl(hba, REG_UFS_CFG1),
++		 ufshcd_readl(hba, REG_CONTROLLER_STATUS),
++		 gpiod_get_value_cansleep(host->device_reset));
++
++	ufs_qcom_device_reset_ctrl(hba, true);
++	usleep_range(10, 15);
++	ufs_qcom_device_reset_ctrl(hba, false);
++	usleep_range(10, 15);
++
++	dev_info(hba->dev,
++		 "HOTDOG_UFS_AFTER_HOST_RESET done cfg1=%#x hcs=%#x reset=%d\n",
++		 ufshcd_readl(hba, REG_UFS_CFG1),
++		 ufshcd_readl(hba, REG_CONTROLLER_STATUS),
++		 gpiod_get_value_cansleep(host->device_reset));
++
++	return 0;
++}
++
+ static int ufs_qcom_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op,
+ 	enum ufs_notify_change_status status)
+ {
