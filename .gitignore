@@ -5,6 +5,7 @@ downloads/
 experiments/
 images/
 logs/
+memory/
 pmbootstrap-work/
 reports/
 rootfs/
@@ -20,3 +21,4 @@ external-refs/
 *.swp
 *.swo
 *~
+__pycache__/
