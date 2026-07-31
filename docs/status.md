@@ -308,13 +308,13 @@ remote debug channel.
     and still reports `NOP OUT failed -11`; the selected DTBO replaced the root
     identity with `qcom,sm8150-mtp` while retaining OnePlus
     `dtsi_no = 0x4d59`.
-77. Test native-UFS D12 next. It accepts that exact runtime identity, limits
-    initial UFS negotiation to HS-G3, and emits controller-revision,
-    bootstrap-gear, and PHY-start messages. Its AVB image SHA256 is
-    `595b8ac4ad1d3e02726d6ecc9778347a1d656767afce23f680bce01d36d01601`.
-78. Keep native-UFS D13 gated behind D12. It adds the downstream revision-2
-    Gear 3 TX/RX lane calibration as a native mainline gear overlay. Two
-    package builds reproduced AVB SHA256
+77. Keep native-UFS D12 as proof that the corrected runtime guard executes. It
+    identified controller revision `4.1.0`, reduced the initial host maximum
+    from Gear 4 to Gear 3, and started the PHY in HS-G3 Rate B. The first NOP
+    still failed with `-11`, so the bootstrap limit alone is insufficient.
+78. Test native-UFS D13 next. It adds the downstream revision-2 Gear 3 TX/RX
+    lane calibration as a native mainline gear overlay. Two package builds
+    reproduced AVB SHA256
     `1efe20d49953d32409091db1ef2b461236dd5f88f22fc524cc5b154dc9a6d7d7`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are

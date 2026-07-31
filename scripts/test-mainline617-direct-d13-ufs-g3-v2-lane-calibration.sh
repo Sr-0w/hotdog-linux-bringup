@@ -106,11 +106,11 @@ hardware fallback interval. Because the first native-UFS run proved that this
 reboot path does not act on the direct mainline boot, this image additionally
 arms a 90-second failure-only panic. The same root-mounted marker cancels it on
 success; otherwise `panic=0` freezes the failed kernel after ramoops records
-its final log. The host test releases its lock after 115 seconds so one manual
+its final log. The host test releases its lock after 180 seconds so one manual
 reset can restore R6 and expose that persistent record.
-This D13 image retains D10's seven SM8150 PCS G3 calibration writes, D11's
-HS-G3 bootstrap limit, and D12's controller-revision trace. It adds the
-downstream QMP v4 revision-2 Gear 3 lane calibration as a native mainline gear
+This D13 image retains D10's seven SM8150 PCS G3 calibration writes and D12's
+corrected runtime identity, HS-G3 bootstrap limit, and controller trace. It adds
+the downstream QMP v4 revision-2 Gear 3 lane calibration as a native mainline gear
 overlay: TX lane mode plus six RX clock-data-recovery and mode values. Mainline
 applies the same table to both lanes. The DTB, filtered DTBO, wrapped pmOS
 initramfs, command line, watchdogs, and rollback images are byte-identical to
@@ -181,15 +181,16 @@ set +e
 		--expect-cmdline-token initramfs_async=0 \
 		--expect-cmdline-token panic=0 \
 		--expect-cmdline-token consoleblank=0 \
-		--restore-after system --boot-wait 115 --poll 1 --fastboot-timeout 15 \
+		--restore-after system --boot-wait 180 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
 test_status=$?
 set -e
 
 if lsusb -d 05c6:900e 2>/dev/null | grep -q .; then
-	printf 'Qualcomm 900e detected; reading fixed and early breadcrumbs.\n'
+	printf 'Qualcomm 900e detected; capturing breadcrumbs and persistent ramoops.\n'
 	"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
-		--early-breadcrumb-address "$EARLY_BREADCRUMB_PHYS" || true
+		--early-breadcrumb-address "$EARLY_BREADCRUMB_PHYS" \
+		--extract-ramoops || true
 fi
 
 exit "$test_status"

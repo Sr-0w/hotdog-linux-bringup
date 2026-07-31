@@ -96,9 +96,33 @@ D11 bootstrap and emits `HOTDOG_UFS_HW_REVISION`, `HOTDOG_UFS_BOOTSTRAP`, and
 
 `595b8ac4ad1d3e02726d6ecc9778347a1d656767afce23f680bce01d36d01601`
 
-D12 is build-, syntax-, hash-, and AVB-validated. Hardware validation is
-pending and must precede D13 so the Gear 3 limit remains the only new hardware
-variable.
+D12 was hardware-validated on 2026-08-01. R6 was first restored with the pinned
+boot and stock-DTBO hashes, reached SSH as `4.14.357-openela-perf`, and handed
+off to the D12 AVB image through the guarded slot-B transaction. The recovered
+console proves that the corrected runtime guard matched:
+
+```text
+HOTDOG_UFS_HW_REVISION=4.1.0
+HOTDOG_UFS_BOOTSTRAP controller_max_gear=4 host_max_gear=3
+HOTDOG_UFS_PHY_START hw=4.1.0 gear=3 rate=B
+```
+
+The device still did not answer the first initialization request:
+
+```text
+ufshcd_verify_dev_init: NOP OUT failed -11
+Initialization failed with error -11
+probe with driver ufshcd-qcom failed with error -11
+```
+
+The failure-only panic fired at `91.599726` seconds and Qualcomm `900e` became
+visible about 140 seconds after the bootloader reboot. The bounded physical
+capture SHA256 is
+`ebc156e2617b1cef33c226b937d819f79dab4fbbc0251173e37392334d0bb0ef`;
+the extracted ramoops console SHA256 is
+`d6890d82294a1209b40521b238ad4a517611a2fb560fb097f373ec888ec70a70`.
+D12 therefore proves that limiting the initial negotiation to HS-G3 is applied
+but is insufficient on its own. This unblocks the D13 lane-calibration test.
 
 ## Native-UFS D13: revision-2 Gear 3 lane calibration
 
@@ -119,7 +143,8 @@ Its AVB boot image is:
 `1efe20d49953d32409091db1ef2b461236dd5f88f22fc524cc5b154dc9a6d7d7`
 
 D13 was reproduced byte-for-byte in two independent package builds and passed
-AVB verification. Hardware validation is pending behind D12.
+AVB verification. D12 satisfied its hardware gate; D13 is now the next direct
+hardware test.
 
 ## Display artifact during recovery
 
@@ -133,10 +158,10 @@ screen as evidence again.
 
 ## Next validation
 
-1. Cold-reset the device to clear the persistent panel and UFS state.
-2. Restore and verify R6 plus the stock DTBO.
-3. Launch the hash-pinned D12 candidate through the guarded dual-partition
+1. Restore and verify R6 plus the stock DTBO after the D12 crashdump.
+2. Launch the hash-pinned D13 candidate through the guarded dual-partition
    transaction.
-4. Recover the persistent kernel log and confirm that all three
-   `HOTDOG_UFS_*` messages are present.
-5. Test D13 only if D12 applies the Gear 3 limit and still fails link startup.
+3. Capture the complete 4 MiB ramoops reservation if D13 enters Qualcomm
+   `900e`; the host window is 180 seconds to include the observed crash timing.
+4. Compare the first NOP result and timing against D12. If the device responds,
+   verify UFS LUN discovery, the nested postmarketOS rootfs, and fresh SSH.

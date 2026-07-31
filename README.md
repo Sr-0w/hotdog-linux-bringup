@@ -27,14 +27,17 @@ that seven missing downstream PCS Gear 3 values alone are insufficient. D11
 then compiled an HS-G3 bootstrap limit, but the selected vendor overlay replaced
 the root compatible and prevented its hotdog guard from matching at runtime.
 D12 recognizes the resulting `qcom,sm8150-mtp` plus OnePlus `dtsi_no` identity
-and emits explicit controller, gear, and PHY-start diagnostics. Its hardware
-test is the next controlled step.
+and emits explicit controller, gear, and PHY-start diagnostics. Hardware logs
+confirm that the revision-4.1.0 controller was limited to HS-G3 Rate B, but its
+first NOP still failed with `-11`. D13 is the next controlled step and adds only
+the downstream revision-2 Gear 3 TX/RX lane calibration.
 
 Failed direct boots can now be diagnosed from Qualcomm `900e` without reading
 phone storage. The host performs a bounded physical-memory read of the 4 MiB
 ramoops reservation and extracts the persistent kernel console. This confirmed
 that D11 completed all 986 initcalls, entered the postmarketOS initramfs, failed
-the same UFS NOP, and reached its controlled 90-second panic.
+the same UFS NOP, and reached its controlled 90-second panic. D12 reproduced
+that controlled path while proving the HS-G3 runtime guard executed.
 
 | Component | Status | Notes |
 |---|---|---|

@@ -9,11 +9,14 @@ source "$(dirname "$0")/phone-lock.sh"
 PYTHON_BIN="${EDL_PYTHON_BIN:-$HOTDOG_ROOT/tools/venvs/edl/bin/python}"
 EDL_SOURCE="${EDL_SOURCE:-$HOTDOG_ROOT/src/qualcomm/edl}"
 HELPER="$HOTDOG_ROOT/helpers/hotdog_sahara_900e.py"
+RAMOOPS_EXTRACTOR="$HOTDOG_ROOT/scripts/extract-ramoops-console.py"
+RAMOOPS_PHYS=0xa9800000
+RAMOOPS_SIZE=0x400000
 
 usage() {
 	cat <<'USAGE'
 Usage: qualcomm-900e-autorescue.sh inspect [--early-breadcrumb-address ADDRESS]
-       [--read-memory ADDRESS LENGTH]
+       [--read-memory ADDRESS LENGTH] [--extract-ramoops]
        qualcomm-900e-autorescue.sh recover
        qualcomm-900e-autorescue.sh state-reset
        qualcomm-900e-autorescue.sh reset
@@ -26,7 +29,8 @@ SAHARA_RESET_STATE_MACHINE_ID and "reset" sends only SAHARA_RESET_REQ. None
 of these actions reads or writes phone storage. ADDRESS accepts decimal or a
 0x-prefixed physical address and reads one additional 64-byte diagnostic
 record. --read-memory stores one bounded physical-memory range (maximum 16
-MiB) in the new run directory without resetting the target.
+MiB) in the new run directory without resetting the target. --extract-ramoops
+reads and decodes the pinned 4 MiB hotdog ramoops reservation.
 USAGE
 }
 
@@ -62,6 +66,7 @@ shift
 early_breadcrumb_address="${HOTDOG_EARLY_BREADCRUMB_PHYS:-}"
 memory_address=""
 memory_length=""
+extract_ramoops=0
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--early-breadcrumb-address)
@@ -77,17 +82,33 @@ while [ "$#" -gt 0 ]; do
 			memory_length="$3"
 			shift 3
 			;;
+		--extract-ramoops)
+			[ "$action" = inspect ] || die "Ramoops extraction requires inspect" 2
+			extract_ramoops=1
+			shift
+			;;
 		*)
 			die "Unknown argument: $1" 2
 			;;
 	esac
 done
 
+if [ "$extract_ramoops" -eq 1 ]; then
+	[ -z "$memory_address" ] || die "--extract-ramoops cannot be combined with --read-memory" 2
+	memory_address="$RAMOOPS_PHYS"
+	memory_length="$RAMOOPS_SIZE"
+fi
+
 hotdog_require_target_serial
 command -v lsusb >/dev/null 2>&1 || die "Missing command: lsusb" 127
 [ -x "$PYTHON_BIN" ] || die "Missing EDL Python runtime: $PYTHON_BIN" 127
 [ -d "$EDL_SOURCE/edlclient" ] || die "Missing bkerler/edl source: $EDL_SOURCE" 127
 [ -r "$HELPER" ] || die "Missing Sahara helper: $HELPER" 127
+if [ "$extract_ramoops" -eq 1 ]; then
+	command -v python3 >/dev/null 2>&1 || die "Missing command: python3" 127
+	command -v sha256sum >/dev/null 2>&1 || die "Missing command: sha256sum" 127
+	[ -r "$RAMOOPS_EXTRACTOR" ] || die "Missing ramoops extractor: $RAMOOPS_EXTRACTOR" 127
+fi
 lsusb -d 05c6:900e 2>/dev/null | grep -q . || die "Qualcomm 05c6:900e is not visible" 3
 
 stamp="$(date +%F-%H%M%S)"
@@ -122,3 +143,18 @@ fi
 
 "$PYTHON_BIN" -u "$HELPER" "${helper_args[@]}"
 log "Sahara $action completed"
+
+if [ "$extract_ramoops" -eq 1 ]; then
+	ramoops_console="$run_dir/ramoops-console.txt"
+	if python3 "$RAMOOPS_EXTRACTOR" \
+		--ddr-phys-base "$RAMOOPS_PHYS" \
+		--reservation-phys "$RAMOOPS_PHYS" \
+		--reservation-size "$RAMOOPS_SIZE" \
+		--scan-reservation "$memory_output" > "$ramoops_console"; then
+		sha256sum "$memory_output" "$ramoops_console" > "$run_dir/SHA256SUMS"
+		log "Ramoops console extracted: $ramoops_console"
+	else
+		rm -f "$ramoops_console"
+		die "No populated ramoops zone found in bounded capture" 5
+	fi
+fi

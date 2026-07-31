@@ -101,15 +101,16 @@ set +e
 		--expect-cmdline-token initramfs_async=0 \
 		--expect-cmdline-token panic=0 \
 		--expect-cmdline-token consoleblank=0 \
-		--restore-after system --boot-wait 115 --poll 1 --fastboot-timeout 15 \
+		--restore-after system --boot-wait 180 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
 test_status=$?
 set -e
 
 if lsusb -d 05c6:900e 2>/dev/null | grep -q .; then
-	printf 'Qualcomm 900e detected; reading fixed and early breadcrumbs.\n'
+	printf 'Qualcomm 900e detected; capturing breadcrumbs and persistent ramoops.\n'
 	"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
-		--early-breadcrumb-address "$EARLY_BREADCRUMB_PHYS" || true
+		--early-breadcrumb-address "$EARLY_BREADCRUMB_PHYS" \
+		--extract-ramoops || true
 fi
 
 exit "$test_status"
