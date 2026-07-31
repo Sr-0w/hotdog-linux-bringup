@@ -17,49 +17,36 @@ through the validated downstream 4.14 kexec bridge. A persistent image launched
 directly by the OnePlus bootloader now completes kernel initialization, executes
 PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
 postmarketOS stage-two init. Direct rootfs and USB access remain under active
-bring-up. Repeat runs exposed two
-timeout overflows after all 986 initcalls: first in the early kernel watchdog,
-then in the PID 1 fallback. The corrected image disables the former before its
-final breadcrumb and reaches PID 1 with hardware-safe 32-second intervals.
-The periodic PID 1 watchdog did not produce a host-visible Fastboot return at
-its logical deadline. A standalone static supervisor then replaced that shell
-worker, used a monotonic deadline, issued `RESTART2(bootloader)` itself, and
-kept a 32-second APSS fallback armed. The hardware test still did not return to
-host-visible Fastboot. Offline reconstruction found that the direct DTB lacked
-the PM8150 bootloader restart mode and that the QCOM watchdog was a module
-outside the initramfs. The prepared guarded candidate adds both, prefers
-`/dev/watchdog0`, and shortens the hardware timeout to two seconds before its
-restart request. Hardware validation is pending. The earlier run reached the
-static-supervisor return and then stalled inside `setup_udev`. A new static
-fork/exec helper now bounds each
-udev command independently without relying on BusyBox ash background-job
-behavior. Its first hardware run still left the aggregate `setup_udev` return
-cell hollow. A per-command hardware trace then filled cells 0-6 and left 7-10
-hollow: stage two entered `setup_udev`, but the first bounded `udevd` launch
-did not return, even after its nominal 15-second deadline. Bypassing udev let
-the USB and DHCP helpers return and filled all 11 cells, but no host USB
-identity appeared. The USB prerequisite trace then filled 8/11 cells:
-configfs and libcomposite are available, but `/sys/class/udc` is empty. The
-first DWC3 diagnostic repeatedly filled 7/11 cells: stage two reached the probe, but the
-expected QCOM platform device was absent. Offline replay then found that D7
-overwrites `/soc@0` from the mainline two-cell address and size format to the
-downstream one-cell format while leaving mainline `reg` properties unchanged.
-The next single-variable test replaces D7 with the validated no-op DTBO so the
-embedded mainline DTB reaches Linux byte-for-byte unchanged. The guarded image
-keeps the same DWC3 probe while adding bounded automatic recovery. These
-bypasses gather evidence; they are not production fixes.
+bring-up.
+
+The current direct-boot boundary is native UFS link startup. A stock-derived
+DTBO with vendor fragments 46, 59, and 60 removed preserves the mainline UFS
+controller and PHY bindings. Both drivers bind, but the first device-init NOP
+times out with `-11`, so no block device or root filesystem appears. D10 proved
+that seven missing downstream PCS Gear 3 values alone are insufficient. D11
+then compiled an HS-G3 bootstrap limit, but the selected vendor overlay replaced
+the root compatible and prevented its hotdog guard from matching at runtime.
+D12 recognizes the resulting `qcom,sm8150-mtp` plus OnePlus `dtsi_no` identity
+and emits explicit controller, gear, and PHY-start diagnostics. Its hardware
+test is the next controlled step.
+
+Failed direct boots can now be diagnosed from Qualcomm `900e` without reading
+phone storage. The host performs a bounded physical-memory read of the 4 MiB
+ramoops reservation and extracts the persistent kernel console. This confirmed
+that D11 completed all 986 initcalls, entered the postmarketOS initramfs, failed
+the same UFS NOP, and reached its controlled 90-second panic.
 
 | Component | Status | Notes |
 |---|---|---|
-| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through the downstream kexec bridge. |
-| UFS storage | Working | Samsung UFS and the complete partition table are detected. |
-| postmarketOS rootfs | Working | The nested `pmOS_root` filesystem mounts read-write. |
-| USB networking | Working | NCM gadget, host address `172.16.42.2`, device address `172.16.42.1`. |
-| SSH | Working | OpenSSH starts from the real postmarketOS userspace. |
-| USB serial | Working | ACM console is exposed on `ttyGS0`. |
-| Mainline reboot | Working through kexec; guarded direct candidate prepared | A mainline boot with PM8150 PON `mode-bootloader = <2>` returned directly to fastboot through `RESTART2(bootloader)`. A separate pre-MMU APSS watchdog probe produced a physical reset during direct boot. The guarded direct image now combines the PON mode, built-in `CONFIG_QCOM_WDT=y`, and a static watchdog supervisor; hardware validation remains pending. |
+| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec and directly from the OnePlus bootloader. |
+| UFS storage | Working through the 4.14 bridge; direct link incomplete | The bridge path exposes the Samsung UFS and all partitions. Direct mainline binds the native host and PHY but fails its first NOP with `-11`. |
+| postmarketOS rootfs | Working through the bridge | The nested `pmOS_root` mounts read-write through kexec. Direct boot remains blocked before storage enumeration. |
+| USB networking | Working through the bridge | NCM uses host `172.16.42.2` and device `172.16.42.1`; direct-mainline gadget registration remains incomplete. |
+| SSH | Working through the bridge | OpenSSH starts from the real postmarketOS userspace after kexec. |
+| USB serial | Working through the bridge | ACM exposes `ttyGS0` after kexec; direct-mainline ACM remains incomplete. |
+| Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active stage-two userspace | Direct boot completes `kernel_init_freeable()`, returns from the async initramfs wait, succeeds in `kernel_execve()`, crosses EL1 to EL0, executes more than 16 PID 1 syscalls, and enters `init_2nd.sh`. With udev bypassed, configfs exists but no UDC registers. The D7 run stops at 7/11 before QCOM USB platform-device creation; the D3 no-op retest is prepared. |
+| Persistent direct mainline | Active initramfs, UFS blocked | Direct boot completes all 986 initcalls, crosses EL1 to EL0, executes PID 1, and reaches postmarketOS stage two. The current filtered-DTBO path reaches native UFS initialization but no block device. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
 | Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
