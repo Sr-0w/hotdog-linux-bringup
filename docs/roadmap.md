@@ -19,8 +19,11 @@ The packaging and submission gates are tracked separately in the
   baseline; hardware readback proves the watchdog-disabled command line and
   both partition images
 - retain D12 as proof that the hotdog runtime identity guard selects HS-G3
-  Rate B on controller revision 4.1.0; test the prepared D13 revision-2 lane
-  calibration next because D12 still failed the first UFS NOP with `-11`
+  Rate B on controller revision 4.1.0, and D13 as proof that the downstream
+  revision-2 Gear 3 lane values still leave the first UFS NOP at `-11`
+- test the UFS device-reset ordering next: pulse the attached device after
+  mainline's final host-controller reset while retaining D13 byte-for-byte
+  everywhere outside the kernel
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
 - validate a direct image generated from the exact r5 package payload; its

@@ -312,10 +312,16 @@ remote debug channel.
     identified controller revision `4.1.0`, reduced the initial host maximum
     from Gear 4 to Gear 3, and started the PHY in HS-G3 Rate B. The first NOP
     still failed with `-11`, so the bootstrap limit alone is insufficient.
-78. Test native-UFS D13 next. It adds the downstream revision-2 Gear 3 TX/RX
-    lane calibration as a native mainline gear overlay. Two package builds
-    reproduced AVB SHA256
-    `1efe20d49953d32409091db1ef2b461236dd5f88f22fc524cc5b154dc9a6d7d7`.
+78. Keep native-UFS D13 as a controlled negative lane-calibration result. Its
+    downstream revision-2 Gear 3 TX/RX overlay executed with the D12 HS-G3
+    guard, but the first NOP still failed with `-11` at 0.928083 seconds. The
+    complete 57,303-byte console and 4 MiB ramoops capture were recovered.
+79. Test the device-reset ordering next. Mainline resets the attached UFS
+    device before its QCOM power-up path performs the last core reset;
+    downstream performs the core reset first. Retain D13 and issue a second
+    device-reset pulse after the final host reset, before HCE is enabled. The
+    prepared D14 AVB image has SHA256
+    `7374d7cb3d74a0fe59e9fc560217451d09cd0f4fc2169a5dcd242bf574356737`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

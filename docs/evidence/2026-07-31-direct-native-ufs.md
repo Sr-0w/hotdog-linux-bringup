@@ -143,8 +143,45 @@ Its AVB boot image is:
 `1efe20d49953d32409091db1ef2b461236dd5f88f22fc524cc5b154dc9a6d7d7`
 
 D13 was reproduced byte-for-byte in two independent package builds and passed
-AVB verification. D12 satisfied its hardware gate; D13 is now the next direct
-hardware test.
+AVB verification. It was hardware-validated on 2026-08-01 after a fresh R6
+boot with ID `775595a0-3189-404c-b8ab-cbe796fb005e`. The recovered console
+identifies kernel build `#37` and proves that the D12 guard remained active:
+
+```text
+HOTDOG_UFS_HW_REVISION=4.1.0
+HOTDOG_UFS_BOOTSTRAP controller_max_gear=4 host_max_gear=3
+HOTDOG_UFS_PHY_START hw=4.1.0 gear=3 rate=B
+ufshcd_verify_dev_init: NOP OUT failed -11
+```
+
+The first NOP failed at `0.928083` seconds, compared with `0.932620` seconds
+for D12. Both extracted consoles contain exactly 57,303 bytes, and D13 reached
+the same controlled panic at `91.590180` seconds. The bounded physical capture
+SHA256 is
+`43d0bbdd936c06b34b9fc98c3a1c8ea68698bdb2e4a4834c8bdcd08d92f47405`;
+the extracted console SHA256 is
+`1f6540f76dd179b7f962c9d0419fcf1379d72bf3490a0025c7b60a65d05a7ac2`.
+D13 therefore proves that the revision-2 Gear 3 lane calibration alone does
+not establish communication with the UFS device.
+
+## Native-UFS D14: device reset after final host reset
+
+The generic mainline UFS core pulses the attached-device reset before calling
+the QCOM HCE preparation hook. That hook subsequently performs another core
+reset as part of `ufs_qcom_power_up_sequence()`. The working downstream path
+performs its full core reset before pulsing the attached device. D14 retains
+D13 and adds a second 10-to-15-microsecond device-reset pulse after mainline's
+last host reset and PHY calibration, immediately before HCE enable. It records
+`REG_UFS_CFG1`, controller status, and the reset-GPIO state before and after the
+pulse.
+
+The D14 AVB image is:
+
+`7374d7cb3d74a0fe59e9fc560217451d09cd0f4fc2169a5dcd242bf574356737`
+
+Two independent package runs reproduced this image byte-for-byte. Its DTB and
+wrapped postmarketOS initramfs remain identical to D13, and `avbtool` verifies
+the embedded footer and boot hash. Hardware validation is pending.
 
 ## Display artifact during recovery
 
@@ -158,10 +195,11 @@ screen as evidence again.
 
 ## Next validation
 
-1. Restore and verify R6 plus the stock DTBO after the D12 crashdump.
-2. Launch the hash-pinned D13 candidate through the guarded dual-partition
-   transaction.
-3. Capture the complete 4 MiB ramoops reservation if D13 enters Qualcomm
-   `900e`; the host window is 180 seconds to include the observed crash timing.
-4. Compare the first NOP result and timing against D12. If the device responds,
-   verify UFS LUN discovery, the nested postmarketOS rootfs, and fresh SSH.
+1. Restore and verify R6 plus the stock DTBO after the D13 crashdump.
+2. Retain D13's DTB, DTBO, initramfs, command line, Gear 3 limit, and complete
+   calibration sequence.
+3. Move only the attached-device reset pulse after mainline's final QCOM host
+   reset and before HCE enable, then record the GPIO and controller state.
+4. Capture the complete 4 MiB ramoops reservation if the candidate enters
+   Qualcomm `900e`. If the device responds, verify UFS LUN discovery, the
+   nested postmarketOS rootfs, and fresh SSH.
