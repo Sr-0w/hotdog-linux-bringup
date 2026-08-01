@@ -21,9 +21,12 @@ The packaging and submission gates are tracked separately in the
 - retain D12 as proof that the hotdog runtime identity guard selects HS-G3
   Rate B on controller revision 4.1.0, and D13 as proof that the downstream
   revision-2 Gear 3 lane values still leave the first UFS NOP at `-11`
-- test the UFS device-reset ordering next: pulse the attached device after
-  mainline's final host-controller reset while retaining D13 byte-for-byte
-  everywhere outside the kernel
+- retain D14 as proof that requesting a second UFS device reset after the final
+  host reset is insufficient; its generic GPIO readback is invalid for the
+  dedicated output-only `UFS_RESET` pad, so trace the output latch directly if
+  reset sequencing needs further investigation
+- test D15's downstream PCS software-reset order next while retaining D14's
+  DTB, DTBO, initramfs, command line, and bounded ramoops recovery path
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
 - validate a direct image generated from the exact r5 package payload; its

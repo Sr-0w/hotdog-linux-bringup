@@ -316,12 +316,16 @@ remote debug channel.
     downstream revision-2 Gear 3 TX/RX overlay executed with the D12 HS-G3
     guard, but the first NOP still failed with `-11` at 0.928083 seconds. The
     complete 57,303-byte console and 4 MiB ramoops capture were recovered.
-79. Test the device-reset ordering next. Mainline resets the attached UFS
-    device before its QCOM power-up path performs the last core reset;
-    downstream performs the core reset first. Retain D13 and issue a second
-    device-reset pulse after the final host reset, before HCE is enabled. The
-    prepared D14 AVB image has SHA256
-    `7374d7cb3d74a0fe59e9fc560217451d09cd0f4fc2169a5dcd242bf574356737`.
+79. Keep native-UFS D14 as a controlled negative reset-order result. Its new
+    path executed after the final QCOM host reset, but the first NOP still
+    failed with `-11` at 0.939149 seconds. Its `reset=1` trace is not a physical
+    readback: GPIO 175 is the dedicated SM8150 `UFS_RESET` pad and has no input
+    bit in pinctrl, so the generic GPIO read API cannot sample it.
+80. Test the downstream PCS software-reset order next. D15 asserts PCS reset
+    before PHY calibration, clears it after calibration, and then releases the
+    host reset, while retaining D14 byte-for-byte outside the kernel. Its
+    reproducible AVB image has SHA256
+    `6737a8099b178b63587c639c0101096b27b87aeb010c0de55bd50e218f5ca405`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

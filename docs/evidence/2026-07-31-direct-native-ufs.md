@@ -181,7 +181,55 @@ The D14 AVB image is:
 
 Two independent package runs reproduced this image byte-for-byte. Its DTB and
 wrapped postmarketOS initramfs remain identical to D13, and `avbtool` verifies
-the embedded footer and boot hash. Hardware validation is pending.
+the embedded footer and boot hash.
+
+D14 was hardware-validated on 2026-08-01 after a fresh R6 boot with ID
+`7197faff-8f25-49c3-8305-d0ef5543dcb6`. The direct image entered Qualcomm
+`900e`; the complete 4 MiB ramoops reservation and 57,524-byte console were
+recovered automatically. The console identifies kernel build `#38` and records:
+
+```text
+HOTDOG_UFS_HW_REVISION=4.1.0
+HOTDOG_UFS_BOOTSTRAP controller_max_gear=4 host_max_gear=3
+HOTDOG_UFS_PHY_START hw=4.1.0 gear=3 rate=B
+HOTDOG_UFS_AFTER_HOST_RESET begin cfg1=0x1c00052c hcs=0x8 reset=1
+HOTDOG_UFS_AFTER_HOST_RESET done cfg1=0x1c00052c hcs=0x8 reset=1
+ufshcd_verify_dev_init: NOP OUT failed -11
+```
+
+The first NOP failed at `0.939149` seconds and the controlled panic occurred at
+`91.601235` seconds. The bounded physical capture SHA256 is
+`0a62f29d39c6be22438ba72cc7f865fdda893b9657d741df9bee6e2292cd247e`;
+the extracted console SHA256 is
+`132cbe54d2444e6fda7490cf07f3e02dac6f7fa60ce24f4506ad1bb435b411b4`.
+
+The marker proves that the new code path executed, but its `reset=1` fields do
+not measure the physical line. SM8150 GPIO 175 is the dedicated `UFS_RESET`
+pad: its pinctrl description has output bit 0 but `in_bit = -1`. The generic
+GPIO read path therefore cannot sample this pad and, after active-low inversion,
+returns `1` regardless of its output latch. D14 proves that this attempted
+ordering change is insufficient; a future trace can read the dedicated output
+latch directly if electrical sequencing remains in question.
+
+## Native-UFS D15: downstream PCS software-reset order
+
+The working downstream 4.14 QMP-v4 PHY asserts the PCS software reset before
+writing its calibration table, clears PCS reset after calibration, and only
+then deasserts the host UFS PHY reset. Mainline writes the table while PCS reset
+is not explicitly asserted and clears PCS reset only after the host reset has
+already been released. D15 retains D14 and changes only this PHY sequence for
+the SM8150 configuration. It logs the PCS reset register before assertion,
+after calibration and deassertion, and after the host reset is released.
+
+The D15 AVB image is:
+
+`6737a8099b178b63587c639c0101096b27b87aeb010c0de55bd50e218f5ca405`
+
+Its kernel Image SHA256 is
+`902c0e8a8ac5a7491d4234fd04bc37ae549ab5dc93b50f6317656c70376d4f49`.
+Two independent package runs reproduced the complete image byte-for-byte. The
+DTB, wrapped initramfs, and command line remain identical to D14, and AVB
+verification succeeds. Hardware validation is pending.
 
 ## Display artifact during recovery
 
@@ -195,11 +243,13 @@ screen as evidence again.
 
 ## Next validation
 
-1. Restore and verify R6 plus the stock DTBO after the D13 crashdump.
-2. Retain D13's DTB, DTBO, initramfs, command line, Gear 3 limit, and complete
-   calibration sequence.
-3. Move only the attached-device reset pulse after mainline's final QCOM host
-   reset and before HCE enable, then record the GPIO and controller state.
-4. Capture the complete 4 MiB ramoops reservation if the candidate enters
+1. Restore and verify R6 plus the stock DTBO after the D14 crashdump.
+2. Launch D15 with the same DTB, DTBO, initramfs, command line, Gear 3 limit,
+   lane calibration, and bounded ramoops recovery path as D14.
+3. Record every `HOTDOG_UFS_PCS_SW_RESET` value and compare the first-NOP
+   timing with D12-D14.
+4. Capture the complete 4 MiB ramoops reservation if D15 enters
    Qualcomm `900e`. If the device responds, verify UFS LUN discovery, the
    nested postmarketOS rootfs, and fresh SSH.
+5. Independently instrument GPIO 175's dedicated output latch rather than its
+   unsupported generic input path if device-reset sequencing remains in scope.

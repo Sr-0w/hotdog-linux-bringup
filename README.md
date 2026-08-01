@@ -31,8 +31,12 @@ and emits explicit controller, gear, and PHY-start diagnostics. Hardware logs
 confirm that the revision-4.1.0 controller was limited to HS-G3 Rate B, but its
 first NOP still failed with `-11`. D13 added the downstream revision-2 Gear 3
 TX/RX lane calibration and reproduced the same failure within 5 ms of D12.
-The next controlled step moves the UFS device-reset pulse after mainline's last
-host-controller reset, matching the effective downstream cold-boot ordering.
+D14 then moved the UFS device-reset request after mainline's last host reset,
+but reproduced the same first-NOP failure. GPIO 175 is the SM8150's special
+`UFS_RESET` pad and has no readable input bit, so D14's generic GPIO readback is
+not electrically meaningful. The prepared D15 candidate keeps that diagnostic
+path and moves the UFS PCS software-reset sequence around PHY calibration to
+match the working downstream 4.14 driver.
 
 Failed direct boots can now be diagnosed from Qualcomm `900e` without reading
 phone storage. The host performs a bounded physical-memory read of the 4 MiB
@@ -40,7 +44,8 @@ ramoops reservation and extracts the persistent kernel console. This confirmed
 that D11 completed all 986 initcalls, entered the postmarketOS initramfs, failed
 the same UFS NOP, and reached its controlled 90-second panic. D12 reproduced
 that controlled path while proving the HS-G3 runtime guard executed. D13 then
-proved that the missing revision-2 lane values alone do not establish the link.
+proved that the missing revision-2 lane values alone do not establish the link,
+and D14 ruled out its attempted reset-order change as sufficient.
 
 | Component | Status | Notes |
 |---|---|---|
