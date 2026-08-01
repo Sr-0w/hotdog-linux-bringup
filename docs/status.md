@@ -333,10 +333,12 @@ remote debug channel.
     with the D15 pre-NOP state before another hardware handoff.
 82. Keep the ClearStaff hotdog branch as an external DTS reference. At commit
     `403b56c33e2c` it enables the same UFS rails but omits the GPIO175
-    `reset-gpios` property. A one-variable D16 reuses the exact D13 kernel,
-    initramfs, command line, and filtered DTBO while removing only that embedded
-    DTB property. Its AVB SHA256 is
-    `feaeca68f10d097ae20415b0a245e615c5f1d5a09d77533366d77de20399b45a`,
+    `reset-gpios` property. D16 reuses the exact D13 kernel, initramfs, and
+    filtered DTBO while removing only that embedded DTB property. The hardware
+    test variant also omits `hotdog_rescue_watchdog_sec=120`, an operational
+    change that leaves a stalled kernel untouched rather than scheduling a
+    reboot. Its AVB SHA256 is
+    `971ac2a5cf2dfb0ef55911eb20a05e5c98314e8ddc3b4bde4718b3aa664b70b7`,
     reproduced byte-for-byte twice; hardware validation remains pending until
     the R6 reference capture is complete.
 

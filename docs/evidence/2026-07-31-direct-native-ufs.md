@@ -278,12 +278,15 @@ device reset. Its `vreg_l5a_0p8` PHY supply and mainline's
 spelling is not an electrical difference.
 
 This leaves the missing `reset-gpios` property as the first concrete
-hotdog-specific difference in the external tree. The prepared D16 image tests
-only that difference against D13: kernel, initramfs, command line, and filtered
-DTBO are byte-identical, while the embedded DTB removes
-`/soc@0/ufshc@1d84000/reset-gpios`. The DTB transformer verifies the complete
-decompiled trees differ by only that property. D16's AVB SHA256 is
-`feaeca68f10d097ae20415b0a245e615c5f1d5a09d77533366d77de20399b45a`;
+hotdog-specific difference in the external tree. The prepared D16 image keeps
+the D13 kernel, initramfs, and filtered DTBO byte-identical, while the embedded
+DTB removes `/soc@0/ufshc@1d84000/reset-gpios`. The DTB transformer verifies
+the complete decompiled trees differ by only that property. The hardware test
+variant additionally removes `hotdog_rescue_watchdog_sec=120` from the command
+line. This is an operational policy change, not a UFS configuration change: it
+prevents the initramfs supervisor from rebooting a stalled candidate. It keeps
+`panic=0`, which holds a kernel panic for diagnosis. The passive D16 AVB SHA256
+is `971ac2a5cf2dfb0ef55911eb20a05e5c98314e8ddc3b4bde4718b3aa664b70b7`;
 two independent package runs reproduced it byte-for-byte. This is a prepared
 hypothesis, not a hardware result.
 
@@ -295,7 +298,8 @@ returned to Qualcomm memory-debug mode. No display instrumentation source had
 changed at the time the artifact first appeared. It is therefore tracked as a
 stale bootloader/panel scanout state across warm resets, not as mainline boot
 progress or a working display path. A cold reset is required before using the
-screen as evidence again.
+screen as evidence again. Subsequent direct-UFS tests use read-only `900e`
+inspection and manual recovery instead of protocol-level Sahara resets.
 
 ## Next validation
 

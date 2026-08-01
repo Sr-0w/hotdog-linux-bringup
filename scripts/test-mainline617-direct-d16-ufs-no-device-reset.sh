@@ -4,7 +4,9 @@ set -Eeuo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/env.sh"
 
-BOOT_IMAGE="$HOTDOG_ROOT/images/pmos-experiments/2026-08-01-142100-mainline617-direct-native-ufs-no-device-reset/boot.img"
+BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-01-180500-mainline617-direct-native-ufs-no-device-reset-passive"
+BOOT_IMAGE="$BOOT_DIR/boot.img"
+BOOT_CMDLINE="$BOOT_DIR/components/cmdline.txt"
 CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
 RESTORE_DTBO="$HOTDOG_ROOT/logs/partition-read-vbmeta-dtbo-clean-2026-07-08-230943/dtbo_b.img"
 RESTORE_BOOT="$HOTDOG_ROOT/images/pmos-experiments/2026-07-12-234100-lineage414-r6-nowdog-kexec-fbwait-acm-rootwatchdog/boot-noefi-pmosdtb-watchdog-300s.img"
@@ -12,7 +14,8 @@ REBOOT_HELPER="$HOTDOG_ROOT/build/hotdog-reboot-mode-aarch64"
 SOURCE_SLOT_SUFFIX="${HOTDOG_EXPECT_SOURCE_SLOT_SUFFIX:-_b}"
 START_MODE="${HOTDOG_TEST_START_MODE:-pmos-ssh}"
 
-BOOT_SHA=feaeca68f10d097ae20415b0a245e615c5f1d5a09d77533366d77de20399b45a
+BOOT_SHA=971ac2a5cf2dfb0ef55911eb20a05e5c98314e8ddc3b4bde4718b3aa664b70b7
+BOOT_CMDLINE_SHA=e237706ccbe3827ff3654ee2e6b4aab88c14aa5e0e363ce51ec235d34cbf4430
 EARLY_BREADCRUMB_PHYS=0x81c0f800
 CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
 RESTORE_DTBO_SHA=95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672
@@ -33,9 +36,11 @@ if [ "${1:-}" = -h ] || [ "${1:-}" = --help ]; then
 	cat <<'USAGE'
 Usage: test-mainline617-direct-d16-ufs-no-device-reset.sh
 
-D16 is a one-variable direct-mainline UFS test. It reuses D13's exact kernel,
-postmarketOS initramfs, command line, and native-UFS filtered DTBO. Its embedded
-DTB differs only by deletion of reset-gpios from /soc@0/ufshc@1d84000.
+D16 is a direct-mainline UFS test. It reuses D13's exact kernel, postmarketOS
+initramfs, and native-UFS filtered DTBO. Its embedded DTB differs only by
+deletion of reset-gpios from /soc@0/ufshc@1d84000. The operational command line
+also omits hotdog_rescue_watchdog_sec, so a stalled candidate is left untouched
+for diagnosis; panic=0 likewise holds a panic instead of rebooting it.
 
 The external ClearStaff hotdog mainline DTS at commit 403b56c33e2c enables the
 same controller and PHY supplies but omits the GPIO175 attached-device reset.
@@ -45,10 +50,12 @@ prepared by the bootloader while mainline resets and calibrates only the host
 and PHY. Vendor DTBO fragments 59 and 60 remain filtered, so they cannot
 rewrite the native PHY or controller node.
 
-The guarded slot-B transaction verifies the running R6 identity before writing,
-pins every candidate and rollback hash, starts two independent rescue watchers,
-and restores the known R6 boot plus stock DTBO at the next fastboot opportunity.
-If the candidate enters Qualcomm 900e, its bounded ramoops record is captured.
+The guarded slot-B transaction verifies the running R6 identity before writing
+and pins every candidate and rollback hash. Two independent rescue watchers may
+restore the known R6 boot plus stock DTBO only after fastboot becomes visible,
+but leave the phone in fastboot and never reboot it. If the candidate enters
+Qualcomm 900e, only its bounded ramoops record is captured; no Sahara reset is
+issued.
 USAGE
 	exit 0
 fi
@@ -68,6 +75,12 @@ esac
 	die "ANDROID_SERIAL differs from HOTDOG_TARGET_SERIAL" 2
 
 check_sha "D16 direct mainline image" "$BOOT_IMAGE" "$BOOT_SHA"
+check_sha "D16 passive command line" "$BOOT_CMDLINE" "$BOOT_CMDLINE_SHA"
+if grep -Eq '(^|[[:space:]])hotdog_rescue_watchdog_sec=' "$BOOT_CMDLINE"; then
+	die "D16 passive command line unexpectedly arms the rescue watchdog" 3
+fi
+grep -Eq '(^|[[:space:]])panic=0([[:space:]]|$)' "$BOOT_CMDLINE" ||
+	die "D16 passive command line does not pin panic=0" 3
 check_sha "D7 native-mainline UFS dtbo_b" "$CANDIDATE_DTBO" "$CANDIDATE_DTBO_SHA"
 check_sha "stock restore dtbo_b" "$RESTORE_DTBO" "$RESTORE_DTBO_SHA"
 check_sha "R6 restore boot_b" "$RESTORE_BOOT" "$RESTORE_BOOT_SHA"
@@ -102,11 +115,10 @@ set +e
 		--expect-kernel-prefix 6.17.0-sm8150 \
 		--expect-cmdline-token rdinit=/hotdog-mainline-wrapper \
 		--expect-cmdline-token hotdog_wrapper_settle_sec=0 \
-		--expect-cmdline-token hotdog_rescue_watchdog_sec=120 \
 		--expect-cmdline-token initramfs_async=0 \
 		--expect-cmdline-token panic=0 \
 		--expect-cmdline-token consoleblank=0 \
-		--restore-after system --boot-wait 180 --poll 1 --fastboot-timeout 15 \
+		--restore-after none --boot-wait 180 --poll 1 --fastboot-timeout 15 \
 	--rescue-watch-timeout 604800 --rescue-watch-poll 1
 test_status=$?
 set -e

@@ -28,8 +28,10 @@ The packaging and submission gates are tracked separately in the
 - retain D15 as proof that the downstream PCS software-reset order still leaves
   the first UFS NOP at `-11`
 - capture a clock-safe host, QMP, and local UniPro reference from working R6,
-  then test the prepared D16 DTB that removes only GPIO175 `reset-gpios`,
-  matching the external ClearStaff hotdog DTS policy
+  then test the passive D16 image whose DTB removes only GPIO175
+  `reset-gpios`, matching the external ClearStaff hotdog DTS policy; the test
+  command line deliberately omits the rescue watchdog so a failure remains
+  observable until manual recovery
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
 - validate a direct image generated from the exact r5 package payload; its

@@ -34,9 +34,12 @@ TX/RX lane calibration and reproduced the same failure within 5 ms of D12.
 D14 then moved the UFS device-reset request after mainline's last host reset,
 but reproduced the same first-NOP failure. GPIO 175 is the SM8150's special
 `UFS_RESET` pad and has no readable input bit, so D14's generic GPIO readback is
-not electrically meaningful. The prepared D15 candidate keeps that diagnostic
-path and moves the UFS PCS software-reset sequence around PHY calibration to
-match the working downstream 4.14 driver.
+not electrically meaningful. D15 moved the UFS PCS software-reset sequence
+around PHY calibration to match the working downstream 4.14 driver, but the
+first NOP still failed. The prepared D16 follows the external ClearStaff hotdog
+DTS by omitting the attached-device `reset-gpios` property. Its passive test
+command line does not arm the initramfs rescue watchdog, so failures remain
+available for diagnosis until manual recovery.
 
 Failed direct boots can now be diagnosed from Qualcomm `900e` without reading
 phone storage. The host performs a bounded physical-memory read of the 4 MiB

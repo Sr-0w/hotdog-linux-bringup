@@ -135,6 +135,14 @@ candidate may return to `900e`; it does not alter slots or restore partitions.
 Both actions validate the configured serial, acquire the phone-operation lock,
 and perform no phone-storage access.
 
+The active direct-UFS workflow does not use that `reset` action. A Sahara reset
+can immediately relaunch the same persistent candidate, obscuring whether an
+observed transition came from the kernel, firmware, or the host. After a
+mainline failure, the host therefore performs `inspect` only and waits for an
+explicit manual recovery to fastboot. A software reboot remains acceptable
+from a freshly identity-checked R6 userspace when it is the deliberate handoff
+into the next test.
+
 ## Reporting a failed test
 
 Include:
