@@ -321,11 +321,24 @@ remote debug channel.
     failed with `-11` at 0.939149 seconds. Its `reset=1` trace is not a physical
     readback: GPIO 175 is the dedicated SM8150 `UFS_RESET` pad and has no input
     bit in pinctrl, so the generic GPIO read API cannot sample it.
-80. Test the downstream PCS software-reset order next. D15 asserts PCS reset
-    before PHY calibration, clears it after calibration, and then releases the
-    host reset, while retaining D14 byte-for-byte outside the kernel. Its
-    reproducible AVB image has SHA256
-    `6737a8099b178b63587c639c0101096b27b87aeb010c0de55bd50e218f5ca405`.
+80. Keep native-UFS D15 as a controlled negative PCS-reset result. The trace
+    proves that reset was asserted throughout calibration, cleared before the
+    host reset was released, and remained clear afterwards. The first NOP still
+    failed with `-11` at 0.939979 seconds; the complete 57,814-byte console and
+    4 MiB diagnostic capture were recovered automatically.
+81. Capture the known-working R6 UFS state before running D16. The expanded
+    read-only helper holds the native UFS clock domain, records a bounded set of
+    host and QMP registers, and issues only serialized local `DME_GET` commands.
+    Its build release and symbol CRCs must match R6 exactly. Compare that result
+    with the D15 pre-NOP state before another hardware handoff.
+82. Keep the ClearStaff hotdog branch as an external DTS reference. At commit
+    `403b56c33e2c` it enables the same UFS rails but omits the GPIO175
+    `reset-gpios` property. A one-variable D16 reuses the exact D13 kernel,
+    initramfs, command line, and filtered DTBO while removing only that embedded
+    DTB property. Its AVB SHA256 is
+    `feaeca68f10d097ae20415b0a245e615c5f1d5a09d77533366d77de20399b45a`,
+    reproduced byte-for-byte twice; hardware validation remains pending until
+    the R6 reference capture is complete.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

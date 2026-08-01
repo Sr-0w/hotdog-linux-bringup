@@ -229,7 +229,63 @@ Its kernel Image SHA256 is
 `902c0e8a8ac5a7491d4234fd04bc37ae549ab5dc93b50f6317656c70376d4f49`.
 Two independent package runs reproduced the complete image byte-for-byte. The
 DTB, wrapped initramfs, and command line remain identical to D14, and AVB
-verification succeeds. Hardware validation is pending.
+verification succeeds.
+
+D15 was hardware-validated on 2026-08-01 after a verified R6 boot with ID
+`659cfe23-58fb-453c-9ee8-9d7aed49be24`. The direct image entered Qualcomm
+`900e`; the bounded automatic capture recovered the complete 4 MiB diagnostic
+window and a 57,814-byte console. The console identifies kernel build `#39`
+and records:
+
+```text
+HOTDOG_UFS_HW_REVISION=4.1.0
+HOTDOG_UFS_BOOTSTRAP controller_max_gear=4 host_max_gear=3
+HOTDOG_UFS_PHY_START hw=4.1.0 gear=3 rate=B
+HOTDOG_UFS_PCS_SW_RESET before=0x1 asserted=0x1
+HOTDOG_UFS_PCS_SW_RESET calibrated=0x1 deasserted=0x0
+HOTDOG_UFS_PCS_SW_RESET host_deasserted=0x0
+HOTDOG_UFS_AFTER_HOST_RESET begin cfg1=0x1c00052c hcs=0x8 reset=1
+HOTDOG_UFS_AFTER_HOST_RESET done cfg1=0x1c00052c hcs=0x8 reset=1
+ufshcd_verify_dev_init: NOP OUT failed -11
+```
+
+PCS was already asserted on entry, remained asserted while every calibration
+table was written, was cleared before the host reset was released, and stayed
+clear afterwards. The first NOP failed at `0.939979` seconds and the controlled
+panic occurred at `91.613433` seconds. The physical capture SHA256 is
+`634d9031cfeabdf3aabd599617fb410a530efe9f786ed494a59b3e236054c9f9`;
+the extracted console SHA256 is
+`5ad8f57b187afad6764d3a0235104b4d9208e9416ed928b43725eff1a93721a8`.
+D15 therefore reproduces the downstream PCS reset order and proves that this
+ordering alone does not establish communication with the device.
+
+An offline comparison after D15 found that the effective direct-boot tree is
+unchanged from the mainline OnePlus tree for the UFS controller, QMP PHY, all
+five referenced regulators, GCC, RPMh clocks, and TLMM. The downstream v2
+Gear 3 PHY values now also match the D15 mainline tables. The next measurement
+therefore uses the supported UFS hold/release API on R6 to capture a bounded,
+read-only reference of host registers, QMP state, and local UniPro attributes.
+
+## External hotdog mainline comparison
+
+The hotdog branch of
+[`ClearStaff/linux-sm8150-mainline-hotdog`](https://github.com/ClearStaff/linux-sm8150-mainline-hotdog)
+was inspected at commit `403b56c33e2ccdda25d90378970a5e5b928dee19`.
+Its OnePlus 7T Pro DTS enables the same UFS controller, QMP PHY, and PM8150
+rails as the direct candidate, but it does not describe GPIO175 as an attached
+device reset. Its `vreg_l5a_0p8` PHY supply and mainline's
+`vdda_ufs_2ln_core_1` label both resolve to PM8150 LDO5 at 880 mV, so that
+spelling is not an electrical difference.
+
+This leaves the missing `reset-gpios` property as the first concrete
+hotdog-specific difference in the external tree. The prepared D16 image tests
+only that difference against D13: kernel, initramfs, command line, and filtered
+DTBO are byte-identical, while the embedded DTB removes
+`/soc@0/ufshc@1d84000/reset-gpios`. The DTB transformer verifies the complete
+decompiled trees differ by only that property. D16's AVB SHA256 is
+`feaeca68f10d097ae20415b0a245e615c5f1d5a09d77533366d77de20399b45a`;
+two independent package runs reproduced it byte-for-byte. This is a prepared
+hypothesis, not a hardware result.
 
 ## Display artifact during recovery
 
@@ -243,13 +299,12 @@ screen as evidence again.
 
 ## Next validation
 
-1. Restore and verify R6 plus the stock DTBO after the D14 crashdump.
-2. Launch D15 with the same DTB, DTBO, initramfs, command line, Gear 3 limit,
-   lane calibration, and bounded ramoops recovery path as D14.
-3. Record every `HOTDOG_UFS_PCS_SW_RESET` value and compare the first-NOP
-   timing with D12-D14.
-4. Capture the complete 4 MiB ramoops reservation if D15 enters
-   Qualcomm `900e`. If the device responds, verify UFS LUN discovery, the
-   nested postmarketOS rootfs, and fresh SSH.
-5. Independently instrument GPIO 175's dedicated output latch rather than its
-   unsupported generic input path if device-reset sequencing remains in scope.
+1. Restore and verify R6 plus the stock DTBO after the D15 crashdump.
+2. Load the matching read-only `helpers/r6-ufs-regdump` module and record the
+   known-working host, QMP PHY, and local UniPro state.
+3. Compare those values with the D15 programmed state and the external
+   no-device-reset DTS.
+4. Hardware-test the prepared one-variable D16 only after the R6 reference is
+   captured.
+5. Independently instrument GPIO175's dedicated output latch if the measured
+   mismatch still points to attached-device reset sequencing.

@@ -25,8 +25,11 @@ The packaging and submission gates are tracked separately in the
   host reset is insufficient; its generic GPIO readback is invalid for the
   dedicated output-only `UFS_RESET` pad, so trace the output latch directly if
   reset sequencing needs further investigation
-- test D15's downstream PCS software-reset order next while retaining D14's
-  DTB, DTBO, initramfs, command line, and bounded ramoops recovery path
+- retain D15 as proof that the downstream PCS software-reset order still leaves
+  the first UFS NOP at `-11`
+- capture a clock-safe host, QMP, and local UniPro reference from working R6,
+  then test the prepared D16 DTB that removes only GPIO175 `reset-gpios`,
+  matching the external ClearStaff hotdog DTS policy
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
 - validate a direct image generated from the exact r5 package payload; its
