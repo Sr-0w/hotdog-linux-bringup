@@ -384,6 +384,25 @@ validate_bounded_exec_source() {
 		die "diagnostic udev bypass lacks its negative setup_udev guard"
 }
 
+validate_disabled_r6_ufs_probe() {
+	local source="helpers/r6-ufs-regdump/hotdog_r6_ufs_regdump.c"
+	local readme="helpers/r6-ufs-regdump/README.md"
+
+	[ -f "$source" ] || die "missing disabled R6 UFS probe source: $source"
+	[ -f "$readme" ] || die "missing disabled R6 UFS probe documentation: $readme"
+
+	log "disabled R6 UFS live-probe contract"
+	grep -q 'HOTDOG_R6_UFS_REGDUMP_DISABLED' "$source" ||
+		die "R6 UFS probe lacks its disabled marker"
+	grep -q 'return -EPERM;' "$source" ||
+		die "R6 UFS probe does not fail closed"
+	if grep -Eq 'ufshcd_hold[[:space:]]*\(|ufshcd_dme_get[[:space:]]*\(|readl(_relaxed)?[[:space:]]*\(' "$source"; then
+		die "R6 UFS probe source contains a live controller access"
+	fi
+	grep -q '2100b2c93190fdbfbdb61b8ef2d77b5dfc5b6378c13eacc898591fb1ce00396f' "$readme" ||
+		die "R6 UFS probe documentation lacks the unsafe binary identity"
+}
+
 main() {
 	local command_name
 
@@ -402,6 +421,7 @@ main() {
 	validate_k1_aport_inputs
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
+	validate_disabled_r6_ufs_probe
 
 	log "all checks passed"
 }

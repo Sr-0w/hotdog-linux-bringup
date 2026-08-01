@@ -262,9 +262,16 @@ ordering alone does not establish communication with the device.
 An offline comparison after D15 found that the effective direct-boot tree is
 unchanged from the mainline OnePlus tree for the UFS controller, QMP PHY, all
 five referenced regulators, GCC, RPMh clocks, and TLMM. The downstream v2
-Gear 3 PHY values now also match the D15 mainline tables. The next measurement
-therefore uses the supported UFS hold/release API on R6 to capture a bounded,
-read-only reference of host registers, QMP state, and local UniPro attributes.
+Gear 3 PHY values now also match the D15 mainline tables.
+
+The planned R6 hold/release measurement was attempted on 2026-08-01 and proved
+unsafe. `ufshcd_hold()` tried to leave a clock-gated hibern8 state, timed out,
+entered broken vendor error recovery, and left module loading blocked in
+`flush_work()`. The normal boot log already records the working Gear 4, two-lane
+Fast Rate B state, while the timeout handler captured host registers and clock
+rates at the failure boundary. The exact incident is recorded in
+[the R6 UFS live-probe evidence](2026-08-01-r6-ufs-live-probe.md). No further
+live register or DME probe will be made from a healthy R6 session.
 
 ## External hotdog mainline comparison
 
@@ -303,12 +310,12 @@ inspection and manual recovery instead of protocol-level Sahara resets.
 
 ## Next validation
 
-1. Restore and verify R6 plus the stock DTBO after the D15 crashdump.
-2. Load the matching read-only `helpers/r6-ufs-regdump` module and record the
-   known-working host, QMP PHY, and local UniPro state.
+1. Recover a fresh R6 boot with the stock DTBO after the failed live probe.
+2. Treat the normal R6 boot log and the driver's timeout snapshot as the
+   downstream reference; do not touch the live controller again.
 3. Compare those values with the D15 programmed state and the external
    no-device-reset DTS.
-4. Hardware-test the prepared one-variable D16 only after the R6 reference is
-   captured.
-5. Independently instrument GPIO175's dedicated output latch if the measured
-   mismatch still points to attached-device reset sequencing.
+4. Hardware-test the prepared one-variable D16 with no candidate watchdog and
+   no protocol-level reset.
+5. If D16 still fails, add any required downstream measurement inside the
+   driver's boot-time path of a disposable R6 diagnostic image.

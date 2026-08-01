@@ -41,6 +41,13 @@ DTS by omitting the attached-device `reset-gpios` property. Its passive test
 command line does not arm the initramfs rescue watchdog, so failures remain
 available for diagnosis until manual recovery.
 
+An attempted live register comparison against R6 was stopped permanently after
+the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
+broken vendor recovery path. The helper now fails closed. D16 instead uses the
+normal R6 boot log plus the controller snapshot emitted by that timeout as its
+passive downstream reference; see the
+[R6 UFS incident record](docs/evidence/2026-08-01-r6-ufs-live-probe.md).
+
 Failed direct boots can now be diagnosed from Qualcomm `900e` without reading
 phone storage. The host performs a bounded physical-memory read of the 4 MiB
 ramoops reservation and extracts the persistent kernel console. This confirmed

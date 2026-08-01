@@ -1,41 +1,31 @@
-# R6 UFS state probe
+# Disabled R6 UFS live probe
 
-This temporary out-of-tree module captures a read-only SM8150 UFS reference
-from the known-working Linux 4.14 R6 rescue kernel. It records the controller
-revision and state, a bounded set of host and QMP PHY registers, and local
-UniPro attributes needed to compare the downstream configuration with the
-direct-mainline path. It is a diagnostic aid, not a runtime dependency.
+> [!CAUTION]
+> Do not load an older build of this module on hardware. In particular, never
+> load a file with SHA256
+> `2100b2c93190fdbfbdb61b8ef2d77b5dfc5b6378c13eacc898591fb1ce00396f`.
 
-The probe deliberately uses the native UFS clock-gating API:
+This directory preserves a failed diagnostic experiment. The original module
+called the downstream 4.14 `ufshcd_hold()` API before reading a fixed set of
+UFS host, PHY, and local UniPro values. On the tested OnePlus 7T Pro, the
+controller was clock-gated and its link was in hibern8. The hold operation
+attempted to wake the link, timed out, entered vendor UFS recovery, and left
+`insmod` blocked in uninterruptible sleep.
 
-1. locate the live `1d84000.ufshc` platform device;
-2. obtain its `ufs_hba` driver data;
-3. call `ufshcd_hold()`;
-4. read only a fixed whitelist of host and PHY registers;
-5. issue local `DME_GET` commands through the serialized UFS core API;
-6. call `ufshcd_release()`.
+The source now fails closed with `-EPERM` before locating or touching any
+device. Git history retains the original experiment for review, while
+[the incident evidence](../../docs/evidence/2026-08-01-r6-ufs-live-probe.md)
+records the exact binary, kernel trace, and outcome.
 
-Do not replace this sequence with raw `ioremap()` reads. A read-only direct
-access to the clock-gated host window stopped the rescue kernel before the
-first register value could be printed.
+Use these sources of reference data instead:
 
-Build against the exact configured R6 kernel tree:
+- the normal R6 boot log for negotiated gear, lane count, mode, rate, device
+  identity, and LUN enumeration;
+- the driver's timeout dump captured by the failed experiment for the host
+  register and clock snapshot at the failure boundary;
+- boot-time instrumentation inside a disposable diagnostic R6 kernel if a
+  future comparison requires values unavailable from existing logs.
 
-```sh
-make -C /path/to/r6-kernel \
-    O=/path/to/exact-r6-build-output \
-    ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-    CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
-    M="$PWD/helpers/r6-ufs-regdump" modules
-```
-
-The captured R6 image reports `4.14.357-openela-perf`. Disable
-`CONFIG_LOCALVERSION_AUTO` in the module build output before `prepare`; an
-otherwise identical build appends the Git revision and will be rejected by
-the running kernel. Verify both the release and symbol versions before loading:
-
-```sh
-modinfo -F vermagic helpers/r6-ufs-regdump/hotdog_r6_ufs_regdump.ko
-modprobe --dump-modversions \
-    helpers/r6-ufs-regdump/hotdog_r6_ufs_regdump.ko
-```
+Do not use raw MMIO, `ufshcd_hold()`, DME commands, runtime-PM changes, or
+debugfs register reads from a healthy R6 rescue session. Those operations can
+change the controller state and invalidate the session being measured.

@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-07-31
+Last updated: 2026-08-01
 
 ## Tested hardware
 
@@ -299,10 +299,11 @@ remote debug channel.
     downstream PCS Gear 3 values compile and execute without regressing the
     diagnostic path, but `ufshcd_verify_dev_init()` still reports
     `NOP OUT failed -11`.
-75. Treat raw UFS MMIO reads from the R6 rescue environment as unsafe. A
-    read-only module stopped at the first host-register access while the UFS
-    clock domain was gated. The replacement diagnostic brackets one supported
-    controller read with the native UFS hold/release API.
+75. Treat all live UFS register access from the R6 rescue environment as
+    unsafe. Raw MMIO stopped while the clock domain was gated. The replacement
+    experiment then blocked inside `ufshcd_hold()` while leaving hibern8,
+    triggered two vendor recovery `BUG` paths, and wedged module loading. The
+    checked-in helper now fails closed before device lookup.
 76. Keep native-UFS D11 as proof that the first HS-G3 bootstrap guard did not
     match the runtime tree. Its ramoops log contains no `HOTDOG_UFS_*` marker
     and still reports `NOP OUT failed -11`; the selected DTBO replaced the root
@@ -326,11 +327,12 @@ remote debug channel.
     host reset was released, and remained clear afterwards. The first NOP still
     failed with `-11` at 0.939979 seconds; the complete 57,814-byte console and
     4 MiB diagnostic capture were recovered automatically.
-81. Capture the known-working R6 UFS state before running D16. The expanded
-    read-only helper holds the native UFS clock domain, records a bounded set of
-    host and QMP registers, and issues only serialized local `DME_GET` commands.
-    Its build release and symbol CRCs must match R6 exactly. Compare that result
-    with the D15 pre-NOP state before another hardware handoff.
+81. Use passive R6 evidence for the downstream comparison. Its normal boot log
+    records Gear 4, two lanes, Fast Rate B, Samsung device identity, and all
+    LUNs. The failed hold operation's timeout handler additionally captured
+    host registers, UFSHCI 3.0, and 37.5 MHz gated clock rates. Do not repeat
+    the live probe; details and artifact hashes are in
+    [the 2026-08-01 incident record](evidence/2026-08-01-r6-ufs-live-probe.md).
 82. Keep the ClearStaff hotdog branch as an external DTS reference. At commit
     `403b56c33e2c` it enables the same UFS rails but omits the GPIO175
     `reset-gpios` property. D16 reuses the exact D13 kernel, initramfs, and
@@ -339,8 +341,8 @@ remote debug channel.
     change that leaves a stalled kernel untouched rather than scheduling a
     reboot. Its AVB SHA256 is
     `971ac2a5cf2dfb0ef55911eb20a05e5c98314e8ddc3b4bde4718b3aa664b70b7`,
-    reproduced byte-for-byte twice; hardware validation remains pending until
-    the R6 reference capture is complete.
+    reproduced byte-for-byte twice. The passive R6 reference is now sufficient
+    to proceed; hardware validation remains pending.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in
