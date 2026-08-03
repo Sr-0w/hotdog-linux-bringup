@@ -22,3 +22,13 @@ external-refs/
 *.swo
 *~
 __pycache__/
+
+# Out-of-tree kernel-module build products
+helpers/**/*.ko
+helpers/**/*.o
+helpers/**/*.mod
+helpers/**/*.mod.c
+helpers/**/.tmp_versions/
+helpers/**/Module.symvers
+helpers/**/modules.order
+helpers/**/.*.cmd

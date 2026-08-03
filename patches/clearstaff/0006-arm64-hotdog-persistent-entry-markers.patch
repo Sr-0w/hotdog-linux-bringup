@@ -1,0 +1,61 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index bd4f2a8197d1..000000000000 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -42,5 +42,34 @@
+ #error PAGE_OFFSET must be at least 2MB aligned
+ #endif
+ 
++/*
++ * Persist early direct-entry checkpoints in the unused final page of the
++ * hotdog ramoops reservation. Each 32-byte record is independent, and its
++ * magic is committed last so a torn write cannot masquerade as a checkpoint.
++ */
++	.macro	hotdog_ram_stage offset, stage, tag_lo, tag_hi
++	movz	x9, #0xf000
++	movk	x9, #0xa9bf, lsl #16
++	add	x9, x9, #\offset
++	str	wzr, [x9, #0x00]
++	movz	w10, #0x0001
++	movk	w10, #0x0006, lsl #16	// instrumentation build 6.1
++	str	w10, [x9, #0x04]
++	mov	w10, #\stage
++	str	w10, [x9, #0x08]
++	mvn	w10, w10
++	str	w10, [x9, #0x0c]
++	movz	w10, #\tag_lo
++	movk	w10, #\tag_hi, lsl #16
++	str	w10, [x9, #0x10]
++	mvn	w10, w10
++	str	w10, [x9, #0x14]
++	dsb	sy
++	movz	w10, #0x5343
++	movk	w10, #0x3631, lsl #16	// little-endian ASCII "CS16"
++	str	w10, [x9, #0x00]
++	dsb	sy
++	.endm
++
+ /*
+  * Draw cumulative white checkpoints in the bootloader-provided framebuffer.
+@@ -176,5 +205,6 @@ SYM_CODE_START(primary_entry)
+ 	bl	init_kernel_el			// w0=cpu_boot_mode
+ 	mov	x20, x0
+ 	/* init_kernel_el() has established an MMU-off physical access context. */
++	hotdog_ram_stage 0x00, 0x10, 0x4c45, 0x3031	// "EL10"
+ 	hotdog_fb_stage 0
+ 	hotdog_fb_pause
+@@ -186,5 +216,6 @@ SYM_CODE_START(primary_entry)
+ 	 * the TCR will have been set.
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
++	hotdog_ram_stage 0x20, 0x20, 0x5043, 0x3255	// "CPU2"
+ 	hotdog_fb_stage 1
+ 	hotdog_fb_pause
+@@ -565,6 +596,7 @@
+ SYM_FUNC_END(__no_granule_support)
+ 
+ SYM_FUNC_START_LOCAL(__primary_switch)
++	hotdog_ram_stage 0x40, 0x30, 0x4d4d, 0x3355	// "MMU3"
+ 	adrp	x1, reserved_pg_dir
+ 	adrp	x2, __pi_init_idmap_pg_dir
+ 	bl	__enable_mmu

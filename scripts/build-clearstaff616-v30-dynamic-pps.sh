@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# shellcheck disable=SC1091
+source "$(dirname "$0")/env.sh"
+
+kernel_build="$HOTDOG_ROOT/build/clearstaff-v30-dynamic-pps"
+kernel="$kernel_build/arch/arm64/boot/Image"
+vmlinux="$kernel_build/vmlinux"
+config="$kernel_build/.config"
+kernel_source="$HOTDOG_ROOT/src/kernel/linux-clearstaff-hotdog"
+dsc_header_source="$kernel_source/include/drm/display/drm_dsc.h"
+dsi_host_source="$kernel_source/drivers/gpu/drm/msm/dsi/dsi_host.c"
+panel_driver_source="$kernel_source/drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c"
+base_dtb="$HOTDOG_ROOT/images/pmos-experiments/2026-08-02-221500-clearstaff616-direct-entry-v13-continue/components/dtb"
+panel_overlay_source="$HOTDOG_ROOT/configs/clearstaff-hotdog-native-panel-te-overlay.dts"
+d7_overlay="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/components/filtered-entry5.dtbo"
+ramdisk="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-160000-clearstaff616-direct-entry-v25-native-display/components/ramdisk"
+cmdline="$HOTDOG_ROOT/configs/clearstaff-hotdog-passive.cmdline"
+kernel_sha=895432d812868fb1eed238cb0a2af4570c7953e1503f38db9b9d7b9bc493bf0d
+base_dtb_sha=040b4b50989b01dafe400436137bf73a64f3ad5e89bf4c7ddf79a19b3cfcee4c
+panel_overlay_source_sha=74055a3c47168ac2d4bcacb2570d51216311e2ec7794093ae7470565c900320b
+d7_overlay_sha=f667f356ec70b5cb3950615a13a3e66dd58eebf86046239c6e476c117a6821aa
+ramdisk_sha=e4c563fcfc6f2a3533fd16539dd22a3fc578bf858e450a9ae7f66d212ae49ec3
+cmdline_sha=902b55b27a157cc6ff14ce5acd155e4b118b1754a9ba8a0707117593071df8f6
+stamp="${HOTDOG_BUILD_STAMP:-$(date +%F-%H%M%S)}"
+build_dir="$HOTDOG_ROOT/build/experiments/$stamp-clearstaff616-v30-dynamic-pps"
+outdir="$HOTDOG_ROOT/images/pmos-experiments/$stamp-clearstaff616-direct-entry-v30-dynamic-pps"
+panel_overlay="$build_dir/hotdog-native-panel-te.dtbo"
+dtb="$build_dir/hotdog-v13-native-panel-te.dtb"
+effective_dtb="$build_dir/hotdog-v13-native-panel-te-d7-effective.dtb"
+mdss=/soc@0/display-subsystem@ae00000
+dsi="$mdss/dsi@ae94000"
+panel="$dsi/panel@0"
+te_state=/soc@0/pinctrl@3100000/panel-te-default-state
+
+die() {
+	printf 'ERROR: %s\n' "$*" >&2
+	exit 1
+}
+
+check_sha() {
+	local label="$1" path="$2" expected="$3" actual
+	[ -s "$path" ] || die "missing $label: $path"
+	actual="$(sha256sum "$path" | awk '{print $1}')"
+	[ "$actual" = "$expected" ] ||
+		die "$label hash mismatch: expected $expected, got $actual"
+}
+
+for command in awk dtc fdtget fdtoverlay grep llvm-nm python3 sha256sum; do
+	command -v "$command" >/dev/null 2>&1 || die "missing command: $command"
+done
+
+check_sha kernel "$kernel" "$kernel_sha"
+check_sha "proven V13 DTB" "$base_dtb" "$base_dtb_sha"
+check_sha "native panel TE overlay source" "$panel_overlay_source" "$panel_overlay_source_sha"
+check_sha "D7 filtered overlay" "$d7_overlay" "$d7_overlay_sha"
+check_sha ramdisk "$ramdisk" "$ramdisk_sha"
+check_sha "kernel command line" "$cmdline" "$cmdline_sha"
+[ -s "$vmlinux" ] || die "missing vmlinux: $vmlinux"
+[ -s "$config" ] || die "missing kernel config: $config"
+[ -s "$dsc_header_source" ] || die "missing DSC header source: $dsc_header_source"
+[ -s "$dsi_host_source" ] || die "missing MSM DSI host source: $dsi_host_source"
+[ -s "$panel_driver_source" ] || die "missing OnePlus panel source: $panel_driver_source"
+[ ! -e "$build_dir" ] || die "refusing to reuse build directory: $build_dir"
+[ ! -e "$outdir" ] || die "refusing to reuse output directory: $outdir"
+
+python3 - "$kernel" "$vmlinux" <<'PY'
+import pathlib
+import struct
+import subprocess
+import sys
+
+image = pathlib.Path(sys.argv[1]).read_bytes()
+if len(image) < 64:
+    raise SystemExit("arm64 Image is shorter than its header")
+load_offset, image_size = struct.unpack_from("<QQ", image, 8)
+magic = struct.unpack_from("<I", image, 56)[0]
+if load_offset != 0x80000:
+    raise SystemExit(f"unexpected arm64 load offset: {load_offset:#x}")
+if image_size != 0x1AD0000:
+    raise SystemExit(f"unexpected arm64 image size: {image_size:#x}")
+if len(image) > image_size:
+    raise SystemExit(f"kernel exceeds declared image window: {len(image)} > {image_size}")
+if magic != 0x644D5241:
+    raise SystemExit(f"bad arm64 Image magic: {magic:#x}")
+
+symbols = {}
+for line in subprocess.check_output(["llvm-nm", "-n", sys.argv[2]], text=True).splitlines():
+    fields = line.split()
+    if len(fields) == 3 and fields[2] in {"_text", "_end"}:
+        symbols[fields[2]] = int(fields[0], 16)
+linked_size = symbols.get("_end", 0) - symbols.get("_text", 0)
+if linked_size != image_size:
+    raise SystemExit(
+        f"linked image window {linked_size:#x} does not match header {image_size:#x}"
+    )
+PY
+
+grep -qx 'CONFIG_DRM_MSM=y' "$config" || die "MSM DRM is not built in"
+grep -qx 'CONFIG_DRM_MSM_DSI=y' "$config" || die "MSM DSI is not built in"
+grep -qx 'CONFIG_DRM_PANEL_SAMSUNG_ONEPLUS_DSC=y' "$config" ||
+	die "native OnePlus panel driver is not built in"
+grep -aFq 'samsung,oneplus-dsc' "$kernel" ||
+	die "native OnePlus panel compatible is absent from the kernel"
+grep -Fq 'unsigned int dsc_slice_per_pkt;' "$dsc_header_source" ||
+	die "DRM DSC config lacks dsc_slice_per_pkt"
+grep -Fq 'ctx->dsc.dsc_slice_per_pkt = 2;' "$panel_driver_source" ||
+	die "OnePlus panel is not configured for two DSC slices per packet"
+grep -Fq 'bytes_per_pkt = dsc->slice_chunk_size * msm_host->dsc_slice_per_pkt;' \
+	"$dsi_host_source" || die "MSM DSI bytes-per-packet formula is missing"
+grep -Fq 'pkt_per_line = slice_per_intf / msm_host->dsc_slice_per_pkt;' \
+	"$dsi_host_source" || die "MSM DSI packets-per-line formula is missing"
+grep -Fq 'msm_host->dsc_slice_per_pkt + 1;' "$dsi_host_source" ||
+	die "MSM DSI command-mode word-count formula is missing"
+grep -Fq 'msm_host->dsc_slice_per_pkt = dsi->dsc->dsc_slice_per_pkt ?: 1;' \
+	"$dsi_host_source" || die "MSM DSI compatibility default is missing"
+grep -Fq 'drm_dsc_pps_payload_pack(&pps, &ctx->dsc);' "$panel_driver_source" ||
+	die "OnePlus panel does not pack a dynamic DSC PPS"
+grep -Fq 'mipi_dsi_picture_parameter_set(ctx->dsi, &pps);' "$panel_driver_source" ||
+	die "OnePlus panel does not transmit the dynamic DSC PPS"
+
+for symbol in \
+	mdss mdss_mdp mdss_dsi0 mdss_dsi0_out mdss_dsi0_phy \
+	vreg_l3c_1p2 vreg_l5a_0p875 vreg_l14a_1p8 tlmm; do
+	fdtget -t s "$base_dtb" /__symbols__ "$symbol" >/dev/null ||
+		die "proven V13 DTB lacks required symbol: $symbol"
+done
+
+mkdir -p "$build_dir"
+dtc -@ -I dts -O dtb -o "$panel_overlay" "$panel_overlay_source"
+fdtoverlay -i "$base_dtb" -o "$dtb" "$panel_overlay"
+
+# Preserve the exact bootloader overlay contract that entered the kernel in V27.
+fdtoverlay -i "$dtb" -o "$effective_dtb" "$d7_overlay"
+
+for tree in "$dtb" "$effective_dtb"; do
+	[ "$(fdtget -t s "$tree" "$mdss" status)" = okay ] || die "MDSS is disabled in $tree"
+	[ "$(fdtget -t s "$tree" "$mdss/display-controller@ae01000" status)" = okay ] ||
+		die "DPU is disabled in $tree"
+	[ "$(fdtget -t s "$tree" "$dsi" status)" = okay ] || die "DSI is disabled in $tree"
+	[ "$(fdtget -t s "$tree" "$mdss/phy@ae94400" status)" = okay ] ||
+		die "DSI PHY is disabled in $tree"
+	[ "$(fdtget -t s "$tree" "$panel" compatible)" = samsung,oneplus-dsc ] ||
+		die "native panel compatible is missing from $tree"
+	[ "$(fdtget -t s "$tree" "$panel" status)" = okay ] || die "panel is disabled in $tree"
+	[ "$(fdtget -t x "$tree" "$panel" reset-gpios)" = "4e 6 1" ] ||
+		die "panel reset is not TLMM GPIO 6 active-low in $tree"
+	[ "$(fdtget -t s "$tree" "$panel" pinctrl-names)" = default ] ||
+		die "panel default pinctrl state is missing from $tree"
+	[ "$(fdtget -t s "$tree" "$te_state" pins)" = gpio8 ] ||
+		die "panel TE is not routed to GPIO8 in $tree"
+	[ "$(fdtget -t s "$tree" "$te_state" function)" = mdp_vsync ] ||
+		die "panel TE is not muxed to mdp_vsync in $tree"
+	[ "$(fdtget -t x "$tree" "$panel" pinctrl-0)" = \
+	  "$(fdtget -t x "$tree" "$te_state" phandle)" ] ||
+		die "panel does not reference its TE pinctrl state in $tree"
+done
+
+sha256sum \
+	"$kernel" "$base_dtb" "$panel_overlay_source" "$panel_overlay" \
+	"$dtb" "$d7_overlay" "$effective_dtb" "$ramdisk" "$cmdline" \
+	"$dsc_header_source" "$dsi_host_source" "$panel_driver_source" \
+	> "$build_dir/SHA256SUMS"
+grep -E '^(CONFIG_DRM_MSM|CONFIG_DRM_MSM_DSI|CONFIG_DRM_PANEL_SAMSUNG_ONEPLUS_DSC)=' \
+	"$config" > "$build_dir/display.config"
+cat > "$build_dir/change.txt" <<'EOF'
+Kernel: V29 ClearStaff Linux 6.16 DSC packetization baseline plus one panel-driver
+        correction: after the vendor panel-on sequence, pack the calculated DSC
+        configuration into a standard 128-byte PPS and transmit it as DSI type
+        0x0a, matching the downstream DSI_CMD_SET_PPS path.
+DTB: byte-identical V28 native panel + TE graph on the proven V13 base.
+DTBO: unchanged D7 filtered vendor overlay, replayed and validated offline.
+Initramfs: unchanged passive postmarketOS diagnostic userspace; no automatic reset.
+Purpose: correct the missing dynamic PPS identified after V29 still produced the
+         stable full-screen DSI stripe pattern despite correct slice packetization.
+EOF
+
+"$HOTDOG_ROOT/scripts/build-mainline-direct-bootimg.sh" \
+	--kernel "$kernel" \
+	--dtb "$dtb" \
+	--ramdisk "$ramdisk" \
+	--cmdline-file "$cmdline" \
+	--outdir "$outdir" \
+	--name boot-clearstaff616-direct-entry-v30-dynamic-pps \
+	--partition-size 100663296
+
+cp "$panel_overlay_source" "$panel_overlay" "$effective_dtb" "$outdir/components/"
+sha256sum \
+	"$outdir/components/$(basename "$panel_overlay_source")" \
+	"$outdir/components/$(basename "$panel_overlay")" \
+	"$outdir/components/$(basename "$effective_dtb")" \
+	>> "$outdir/SHA256SUMS"
+cat >> "$outdir/MANIFEST.md" <<EOF
+
+## V30 dynamic DSC PPS contract
+
+- Proven V13 base DTB: \`$base_dtb\`
+- Native panel + TE graph: byte-identical to V28
+- D7 overlay replay: \`$d7_overlay\`
+- Effective DTB: \`components/$(basename "$effective_dtb")\`
+- DSC geometry: 1440 pixels = two 720-pixel slices
+- Panel transport: two DSC slices per DSI packet
+- Resulting command-mode transport: 1440 bytes/packet, one packet/line, WC 1441
+- Panel-on follow-up: generated 128-byte DSC PPS sent as DSI type \`0x0a\`
+- Arm64 Image window: \`0x01ad0000\` (matches linked \`_end - _text\`)
+EOF
+
+printf 'Build directory: %s\nArtifact directory: %s\n' "$build_dir" "$outdir"

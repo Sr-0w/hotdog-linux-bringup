@@ -294,8 +294,39 @@ line. This is an operational policy change, not a UFS configuration change: it
 prevents the initramfs supervisor from rebooting a stalled candidate. It keeps
 `panic=0`, which holds a kernel panic for diagnosis. The passive D16 AVB SHA256
 is `971ac2a5cf2dfb0ef55911eb20a05e5c98314e8ddc3b4bde4718b3aa664b70b7`;
-two independent package runs reproduced it byte-for-byte. This is a prepared
-hypothesis, not a hardware result.
+two independent package runs reproduced it byte-for-byte.
+
+## Native-UFS D16: passive no-device-reset result
+
+D16 was launched from verified R6 boot
+`3b9b4950-2808-46a6-81c9-9feaf723f81a` on 2026-08-02. The transaction flashed
+the native-UFS filtered DTBO SHA256
+`d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd`
+and the D16 image, selected slot B, and rebooted at 01:59:34. The 180-second
+observation found no Fastboot identity, USB gadget, or postmarketOS SSH. No
+candidate watchdog, Sahara reset, or other software reset was sent.
+
+The phone remained unavailable until a manual reset exposed Fastboot at 10:48.
+The pre-armed restore transaction then wrote the pinned stock DTBO SHA256
+`95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`
+and exact R6 boot SHA256
+`e76c85a56cdbcc6ddd105844eb322cb854fb33b2b23077da12ff098adc8f2369`,
+selected slot B, and deliberately left the phone in Fastboot. R6 subsequently
+booted normally and exposed USB networking and SSH. Its ramoops backend attached
+at `0xa9800000`, but `/sys/fs/pstore` was empty. The D16 transaction log SHA256
+is `b3f50a82b302c260ff4b3fbe24d97fef3cd67a9c273de5e0d7174fb756bbcbf4`;
+the restore log SHA256 is
+`c5c8f56f8f51304b0e2ea4d8a50aee169a42ec779e78b1f59b3cf5cc740b8952`;
+and the empty-pstore report SHA256 is
+`7cf1b9d88f33b1cc8176ef312be73666b3a1094996b5ef812501c4f2eec714a9`.
+
+D16 therefore proves that removing only `reset-gpios` is not sufficient for a
+usable direct boot. Because the passive run produced no recoverable console, it
+does not prove whether the first UFS NOP still failed. A complete comparison
+also found that ClearStaff's 663-line standalone hotdog DTS differs globally
+from this project's OnePlus-common DTS plus filtered vendor DTBO. The next
+control must reproduce the complete external kernel and DTS rather than borrow
+one UFS property from it.
 
 ## Display artifact during recovery
 
@@ -310,12 +341,13 @@ inspection and manual recovery instead of protocol-level Sahara resets.
 
 ## Next validation
 
-1. Recover a fresh R6 boot with the stock DTBO after the failed live probe.
-2. Treat the normal R6 boot log and the driver's timeout snapshot as the
-   downstream reference; do not touch the live controller again.
-3. Compare those values with the D15 programmed state and the external
-   no-device-reset DTS.
-4. Hardware-test the prepared one-variable D16 with no candidate watchdog and
-   no protocol-level reset.
-5. If D16 still fails, add any required downstream measurement inside the
-   driver's boot-time path of a disposable R6 diagnostic image.
+1. Keep the recovered R6 boot and its normal log as the downstream reference;
+   do not touch the live controller again.
+2. Build the exact ClearStaff `403b56c33e2c` kernel and standalone hotdog DTS
+   without local UFS experiments.
+3. Pair that complete external baseline with a minimal, explicitly verified
+   DTBO so retained Android fragments cannot rewrite unrelated shared hardware.
+4. Package it with the known postmarketOS initramfs, validate every component
+   identity offline, and hardware-test it without candidate reset automation.
+5. If the exact external baseline still fails, add boot-time visual and
+   persistent diagnostics before changing another UFS electrical parameter.

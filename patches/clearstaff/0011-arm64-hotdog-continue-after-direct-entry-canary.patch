@@ -1,0 +1,48 @@
+From c63794f23f366add705983cc341fcce676bf4b00 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 3 Aug 2026 17:23:56 +0200
+Subject: [PATCH 1/2] arm64: hotdog: continue after direct-entry canary
+
+---
+ arch/arm64/kernel/head.S | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index b66aeaa2f9b8..bbd3fa78897d 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -99,7 +99,7 @@
+ /*
+  * First-instruction canary for the direct-boot path. ABL is required to enter
+  * with the MMU and D-cache disabled. In that state, stop the inherited APSS
+- * watchdog, paint one webcam-visible block, and remain at the entry point.
++ * watchdog and paint one webcam-visible block before normal entry continues.
+  * If the boot contract is not met, hold without touching physical MMIO.
+  */
+ 	.macro	hotdog_entry_canary
+@@ -120,7 +120,7 @@
+ 	add	x11, x11, #0x680		// stride - 1024 * 4
+ 	subs	x13, x13, #1
+ 	b.ne	.Lhotdog_entry_row\@
+-	dsb	sy
++	b	.Lhotdog_v9_continue
+ 	.endm
+ 
+ /*
+@@ -147,7 +147,7 @@
+ 	.long	0				// reserved / stock-compatible code1
+ #endif
+ 	.quad	0x00080000			// Image load offset from start of RAM, little-endian
+-	.quad	0x01c00000			// V10: match the accepted 6.17 Image size field
++	.quad	0x01ad0000			// Exact linked image window used by the proven V13 entry
+ 	le64sym	_kernel_flags_le		// Informative flags, little-endian
+ 	.quad	0				// reserved
+ 	.quad	0				// reserved
+@@ -186,6 +186,7 @@ SYM_CODE_START(primary_entry)
+ 	wfe
+ 	b	.Lhotdog_v9_hold
+ 
++.Lhotdog_v9_continue:
+ 	/* Record entry only when the bootloader honored the MMU/cache contract. */
+ 	mrs	x11, CurrentEL
+ 	cmp	x11, #CurrentEL_EL2

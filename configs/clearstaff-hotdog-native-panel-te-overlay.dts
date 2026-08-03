@@ -1,0 +1,106 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "oneplus,hotdog";
+
+	fragment@0 {
+		target-path = "/";
+
+		__overlay__ {
+			panel_avdd_1p8: panel-avdd-regulator {
+				compatible = "regulator-fixed";
+				regulator-name = "panel_avdd_1p8";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				gpio = <&tlmm 130 0>;
+				enable-active-high;
+				pinctrl-0 = <&panel_avdd_default>;
+				pinctrl-names = "default";
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&tlmm>;
+
+		__overlay__ {
+			panel_avdd_default: panel-avdd-default-state {
+				pins = "gpio130";
+				function = "gpio";
+				drive-strength = <8>;
+				bias-disable;
+			};
+
+			panel_te_default: panel-te-default-state {
+				pins = "gpio8";
+				function = "mdp_vsync";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&mdss>;
+
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@3 {
+		target = <&mdss_mdp>;
+
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@4 {
+		target = <&mdss_dsi0>;
+
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			vdda-supply = <&vreg_l3c_1p2>;
+			status = "okay";
+
+			display_panel: panel@0 {
+				compatible = "samsung,oneplus-dsc";
+				reg = <0>;
+				vddio-supply = <&vreg_l14a_1p8>;
+				avdd-supply = <&panel_avdd_1p8>;
+				reset-gpios = <&tlmm 6 1>;
+				pinctrl-0 = <&panel_te_default>;
+				pinctrl-names = "default";
+				status = "okay";
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&mdss_dsi0_out>;
+					};
+				};
+			};
+		};
+	};
+
+	fragment@5 {
+		target = <&mdss_dsi0_out>;
+
+		__overlay__ {
+			data-lanes = <0 1 2 3>;
+			remote-endpoint = <&panel_in>;
+			status = "okay";
+		};
+	};
+
+	fragment@6 {
+		target = <&mdss_dsi0_phy>;
+
+		__overlay__ {
+			vdds-supply = <&vreg_l5a_0p875>;
+			status = "okay";
+		};
+	};
+};

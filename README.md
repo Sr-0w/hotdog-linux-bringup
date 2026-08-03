@@ -13,11 +13,12 @@ it as HD1911 and expose the `hotdog` project/codename.
 ## Project status
 
 Linux 6.17 reaches the installed postmarketOS root filesystem on real hardware
-through the validated downstream 4.14 kexec bridge. A persistent image launched
-directly by the OnePlus bootloader now completes kernel initialization, executes
-PID 1 from the initramfs, sustains EL0 syscalls, and reaches the first
-postmarketOS stage-two init. Direct rootfs and USB access remain under active
-bring-up.
+through the validated downstream 4.14 kexec bridge. A mainline-oriented
+ClearStaff 6.16 image launched directly by the OnePlus bootloader now completes
+kernel initialization, initializes the native SM8150 DPU/DSI pipeline, exposes
+`fb0`, switches `tty0` to a 180x195 framebuffer console, executes PID 1, and
+enters the postmarketOS initramfs. Direct rootfs and USB access remain under
+active bring-up.
 
 The current direct-boot boundary is native UFS link startup. A stock-derived
 DTBO with vendor fragments 46, 59, and 60 removed preserves the mainline UFS
@@ -36,10 +37,25 @@ but reproduced the same first-NOP failure. GPIO 175 is the SM8150's special
 `UFS_RESET` pad and has no readable input bit, so D14's generic GPIO readback is
 not electrically meaningful. D15 moved the UFS PCS software-reset sequence
 around PHY calibration to match the working downstream 4.14 driver, but the
-first NOP still failed. The prepared D16 follows the external ClearStaff hotdog
-DTS by omitting the attached-device `reset-gpios` property. Its passive test
-command line does not arm the initramfs rescue watchdog, so failures remain
-available for diagnosis until manual recovery.
+first NOP still failed. D16 followed one property from the external ClearStaff
+hotdog DTS by omitting the attached-device `reset-gpios` property. It remained
+without USB or SSH for roughly 8 hours 48 minutes until manual recovery. The
+subsequent verified R6 boot found no persistent console, so D16 proves that
+removing this property does not produce a usable direct boot but does not
+identify whether the first NOP changed. A full-tree comparison then showed that
+the external 663-line DTS is structurally different from this project's
+OnePlus-common plus filtered-vendor-DTBO tree. Reproducing that complete
+external baseline is the next controlled test.
+
+Native display bring-up reached a second major boundary on 2026-08-03. V29
+corrected the MSM DSI command-mode packetization for the panel's two 720-pixel
+DSC slices, and V30 added the generated 128-byte DSC PPS sent by the downstream
+driver after its vendor panel-on commands. V30 produces readable kernel and
+postmarketOS initramfs output on the physical panel. Dense scrolling currently
+appears repeated vertically, so V31 keeps every V30 display artifact identical
+and replaces only `rdinit` with a five-band static geometry test and a `tty0`
+BusyBox shell. See the
+[native display evidence](docs/evidence/2026-08-03-native-display.md).
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -59,7 +75,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 
 | Component | Status | Notes |
 |---|---|---|
-| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec and directly from the OnePlus bootloader. |
+| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; the mainline-oriented ClearStaff 6.16 image starts directly from the OnePlus bootloader. |
 | UFS storage | Working through the 4.14 bridge; direct link incomplete | The bridge path exposes the Samsung UFS and all partitions. Direct mainline binds the native host and PHY but fails its first NOP with `-11`. |
 | postmarketOS rootfs | Working through the bridge | The nested `pmOS_root` mounts read-write through kexec. Direct boot remains blocked before storage enumeration. |
 | USB networking | Working through the bridge | NCM uses host `172.16.42.2` and device `172.16.42.1`; direct-mainline gadget registration remains incomplete. |
@@ -69,8 +85,8 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
 | Persistent direct mainline | Active initramfs, UFS blocked | Direct boot completes all 986 initcalls, crosses EL1 to EL0, executes PID 1, and reaches postmarketOS stage two. The current filtered-DTBO path reaches native UFS initialization but no block device. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
-| Early display output | Working for diagnostics | Direct pre-MMU, post-MMU, post-init, EL0-transition, and PID 1 syscall markers are visible over the retained OnePlus splash. A normal mainline DRM console is not available yet. |
-| Mainline panel | Not working | The panel becomes black after early boot; the DRM path is not enabled. |
+| Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
+| Mainline panel | Partial | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel initialize. Dense fbcon output is repeated vertically; V31 isolates scanout geometry with a non-scrolling test. |
 | RAM | Partial | Only about 448 MiB is currently exposed. |
 | Touch, Wi-Fi, Bluetooth, audio, modem, cameras | Not validated | These remain bring-up work. |
 
@@ -266,6 +282,21 @@ cp hotdog.env.example hotdog.env
 ./scripts/check-host-tools.sh
 ./scripts/build-mainline-k1-dtb-chain.sh
 ```
+
+The hardware-tested V30 direct-display kernel can be rebuilt byte-for-byte
+from the pinned ClearStaff commit, the public patch series, and the checked-in
+kernel configuration:
+
+```bash
+./scripts/prepare-clearstaff616-source.sh
+./scripts/build-clearstaff616-v30-kernel.sh
+```
+
+The build stops unless the selected source files, generated configuration, and
+final arm64 `Image` match their recorded SHA256 values. The separate
+`build-clearstaff616-v30-dynamic-pps.sh` packager also validates its DTB, DTBO,
+initramfs, command line, and Android boot-image inputs; those earlier
+bring-up artifacts are not yet all regenerated by one clean public command.
 
 The repository does not distribute ready-to-flash boot images. Generated
 kernels, initramfs archives, phone dumps, logs, and source checkouts stay in
