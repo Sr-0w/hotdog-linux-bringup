@@ -1,14 +1,15 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 3 ]; then
-	echo "usage: $0 IMAGE CONFIG DTB" >&2
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+	echo "usage: $0 IMAGE CONFIG DTB [MODULES_DIR]" >&2
 	exit 2
 fi
 
 image=$1
 config=$2
 dtb=$3
+modules_dir=${4:-}
 
 die() {
 	echo "hotdog mainline 6.16 validation: $*" >&2
@@ -39,6 +40,12 @@ expect_absent() {
 [ -s "$image" ] || die "missing Image: $image"
 [ -s "$config" ] || die "missing config: $config"
 [ -s "$dtb" ] || die "missing DTB: $dtb"
+
+if [ -n "$modules_dir" ]; then
+	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
+	find "$modules_dir" -type f -name '*.ko' -print -quit | grep -q . ||
+		die "no kernel modules under: $modules_dir"
+fi
 
 python3 - "$image" <<'PY'
 import pathlib

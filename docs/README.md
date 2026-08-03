@@ -35,8 +35,8 @@ credentials, proprietary dumps, or workstation-specific paths.
   framebuffer mapping fix, and the observed 511-character ABL command-line
   limit.
 - [evidence/2026-08-03-mainline616-pmaports.md](evidence/2026-08-03-mainline616-pmaports.md):
-  first strict pmbootstrap build of the source-generated Linux 6.16 reference
-  package, including exact APK, Image, and DTB hashes.
+  strict source build and complete current-pmaports image assembly, including
+  exact APK, Image, DTB, initramfs, boot-image, and filesystem hashes.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

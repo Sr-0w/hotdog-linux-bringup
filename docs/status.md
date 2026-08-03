@@ -26,9 +26,9 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
-| Mainline 6.16 reference package | Strict pmbootstrap build passes; hardware test pending | `linux-oneplus-hotdog-mainline616-6.16.0-r0.apk` is `25,534,610` bytes, SHA256 `ee5c55ddde8c9a385d1b11af799df2a373110dabc4441614b33b8712877408ce`. Its Image is `27,572,232` bytes, SHA256 `ee3abf18421b49462b5afd2f4e923fd97e6f3cdc13a06e4a1948e18e306b69d5`; its source-built hotdog DTB is `138,194` bytes, SHA256 `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`. The package's integrated hardware-contract validator passed. |
+| Mainline 6.16 pmaports image | Complete offline build; exact hardware test pending | Current pmaports produced `linux-oneplus-hotdog-mainline616-6.16.0-r3.apk` (`25,534,706` bytes, SHA256 `513ff02bc7f501b72061f50cbe44aa13e3ba9311ea414228a0792103aecebcee`), a normal initramfs, a header-v2 Android boot image, and split boot/root filesystems. The Image SHA256 is `86775a0b6b6db7ff0885c94cccb6b6521f2f517127154e8c9f1d9938b884d3f4`; the source-built DTB is `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`; the raw pmaports boot image is `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba`. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
-| Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
+| Device package metadata | Complete image generated; hardware test pending | The version-2 metadata and `kernel-cmdline.conf` generated a normal pmaports boot image. The 397-byte command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, and selects `TER16x32`. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
 | Persistent direct boot | Read-write rootfs and networking working | V43 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, and starts OpenRC, NCM, and SSH in about 15 seconds. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working directly with a temporary DMA constraint | V32 isolated an inaccessible UTRL above 4 GiB while SMMU was bypassed. V33 conditionally forces 32-bit coherent DMA for this exact SM8150 no-`iommus` configuration and enumerates the Samsung UFS. |
@@ -43,7 +43,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
 | Apps SMMU | Partial | V43 attaches DWC3 to stream ID `0x140` and uses a translated domain successfully with generic IOMMU and DWC3 source. Other clients and the complete SoC description remain unvalidated. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
-| Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
+| Kernel modules | Packaged for the candidate | The r3 package installs the 6.16 module tree under `/usr/lib/modules/6.16.0-sm8150`; the generated initramfs and root image contain that mainline tree. Runtime loading from this exact image is pending. |
 | Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
 | Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
 | Touch | Not enabled | Android identifies a Samsung `sec-s6sy761` controller. |
@@ -70,10 +70,12 @@ possible.
 
 V43 has reproduced the complete direct boot from a clean pinned kernel source
 and public patch series, without generic DWC3 or IOMMU modifications. The
-kernel, source-built DTB, and modules now build as a strict pmbootstrap aport
-and pass the encoded V43 hardware contract. The next milestone is to assemble
-that package with the initramfs, boot image, and rootfs, then validate the exact
-output on hardware. Hardware enablement can then proceed over stable SSH:
+kernel, source-built DTB, and modules now build as a strict pmbootstrap aport,
+pass the encoded V43 hardware contract, and assemble through the normal current
+pmaports flow into an initramfs, Android boot image, and split installation.
+The next milestone is to add the validated partition-sized AVB envelope and
+boot that exact package output on hardware. Hardware enablement can then
+proceed over stable SSH:
 battery and charging, touch and remaining keys, Wi-Fi/Bluetooth, audio,
 modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds must be replaced with upstreamable hardware
@@ -395,8 +397,12 @@ descriptions before submission.
 89. Keep the first strict `linux-oneplus-hotdog-mainline616` build as the
     source-package milestone. It generates the DTB, Image, and modules without
     the forensic K1 binary-DTB transforms and passes the encoded V43 contract.
-    Next build the initramfs, boot image, and rootfs around this package, then
-    repeat the guarded direct-boot validation.
+90. Keep the r3 current-pmaports build as the package-to-image milestone. It
+    creates the normal initramfs, header-v2 Android boot image, `pmOS_boot`, and
+    `pmOS_root`; its 397-byte command line preserves the translated DWC3 domain,
+    removes `quiet`/Plymouth, and stays below the measured ABL limit. Add the
+    96 MiB AVB envelope, verify it offline, then perform one guarded write and
+    exact readback before rebooting the hardware.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

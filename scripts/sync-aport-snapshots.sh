@@ -41,6 +41,7 @@ snapshot_rels=(
 	"device/testing/linux-postmarketos-sm8150-staging"
 	"device/testing/linux-postmarketos-qcom-sm8150"
 	"device/testing/linux-oneplus-hotdog-lineage414"
+	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 )
 
@@ -100,6 +101,11 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-lineage414:APKBUILD | \
 		device/testing/linux-oneplus-hotdog-lineage414:config-oneplus-hotdog-lineage414.aarch64 | \
 		device/testing/linux-oneplus-hotdog-lineage414:stock-hotdog-dtbpack.dtb | \
+		device/testing/linux-oneplus-hotdog-mainline616:APKBUILD | \
+		device/testing/linux-oneplus-hotdog-mainline616:README.md | \
+		device/testing/linux-oneplus-hotdog-mainline616:config-oneplus-hotdog-mainline616.aarch64 | \
+		device/testing/linux-oneplus-hotdog-mainline616:validate-mainline616-build.sh | \
+		device/testing/linux-oneplus-hotdog-mainline616:*.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:APKBUILD | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:README.md | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:config-oneplus-hotdog-mainline617-k1.aarch64 | \

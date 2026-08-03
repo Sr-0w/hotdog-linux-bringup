@@ -24,6 +24,15 @@ package-generated image. See the
 [project status](status.md), [historical r0 package evidence](evidence/k1-kernel-package.md),
 and [K1 DTB evidence](evidence/k1-dtb-source.md).
 
+The newer Linux 6.16 reference aport closes the next packaging boundary. From
+pmaports commit `918a1f4e4dd1ebcf0e4df226dbadc210a857fe9c`, the normal
+device flow produced the source-built kernel and DTB, mainline modules under
+`/usr/lib/modules`, a postmarketOS initramfs, a header-v2 Android boot image,
+and split boot/root filesystems. These exact outputs are offline-validated but
+not yet hardware-validated; they remain a reference for migration into the
+shared SM8150 package rather than the final submission layout. See the
+[Linux 6.16 pmaports image evidence](evidence/2026-08-03-mainline616-pmaports.md).
+
 Relevant pmaports policy references are:
 
 - *Device Categorization*, sections "Testing" and "Community";
@@ -83,10 +92,13 @@ branch. The confirmed blockers are:
 - [ ] A public `oneplus-hotdog` wiki page is verified or created with accurate
   installation, recovery, and known-issues information before submission.
 
-The migrated version-2 `deviceinfo` and `kernel-cmdline.conf` containing
-`clk_ignore_unused` pass `dint` structurally. That result validates metadata
-shape only. `deviceinfo_drm` must remain absent from the submission candidate
-until DRM, DSI, panel, and userspace scanout work on hardware.
+The migrated version-2 `deviceinfo` and `kernel-cmdline.conf` generate a
+397-byte command line that contains the translated-DWC3 IOMMU setting and
+verbose fbcon setup while removing the distro quiet/Plymouth defaults. That
+result validates metadata shape and image assembly only. Most debug arguments
+must be removed before submission, and `deviceinfo_drm` must remain absent from
+the submission candidate until DRM, DSI, panel, and userspace scanout work on
+hardware.
 
 ## Expected package architecture
 

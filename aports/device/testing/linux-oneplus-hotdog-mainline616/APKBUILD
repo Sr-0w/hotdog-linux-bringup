@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=0
+pkgrel=3
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -66,7 +66,7 @@ build() {
 	unset LDFLAGS
 	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
 		SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
-		KBUILD_BUILD_TIMESTAMP="2025-08-22 17:25:08 UTC" \
+		KBUILD_BUILD_TIMESTAMP="2025-08-22 17:25:08" \
 		KBUILD_BUILD_USER="postmarketOS" \
 		KBUILD_BUILD_HOST="pmaports" \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
@@ -99,7 +99,8 @@ package() {
 	sh "$srcdir/validate-mainline616-build.sh" \
 		"$pkgdir/boot/vmlinuz" \
 		"$builddir/.config" \
-		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" \
+		"$pkgdir/usr/lib/modules/$(cat "$builddir/include/config/kernel.release")"
 }
 
 sha512sums="
@@ -120,5 +121,5 @@ c8ac195e20945e54ece79e16aa1eea4dc1a7d1f242b9eaa8669f18b8f21b790c946cb1dd668c7ba0
 88d9dc234a1d094b3192f0b4dcfa12f1702a23142f61e0764347d5a7fc1936f607572aa40b167ef6cdacc8d21528752e892a3203448de74c81747750ea61c111  0013-ufs-core-add-v33-ordering-diagnostics.patch
 be58bea49d34fc71c3920266193567270711c0b61915b44f5a9914784ef4d0a65fbec826c9df1a0bedd279a602532c49448fe742b3ff8a237aa2c75d6b183d94  0014-ufs-qcom-force-dma32-without-smmu.patch
 2ce75fcf65fd535f110bc70da1ecdf673639bb40ad1c42ac60419cea0627974b56ff0590aa71ef7a85e0e0800bf37a1c9dc5e67c86a9250b325a6eded7f342f1  0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
-d622a72dbd9968c7b0fc4e3911c0d3fc1787cd72c79ec2ee8549ce826ce788fd50edf8ce548eb4d437548d7bcdc805eaf84dd2a6fbe7ebb290cc3b36aa60eebc  validate-mainline616-build.sh
+8476417653988113558928a82abf45a33c34d783299a6bbe42f0cad86fc383ea2b7629133465ae0c6aa859e9769e4baade2504a57e05bb9f5e803d4f07e03259  validate-mainline616-build.sh
 "

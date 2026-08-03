@@ -281,6 +281,66 @@ validate_k1_aport_inputs() {
 		"expected $((source_count - tar_count)) K1 local inputs, found $local_count"
 }
 
+validate_mainline616_aport_inputs() {
+	local aport_dir="aports/device/testing/linux-oneplus-hotdog-mainline616"
+	local apkbuild="$aport_dir/APKBUILD"
+	local validator="$aport_dir/validate-mainline616-build.sh"
+	local line
+	local expected
+	local filename
+	local checksum_count=0
+	local local_count=0
+	local source_count=0
+	local tar_count=0
+	local in_source=0
+
+	[ -f "$apkbuild" ] || die "missing mainline 6.16 APKBUILD: $apkbuild"
+	[ -f "$validator" ] || die "missing mainline 6.16 validator: $validator"
+	log "mainline 6.16 aport SHA512 inputs"
+	sh -n "$validator"
+	shellcheck --severity=warning --shell=sh -- "$validator"
+
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [ "$in_source" -eq 0 ]; then
+			[[ "$line" =~ ^source=\"[[:space:]]*$ ]] && in_source=1
+			continue
+		fi
+		[[ "$line" =~ ^[[:space:]]*\"[[:space:]]*$ ]] && break
+		[[ "$line" =~ ^[[:space:]]*$ ]] || ((source_count += 1))
+	done < "$apkbuild"
+	[ "$source_count" -gt 0 ] || die "could not parse mainline 6.16 sources from $apkbuild"
+
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [[ "$line" =~ ^([0-9a-f]{128})[[:space:]]+([^[:space:]]+)$ ]]; then
+			expected="${BASH_REMATCH[1]}"
+			filename="${BASH_REMATCH[2]}"
+			((checksum_count += 1))
+
+			if [[ "$filename" == *.tar.gz ]]; then
+				((tar_count += 1))
+				if [ -f "$aport_dir/$filename" ]; then
+					verify_sha512 "$expected" "$aport_dir/$filename"
+				else
+					log "skip absent mainline 6.16 source tarball: $filename"
+				fi
+				continue
+			fi
+
+			((local_count += 1))
+			[ -f "$aport_dir/$filename" ] ||
+				die "missing local mainline 6.16 aport input: $aport_dir/$filename"
+			verify_sha512 "$expected" "$aport_dir/$filename"
+		fi
+	done < "$apkbuild"
+
+	[ "$checksum_count" -eq "$source_count" ] || die \
+		"expected one mainline 6.16 SHA512 entry per source ($source_count), found $checksum_count"
+	[ "$tar_count" -eq 1 ] || die \
+		"expected one mainline 6.16 remote source tarball entry, found $tar_count"
+	[ "$local_count" -eq $((source_count - tar_count)) ] || die \
+		"expected $((source_count - tar_count)) mainline 6.16 local inputs, found $local_count"
+}
+
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
@@ -419,6 +479,7 @@ main() {
 	validate_public_markers
 	validate_k1_patch_copies
 	validate_k1_aport_inputs
+	validate_mainline616_aport_inputs
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
 	validate_disabled_r6_ufs_probe
