@@ -1,0 +1,95 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index 36871310b388..39c8ffbaeff7 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -80,6 +80,14 @@
+ 	dsb	sy
+ 	.endm
+ 
++	/* Keep each early checkpoint visible long enough for a 30 fps camera. */
++	.macro	hotdog_fb_pause
++	mov	x10, #0x02000000
++.Lhotdog_fb_pause\@:
++	subs	x10, x10, #1
++	b.ne	.Lhotdog_fb_pause\@
++	.endm
++
+ /*
+  * Kernel startup entry point.
+  * ---------------------------
+@@ -126,8 +134,22 @@
+ 	 *  x21        primary_entry() .. start_kernel()        FDT pointer passed at boot in x0
+ 	 */
+ SYM_CODE_START(primary_entry)
++	/* Prove the first executed kernel instructions before touching CPU state. */
++	hotdog_fb_stage 0
++
++	/* Stop the watchdog inherited from the Android boot chain immediately. */
++	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
++	str	wzr, [x9, #0x08]		// WDT0_EN = 0
++	dsb	sy
++	hotdog_fb_stage 1
++	hotdog_fb_pause
++
+ 	bl	record_mmu_state
++	hotdog_fb_stage 2
++	hotdog_fb_pause
+ 	bl	preserve_boot_args
++	hotdog_fb_stage 3
++	hotdog_fb_pause
+ 
+ 	adrp	x1, early_init_stack
+ 	mov	sp, x1
+@@ -135,6 +157,8 @@ SYM_CODE_START(primary_entry)
+ 	adrp	x0, __pi_init_idmap_pg_dir
+ 	mov	x1, xzr
+ 	bl	__pi_create_init_idmap
++	hotdog_fb_stage 4
++	hotdog_fb_pause
+ 
+ 	/*
+ 	 * If the page tables have been populated with non-cacheable
+@@ -170,13 +194,8 @@ SYM_CODE_START(primary_entry)
+ 	 * the TCR will have been set.
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
+-
+-	/* Prevent an inherited APSS watchdog from expiring during early boot. */
+-	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
+-	str	wzr, [x9, #0x08]		// WDT0_EN = 0
+-	dsb	sy
+-
+-	hotdog_fb_stage 0
++	hotdog_fb_stage 5
++	hotdog_fb_pause
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)
+ 
+@@ -268,7 +287,6 @@ SYM_CODE_END(preserve_boot_args)
+  *   x0 = __pa(KERNEL_START)
+  */
+ SYM_FUNC_START_LOCAL(__primary_switched)
+-	hotdog_fb_stage 4, 1
+ 	adr_l	x4, init_task
+ 	init_cpu_task x4, x5, x6
+ 
+@@ -557,11 +575,9 @@ SYM_FUNC_START_LOCAL(__no_granule_support)
+ SYM_FUNC_END(__no_granule_support)
+ 
+ SYM_FUNC_START_LOCAL(__primary_switch)
+-	hotdog_fb_stage 1
+ 	adrp	x1, reserved_pg_dir
+ 	adrp	x2, __pi_init_idmap_pg_dir
+ 	bl	__enable_mmu
+-	hotdog_fb_stage 2, 1
+ 
+ 	adrp	x1, early_init_stack
+ 	mov	sp, x1
+@@ -569,7 +585,6 @@ SYM_FUNC_START_LOCAL(__primary_switch)
+ 	mov	x0, x20				// pass the full boot status
+ 	mov	x1, x21				// pass the FDT
+ 	bl	__pi_early_map_kernel		// Map and relocate the kernel
+-	hotdog_fb_stage 3, 1
+ 
+ 	ldr	x8, =__primary_switched
+ 	adrp	x0, KERNEL_START		// __pa(KERNEL_START)

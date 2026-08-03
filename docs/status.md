@@ -13,7 +13,7 @@ Last updated: 2026-08-03
 | Architecture | AArch64 |
 | Bootloader | Unlocked A/B bootloader |
 | Userspace | postmarketOS edge, OpenRC |
-| Mainline base | postmarketOS Qualcomm SM8150 Linux 6.17 branch |
+| Mainline base | Hardware-validated ClearStaff Linux 6.16; shared pmaports target is SM8150 6.17 or newer |
 | Bridge base | Lineage/OpenELA-derived Linux 4.14.357 |
 
 Other `hotdog` variants may differ in modem, panel, firmware, and bootloader
@@ -26,6 +26,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
+| Mainline 6.16 reference package | Strict pmbootstrap build passes; hardware test pending | `linux-oneplus-hotdog-mainline616-6.16.0-r0.apk` is `25,534,610` bytes, SHA256 `ee5c55ddde8c9a385d1b11af799df2a373110dabc4441614b33b8712877408ce`. Its Image is `27,572,232` bytes, SHA256 `ee3abf18421b49462b5afd2f4e923fd97e6f3cdc13a06e4a1948e18e306b69d5`; its source-built hotdog DTB is `138,194` bytes, SHA256 `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`. The package's integrated hardware-contract validator passed. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
 | Persistent direct boot | Read-write rootfs and networking working | V43 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, and starts OpenRC, NCM, and SSH in about 15 seconds. |
@@ -68,11 +69,13 @@ possible.
 ## Definition of the next milestone
 
 V43 has reproduced the complete direct boot from a clean pinned kernel source
-and public patch series, without generic DWC3 or IOMMU modifications. The next
-milestone is to carry the validated display, UFS, DWC3 SMMU, rootfs, and USB setup into a
-pmbootstrap-built pmaports package. Hardware enablement can then proceed over
-stable SSH: battery and charging, touch and remaining keys, Wi-Fi/Bluetooth,
-audio, modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
+and public patch series, without generic DWC3 or IOMMU modifications. The
+kernel, source-built DTB, and modules now build as a strict pmbootstrap aport
+and pass the encoded V43 hardware contract. The next milestone is to assemble
+that package with the initramfs, boot image, and rootfs, then validate the exact
+output on hardware. Hardware enablement can then proceed over stable SSH:
+battery and charging, touch and remaining keys, Wi-Fi/Bluetooth, audio,
+modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds must be replaced with upstreamable hardware
 descriptions before submission.
 
@@ -389,9 +392,11 @@ descriptions before submission.
     readback matched exactly; one normal reboot reached fresh SSH in about 15
     seconds with boot ID `9f90f5bc-a2c9-4105-8827-eae7dc5addcd`. Its AVB image
     SHA256 is `a77e789f4991483eddb1671d03895a504faf1e1a6b9e1a3e78daadab5b87c2fd`.
-89. Reproduce V43 through pmbootstrap/pmaports. Build the DTB, kernel modules,
-    initramfs, boot image, and rootfs from package sources without the forensic
-    K1 binary-DTB transforms, then repeat the guarded direct-boot validation.
+89. Keep the first strict `linux-oneplus-hotdog-mainline616` build as the
+    source-package milestone. It generates the DTB, Image, and modules without
+    the forensic K1 binary-DTB transforms and passes the encoded V43 contract.
+    Next build the initramfs, boot image, and rootfs around this package, then
+    repeat the guarded direct-boot validation.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

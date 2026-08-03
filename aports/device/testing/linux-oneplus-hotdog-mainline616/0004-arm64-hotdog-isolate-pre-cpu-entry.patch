@@ -1,0 +1,67 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index 39c8ffbaeff7..077e5554be11 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -82,7 +82,7 @@
+ 
+ 	/* Keep each early checkpoint visible long enough for a 30 fps camera. */
+ 	.macro	hotdog_fb_pause
+-	mov	x10, #0x02000000
++	mov	x10, #0x04000000
+ .Lhotdog_fb_pause\@:
+ 	subs	x10, x10, #1
+ 	b.ne	.Lhotdog_fb_pause\@
+@@ -136,19 +136,13 @@
+ SYM_CODE_START(primary_entry)
+ 	/* Prove the first executed kernel instructions before touching CPU state. */
+ 	hotdog_fb_stage 0
+-
+-	/* Stop the watchdog inherited from the Android boot chain immediately. */
+-	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
+-	str	wzr, [x9, #0x08]		// WDT0_EN = 0
+-	dsb	sy
+-	hotdog_fb_stage 1
+ 	hotdog_fb_pause
+ 
+ 	bl	record_mmu_state
+-	hotdog_fb_stage 2
++	hotdog_fb_stage 1
+ 	hotdog_fb_pause
+ 	bl	preserve_boot_args
+-	hotdog_fb_stage 3
++	hotdog_fb_stage 2
+ 	hotdog_fb_pause
+ 
+ 	adrp	x1, early_init_stack
+@@ -157,7 +151,7 @@ SYM_CODE_START(primary_entry)
+ 	adrp	x0, __pi_init_idmap_pg_dir
+ 	mov	x1, xzr
+ 	bl	__pi_create_init_idmap
+-	hotdog_fb_stage 4
++	hotdog_fb_stage 3
+ 	hotdog_fb_pause
+ 
+ 	/*
+@@ -183,9 +177,13 @@ SYM_CODE_START(primary_entry)
+ 	adr_l	x2, dcache_clean_poc
+ 	blr	x2
+ 
+-1:	mov	x0, x19
++1:	hotdog_fb_stage 4
++	hotdog_fb_pause
++	mov	x0, x19
+ 	bl	init_kernel_el			// w0=cpu_boot_mode
+ 	mov	x20, x0
++	hotdog_fb_stage 5
++	hotdog_fb_pause
+ 
+ 	/*
+ 	 * The following calls CPU setup code, see arch/arm64/mm/proc.S for
+@@ -194,7 +192,5 @@ SYM_CODE_START(primary_entry)
+ 	 * the TCR will have been set.
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
+-	hotdog_fb_stage 5
+-	hotdog_fb_pause
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)

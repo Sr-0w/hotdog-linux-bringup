@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=0
+pkgrel=1
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -51,10 +51,10 @@ kernel_downstream() {
 }
 
 kernel_mainline() {
-	pkgdesc="Mainline 6.17 K1-input reproduction (experimental)"
+	pkgdesc="Mainline Linux 6.16 direct-boot reference kernel"
 	depends="
 		!$pkgname-kernel-downstream
-		linux-oneplus-hotdog-mainline617-k1
+		linux-oneplus-hotdog-mainline616
 		mesa-vulkan-freedreno
 	"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname

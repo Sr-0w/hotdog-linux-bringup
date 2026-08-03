@@ -1,0 +1,124 @@
+# Hardware-validated reference kernel for the OnePlus 7T Pro mainline port.
+
+pkgname=linux-oneplus-hotdog-mainline616
+pkgver=6.16.0
+pkgrel=0
+pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
+maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
+arch="aarch64"
+_carch="arm64"
+_flavor="oneplus-hotdog-mainline616"
+url="https://github.com/ClearStaff/linux-sm8150-mainline-hotdog"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	dtc
+	findutils
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	python3
+	zstd
+"
+
+_repo="linux-sm8150-mainline-hotdog"
+_commit="403b56c33e2ccdda25d90378970a5e5b928dee19"
+export SOURCE_DATE_EPOCH=1755883508
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/ClearStaff/$_repo/archive/$_commit.tar.gz
+	$_config
+	0001-input-fts-fix-llvm-prototypes.patch
+	0002-arm64-hotdog-direct-entry.patch
+	0003-arm64-hotdog-early-entry-diagnostics.patch
+	0004-arm64-hotdog-isolate-pre-cpu-entry.patch
+	0005-arm64-hotdog-post-el-entry-diagnostics.patch
+	0006-arm64-hotdog-persistent-entry-markers.patch
+	0007-arm64-hotdog-remove-visual-entry-delays.patch
+	0008-arm64-hotdog-native-pmsg-and-visual-stages.patch
+	0009-arm64-hotdog-first-entry-canary.patch
+	0010-arm64-hotdog-match-working-image-size.patch
+	0011-arm64-hotdog-continue-after-direct-entry-canary.patch
+	0012-drm-msm-enable-native-hotdog-dsc-panel.patch
+	0013-ufs-core-add-v33-ordering-diagnostics.patch
+	0014-ufs-qcom-force-dma32-without-smmu.patch
+	0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
+	validate-mainline616-build.sh
+"
+builddir="$srcdir/$_repo-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/$_config" .config
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 olddefconfig
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
+		SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
+		KBUILD_BUILD_TIMESTAMP="2025-08-22 17:25:08 UTC" \
+		KBUILD_BUILD_USER="postmarketOS" \
+		KBUILD_BUILD_HOST="pmaports" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
+		Image modules dtbs
+
+	sh "$srcdir/validate-mainline616-build.sh" \
+		"arch/$_carch/boot/Image" \
+		.config \
+		"arch/$_carch/boot/dts/qcom/sm8150-oneplus-hotdog.dtb"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 LLVM_IAS=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir/usr" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+
+	sh "$srcdir/validate-mainline616-build.sh" \
+		"$pkgdir/boot/vmlinuz" \
+		"$builddir/.config" \
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
+}
+
+sha512sums="
+6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
+dc887240f058fb3cec90bb65207e813838d7284f20533b5edef0c42e9c53a4eeef1297d31003d289f7b3b19a7f6193a88f4cd5bca3d36ec1121c21f1094283cb  config-oneplus-hotdog-mainline616.aarch64
+2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
+36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
+5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
+190b83dd8c8a81609cab9894f008f61d2e5bb4c27dec171371c096d467347f0c0c2f9b6ff30442f941df1c7876266bd0bb6d54b633e76d908584e836c0f9c36f  0004-arm64-hotdog-isolate-pre-cpu-entry.patch
+28fd5212ffbd84104113aee9dc7facdab18fddd1c209889e67806f88fa24cedf0b90d66869d7d4d23a1a1248381fd4a605f010a0e754a5ee3de9459b486ec826  0005-arm64-hotdog-post-el-entry-diagnostics.patch
+c8d186c6e975ed6d2c7fb9da81719ac15af0ddb458cce90caadbbc660a17dab91195d8c3877bd1218e91cf815710ea4c4cbf6d551c097628e0f4f4ecb990c8c5  0006-arm64-hotdog-persistent-entry-markers.patch
+71bdcec3966c0a0a9bac9efc748109f556630a5a4a2c0d4e6df01e4b7de90bf8cb2b7b3d9be73ac92c7f8a8ed4ba3ba23b9c7fd012d50ab04566e6b59bdb7fb1  0007-arm64-hotdog-remove-visual-entry-delays.patch
+37b30263d307ce5bed225ff6417c2ff8a87507b99bae6e878ab2951992e4f0a9cce33810ce94cb64e87616acd66ea846a461a8b8307343b089057a6d02c7b156  0008-arm64-hotdog-native-pmsg-and-visual-stages.patch
+c3c3dc2afd1259b2fea0b636c71325d6eff565196427949d59ab71e5e3a43bfaf12669e0f17230703384432a23878f2d3a9121b030f069c7e52a8a60d13ad954  0009-arm64-hotdog-first-entry-canary.patch
+c8ac195e20945e54ece79e16aa1eea4dc1a7d1f242b9eaa8669f18b8f21b790c946cb1dd668c7ba0ef7ce3fb3b46ceaaac2f887cfc8cfb4ea4fe4bd9aaefb368  0010-arm64-hotdog-match-working-image-size.patch
+57f6596fc55ad141c1f59d788fa2a6679e6457e298666c62e46d842ac1eb773479184b5de3df807f5d67e30590fd99d0788a7da72f9d0d79b23b1e1ae427111e  0011-arm64-hotdog-continue-after-direct-entry-canary.patch
+03d4da050b0f737b4be5b89fad6fd8782661b10633dd7868ea0c4304f4c0aeafad53d7d904136d72e735dd51f50f721d6978928bee754df2c8e691750580c4cf  0012-drm-msm-enable-native-hotdog-dsc-panel.patch
+88d9dc234a1d094b3192f0b4dcfa12f1702a23142f61e0764347d5a7fc1936f607572aa40b167ef6cdacc8d21528752e892a3203448de74c81747750ea61c111  0013-ufs-core-add-v33-ordering-diagnostics.patch
+be58bea49d34fc71c3920266193567270711c0b61915b44f5a9914784ef4d0a65fbec826c9df1a0bedd279a602532c49448fe742b3ff8a237aa2c75d6b183d94  0014-ufs-qcom-force-dma32-without-smmu.patch
+2ce75fcf65fd535f110bc70da1ecdf673639bb40ad1c42ac60419cea0627974b56ff0590aa71ef7a85e0e0800bf37a1c9dc5e67c86a9250b325a6eded7f342f1  0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
+d622a72dbd9968c7b0fc4e3911c0d3fc1787cd72c79ec2ee8549ce826ce788fd50edf8ce548eb4d437548d7bcdc805eaf84dd2a6fbe7ebb290cc3b36aa60eebc  validate-mainline616-build.sh
+"

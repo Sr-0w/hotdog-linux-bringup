@@ -56,8 +56,14 @@ write to `boot_b`, a normal reboot reached a fresh kernel, NCM, and SSH in about
 15 seconds. No V37/V39 DWC3 diagnostics or unknown-endpoint events remained.
 This proves that the temporary generic DWC3 changes used for localization are
 not required once DWC3 uses its translated SMMU domain. V43 deliberately keeps
-V42's validated DTB, initramfs, command line, and font byte-identical; producing
-those components through pmbootstrap is the next integration boundary.
+V42's validated DTB, initramfs, command line, and font byte-identical.
+
+The `linux-oneplus-hotdog-mainline616` aport now reproduces the V43 kernel
+contract from pinned source through a strict pmbootstrap build. It generates
+the hotdog DTB directly from DTS, builds the Image and modules, and rejects any
+payload that violates the validated entry, memory, display, UFS, or DWC3 SMMU
+invariants. The first strict build completed successfully; assembling and
+hardware-testing the complete pmbootstrap boot image is the next boundary.
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -78,6 +84,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
+| Mainline 6.16 reference package | Strict build passes; hardware test pending | pmbootstrap produced a `25,534,610`-byte APK from pinned source. Its `27,572,232`-byte Image is `ee3abf18421b49462b5afd2f4e923fd97e6f3cdc13a06e4a1948e18e306b69d5`; its source-built DTB is `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | V33 mounts nested `pmOS_root` read-write as `/dev/loop1` and completes `switch_root` without kexec. |
 | USB networking | Working directly | V43 exposes NCM with host `172.16.42.2` and device `172.16.42.1` using unmodified generic DWC3/IOMMU source. |
@@ -239,10 +246,10 @@ controlled device tree and userspace still carry these bring-up changes:
    tested ABL drops byte 512 and ignores header-v2 `extra_cmdline`.
 
 V43 contains no local modifications to generic DWC3, USB gadget, or IOMMU
-source. Its DTB and initramfs remain controlled V42 artifacts, so the current
-changes are bring-up fixes rather than proposed upstream solutions. The SMMU
-bypasses, ICE removal, nested-root wrapper, and prebuilt DTB handoff all need
-proper pmaports replacements.
+source. Its DTB and initramfs remain controlled V42 artifacts. The new 6.16
+reference aport removes the prebuilt-DTB dependency for packaged builds, but
+the SMMU bypasses, ICE removal, nested-root wrapper, and complete image assembly
+still need proper pmaports integration before submission.
 The technical evidence and rationale are documented in
 [docs/mainline-bringup.md](docs/mainline-bringup.md).
 

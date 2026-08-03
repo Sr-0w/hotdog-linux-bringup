@@ -1,0 +1,816 @@
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 44e0ac0ebecf..fd0770446c07 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -270,6 +270,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-hdk.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-google-flame.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-microsoft-surface-duo.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-mtp.dtb
++DTC_FLAGS_sm8150-oneplus-hotdog := -@
+ dtb-$(CONFIG_ARCH_QCOM) += sm8150-oneplus-hotdog.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-sony-xperia-kumano-bahamut.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-sony-xperia-kumano-griffin.dtb
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 1c4f34e36f46..75b5f49ff2c9 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -1,142 +1,101 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+ /*
+- * Copyright (c) soon
++ * Devicetree for the OnePlus 7T Pro (hotdog / HD1911).
++ *
++ * This keeps the proven OnePlus SM8150 common base used by guacamole and
++ * hotdogb, then adds only the HD1911-specific first-boot pieces we can verify
++ * from stock dumps: 1440x3120 simplefb, Samsung S6SY761 touch, and ramoops.
+  */
+ 
+ /dts-v1/;
+ 
+-#include <dt-bindings/arm/qcom,ids.h>
+-#include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+-#include <dt-bindings/sound/qcom,q6asm.h>
+-#include <dt-bindings/usb/pd.h>
+-#include "sm8150.dtsi"
+-#include "sm8150-wcd9340.dtsi"
+-#include "pm8150.dtsi"
+-#include "pm8150b.dtsi"
+-#include "pm8150l.dtsi"
+-
+-/delete-node/ &tz_mem;
+-/delete-node/ &adsp_mem;
+-/delete-node/ &mpss_mem;
+-/delete-node/ &venus_mem;
+-/delete-node/ &wlan_mem;
+-/delete-node/ &slpi_mem;
+-/delete-node/ &ipa_fw_mem;
+-/delete-node/ &ipa_gsi_mem;
+-/delete-node/ &gpu_mem;
+-/delete-node/ &spss_mem;
+-/delete-node/ &camera_mem;
+-/delete-node/ &cdsp_mem;
+-/delete-node/ &rmtfs_mem;
++#include <dt-bindings/gpio/gpio.h>
++#include "sm8150-oneplus-common.dtsi"
+ 
+ / {
+ 	model = "OnePlus 7T Pro";
+-	compatible = "oneplus,hotdog", "qcom,sm8150";
++	compatible = "oneplus,hotdog", "oneplus,oneplus7", "qcom,sm8150";
+ 	chassis-type = "handset";
+ 
+-	qcom,msm-id = <339 0x20000>; /* SM8150 "v2" */
++	qcom,msm-id = <339 0x20000>; /* SM8150 v2 */
++	qcom,msm-name = "SM8150 V2";
++	qcom,pmic-name = "PM8150";
+ 	qcom,board-id = <8 0>;
+ 
+-	chosen {
+-		#address-cells = <2>;
+-		#size-cells = <2>;
+-		ranges;
++	/*
++	 * Matches the Android DTBO selected on the test HD1911:
++	 * project 19801, EVT/PVT/DVT hardware range 12..55.
++	 */
++	oplus,dtsi_no = <19801>;
++	oplus,pcb_range = <0 55>;
+ 
+-		stdout-path = "framebuffer0";
+-		cmdline = "clk_ignore_unused console=ttyGS0,115200 pmos.debug-shell";
++	memory@80000000 {
++		reg = <0 0x80000000 0 0x3bb00000>;
+ 	};
+ 
+-	reserved-memory {
++	aliases {
++		serial0 = &uart2;
++		display0 = &framebuffer0;
++	};
++
++	chosen {
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+ 		ranges;
+-
+-		tz_mem: memory@86200000 {
+-			reg = <0x0 0x86200000 0x0 0x7500000>;
+-			no-map;
+-		};
+-		adsp_mem: memory@9b200000 {
+-			reg = <0x0 0x9b200000 0x0 0x1e00000>;
+-			no-map;
+-		};
+-
+-		mpss_mem: memory@8dc00000 {
+-			reg = <0x0 0x8dc00000 0x0 0xa000000>;
+-			no-map;
+-		};
+-
+-		venus_mem: memory@97c00000 {
+-			reg = <0x0 0x97c00000 0x0 0x500000>;
+-			no-map;
+-		};
+-
+-		wlan_mem: memory@9b000000 {
+-			reg = <0x0 0x9b000000 0x0 0x180000>;
+-			no-map;
+-		};
+-
+-		slpi_mem: memory@98100000 {
+-			reg = <0x0 0x98100000 0x0 0x1400000>;
+-			no-map;
+-		};
+-
+-		ipa_fw_mem: memory@99500000 {
+-			reg = <0x0 0x99500000 0x0 0x10000>;
+-			no-map;
+-		};
+-
+-		ipa_gsi_mem: memory@99510000 {
+-			reg = <0x0 0x99510000 0x0 0x5000>;
+-			no-map;
+-		};
+-
+-		gpu_mem: memory@99515000 {
+-			reg = <0x0 0x99515000 0x0 0x2000>;
+-			no-map;
+-		};
+-
+-		spss_mem: memory@99600000 {
+-			reg = <0x0 0x99600000 0x0 0x100000>;
+-			no-map;
++		stdout-path = "display0";
++
++		/*
++		 * Use the framebuffer prepared by the bootloader. This mirrors
++		 * guacamole, but keeps hotdog's 1440x3120 panel geometry.
++		 */
++		framebuffer0: framebuffer@9c000000 {
++			compatible = "simple-framebuffer";
++			reg = <0 0x9c000000 0 (1440 * 3120 * 4)>;
++			width = <1440>;
++			height = <3120>;
++			stride = <(1440 * 4)>;
++			format = "a8r8g8b8";
++			status = "okay";
+ 		};
++	};
+ 
+-		camera_mem: memory@9ab00000 {
+-			reg = <0x0 0x9ab00000 0x0 0x500000>;
++	reserved-memory {
++		hotdog_removed_gap: hotdog-removed-gap@89d00000 {
++			reg = <0 0x89d00000 0 0x1a00000>;
+ 			no-map;
+ 		};
+ 
+-		cdsp_mem: memory@99700000 {
+-			reg = <0x0 0x99700000 0x0 0x1400000>;
+-			no-map;
++		/* Bootloader framebuffer memory region. */
++		cont_splash_region: disp_rdump_region: memory@9c000000 {
++			reg = <0 0x9c000000 0 0x2400000>;
+ 		};
+ 
+-		cdsp_sec_mem: memory@a4c00000 {
+-			reg = <0x0 0xa4c00000 0x0 0xc00000>;
++		cdsp_sec_regions: memory@a4c00000 {
++			compatible = "removed-dma-pool";
+ 			no-map;
++			reg = <0 0xa4c00000 0 0x3c00000>;
+ 		};
+ 
+-		ramoops@b7e00000 {
++		ramoops: ramoops@a9800000 {
+ 			compatible = "ramoops";
+-			reg = <0x0 0xb7e00000 0x0 0x400000>;
++			reg = <0 0xa9800000 0 0x400000>;
+ 			record-size = <0x40000>;
+-			console-size = <0x40000>;
++			console-size = <0x1000>;
++			ftrace-size = <0x1000>;
++			pmsg-size = <0x1000>;
++			ecc-size = <0>;
+ 		};
+ 
+-		rmtfs_mem: memory@fc201000 {
+-			compatible = "qcom,rmtfs-mem";
+-			reg = <0 0xfc201000 0 0x200000>;
++		param_mem: memory@ac200000 {
++			reg = <0 0xac200000 0 0x100000>;
+ 			no-map;
+-			qcom,client-id = <1>;
+-			qcom,vmid = <15>;
+ 		};
+-	};
+ 
+-	vph_pwr: vph-pwr-regulator {
+-		compatible = "regulator-fixed";
+-		regulator-name = "vph_pwr";
+-		regulator-min-microvolt = <3700000>;
+-		regulator-max-microvolt = <3700000>;
++		mtp_mem: memory@ac300000 {
++			reg = <0 0xac300000 0 0xb00000>;
++			no-map;
++		};
+ 	};
+ 
+ 	panel_avdd_1p8: panel-avdd-regulator {
+@@ -150,27 +109,33 @@ panel_avdd_1p8: panel-avdd-regulator {
+ 		pinctrl-names = "default";
+ 	};
+ 
+-	/*
+-	 * Apparently RPMh does not provide support for PM8150 S4 because it
+-	 * is always-on; model it as a fixed regulator.
+-	 */
+-	vreg_s4a_1p8: pm8150-s4 {
++	ufs_phy_gdsc: ufs-phy-gdsc-supply {
+ 		compatible = "regulator-fixed";
+-		regulator-name = "vreg_s4a_1p8";
+-
+-		regulator-min-microvolt = <1800000>;
+-		regulator-max-microvolt = <1800000>;
+-
++		regulator-name = "ufs-phy-gdsc-bridge";
++		regulator-min-microvolt = <1>;
++		regulator-max-microvolt = <1>;
+ 		regulator-always-on;
+ 		regulator-boot-on;
++	};
+ 
+-		vin-supply = <&vph_pwr>;
++	/*
++	 * Compatibility names consumed by the filtered HD1913 bootloader DTBO.
++	 * They point at existing mainline nodes and can disappear once the
++	 * remaining DTBO fragments have been moved into this source tree.
++	 */
++	__symbols__ {
++		ufsphy_mem = "/soc@0/phy@1d87000";
++		ufshc_mem = "/soc@0/ufshc@1d84000";
++		pm8150_l5 = "/soc@0/rsc@18200000/pm8150-rpmh-regulators/ldo5";
++		pm8150l_l3 = "/soc@0/rsc@18200000/pm8150l-rpmh-regulators/ldo3";
++		pm8150_l10 = "/soc@0/rsc@18200000/pm8150-rpmh-regulators/ldo10";
++		pm8150_l9 = "/soc@0/rsc@18200000/pm8150-rpmh-regulators/ldo9";
++		pm8150_s4 = "/pm8150-s4";
++		pm8150l_s8 = "/soc@0/rsc@18200000/pm8150l-rpmh-regulators/smps8";
+ 	};
+ };
+ 
+ &tlmm {
+-	gpio-reserved-ranges = <4 2>, <83 2>, <126 4>;
+-
+ 	panel_avdd_default: panel-avdd-default-state {
+ 		pins = "gpio130";
+ 		function = "gpio";
+@@ -184,436 +149,96 @@ panel_te_default: panel-te-default-state {
+ 		drive-strength = <2>;
+ 		bias-pull-down;
+ 	};
+-
+-	ts_reset_default: ts-reset-default-state {
+-		pins = "gpio54";
+-		function = "gpio";
+-		drive-strength = <2>;
+-		bias-disable;
+-		output-high;
+-	};
+-
+-	ts_int_default: ts-int-default-state {
+-		pins = "gpio122";
+-		function = "gpio";
+-		drive-strength = <2>;
+-		bias-disable;
+-	};
+-
+-	quat_mi2s_active: quat_mi2s_active_state {
+-		pins = "gpio137", "gpio138";
+-		function = "qua_mi2s";
+-		drive-strength = <8>;
+-		bias-disable;
+-		output-high;
+-	};
+-
+-	quat_mi2s_mclk_active: quat_mi2s_mclk_active {
+-		pins = "gpio136";
+-		function = "qua_mi2s";
+-		drive-strength = <8>;
+-		bias-disable;
+-	};
+-
+-	quat_mi2s_sd0_active: quat_mi2s_sd0_active {
+-		pins = "gpio139";
+-		function = "qua_mi2s";
+-		drive-strength = <8>;
+-		bias-disable;
+-	};
+-
+-	quat_mi2s_sd1_active: quat_mi2s_sd1_active {
+-		pins = "gpio140";
+-		function = "qua_mi2s";
+-		drive-strength = <8>;
+-		bias-disable;
+-	};
+ };
+ 
+-&apps_rsc {
+-	pm8150-rpmh-regulators {
+-		compatible = "qcom,pm8150-rpmh-regulators";
+-		qcom,pmic-id = "a";
+-
+-		vdd-s1-supply = <&vph_pwr>;
+-		vdd-s2-supply = <&vph_pwr>;
+-		vdd-s3-supply = <&vph_pwr>;
+-		vdd-s4-supply = <&vph_pwr>;
+-		vdd-s5-supply = <&vph_pwr>;
+-		vdd-s6-supply = <&vph_pwr>;
+-		vdd-s7-supply = <&vph_pwr>;
+-		vdd-s8-supply = <&vph_pwr>;
+-		vdd-s9-supply = <&vph_pwr>;
+-		vdd-s10-supply = <&vph_pwr>;
+-
+-		vdd-l1-l8-l11-supply = <&vreg_s6a_0p9>;
+-		vdd-l2-l10-supply = <&vreg_bob>;
+-		vdd-l3-l4-l5-l18-supply = <&vreg_s6a_0p9>;
+-		vdd-l6-l9-supply = <&vreg_s8c_1p3>;
+-		vdd-l7-l12-l14-l15-supply = <&vreg_s5a_2p0>;
+-		vdd-l13-l16-l17-supply = <&vreg_bob>;
+-
+-		vreg_s5a_2p0: smps5 {
+-			regulator-min-microvolt = <1904000>;
+-			regulator-max-microvolt = <2040000>;
+-		};
+-
+-		vreg_s6a_0p9: smps6 {
+-			regulator-min-microvolt = <920000>;
+-			regulator-max-microvolt = <1128000>;
+-		};
+-
+-		vreg_l1a_0p75: ldo1 {
+-			regulator-min-microvolt = <752000>;
+-			regulator-max-microvolt = <752000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l2a_3p1: ldo2 {
+-			regulator-min-microvolt = <3072000>;
+-			regulator-max-microvolt = <3072000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l3a_0p8: ldo3 {
+-			regulator-min-microvolt = <480000>;
+-			regulator-max-microvolt = <932000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l5a_0p8: ldo5 {
+-			regulator-min-microvolt = <880000>;
+-			regulator-max-microvolt = <880000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l6a_1p2: ldo6 {
+-			regulator-min-microvolt = <1200000>;
+-			regulator-max-microvolt = <1200000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l7a_1p8: ldo7 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1800000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l9a_1p2: ldo9 {
+-			regulator-min-microvolt = <1200000>;
+-			regulator-max-microvolt = <1200000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l10a_2p5: ldo10 {
+-			regulator-min-microvolt = <2504000>;
+-			regulator-max-microvolt = <2950000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l11a_0p8: ldo11 {
+-			regulator-min-microvolt = <800000>;
+-			regulator-max-microvolt = <800000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l12a_1p8: ldo12 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1800000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l13a_2p7: ldo13 {
+-			regulator-min-microvolt = <3000000>;
+-			regulator-max-microvolt = <3000000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l14a_1p8: ldo14 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1880000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l15a_1p7: ldo15 {
+-			regulator-min-microvolt = <1704000>;
+-			regulator-max-microvolt = <1704000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l16a_2p7: ldo16 {
+-			regulator-min-microvolt = <2704000>;
+-			regulator-max-microvolt = <2960000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l17a_3p0: ldo17 {
+-			regulator-min-microvolt = <2856000>;
+-			regulator-max-microvolt = <3008000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-	};
+-
+-	pm8150l-rpmh-regulators {
+-		compatible = "qcom,pm8150l-rpmh-regulators";
+-		qcom,pmic-id = "c";
+-
+-		vdd-s1-supply = <&vph_pwr>;
+-		vdd-s2-supply = <&vph_pwr>;
+-		vdd-s3-supply = <&vph_pwr>;
+-		vdd-s4-supply = <&vph_pwr>;
+-		vdd-s5-supply = <&vph_pwr>;
+-		vdd-s6-supply = <&vph_pwr>;
+-		vdd-s7-supply = <&vph_pwr>;
+-		vdd-s8-supply = <&vph_pwr>;
+-
+-		vdd-l1-l8-supply = <&vreg_s4a_1p8>;
+-		vdd-l2-l3-supply = <&vreg_s8c_1p3>;
+-		vdd-l4-l5-l6-supply = <&vreg_bob>;
+-		vdd-l7-l11-supply = <&vreg_bob>;
+-		vdd-l9-l10-supply = <&vreg_bob>;
+-
+-		vdd-bob-supply = <&vph_pwr>;
+-		vdd-flash-supply = <&vreg_bob>;
+-		vdd-rgb-supply = <&vreg_bob>;
+-
+-		vreg_bob: bob {
+-			regulator-min-microvolt = <3008000>;
+-			regulator-max-microvolt = <4000000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_AUTO>;
+-			regulator-allow-bypass;
+-		};
+-
+-		vreg_s8c_1p3: smps8 {
+-			regulator-min-microvolt = <1352000>;
+-			regulator-max-microvolt = <1352000>;
+-		};
+-
+-		vreg_l1c_1p8: ldo1 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1800000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l2c_1p3: ldo2 {
+-			regulator-min-microvolt = <1304000>;
+-			regulator-max-microvolt = <1304000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l3c_1p2: ldo3 {
+-			regulator-min-microvolt = <1200000>;
+-			regulator-max-microvolt = <1200000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l4c_1p8: ldo4 {
+-			regulator-min-microvolt = <1704000>;
+-			regulator-max-microvolt = <2928000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l5c_1p8: ldo5 {
+-			regulator-min-microvolt = <1704000>;
+-			regulator-max-microvolt = <2928000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l6c_2p9: ldo6 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <2960000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l7c_3p0: ldo7 {
+-			regulator-min-microvolt = <2856000>;
+-			regulator-max-microvolt = <3104000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l8c_1p8: ldo8 {
+-			regulator-min-microvolt = <1800000>;
+-			regulator-max-microvolt = <1800000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
+-
+-		vreg_l9c_2p9: ldo9 {
+-			regulator-min-microvolt = <2704000>;
+-			regulator-max-microvolt = <2960000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
++&i2c17 {
++	status = "disabled";
++	clock-frequency = <400000>;
+ 
+-		vreg_l10c_3p3: ldo10 {
+-			regulator-min-microvolt = <3000000>;
+-			regulator-max-microvolt = <3312000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
++	touchscreen@48 {
++		compatible = "samsung,s6sy761";
++		status = "disabled";
++		reg = <0x48>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <122 0x2008>;
++		vdd-supply = <&vreg_l17a_3p0>;
+ 
+-		vreg_l11c_3p3: ldo11 {
+-			regulator-min-microvolt = <3104000>;
+-			regulator-max-microvolt = <3312000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+-		};
++		pinctrl-names = "default";
++		pinctrl-0 = <&tp_irq_active &tp_rst_active &tp_1v8_active>;
+ 	};
+ };
+ 
+-&ufs_mem_hc {
+-	status = "okay";
+-
+-	vcc-supply = <&vreg_l10a_2p5>;
+-	vcc-max-microamp = <750000>;
+-	vccq-supply = <&vreg_l9a_1p2>;
+-	vccq-max-microamp = <700000>;
+-	vccq2-supply = <&vreg_s4a_1p8>;
+-	vccq2-max-microamp = <750000>;
++&remoteproc_mpss {
++	status = "disabled";
+ };
+ 
+-&ufs_mem_phy {
+-	status = "okay";
+-
+-	vdda-phy-supply = <&vreg_l5a_0p8>;
+-	vdda-phy-max-microamp = <90200>;
+-	vdda-pll-supply = <&vreg_l3c_1p2>;
+-	vdda-pll-max-microamp = <19000>;
++&wifi {
++	status = "disabled";
+ };
+ 
+-&usb_1 {
+-	/* USB 2.0 only */
+-	qcom,select-utmi-as-pipe-clk;
+-	status = "okay";
++&rmtfs_mem {
++	reg = <0x0 0x89b00000 0x0 0x200000>;
+ };
+ 
+-&usb_1_dwc3 {
+-	dr_mode = "otg";
+-	maximum-speed = "high-speed";
+-	/* Remove USB3 phy */
+-	phys = <&usb_1_hsphy>;
+-	phy-names = "usb2-phy";
+-	usb-role-switch;
++&adsp_mem {
++	reg = <0x0 0x8be00000 0x0 0x1e00000>;
+ };
+ 
+-&usb_1_hsphy {
+-	vdda-pll-supply = <&vreg_l5a_0p8>;
+-	vdda18-supply = <&vreg_l12a_1p8>;
+-	vdda33-supply = <&vreg_l2a_3p1>;
+-	status = "okay";
++&mpss_mem {
++	reg = <0x0 0x8dc00000 0x0 0xa000000>;
+ };
+ 
+-&qupv3_id_0 {
+-	status = "okay";
+-};
+-&qupv3_id_1 {
+-	status = "okay";
+-};
+-&qupv3_id_2 {
+-	status = "okay";
++&venus_mem {
++	reg = <0x0 0x97c00000 0x0 0x500000>;
+ };
+ 
+-&i2c17 {
+-	status = "okay";
+-	clock-frequency = <400000>;
+-	touchscreen@48 {
+-		compatible = "samsung,s6sy761";
+-		reg = <0x48>;
+-		interrupt-parent = <&tlmm>;
+-		interrupts = <122 IRQ_TYPE_LEVEL_LOW>;
+-		vdd-supply = <&vreg_l1c_1p8>;
+-		avdd-supply = <&vreg_l10c_3p3>;
+-
+-		pinctrl-names = "default";
+-		pinctrl-0 = <&ts_reset_default &ts_int_default>;
+-	};
++&slpi_mem {
++	reg = <0x0 0x98100000 0x0 0x1400000>;
+ };
+ 
+-&i2c4 {
+-	status = "okay";
+-/*
+-	speaker_codec: audio-codec@34 {
+-		compatible = "nxp,tfa9895";
+-		reg = <0x34>;
+-		vddd-supply = <&vreg_l5a_0p8>;
+-		sound-name-prefix = "Speaker";
+-		#sound-dai-cells = <0>;
+-	};
+-*/
+-	speaker_codec: audio-codec@34 {
+-		compatible = "nxp,tfa9894";
+-		reg = <0x34>;
+-		vddd-supply = <&vreg_l5a_0p8>;
+-		sound-name-prefix = "Speaker";
+-		#sound-dai-cells = <0>;
+-	};
++&ipa_fw_mem {
++	reg = <0x0 0x99500000 0x0 0x10000>;
+ };
+ 
+-&q6afedai {
+-	qi2s@22 {
+-		reg = <QUATERNARY_MI2S_RX>;
+-		qcom,sd-lines = <0>;
+-	};
++&ipa_gsi_mem {
++	reg = <0x0 0x99510000 0x0 0x5000>;
+ };
+ 
+-&q6asmdai {
+-	dai@0 {
+-		reg = <0>;
+-	};
++&gpu_mem {
++	reg = <0x0 0x99515000 0x0 0x2000>;
+ };
+ 
+-&sound {
+-	compatible = "qcom,sdm845-sndcard";
+-	pinctrl-0 = <&quat_mi2s_active &quat_mi2s_sd0_active
+-			   &quat_mi2s_sd1_active &quat_mi2s_mclk_active>;
+-	pinctrl-names = "default";
+-	model = "OnePlus 7T Pro";
+-
+-	audio-routing = "RX_BIAS", "MCLK",
+-		"AMIC1", "MIC BIAS1",
+-		"AMIC2", "MIC BIAS2",
+-		"AMIC3", "MIC BIAS3",
+-		"AMIC4", "MIC BIAS4";
+-
+-	mm1-dai-link {
+-		link-name = "MultiMedia1";
+-		cpu {
+-			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
+-		};
+-	};
+-	speaker_playback_dai {
+-		link-name = "Primary Spkr Playback";
+-		cpu {
+-			sound-dai = <&q6afedai QUATERNARY_MI2S_RX>;
+-		};
+-		platform {
+-			sound-dai = <&q6routing>;
+-		};
+-		codec {
+-			sound-dai = <&speaker_codec>;
+-		};
+-	};
++&spss_mem {
++	reg = <0x0 0x99600000 0x0 0x100000>;
+ };
+ 
+-&gpu {
+-	status = "okay";
++&cdsp_mem {
++	reg = <0x0 0x99700000 0x0 0x1400000>;
++};
+ 
+-	zap-shader {
+-		memory-region = <&gpu_mem>;
+-		firmware-name = "qcom/sm8150/oneplus/hotdog/a640_zap.mbn";
+-	};
++&ufs_mem_hc {
++	/delete-property/ iommus;
++	/delete-property/ qcom,ice;
+ };
+ 
+-&gmu {
+-	status = "okay";
++&qupv3_id_1 {
++	/delete-property/ iommus;
+ };
+ 
+-&gpi_dma0 {
++&usb_1 {
++	qcom,select-utmi-as-pipe-clk;
+ 	status = "okay";
+ };
+ 
+-&gpi_dma1 {
+-	status = "okay";
++&usb_1_qmpphy {
++	status = "disabled";
+ };
+ 
+-&gpi_dma2 {
+-	status = "okay";
++&usb_1_dwc3 {
++	dr_mode = "peripheral";
++	maximum-speed = "high-speed";
++	phys = <&usb_1_hsphy>;
++	phy-names = "usb2-phy";
+ };
+ 
+ &mdss {
+@@ -625,6 +250,8 @@ &mdss_mdp {
+ };
+ 
+ &mdss_dsi0 {
++	#address-cells = <1>;
++	#size-cells = <0>;
+ 	vdda-supply = <&vreg_l3c_1p2>;
+ 	status = "okay";
+ 
+@@ -633,11 +260,9 @@ display_panel: panel@0 {
+ 		reg = <0>;
+ 		vddio-supply = <&vreg_l14a_1p8>;
+ 		avdd-supply = <&panel_avdd_1p8>;
+-
+ 		reset-gpios = <&tlmm 6 GPIO_ACTIVE_LOW>;
+ 		pinctrl-0 = <&panel_te_default>;
+ 		pinctrl-names = "default";
+-
+ 		status = "okay";
+ 
+ 		port {
+@@ -655,38 +280,6 @@ &mdss_dsi0_out {
+ };
+ 
+ &mdss_dsi0_phy {
+-	vdds-supply = <&vreg_l5a_0p8>;
+-	status = "okay";
+-};
+-
+-/* remoteproc */
+-
+-&remoteproc_adsp {
+-	status = "okay";
+-	firmware-name = "qcom/sm8150/oneplus/hotdog/adsp.mbn";
+-};
+-
+-&remoteproc_cdsp {
+-	status = "okay";
+-	firmware-name = "qcom/sm8150/oneplus/hotdog/cdsp.mbn";
+-};
+-
+-&remoteproc_mpss {
+-	status = "okay";
+-	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
+-};
+-
+-/* wifi */
+-&wifi {
+-	status = "okay";
+-
+-	vdd-0.8-cx-mx-supply = <&vreg_l1a_0p75>;
+-	vdd-1.8-xo-supply = <&vreg_l7a_1p8>;
+-	vdd-1.3-rfa-supply = <&vreg_l2c_1p3>;
+-	vdd-3.3-ch0-supply = <&vreg_l11c_3p3>;
+-};
+-
+-/* shit */
+-&pon_pwrkey {
++	vdds-supply = <&vreg_l5a_0p875>;
+ 	status = "okay";
+ };

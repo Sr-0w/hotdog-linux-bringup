@@ -1,0 +1,55 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index 077e555cc3d1..bd4f2a8197d1 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -134,16 +134,11 @@
+ 	 *  x21        primary_entry() .. start_kernel()        FDT pointer passed at boot in x0
+ 	 */
+ SYM_CODE_START(primary_entry)
+-	/* Prove the first executed kernel instructions before touching CPU state. */
+-	hotdog_fb_stage 0
++	/* A register-only delay remains safe regardless of the incoming MMU state. */
+ 	hotdog_fb_pause
+ 
+ 	bl	record_mmu_state
+-	hotdog_fb_stage 1
+-	hotdog_fb_pause
+ 	bl	preserve_boot_args
+-	hotdog_fb_stage 2
+-	hotdog_fb_pause
+ 
+ 	adrp	x1, early_init_stack
+ 	mov	sp, x1
+@@ -151,8 +146,6 @@ SYM_CODE_START(primary_entry)
+ 	adrp	x0, __pi_init_idmap_pg_dir
+ 	mov	x1, xzr
+ 	bl	__pi_create_init_idmap
+-	hotdog_fb_stage 3
+-	hotdog_fb_pause
+ 
+ 	/*
+ 	 * If the page tables have been populated with non-cacheable
+@@ -177,12 +170,11 @@ SYM_CODE_START(primary_entry)
+ 	adr_l	x2, dcache_clean_poc
+ 	blr	x2
+ 
+-1:	hotdog_fb_stage 4
+-	hotdog_fb_pause
+-	mov	x0, x19
++1:	mov	x0, x19
+ 	bl	init_kernel_el			// w0=cpu_boot_mode
+ 	mov	x20, x0
+-	hotdog_fb_stage 5
++	/* init_kernel_el() has established an MMU-off physical access context. */
++	hotdog_fb_stage 0
+ 	hotdog_fb_pause
+ 
+ 	/*
+@@ -192,5 +184,7 @@ SYM_CODE_START(primary_entry)
+ 	 * the TCR will have been set.
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
++	hotdog_fb_stage 1
++	hotdog_fb_pause
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)
