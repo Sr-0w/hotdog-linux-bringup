@@ -8,8 +8,66 @@ source "$(dirname "$0")/phone-lock.sh"
 
 VARIANT="${HOTDOG_CLEARSTAFF_VARIANT:-mainline617-d13-passive-replay}"
 CANDIDATE_LABEL="ClearStaff Linux 6.16"
-TARGET_KERNEL=6.16.0-sm8150
+TARGET_KERNEL=6.16.0-sm8150+
 case "$VARIANT" in
+	direct-entry-v42-clean-console)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V42 clean 16x32 console"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-201500-clearstaff616-direct-entry-v42-clean-console"
+		BOOT_SHA=baeeeffc6a96f2416038a6468260b609950e63b8bd8b1f4c08d5980d812fe824
+		BOOT_CMDLINE_SHA=de6f08f3690798e6ec3b20f5ca3b4683fd9efc15dd76ea5c970366afe2aeb4b3
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v41-translated-dwc3-iommu)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V41 translated DWC3 Apps SMMU"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-235000-clearstaff616-direct-entry-v41-translated-dwc3-iommu"
+		BOOT_SHA=f7d2f9f51a3c7818df2148c1bf25c72cf7ee1545ac38c9c3847793820bf9b604
+		BOOT_CMDLINE_SHA=7c88a4d3054577b7203f827950286c684759b229cce3c174e1d476320cf18f80
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v40-dwc3-iommu)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V40 DWC3 Apps SMMU stream"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-233000-clearstaff616-direct-entry-v40-dwc3-iommu"
+		BOOT_SHA=478aae1ffe9c9159cac767e71813cf3e23085f5d1ef13b56d76d00071b6b1e15
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v39-ep0-iommu-trace)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V39 EP0 and IOMMU trace"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-230000-clearstaff616-direct-entry-v39-ep0-iommu-trace"
+		BOOT_SHA=63512b5bc41aebf3b2252067151da4a343ecd854a4ad299bcdada5bb94cd0ee5
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v38-first-connect-no-reset)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V38 first-connect no-reset"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-223000-clearstaff616-direct-entry-v38-first-connect-no-reset"
+		BOOT_SHA=eeda76d6b98a6eb021260f97360e3a4224ea902390c32faf15583781cd291930
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v37-usb-bind-trace)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V37 USB bind trace"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-220000-clearstaff616-direct-entry-v37-usb-bind-trace"
+		BOOT_SHA=7d24d47d11154d54f27b0e0f7c3e84e6358d939dc8dbb3be41d0d13529939828
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v36-staged-usb)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V36 staged DWC3 gadget"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-213000-clearstaff616-direct-entry-v36-staged-usb"
+		BOOT_SHA=a611368ce382b990868f7789e583eb4ab18309a288411ca8b56ba83f0056a0a3
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v35-dwc3-dma32)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V35 DWC3 32-bit DMA"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-210000-clearstaff616-direct-entry-v35-dwc3-dma32"
+		BOOT_SHA=f4e5d957e1293b0cf4a746c0e28bf2228ac515b143c2210fed547fabf5ed6817
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
 	direct-entry-v34-active-usb)
 		CANDIDATE_LABEL="ClearStaff Linux 6.16 V34 bounded active USB"
 		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-203000-clearstaff616-direct-entry-v34-active-usb"
@@ -321,6 +379,16 @@ and D7 bootloader-overlay contract byte-identical. It changes only rdinit: after
 preserving dmesg in RAM, it draws five unique non-scrolling bands across tty0
 and leaves an interactive BusyBox shell alive. This distinguishes native
 scanout geometry faults from fbcon scrolling without any automatic reboot. The
+direct-entry-v36-staged-usb variant uses V35's DWC3 DMA constraint but creates
+the NCM configfs tree without binding it, waits two seconds, then performs one
+UDC bind and starts DHCP only if that write returns. ACM reconfiguration is
+disabled, so a failure identifies either the initial UDC bind or an earlier
+configfs step. The
+direct-entry-v35-dwc3-dma32 variant retains V34's bounded active-USB initramfs,
+V33's validated DTB, and the working direct-mainline UFS path. Its only
+functional kernel delta forces coherent DWC3 allocations below 4 GiB when the
+SM8150 bring-up DT omits the failed Apps SMMU, and prints the resulting DMA
+addresses before the gadget is configured. The
 direct-entry-v34-active-usb variant keeps the hardware-validated V33 kernel,
 DTB, command line, and complete ramdisk prefix byte-identical. Its appended
 initramfs member replaces only the two passive USB markers with a bounded UDC

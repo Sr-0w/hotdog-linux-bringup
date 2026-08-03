@@ -28,19 +28,19 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Read-write rootfs working | V33 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, starts `udevd`, and launches the visible rootfs shell on `tty1`. |
+| Persistent direct boot | Read-write rootfs and networking working | V41 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, and starts OpenRC, NCM, and SSH. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
 | UFS | Working directly with a temporary DMA constraint | V32 isolated an inaccessible UTRL above 4 GiB while SMMU was bypassed. V33 conditionally forces 32-bit coherent DMA for this exact SM8150 no-`iommus` configuration and enumerates the Samsung UFS. |
 | postmarketOS root | Working directly | Nested `pmOS_root` mounts read-write as `/dev/loop1` and direct mainline completes `switch_root`. |
 | postmarketOS boot | Working directly | Nested `pmOS_boot` is discovered as `/dev/loop0`. |
-| OpenRC userspace | Direct rootfs handoff working | `udevd` and injected local.d diagnostics start after direct `switch_root`; a normal complete service boot still needs USB access for validation. |
-| USB NCM | Working through the bridge | The device is reachable at `172.16.42.1`. Direct-mainline gadget registration remains incomplete. |
-| USB ACM | Working through the bridge | A serial shell is exposed on `ttyGS0`. Direct-mainline ACM remains incomplete. |
+| OpenRC userspace | Working directly | V41 completes `switch_root`, starts OpenRC, NetworkManager, `sshd`, and the normal postmarketOS user session from `/dev/loop1`. |
+| USB NCM | Working directly | DWC3 uses Apps SMMU stream `0x140` with a translated domain. V41 exposes `usb0` at `172.16.42.1`; host ping and SSH are stable. |
+| USB ACM | Enumerating directly | V41 exposes CDC ACM and creates `ttyGS0`. An interactive serial-session check remains pending. |
 | Early console | Working through native fbcon | V30 switches `tty0` to a 180x195 color framebuffer console and displays readable kernel and postmarketOS initramfs output. |
 | DRM/panel | Partial | Native SM8150 DPU, DSI, TE, DSC, and the OnePlus Samsung panel bind and scan out. Dense console output appears repeated vertically, so final geometry is not yet validated. |
 | Framebuffer | Working for direct-boot diagnostics | Mainline registers `fb0: msm`; both kernel fbcon and PID 1 framebuffer writes are visible. V31 adds a non-scrolling five-band geometry test and a `tty0` BusyBox shell. |
 | RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
-| Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
+| Apps SMMU | Partial | V41 attaches DWC3 to stream ID `0x140` and uses a translated domain successfully. Other clients and the complete SoC description remain unvalidated. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
 | Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
@@ -67,11 +67,15 @@ possible.
 
 ## Definition of the next milestone
 
-The next milestone is direct DWC3 gadget registration with NCM, ACM, and SSH on
-the V33 rootfs path. After transport is available, the validated UFS DMA fix and
-native panel work must be carried into a reproducible pmaports package, the
-repeated DSI scanout geometry corrected, and the temporary SMMU/ICE bypasses
-replaced with proper hardware descriptions.
+The immediate validation candidate is V42, which reproduces V41 with the noisy
+EP0 trace removed and a built-in Terminus 16x32 console font. After that, the
+next milestone is to
+carry the validated display, UFS, DWC3 SMMU, rootfs, and USB setup into a
+pmbootstrap-built pmaports package. Hardware enablement can then proceed over
+stable SSH: battery and charging, touch and remaining keys, Wi-Fi/Bluetooth,
+audio, modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
+bootloader-overlay workarounds must be replaced with upstreamable hardware
+descriptions before submission.
 
 ## Current validation queue
 
@@ -368,6 +372,16 @@ replaced with proper hardware descriptions.
     an interactive BusyBox shell remains on `tty0`, and no automatic reboot or
     watchdog is armed. Its AVB image SHA256 is
     `cacc4751e1b2f3ed8085c0db0d1ff443d75ecfb57b7c6295d8187f4048b70834`.
+86. Keep V41 as the first complete direct-mainline transport result. Its
+    translated DWC3 Apps SMMU domain exposes stable NCM and ACM, and read-only
+    SSH validation confirms Linux `6.16.0-sm8150+`, the postmarketOS rootfs,
+    OpenRC, and `usb0` at `172.16.42.1`. Its AVB image SHA256 is
+    `f7d2f9f51a3c7818df2148c1bf25c72cf7ee1545ac38c9c3847793820bf9b604`.
+87. Validate V42 before starting another subsystem. It retains V41's DTB,
+    initramfs, translated-IOMMU setup, and direct-entry window, removes only
+    the high-frequency EP0 trace from the kernel, and selects the built-in
+    Terminus 16x32 console font. Its AVB image SHA256 is
+    `baeeeffc6a96f2416038a6468260b609950e63b8bd8b1f4c08d5980d812fe824`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

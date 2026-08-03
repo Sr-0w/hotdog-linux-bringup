@@ -1,0 +1,14 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "oneplus,hotdog", "oneplus,oneplus7", "qcom,sm8150";
+
+	fragment@0 {
+		target = <&usb_1_dwc3>;
+
+		__overlay__ {
+			iommus = <&apps_smmu 0x140 0>;
+		};
+	};
+};

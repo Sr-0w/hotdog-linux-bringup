@@ -12,11 +12,11 @@ it as HD1911 and expose the `hotdog` project/codename.
 
 ## Project status
 
-The mainline-oriented ClearStaff 6.16 V33 image now boots directly from the
+The mainline-oriented ClearStaff 6.16 V41 image now boots directly from the
 OnePlus bootloader, initializes the native SM8150 display, enumerates UFS,
 mounts the nested postmarketOS root filesystem read-write, completes
-`switch_root`, starts `udevd`, and launches a rootfs shell on `tty1`. This path
-does not execute the downstream 4.14 kernel and does not use kexec. The bridge
+`switch_root`, starts OpenRC and `sshd`, and exposes USB NCM/ACM. This path does
+not execute the downstream 4.14 kernel and does not use kexec. The bridge
 remains available as a recovery and comparison environment.
 
 V32 isolated the former UFS failure to DMA addressability: the controller was
@@ -37,6 +37,17 @@ the real rootfs. Dense scrolling currently appears repeated vertically, so the
 remaining display work is scanout/DSI geometry rather than basic panel power or
 kernel-console visibility. See the
 [native display evidence](docs/evidence/2026-08-03-native-display.md).
+
+Direct USB networking and SSH now work from the bootloader-started mainline
+kernel. V39 localized the last Qualcomm `900e` transition to the first EP0
+transfer command. V40 attached DWC3 to Apps SMMU stream `0x140`, which stopped
+the crash but left the event ring unwritten while the kernel requested a
+passthrough domain. V41 changed only `iommu.passthrough=1` to `0`; DWC3 then
+completed EP0 transfers, exposed NCM and ACM, and postmarketOS became reachable
+at `172.16.42.1` over SSH. See the
+[direct mainline USB evidence](docs/evidence/2026-08-03-direct-mainline-usb.md).
+V42 is prepared as a behavior-preserving confirmation build: it removes the
+high-frequency EP0 trace and uses a larger Terminus 16x32 console font.
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -59,9 +70,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; the mainline-oriented ClearStaff 6.16 image starts directly from the OnePlus bootloader. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | V33 mounts nested `pmOS_root` read-write as `/dev/loop1` and completes `switch_root` without kexec. |
-| USB networking | Working through the bridge | NCM uses host `172.16.42.2` and device `172.16.42.1`; direct-mainline gadget registration remains incomplete. |
-| SSH | Working through the bridge; direct transport pending | V33 reaches the real rootfs directly, but DWC3 has not yet exposed NCM or ACM. |
-| USB serial | Working through the bridge | ACM exposes `ttyGS0` after kexec; direct-mainline ACM remains incomplete. |
+| USB networking | Working directly | V41 exposes NCM with host `172.16.42.2` and device `172.16.42.1`; repeated ping and SSH sessions remain stable. |
+| SSH | Working directly | OpenSSH starts on the direct postmarketOS rootfs and reports `Linux hotdog 6.16.0-sm8150+`. |
+| USB serial | Enumerating directly | V41 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
 | Persistent direct mainline | Rootfs boot working | V33 boots from persistent `boot_b`, enumerates storage, mounts rootfs, starts `udevd`, and launches the visible rootfs shell. |
@@ -77,12 +88,12 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["ClearStaff Linux 6.16 V33"]
+    A["OnePlus bootloader"] --> B["ClearStaff Linux 6.16 V41"]
     B --> C["Native DPU, DSI and fbcon"]
     B --> D["UFS with temporary 32-bit DMA"]
     D --> E["Nested pmOS GPT discovery"]
     E --> F["Read-write postmarketOS rootfs"]
-    F --> G["udevd and visible tty1 shell"]
+    F --> G["OpenRC, NCM/ACM and SSH"]
 ```
 
 The bridge is a temporary engineering tool. The long-term target is a normal
