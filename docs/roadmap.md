@@ -5,6 +5,11 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
+The accepted hardware baseline is now the reproducible 6.16 `r5` package. Its
+exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
+S6SY761 multitouch, and an Adreno 640 render node that completes Turnip Vulkan
+workloads.
+
 ## Priority 0: reproducible mainline boot
 
 - keep D6 as a timing-sensitive negative control; it exposes all UFS LUNs,
@@ -34,9 +39,6 @@ The packaging and submission gates are tracked separately in the
   observable until manual recovery
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
   reliable software reboot, and the hotdog-only PON reboot-mode properties
-- validate a direct image generated from the exact r5 package payload; its
-  RAID6 config delta passed the hardware checkpoint, while the complete package
-  payload and normal userspace path remain unvalidated
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
 - restore the complete RAM map
@@ -47,6 +49,8 @@ The packaging and submission gates are tracked separately in the
 
 - bring up display clocks, DSI, DSC, and the Samsung panel under mainline
 - keep a persistent framebuffer or DRM console after userspace starts
+- validate Adreno-accelerated graphical-shell scanout, orientation, frame
+  pacing, and suspend/resume after the working headless Vulkan bring-up
 - validate S6SY761 orientation and suspend/resume after the working multitouch
   bring-up
 - validate buttons, haptics, battery reporting, and charging

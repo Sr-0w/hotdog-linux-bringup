@@ -73,6 +73,10 @@ PY
 expect_config 'CONFIG_DRM_MSM=y'
 expect_config 'CONFIG_DRM_MSM_DSI=y'
 expect_config 'CONFIG_DRM_PANEL_SAMSUNG_ONEPLUS_DSC=y'
+expect_config 'CONFIG_QCOM_SCM=y'
+expect_config 'CONFIG_QCOM_MDT_LOADER=y'
+expect_config 'CONFIG_QCOM_RPMPD=y'
+expect_config 'CONFIG_INTERCONNECT_QCOM_SM8150=y'
 expect_config 'CONFIG_USB_DWC3=y'
 expect_config 'CONFIG_USB_DWC3_DUAL_ROLE=y'
 expect_config 'CONFIG_USB_CONFIGFS=y'
@@ -97,6 +101,10 @@ qup2=$soc/geniqup@cc0000
 gpi2=$soc/dma-controller@c00000
 i2c17=$qup2/i2c@c80000
 touch=$i2c17/touchscreen@48
+gpu=$soc/gpu@2c00000
+gmu=$soc/gmu@2c6a000
+adreno_smmu=$soc/iommu@2ca0000
+gpu_zap=$gpu/zap-shader
 dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
 te=$soc/pinctrl@3100000/panel-te-default-state
@@ -164,6 +172,27 @@ expect_value touchscreen-reset-pin gpio54 fdtget -ts "$dtb" "$ts_reset" pins
 expect_value touchscreen-irq-pin gpio122 fdtget -ts "$dtb" "$ts_int" pins
 fdtget "$dtb" "$ts_reset" output-high >/dev/null ||
 	die "touchscreen reset pin must default high"
+
+expect_value gpu-status okay fdtget -ts "$dtb" "$gpu" status
+expect_value gpu-compatible 'qcom,adreno-640.1 qcom,adreno' \
+	fdtget -ts "$dtb" "$gpu" compatible
+expect_value gmu-status okay fdtget -ts "$dtb" "$gmu" status
+expect_value gmu-compatible 'qcom,adreno-gmu-640.1 qcom,adreno-gmu' \
+	fdtget -ts "$dtb" "$gmu" compatible
+expect_value gpu-zap-firmware qcom/sm8150/oneplus/hotdog/a640_zap.mbn \
+	fdtget -ts "$dtb" "$gpu_zap" firmware-name
+adreno_smmu_phandle=$(fdtget -tx "$dtb" "$adreno_smmu" phandle) ||
+	die "missing Adreno SMMU phandle"
+expect_value gpu-iommus "$adreno_smmu_phandle 0 401" \
+	fdtget -tx "$dtb" "$gpu" iommus
+expect_value gmu-iommus "$adreno_smmu_phandle 5 400" \
+	fdtget -tx "$dtb" "$gmu" iommus
+gpu_mem_path=$(fdtget -ts "$dtb" /__symbols__ gpu_mem) ||
+	die "missing gpu_mem symbol"
+gpu_mem_phandle=$(fdtget -tx "$dtb" "$gpu_mem_path" phandle) ||
+	die "missing gpu_mem phandle"
+expect_value gpu-zap-memory "$gpu_mem_phandle" \
+	fdtget -tx "$dtb" "$gpu_zap" memory-region
 
 for symbol in \
 	ufsphy_mem ufshc_mem pm8150_l5 pm8150l_l3 \

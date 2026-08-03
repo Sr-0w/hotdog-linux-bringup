@@ -1,14 +1,14 @@
 # Hardware enablement roadmap
 
-This roadmap starts only after the
-[direct-boot completion criteria](direct-boot.md#completion-criteria) are met.
-The direct baseline must boot Linux 6.17 without the downstream kexec bridge,
-mount the postmarketOS root read-write, and retain USB NCM, USB ACM, SSH, and a
-tested recovery path. The current support claims are recorded in the
-[hardware status matrix](status.md), while the temporary K1 workarounds and
-their evidence are documented in the
-[mainline bring-up record](mainline-bringup.md) and the
-[K1 evidence record](evidence/2026-07-11-mainline-k1.md).
+This roadmap follows the
+[direct-boot completion criteria](direct-boot.md#completion-criteria). The
+accepted 6.16 `r5` pmaports baseline starts directly from the OnePlus
+bootloader without the downstream kexec bridge, mounts the postmarketOS root
+read-write, and retains USB NCM, USB ACM, SSH, the S6SY761 touchscreen, and the
+Adreno 640 render path. The current support claims are recorded in the
+[hardware status matrix](status.md). Earlier K1 workarounds remain historical
+diagnostic evidence in the [mainline bring-up record](mainline-bringup.md) and
+the [K1 evidence record](evidence/2026-07-11-mainline-k1.md).
 
 For every experiment below:
 
@@ -105,35 +105,29 @@ first conclusive failure. If the direct result matches K1, investigate
 
 ## 4. DRM, DSI, and panel
 
-**Proven current state.** Early console output is lost and
-`simple-framebuffer` cannot reserve its video memory. The mainline display
-clock path and MDSS/DSI nodes are not enabled, while downstream proves a
-working MSM DRM path for the Samsung DSC command-mode panel. The public K1 DTS
-baseline contains only the bootloader framebuffer and panel geometry; see the
-[tracked hotdog DTS patch](../patches/mainline-hotdog-k1-dts.patch) and the
-[status matrix](status.md#mainline-support-matrix). The K1 config already
-enables DRM MSM, DSI, and the 7 nm DSI PHY, but no mainline panel description
-yet represents the complete OnePlus 1440x3120 60/90 Hz command sequence.
+**Proven current state.** The 6.16 pmaports baseline initializes the native
+SM8150 DPU, display clock controller, DSI host, 7 nm DSI PHY, TE signal, DSC,
+and the OnePlus Samsung command-mode panel. DRM registers `fb0`, and fbcon
+shows kernel plus initramfs output with the built-in Terminus 16x32 font. The
+`r5` baseline also binds the Adreno GPU to the DPU. Dense fbcon output can
+still repeat vertically, so final scanout geometry and userspace handoff are
+not yet accepted.
 
-**Hypothesis.** The first independent blocker is display clock-controller
-initialization. It can be validated without sending commands to the panel or
-depending on the final panel driver.
+**Next experiment.** Start a minimal DRM/KMS userspace compositor on the
+accepted `r5` image while retaining SSH. Keep the panel mode and DTS fixed so
+the experiment measures scanout, orientation, and handoff rather than another
+kernel variable.
 
-**Single-variable experiment.** Remove only `disp_cc_sm8250_driver_init` from
-the initcall blacklist. Leave MDSS, DSI0, DSI PHY0, and the panel disabled.
+**Success criteria.** A compositor presents a correctly oriented 1440x3120
+surface without duplicated rows, tearing, or panel timeout. Touch coordinates
+match the displayed corners, GPU acceleration is selected, console handoff is
+clean, and USB SSH remains stable. Validate 60 Hz first; 90 Hz and repeated
+mode changes are separate tests.
 
-**Success criteria.** The display clock controller and its power domain probe
-without timeout, reset, or regulator regression. Phase completion additionally
-requires later one-step variants that enable the MDSS/DSI host without a
-panel, then a 60 Hz-only panel driver and graph, before adding DSC mode changes
-or 90 Hz. Final success is stable DRM scanout with console handoff and no loss
-of USB SSH.
-
-**Risks and fallback.** Incorrect clock or power-domain sequencing can reset
-the device before remote logging starts; incorrect panel commands can leave a
-lit, blank, or damaged display. Restore the display-blacklisted DTB on a clock
-failure. Keep the panel disabled until host-only probing is clean, and retain
-the downstream panel data as reference rather than copying its vendor driver.
+**Risks and fallback.** A userspace atomic modeset can blank the only local
+console even when the kernel remains healthy. Keep SSH active, preserve the
+accepted `r5` image, and avoid changing panel commands, refresh rate, and
+compositor configuration in the same experiment.
 
 ## 5. Samsung S6SY761 touchscreen
 
@@ -158,7 +152,27 @@ complete.
 rails or GPIO assignments. Keep the accepted `r4` boot image available and
 change only one power, pinctrl, or suspend property per follow-up test.
 
-## 6. Wi-Fi
+## 6. Adreno 640 GPU
+
+**Proven current state.** The reproducible `r5` package enables the Adreno 640
+and GMU using the upstream SM8150 SMMU, clocks, interconnects, power domains,
+OPP table, and reserved memory. The handset-specific ZAP path is the only
+device override. MSM DRM binds `2c00000.gpu`, loads GMU firmware v2.0.261,
+exposes `/dev/dri/renderD128`, and publishes six frequencies from 257 to
+675 MHz. Turnip Mesa 26.1.6 completed two Vulkan workloads without a GPU, GMU,
+or IOMMU fault. See the
+[GPU evidence](evidence/2026-08-04-mainline616-gpu.md).
+
+**Remaining validation.** Run an accelerated graphical shell through the
+physical KMS display, validate sustained mixed GPU/display load, then test
+suspend/resume and repeated cold boots. Resolve or justify the non-fatal dummy
+`vdd` and `vddcx` regulator warnings before upstream submission.
+
+**Risks and fallback.** GPU faults can wedge display scanout while USB remains
+alive. Keep the exact `r4` touch image as a GPU-disabled fallback and preserve
+the `r5` headless Vulkan test as a control when debugging compositor failures.
+
+## 7. Wi-Fi
 
 **Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
 validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
@@ -185,7 +199,7 @@ crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
 networking as the fallback. Do not combine first Wi-Fi validation with
 Bluetooth or modem enablement.
 
-## 7. USB host mode
+## 8. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

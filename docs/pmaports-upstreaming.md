@@ -37,6 +37,13 @@ into the shared SM8150 package rather than the final submission layout. See the
 Revision `r4` of that reference aport also direct-boots its exact kernel and
 DTB with hardware-validated S6SY761 touch and multitouch; see the
 [touchscreen evidence](evidence/2026-08-04-mainline616-touchscreen.md).
+Revision `r5` adds the Adreno 640 and GMU. Two clean strict builds produced a
+byte-identical `25,534,915`-byte APK with SHA256
+`276be937d54b8d7120c3665c202f06f0a0231e56058e0bf221e6aba5c2e200fb`.
+The exact package kernel and DTB direct-booted from a completely read-back AVB
+image, exposed a DRM render node, and completed Turnip Vulkan workloads without
+a GPU, GMU, or IOMMU fault; see the
+[GPU evidence](evidence/2026-08-04-mainline616-gpu.md).
 
 Relevant pmaports policy references are:
 
@@ -226,6 +233,7 @@ requires all criteria in *Device Categorization*, section "Community", including
 The project promotion gate additionally requires the staged validation in the
 [hardware roadmap](hardware-roadmap.md): full RAM, Apps SMMU, UFS ICE,
 DRM/DSI/panel, touchscreen suspend/resume, then Wi-Fi and USB host. Basic touch
-and multitouch input are complete. Any remaining limitation must be
+and multitouch input plus basic Adreno rendering are complete. Any remaining
+limitation must be
 measured, documented in the [status matrix](status.md), and explicitly acceptable
 under the current pmaports community policy before promotion is requested.
