@@ -34,6 +34,9 @@ and reached a writable rootfs plus stable USB networking and SSH. The temporary
 are laboratory integration steps, so this remains a reference for migration
 into the shared SM8150 package rather than the final submission layout. See the
 [Linux 6.16 pmaports image evidence](evidence/2026-08-03-mainline616-pmaports.md).
+Revision `r4` of that reference aport also direct-boots its exact kernel and
+DTB with hardware-validated S6SY761 touch and multitouch; see the
+[touchscreen evidence](evidence/2026-08-04-mainline616-touchscreen.md).
 
 Relevant pmaports policy references are:
 
@@ -222,6 +225,7 @@ requires all criteria in *Device Categorization*, section "Community", including
 
 The project promotion gate additionally requires the staged validation in the
 [hardware roadmap](hardware-roadmap.md): full RAM, Apps SMMU, UFS ICE,
-DRM/DSI/panel, touch, then Wi-Fi and USB host. Any remaining limitation must be
+DRM/DSI/panel, touchscreen suspend/resume, then Wi-Fi and USB host. Basic touch
+and multitouch input are complete. Any remaining limitation must be
 measured, documented in the [status matrix](status.md), and explicitly acceptable
 under the current pmaports community policy before promotion is requested.

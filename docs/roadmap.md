@@ -47,7 +47,8 @@ The packaging and submission gates are tracked separately in the
 
 - bring up display clocks, DSI, DSC, and the Samsung panel under mainline
 - keep a persistent framebuffer or DRM console after userspace starts
-- enable the Samsung touch controller
+- validate S6SY761 orientation and suspend/resume after the working multitouch
+  bring-up
 - validate buttons, haptics, battery reporting, and charging
 
 ## Priority 2: connectivity

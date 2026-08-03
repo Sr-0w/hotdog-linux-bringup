@@ -1,5 +1,9 @@
 # Mainline 6.16 pmaports image
 
+> This record captures the original `r3` package-to-device milestone. The
+> 2026-08-04 [`r4` touchscreen run](2026-08-04-mainline616-touchscreen.md)
+> preserves this boot path and adds hardware-validated S6SY761 multitouch.
+
 Date: 2026-08-03
 
 ## Result

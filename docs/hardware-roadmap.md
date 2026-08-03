@@ -137,30 +137,26 @@ the downstream panel data as reference rather than copying its vendor driver.
 
 ## 5. Samsung S6SY761 touchscreen
 
-**Proven current state.** The K1 DTS records I2C address `0x48`, interrupt GPIO
-122, reset-related pinctrl, and the 3.0 V L17 rail, but both `i2c17` and the
-touchscreen child are disabled. `CONFIG_TOUCHSCREEN_S6SY761=m` is available.
-The mainline binding requires separate `vdd` and `avdd` supplies, so the
-current one-supply node is not ready to enable. The baseline is visible in the
-[tracked hotdog DTS patch](../patches/mainline-hotdog-k1-dts.patch).
+**Proven current state.** Hardware validation is complete for basic input. The
+`r4` reference package enables QUPv3 wrapper 2, GPI DMA 2, I2C17, reset GPIO
+54, level-low interrupt GPIO 122, `vreg_l1c_1p8`, and `vreg_l10c_3p3`. The
+schema-valid S6SY761 node binds at address `0x48` and registers `event1`.
 
-**Hypothesis.** The QUP/I2C and pinctrl path is usable independently of the
-touch driver; the remaining device-level work is an accurate 1.8 V/3.0 V
-supply description and reset sequence.
+Taps and drags produced continuous 1440x3120-range coordinates, pressure,
+contact dimensions, tracking IDs, and multiple slots. GPIO 122 recorded 729
+S6SY761 interrupts during the test. The exact APK kernel and DTB booted
+directly with USB SSH intact. See the
+[touchscreen evidence](evidence/2026-08-04-mainline616-touchscreen.md).
 
-**Single-variable experiment.** Enable only `i2c17`, leaving
-`touchscreen@48` disabled. Confirm adapter registration and perform one
-controlled address transaction at `0x48`; do not scan unrelated addresses.
+**Remaining validation.** Exercise every advertised contact slot, validate
+orientation in a graphical shell, and test suspend/resume repeatedly. The
+driver emits a legacy `ABS_X`/`ABS_Y` warning while correctly exposing the
+multitouch axes; keep that distinction visible until userspace validation is
+complete.
 
-**Success criteria.** The I2C controller probes without SMMU or pinctrl faults
-and the known controller address acknowledges consistently. Final touchscreen
-success requires a schema-valid two-supply node, clean S6SY761 probe, correct
-1440x3120 coordinates, ten-contact reporting, suspend/resume, and no IRQ storm.
-
-**Risks and fallback.** A missing logical rail can produce a false negative,
-while incorrect reset or regulator sequencing can hold the controller or panel
-subsystem in reset. Return `i2c17` to disabled after an inconclusive result and
-add supplies or reset behavior one at a time.
+**Risks and fallback.** Other regional `hotdog` variants may use different
+rails or GPIO assignments. Keep the accepted `r4` boot image available and
+change only one power, pinctrl, or suspend property per follow-up test.
 
 ## 6. Wi-Fi
 

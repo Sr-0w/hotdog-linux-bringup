@@ -1,0 +1,70 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 00:20:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: enable S6SY761 touchscreen
+
+The touchscreen sits on QUPv3 wrapper 2 and uses GPI DMA channels. Enable
+both parents before enabling I2C17, then restore the HD191x reset and IRQ
+states together with the two supplies required by the upstream driver.
+
+This was validated on an HD1913: the controller probes as I2C client
+0-0048 and registers an s6sy761 input device.
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 34 +++++++++++++++----
+ 1 file changed, 27 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -149,22 +149,45 @@
+ 		drive-strength = <2>;
+ 		bias-pull-down;
+ 	};
++
++	ts_reset_default: ts-reset-default-state {
++		pins = "gpio54";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-high;
++	};
++
++	ts_int_default: ts-int-default-state {
++		pins = "gpio122";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++};
++
++&qupv3_id_2 {
++	status = "okay";
++};
++
++&gpi_dma2 {
++	status = "okay";
+ };
+ 
+ &i2c17 {
+-	status = "disabled";
++	status = "okay";
+ 	clock-frequency = <400000>;
+ 
+ 	touchscreen@48 {
+ 		compatible = "samsung,s6sy761";
+-		status = "disabled";
+ 		reg = <0x48>;
+ 		interrupt-parent = <&tlmm>;
+-		interrupts = <122 0x2008>;
+-		vdd-supply = <&vreg_l17a_3p0>;
++		interrupts = <122 IRQ_TYPE_LEVEL_LOW>;
++		vdd-supply = <&vreg_l1c_1p8>;
++		avdd-supply = <&vreg_l10c_3p3>;
+ 
+ 		pinctrl-names = "default";
+-		pinctrl-0 = <&tp_irq_active &tp_rst_active &tp_1v8_active>;
++		pinctrl-0 = <&ts_reset_default &ts_int_default>;
+ 	};
+ };
+ 
+-- 
+2.50.1

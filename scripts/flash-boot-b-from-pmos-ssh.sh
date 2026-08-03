@@ -34,6 +34,7 @@ EXPECTED_SOURCE_BOOT_ID=""
 EXPECTED_SOURCE_KERNEL=""
 EXPECTED_SOURCE_CMDLINE_TOKENS=()
 ACTIVE_TRANSPORT_PID=""
+REMOTE_SUDO_MODE=""
 
 usage() {
   cat <<'USAGE'
@@ -595,9 +596,33 @@ remote_run() {
   ssh_base "$@"
 }
 
+detect_remote_sudo_mode() {
+  if remote_run 'sudo -n true' >/dev/null 2>&1; then
+    REMOTE_SUDO_MODE="noninteractive"
+  elif printf '%s\n' "$PMOS_PASSWORD" |
+    remote_run "sudo -S -p '' true" >/dev/null 2>&1; then
+    REMOTE_SUDO_MODE="password"
+  else
+    die "Remote sudo authentication failed" 3
+  fi
+  log "Remote sudo mode: $REMOTE_SUDO_MODE"
+}
+
 remote_sudo_sh() {
   local script="$1"
-  remote_run "sudo -n sh -c $(remote_quote "$script")"
+
+  case "$REMOTE_SUDO_MODE" in
+    noninteractive)
+      remote_run "sudo -n sh -c $(remote_quote "$script")"
+      ;;
+    password)
+      printf '%s\n' "$PMOS_PASSWORD" |
+        remote_run "sudo -S -p '' sh -c $(remote_quote "$script")"
+      ;;
+    *)
+      die "Remote sudo mode was not initialized" 3
+      ;;
+  esac
 }
 
 guarded_remote_sudo_sh() {
@@ -605,7 +630,32 @@ guarded_remote_sudo_sh() {
   local output="$2"
   local script="$3"
 
-  guarded_ssh_base "$label" "$output" "sudo -n sh -c $(remote_quote "$script")"
+  case "$REMOTE_SUDO_MODE" in
+    noninteractive)
+      guarded_ssh_base "$label" "$output" "sudo -n sh -c $(remote_quote "$script")"
+      ;;
+    password)
+      printf '%s\n' "$PMOS_PASSWORD" |
+        guarded_ssh_base "$label" "$output" "sudo -S -p '' sh -c $(remote_quote "$script")"
+      ;;
+    *)
+      die "Remote sudo mode was not initialized" 3
+      ;;
+  esac
+}
+
+run_guarded_sudo_transport() {
+  case "$REMOTE_SUDO_MODE" in
+    noninteractive)
+      run_guarded_transport "$@"
+      ;;
+    password)
+      printf '%s\n' "$PMOS_PASSWORD" | run_guarded_transport "$@"
+      ;;
+    *)
+      die "Remote sudo mode was not initialized" 3
+      ;;
+  esac
 }
 
 remote_assert_peer_identity() {
@@ -699,11 +749,22 @@ remote_force_reboot() {
   dispatch_marker="HOTDOG_REBOOT_DISPATCH=$dispatch_nonce"
   ready_marker="HOTDOG_REBOOT_READY=$dispatch_nonce"
   reboot_inner="printf '%s\\n' $(remote_quote "$ready_marker"); sync; printf '%s\\n' $(remote_quote "$dispatch_marker"); echo b > /proc/sysrq-trigger"
-  reboot_cmd="sudo -n sh -c $(remote_quote "$reboot_inner")"
+  case "$REMOTE_SUDO_MODE" in
+    noninteractive)
+      reboot_cmd="sudo -n sh -c $(remote_quote "$reboot_inner")"
+      ;;
+    password)
+      reboot_cmd="sudo -S -p '' sh -c $(remote_quote "$reboot_inner")"
+      ;;
+    *)
+      log "ERROR: remote sudo mode was not initialized"
+      return 1
+      ;;
+  esac
 
   log "Sending supervised kernel sysrq reboot"
   if command -v timeout >/dev/null 2>&1; then
-    run_guarded_transport "remote reboot dispatch" "$run_dir/reboot-sysrq.txt" \
+    run_guarded_sudo_transport "remote reboot dispatch" "$run_dir/reboot-sysrq.txt" \
       timeout 10 sshpass -p "$PMOS_PASSWORD" ssh \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile="$run_dir/known_hosts" \
@@ -712,7 +773,14 @@ remote_force_reboot() {
         -o PubkeyAuthentication=no \
         "$PMOS_USER@$PMOS_HOST" "$reboot_cmd" || reboot_status=$?
   else
-    guarded_ssh_base "remote reboot dispatch" "$run_dir/reboot-sysrq.txt" "$reboot_cmd" || reboot_status=$?
+    run_guarded_sudo_transport "remote reboot dispatch" "$run_dir/reboot-sysrq.txt" \
+      sshpass -p "$PMOS_PASSWORD" ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile="$run_dir/known_hosts" \
+        -o ConnectTimeout=8 \
+        -o PreferredAuthentications=password \
+        -o PubkeyAuthentication=no \
+        "$PMOS_USER@$PMOS_HOST" "$reboot_cmd" || reboot_status=$?
   fi
   [ -s "$run_dir/reboot-sysrq.txt" ] && sed 's/^/[reboot-ssh] /' "$run_dir/reboot-sysrq.txt" || true
   case "$reboot_status" in
@@ -827,8 +895,10 @@ main() {
   fi
   verify_required_watcher
 
-  log "Probing SSH and noninteractive root"
-  remote_run 'printf "ssh-ok "; uname -n; sudo -n id; test -x /etc/local.d/hotdog-devnodes.start || true'
+  log "Probing SSH and root authentication"
+  remote_run 'printf "ssh-ok "; uname -n; test -x /etc/local.d/hotdog-devnodes.start || true'
+  detect_remote_sudo_mode
+  remote_sudo_sh 'id'
   remote_assert_peer_identity || die "pmOS SSH peer identity check failed; refusing to write boot_b" 4
 
   log "Creating remote work directory: $REMOTE_DIR"

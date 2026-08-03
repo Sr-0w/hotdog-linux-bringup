@@ -1,5 +1,10 @@
 # Mainline bring-up record
 
+> This document preserves the earlier Linux 6.17/kexec and V33 localization
+> history. The current direct-pmaports status is tracked in
+> [status.md](status.md); exact Linux 6.16 `r4` now boots with USB SSH and
+> hardware-validated S6SY761 multitouch.
+
 This document records the minimum set of changes that produced a real
 postmarketOS userspace under Linux 6.17 on the OnePlus 7T Pro HD1913.
 

@@ -45,6 +45,8 @@ if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	find "$modules_dir" -type f -name '*.ko' -print -quit | grep -q . ||
 		die "no kernel modules under: $modules_dir"
+	find "$modules_dir" -type f -path '*/drivers/input/touchscreen/s6sy761.ko' \
+		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
 fi
 
 python3 - "$image" <<'PY'
@@ -81,15 +83,25 @@ expect_config 'CONFIG_SCSI_UFS_QCOM=y'
 expect_config 'CONFIG_QCOM_WDT=y'
 expect_config 'CONFIG_EXT4_FS=y'
 expect_config 'CONFIG_FONT_TER16x32=y'
+expect_config 'CONFIG_QCOM_GENI_SE=y'
+expect_config 'CONFIG_QCOM_GPI_DMA=y'
+expect_config 'CONFIG_I2C_QCOM_GENI=y'
+expect_config 'CONFIG_TOUCHSCREEN_S6SY761=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
 soc=/soc@0
 ufs=$soc/ufshc@1d84000
 qup=$soc/geniqup@ac0000
+qup2=$soc/geniqup@cc0000
+gpi2=$soc/dma-controller@c00000
+i2c17=$qup2/i2c@c80000
+touch=$i2c17/touchscreen@48
 dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
 te=$soc/pinctrl@3100000/panel-te-default-state
+ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
+ts_int=$soc/pinctrl@3100000/ts-int-default-state
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -130,6 +142,28 @@ expect_value panel-status okay fdtget -ts "$dtb" "$panel" status
 expect_value panel-te-function mdp_vsync fdtget -ts "$dtb" "$te" function
 expect_value ufs-bridge ufs-phy-gdsc-bridge \
 	fdtget -ts "$dtb" /ufs-phy-gdsc-supply regulator-name
+
+expect_value qupv3-id2-status okay fdtget -ts "$dtb" "$qup2" status
+expect_value gpi-dma2-status okay fdtget -ts "$dtb" "$gpi2" status
+expect_value i2c17-status okay fdtget -ts "$dtb" "$i2c17" status
+expect_value touchscreen-compatible samsung,s6sy761 \
+	fdtget -ts "$dtb" "$touch" compatible
+expect_value touchscreen-address 48 fdtget -tx "$dtb" "$touch" reg
+expect_value touchscreen-interrupt '7a 8' fdtget -tx "$dtb" "$touch" interrupts
+vdd_path=$(fdtget -ts "$dtb" /__symbols__ vreg_l1c_1p8) ||
+	die "missing vreg_l1c_1p8 symbol"
+vdd_phandle=$(fdtget -tx "$dtb" "$vdd_path" phandle) ||
+	die "missing vreg_l1c_1p8 phandle"
+avdd_path=$(fdtget -ts "$dtb" /__symbols__ vreg_l10c_3p3) ||
+	die "missing vreg_l10c_3p3 symbol"
+avdd_phandle=$(fdtget -tx "$dtb" "$avdd_path" phandle) ||
+	die "missing vreg_l10c_3p3 phandle"
+expect_value touchscreen-vdd "$vdd_phandle" fdtget -tx "$dtb" "$touch" vdd-supply
+expect_value touchscreen-avdd "$avdd_phandle" fdtget -tx "$dtb" "$touch" avdd-supply
+expect_value touchscreen-reset-pin gpio54 fdtget -ts "$dtb" "$ts_reset" pins
+expect_value touchscreen-irq-pin gpio122 fdtget -ts "$dtb" "$ts_int" pins
+fdtget "$dtb" "$ts_reset" output-high >/dev/null ||
+	die "touchscreen reset pin must default high"
 
 for symbol in \
 	ufsphy_mem ufshc_mem pm8150_l5 pm8150l_l3 \

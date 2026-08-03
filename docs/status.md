@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 ## Tested hardware
 
@@ -26,7 +26,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
-| Mainline 6.16 pmaports image | Exact direct hardware boot working | Current pmaports produced `linux-oneplus-hotdog-mainline616-6.16.0-r3.apk` (`25,534,706` bytes, SHA256 `513ff02bc7f501b72061f50cbe44aa13e3ba9311ea414228a0792103aecebcee`), a normal initramfs, header-v2 Android boot image, and split boot/root filesystems. The deterministic 96 MiB AVB image `df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca` was written to and read back from `boot_b`. A normal reboot reached fresh SSH in 18 seconds with boot ID `03d2e4e7-46df-4589-a3ee-d61b06659e25`, kernel `6.16.0-sm8150`, and the matching pmaports root UUID. |
+| Mainline 6.16 pmaports image | Exact direct hardware boot working | The complete `r3` pmaports image established the normal initramfs, split boot/root filesystems, read-write root, and USB SSH path. Revision `r4` (`25,534,903` bytes, SHA256 `ca4cc9ff32caac1fe1126966e681ffcf1ec827bd5d96450f81a500df63903664`) adds the source-built touchscreen fix. Its exact APK kernel and DTB booted from a fully read-back 96 MiB AVB image, SHA256 `b90b54b4864ad265de088edf4e776751aeed805ae2201d9cb239fd55b33668ff`, and returned fresh SSH with kernel build `#5-oneplus-hotdog-mainline616`. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Complete image hardware-validated | The version-2 metadata and `kernel-cmdline.conf` generated the pmaports image used on hardware. Its 397-byte command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, selects `TER16x32`, and boots successfully. `deviceinfo_drm` remains absent because desktop scanout and final geometry are not yet validated. |
 | Persistent direct boot | Exact pmaports rootfs and networking working | The package-generated image boots from persistent `boot_b`, enumerates UFS, mounts the matching nested `pmOS_root` on `/dev/loop0p2`, completes `switch_root`, and starts OpenRC, USB networking, and SSH in 18 seconds. The current laboratory deployment stores the nested GPT in `userdata`; the final installation target remains open. |
@@ -43,10 +43,10 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
 | Apps SMMU | Partial | V43 attaches DWC3 to stream ID `0x140` and uses a translated domain successfully with generic IOMMU and DWC3 source. Other clients and the complete SoC description remain unvalidated. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
-| Kernel modules | Packaged and running | The r3 package installs the 6.16 module tree under `/usr/lib/modules/6.16.0-sm8150`; the exact package-built rootfs is running and loads its module tree after `switch_root`. |
+| Kernel modules | Packaged and running | The 6.16 module tree is installed under `/usr/lib/modules/6.16.0-sm8150` and loads after `switch_root`. The exact `r4` APK also contains `s6sy761.ko`; the running system loads the ABI-matched module and binds the physical controller. |
 | Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
 | Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
-| Touch and keys | Partial | The exact pmaports boot exposes `pm8941_pwrkey` as `event0`; touchscreen and remaining keys are absent. Android identifies a Samsung `sec-s6sy761` controller. |
+| Touch and keys | Touchscreen working; keys partial | `pm8941_pwrkey` is `event0`. The `r4` DTB enables QUPv3 wrapper 2, GPI DMA 2, I2C17, GPIO 54 reset, GPIO 122 IRQ, and both S6SY761 rails. The controller binds at `0-0048` as `event1`; taps, drags, pressure, continuous X/Y coordinates, and multiple contact slots were hardware-validated. Volume and other keys remain absent; touchscreen suspend/resume is untested. |
 | Firmware packages | Packaging complete, runtime not validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads, all under `/usr/lib/firmware`. This proves package layout, not peripheral operation or redistribution approval. |
 | Wi-Fi/Bluetooth | Not enabled | The usrmerged firmware packages exist, but the exact pmaports boot exposes neither a WLAN interface nor `/dev/rfkill`. Runtime loading and connectivity remain pending. |
 | Audio | Not enabled | The exact pmaports boot reports no ALSA sound cards. Codec, routing, DSP, and userspace configuration remain open. |
@@ -73,7 +73,7 @@ kernel, source-built DTB, standard initramfs, split installation, and
 deterministic AVB envelope were written with complete readback verification;
 fresh SSH proved the new kernel and filesystem UUIDs. Hardware enablement can
 therefore proceed over the package-built system:
-battery and charging, touch and remaining keys, Wi-Fi/Bluetooth, audio,
+battery and charging, remaining keys, Wi-Fi/Bluetooth, audio,
 modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds, the laboratory `userdata` deployment, and the
 device-specific kernel package must be replaced with upstreamable integration
@@ -410,6 +410,11 @@ before submission.
     read back exactly from `boot_b`. One normal reboot reached SSH in 18 seconds
     with boot ID `03d2e4e7-46df-4589-a3ee-d61b06659e25`, package-built kernel
     `6.16.0-sm8150`, and the matching pmaports boot/root UUIDs.
+93. Keep the `r4` touchscreen run as the first direct-pmaports peripheral
+    milestone. The exact APK kernel and DTB booted from AVB image
+    `b90b54b4864ad265de088edf4e776751aeed805ae2201d9cb239fd55b33668ff`;
+    S6SY761 registered at I2C `0-0048`, delivered 729 observed IRQs, continuous
+    coordinates and pressure, and multiple simultaneous contact slots.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

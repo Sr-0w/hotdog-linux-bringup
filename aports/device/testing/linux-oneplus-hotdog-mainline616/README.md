@@ -4,6 +4,8 @@ This aport packages the first source-reproducible kernel configuration known to
 boot directly from the HD1913 bootloader into a postmarketOS root filesystem.
 The hardware run reached the native display console, USB NCM and ACM gadget
 functions, and SSH without using a downstream bridge kernel or `kexec`.
+Revision `r4` also enables and hardware-validates the Samsung S6SY761
+touchscreen, including multitouch coordinate and pressure events.
 
 ## Source contract
 
@@ -14,6 +16,8 @@ functions, and SSH without using a downstream bridge kernel or `kexec`.
   translated domain (`iommu.passthrough=0`).
 - The native Samsung DSC panel, TE signal, and 16x32 framebuffer console are
   built in.
+- QUPv3 wrapper 2, GPI DMA 2, I2C17, and the schema-complete S6SY761 node are
+  enabled for the HD1913 touchscreen.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -23,18 +27,20 @@ build fails if one of those invariants changes.
 
 ## Strict build evidence
 
-The first clean strict pmbootstrap build completed on 2026-08-03 and printed
+The accepted strict pmbootstrap build completed on 2026-08-04 and printed
 `hotdog mainline 6.16 build contract: PASS` before packaging:
 
 | Output | Size | SHA256 |
 |---|---:|---|
-| `linux-oneplus-hotdog-mainline616-6.16.0-r0.apk` | 25,534,610 bytes | `ee5c55ddde8c9a385d1b11af799df2a373110dabc4441614b33b8712877408ce` |
-| `boot/vmlinuz` | 27,572,232 bytes | `ee3abf18421b49462b5afd2f4e923fd97e6f3cdc13a06e4a1948e18e306b69d5` |
-| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 138,194 bytes | `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r4.apk` | 25,534,903 bytes | `ca4cc9ff32caac1fe1126966e681ffcf1ec827bd5d96450f81a500df63903664` |
+| `boot/vmlinuz` | 27,572,232 bytes | `df3f119058c320e09c7372ee3cdcd5b90dd2c088d4f14e4af70831d5df7843f2` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 138,574 bytes | `ef22a1e539e28af028e48d0154ae091de79da358dd3854797a86c403dd520af3` |
 
-This validates package reproducibility from the pinned inputs and the encoded
-hardware contract. It does not yet claim that this exact APK-derived payload
-has booted on hardware.
+Two strict builds produced the same APK hash. The exact APK kernel and DTB were
+then assembled with the validated pmaports initramfs, written to `boot_b`, read
+back completely, and booted directly on the HD1913. USB networking and SSH
+returned, and `s6sy761` registered as I2C client `0-0048` and input `event1`.
+Taps, drags, pressure, and multiple contact slots produced live input events.
 
 ## Temporary bring-up constraints
 
