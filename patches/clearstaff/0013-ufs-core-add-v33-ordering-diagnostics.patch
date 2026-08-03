@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000013 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 3 Aug 2026 18:24:00 +0200
+Subject: [PATCH] ufs: core: add SM8150 bring-up ordering diagnostics
+
+This is temporary bring-up instrumentation. Match the explicit descriptor and
+MMIO ordering used by the downstream SM8150 driver, then dump the first timed
+out NOP OUT before clearing it. The framebuffer-readable dump distinguishes a
+link failure from an inaccessible transfer-request list.
+
+---
+ drivers/ufs/core/ufshcd.c | 43 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/drivers/ufs/core/ufshcd.c b/drivers/ufs/core/ufshcd.c
+index 50adfb8b335b..a8d6aa213f25 100644
+--- a/drivers/ufs/core/ufshcd.c
++++ b/drivers/ufs/core/ufshcd.c
+@@ -141,6 +141,9 @@ MODULE_PARM_DESC(uic_cmd_timeout,
+ 
+ static unsigned int dev_cmd_timeout = QUERY_REQ_TIMEOUT_DEFAULT;
+ 
++/* One-shot bring-up dump, kept small enough to remain readable on fbcon. */
++static atomic_t dev_cmd_timeout_dump_pending = ATOMIC_INIT(1);
++
+ static int dev_cmd_timeout_set(const char *val, const struct kernel_param *kp)
+ {
+ 	return param_set_uint_minmax(val, kp, QUERY_REQ_TIMEOUT_MIN,
+@@ -2352,8 +2355,11 @@ void ufshcd_send_command(struct ufs_hba *hba, unsigned int task_tag,
+ 			hba->vops->setup_xfer_req(hba, lrbp->task_tag,
+ 						  !!lrbp->cmd);
+ 		__set_bit(lrbp->task_tag, &hba->outstanding_reqs);
++		/* Match the ordering used by the downstream SM8150 UFS driver. */
++		dma_wmb();
+ 		ufshcd_writel(hba, 1 << lrbp->task_tag,
+ 			      REG_UTP_TRANSFER_REQ_DOOR_BELL);
++		wmb();
+ 		spin_unlock_irqrestore(&hba->outstanding_lock, flags);
+ 	}
+ }
+@@ -3210,6 +3216,34 @@ static int ufshcd_wait_for_dev_cmd(struct ufs_hba *hba,
+ 		dev_dbg(hba->dev, "%s: dev_cmd request timedout, tag %d\n",
+ 			__func__, lrbp->task_tag);
+ 
++		if (hba->dev_cmd.type == DEV_CMD_TYPE_NOP &&
++		    atomic_cmpxchg(&dev_cmd_timeout_dump_pending, 1, 0) == 1) {
++			dma_rmb();
++			dev_err(hba->dev,
++				"V33 NOP timeout: tag=%d IS=%08x IE=%08x HCS=%08x HCE=%08x\n",
++				lrbp->task_tag,
++				ufshcd_readl(hba, REG_INTERRUPT_STATUS),
++				ufshcd_readl(hba, REG_INTERRUPT_ENABLE),
++				ufshcd_readl(hba, REG_CONTROLLER_STATUS),
++				ufshcd_readl(hba, REG_CONTROLLER_ENABLE));
++			dev_err(hba->dev,
++				"V33 UTRL: BA=%08x:%08x DB=%08x RS=%08x outstanding=%lx\n",
++				ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_BASE_H),
++				ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_BASE_L),
++				ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL),
++				ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_RUN_STOP),
++				hba->outstanding_reqs);
++			dev_err(hba->dev,
++				"V33 UIC: PA=%08x DL=%08x NL=%08x TL=%08x DME=%08x\n",
++				ufshcd_readl(hba, REG_UIC_ERROR_CODE_PHY_ADAPTER_LAYER),
++				ufshcd_readl(hba, REG_UIC_ERROR_CODE_DATA_LINK_LAYER),
++				ufshcd_readl(hba, REG_UIC_ERROR_CODE_NETWORK_LAYER),
++				ufshcd_readl(hba, REG_UIC_ERROR_CODE_TRANSPORT_LAYER),
++				ufshcd_readl(hba, REG_UIC_ERROR_CODE_DME));
++			ufshcd_print_host_state(hba);
++			ufshcd_print_tr(hba, lrbp->task_tag, false);
++		}
++
+ 		/* MCQ mode */
+ 		if (hba->mcq_enabled) {
+ 			/* successfully cleared the command, retry if needed */
+@@ -4822,6 +4856,9 @@ int ufshcd_make_hba_operational(struct ufs_hba *hba)
+ 	ufshcd_writel(hba, upper_32_bits(hba->utmrdl_dma_addr),
+ 			REG_UTP_TASK_REQ_LIST_BASE_H);
+ 
++	/* Match the downstream ordering before enabling UTRL and UTMRL. */
++	wmb();
++
+ 	/*
+ 	 * UCRDY, UTMRLDY and UTRLRDY bits must be 1
+ 	 */
+-- 
+2.50.1

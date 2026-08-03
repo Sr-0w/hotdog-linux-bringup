@@ -10,6 +10,20 @@ VARIANT="${HOTDOG_CLEARSTAFF_VARIANT:-mainline617-d13-passive-replay}"
 CANDIDATE_LABEL="ClearStaff Linux 6.16"
 TARGET_KERNEL=6.16.0-sm8150
 case "$VARIANT" in
+	direct-entry-v34-active-usb)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V34 bounded active USB"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-203000-clearstaff616-direct-entry-v34-active-usb"
+		BOOT_SHA=872ac5c363d1e07cfb3a94acc23dba529d8ead3e01b730c5faf9e5770b6e9f19
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
+	direct-entry-v33-ufs-dma32)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V33 UFS 32-bit DMA diagnostic"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-200000-clearstaff616-direct-entry-v33-ufs-dma32"
+		BOOT_SHA=9f0abd8eb79f8b1f694a822bb537401958b879f5dec59339f6164751279c3adb
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
 	direct-entry-v32-ufs-ordering-diag)
 		CANDIDATE_LABEL="ClearStaff Linux 6.16 V32 UFS ordering + pre-clear diagnostics"
 		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-194000-clearstaff616-direct-entry-v32-ufs-ordering-diag"
@@ -307,6 +321,15 @@ and D7 bootloader-overlay contract byte-identical. It changes only rdinit: after
 preserving dmesg in RAM, it draws five unique non-scrolling bands across tty0
 and leaves an interactive BusyBox shell alive. This distinguishes native
 scanout geometry faults from fbcon scrolling without any automatic reboot. The
+direct-entry-v34-active-usb variant keeps the hardware-validated V33 kernel,
+DTB, command line, and complete ramdisk prefix byte-identical. Its appended
+initramfs member replaces only the two passive USB markers with a bounded UDC
+wait and the standard postmarketOS NCM/DHCP setup. A missing UDC is logged and
+the successful V33 rootfs path continues without reset. The
+direct-entry-v33-ufs-dma32 variant keeps every V32 boot component and diagnostic
+unchanged except for the kernel's QCOM UFS DMA-mask callback. On SM8150 only,
+and only while the temporary DT omits `iommus`, it forces coherent UFS request
+lists below 4 GiB and reports their addresses in the retained timeout dump. The
 direct-entry-v32-ufs-ordering-diag variant keeps V30's validated DTB,
 initramfs, command line, D7 overlay, and native display path byte-identical. Its
 kernel adds the UFS DMA/MMIO ordering used by the working downstream kernel and

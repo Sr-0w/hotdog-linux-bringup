@@ -7,6 +7,25 @@ The current result is a bring-up checkpoint. Several changes deliberately
 bypass broken providers and are not suitable for upstreaming in their present
 form.
 
+## Direct-boot milestone: V33
+
+On 2026-08-03, ClearStaff-based Linux 6.16 V33 reached the installed
+postmarketOS rootfs directly from the OnePlus bootloader. It enumerated UFS,
+discovered the nested GPT in `/dev/sda15`, mounted `pmOS_root` read-write as
+`/dev/loop1`, completed `switch_root`, and started rootfs `udevd` plus the
+visible `tty1` shell. No downstream kernel or kexec stage ran.
+
+V32 had shown an operational UFS controller consuming a doorbell while its
+transfer-request list at `0x1_02771000` remained unexecuted (`OCS=0xf`) and the
+response UPIU stayed zero. Because the temporary DT removes UFS `iommus`, V33
+conditionally forced coherent DMA below 4 GiB for that exact SM8150 bypass
+configuration. Every other boot component remained byte-identical, and UFS
+then completed initialization. See
+[the V33 hardware record](evidence/2026-08-03-direct-mainline-rootfs.md).
+
+Direct DWC3 remains unresolved: the rootfs has no inherited `ttyGS0`, so NCM,
+ACM, and SSH are still available only through the historical bridge path.
+
 ## Boot result
 
 The validated cycle reaches:

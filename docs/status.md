@@ -28,18 +28,18 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Structural validation only | The version-2 device metadata uses `kernel-cmdline.conf` containing `clk_ignore_unused` and has passed `dint` structural validation. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
-| Persistent direct boot | Active stage-two userspace | The current trace completes `kernel_init_freeable()`, the bounded global async wait, `kernel_execve()`, and the EL1-to-EL0 return. PID 1 records more than 16 syscalls, mounts the early pseudo-filesystems, arms the rescue watchdog, and enters `init_2nd.sh`. A per-command trace stopped in the first `udevd` launch; bypassing udev let both USB setup helpers return, but no direct USB identity appeared. A mounted rootfs remains unobserved. |
+| Persistent direct boot | Read-write rootfs working | V33 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, starts `udevd`, and launches the visible rootfs shell on `tty1`. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
-| UFS | Working through the 4.14 bridge; direct boot incomplete | The kexec path exposes all Android partitions. Direct mainline-oriented kernels bind the native SM8150 PHY and host but the first device-init NOP times out with `-EAGAIN`; no block device appears. |
-| postmarketOS root | Working through the bridge | Nested `pmOS_root` mounts read-write as `/dev/loop1`; direct-mainline mounting remains blocked by UFS link startup. |
-| postmarketOS boot | Working through the bridge | Nested `pmOS_boot` mounts as `/dev/loop0`. |
-| OpenRC userspace | Working through the bridge | Core boot, NetworkManager, SSH, and local services start. |
+| UFS | Working directly with a temporary DMA constraint | V32 isolated an inaccessible UTRL above 4 GiB while SMMU was bypassed. V33 conditionally forces 32-bit coherent DMA for this exact SM8150 no-`iommus` configuration and enumerates the Samsung UFS. |
+| postmarketOS root | Working directly | Nested `pmOS_root` mounts read-write as `/dev/loop1` and direct mainline completes `switch_root`. |
+| postmarketOS boot | Working directly | Nested `pmOS_boot` is discovered as `/dev/loop0`. |
+| OpenRC userspace | Direct rootfs handoff working | `udevd` and injected local.d diagnostics start after direct `switch_root`; a normal complete service boot still needs USB access for validation. |
 | USB NCM | Working through the bridge | The device is reachable at `172.16.42.1`. Direct-mainline gadget registration remains incomplete. |
 | USB ACM | Working through the bridge | A serial shell is exposed on `ttyGS0`. Direct-mainline ACM remains incomplete. |
 | Early console | Working through native fbcon | V30 switches `tty0` to a 180x195 color framebuffer console and displays readable kernel and postmarketOS initramfs output. |
 | DRM/panel | Partial | Native SM8150 DPU, DSI, TE, DSC, and the OnePlus Samsung panel bind and scan out. Dense console output appears repeated vertically, so final geometry is not yet validated. |
 | Framebuffer | Working for direct-boot diagnostics | Mainline registers `fb0: msm`; both kernel fbcon and PID 1 framebuffer writes are visible. V31 adds a non-scrolling five-band geometry test and a `tty0` BusyBox shell. |
-| RAM | Partial | Approximately 448 MiB is available with the low-bank map. |
+| RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
 | Apps SMMU | Not working | Registration fails with `-EINVAL`; selected clients bypass it. |
 | UFS ICE | Not working | ICE probe fails; UFS currently runs without the ICE dependency. |
 | Kernel modules | Incomplete | The installed rootfs still contains downstream 4.14 modules. |
@@ -67,10 +67,11 @@ possible.
 
 ## Definition of the next milestone
 
-The next milestone is a reproducible pmaports build that boots mainline without
-the downstream kexec bridge, mounts the postmarketOS rootfs, and retains USB
-SSH. Native display is now active; its scanout geometry must be corrected or
-validated while direct UFS link startup remains the storage blocker.
+The next milestone is direct DWC3 gadget registration with NCM, ACM, and SSH on
+the V33 rootfs path. After transport is available, the validated UFS DMA fix and
+native panel work must be carried into a reproducible pmaports package, the
+repeated DSI scanout geometry corrected, and the temporary SMMU/ICE bypasses
+replaced with proper hardware descriptions.
 
 ## Current validation queue
 

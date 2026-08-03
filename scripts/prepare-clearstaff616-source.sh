@@ -8,7 +8,7 @@ repo_url=https://github.com/ClearStaff/linux-sm8150-mainline-hotdog.git
 commit=403b56c33e2ccdda25d90378970a5e5b928dee19
 target="$HOTDOG_SRC_ROOT/kernel/linux-clearstaff-hotdog"
 patch_dir="$HOTDOG_ROOT/patches/clearstaff"
-source_manifest="$HOTDOG_ROOT/configs/clearstaff-hotdog-v30-source.sha256"
+source_manifest="$HOTDOG_ROOT/configs/clearstaff-hotdog-v33-source.sha256"
 verify_only=0
 preflight_index=
 
@@ -16,8 +16,9 @@ usage() {
 	cat <<'USAGE'
 Usage: prepare-clearstaff616-source.sh [--target DIR] [--verify-only]
 
-Clone the pinned ClearStaff hotdog kernel and apply the checked-in direct-entry
-and native-display patch series. Existing changes are never overwritten.
+Clone the pinned ClearStaff hotdog kernel and apply the checked-in direct-entry,
+native-display, and UFS bring-up patch series. Existing changes are never
+overwritten.
 
 Options:
   --target DIR    Source checkout path.
@@ -68,7 +69,7 @@ mapfile -t patches < <(find "$patch_dir" -maxdepth 1 -type f -name '*.patch' | s
 
 if [ "$verify_only" -eq 1 ]; then
 	verify_source
-	printf 'Verified ClearStaff V30 source: %s\n' "$target"
+	printf 'Verified ClearStaff V33 source: %s\n' "$target"
 	exit 0
 fi
 
@@ -115,6 +116,6 @@ for patch in "${patches[@]}"; do
 done
 verify_source
 
-printf 'Prepared ClearStaff V30 source: %s\n' "$target"
+printf 'Prepared ClearStaff V33 source: %s\n' "$target"
 printf 'Base commit: %s\n' "$commit"
 printf 'Applied patches: %s\n' "${#patches[@]}"

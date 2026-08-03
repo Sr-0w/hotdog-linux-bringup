@@ -1,0 +1,10 @@
+6d66067bf3e399652a1ea051e8fbec1707ab38a1f5d15196faab9503718901af  arch/arm64/kernel/head.S
+21691a9ca7be813e17ceaaafc6275662d066cfce4ac6a6347fc084853bee19b6  drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
+11acf7971bc6a52d1de71649e66b8a3e9809ea196cc895fb715c355cabd14e99  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+d3914392c7383ec9586326318ff015cd426e784092dd58d4645d3692e9ab3abe  arch/arm64/configs/sm8150.config
+53f56eba185ce0217127253d3e862613db7643eab81b752eaf5c9628e5909589  drivers/gpu/drm/msm/dsi/dsi_host.c
+f93ea09e223ebb5dfa0c7f1d803f4cb468afaac2e01b2b2e0bc96fcae9cc927d  drivers/gpu/drm/panel/Kconfig
+74e47f6459203c6713af803f66774a0faff426d3fc28f581ca1858072774474e  drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
+c5ea09d8a7d9f189ad212ad0b28e51f44495d0dfd349ff83c72612038e447e11  include/drm/display/drm_dsc.h
+b172db656e0ccff177727f8829c47de675e4003985b187fd8aac4788c73ce215  drivers/ufs/core/ufshcd.c
+7827531e7af78d8f4375d6ec6ab6f192c247cdff12f255b6b66d2ef73b742488  drivers/ufs/host/ufs-qcom.c

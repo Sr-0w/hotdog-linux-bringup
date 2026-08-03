@@ -12,49 +12,30 @@ it as HD1911 and expose the `hotdog` project/codename.
 
 ## Project status
 
-Linux 6.17 reaches the installed postmarketOS root filesystem on real hardware
-through the validated downstream 4.14 kexec bridge. A mainline-oriented
-ClearStaff 6.16 image launched directly by the OnePlus bootloader now completes
-kernel initialization, initializes the native SM8150 DPU/DSI pipeline, exposes
-`fb0`, switches `tty0` to a 180x195 framebuffer console, executes PID 1, and
-enters the postmarketOS initramfs. Direct rootfs and USB access remain under
-active bring-up.
+The mainline-oriented ClearStaff 6.16 V33 image now boots directly from the
+OnePlus bootloader, initializes the native SM8150 display, enumerates UFS,
+mounts the nested postmarketOS root filesystem read-write, completes
+`switch_root`, starts `udevd`, and launches a rootfs shell on `tty1`. This path
+does not execute the downstream 4.14 kernel and does not use kexec. The bridge
+remains available as a recovery and comparison environment.
 
-The current direct-boot boundary is native UFS link startup. A stock-derived
-DTBO with vendor fragments 46, 59, and 60 removed preserves the mainline UFS
-controller and PHY bindings. Both drivers bind, but the first device-init NOP
-times out with `-11`, so no block device or root filesystem appears. D10 proved
-that seven missing downstream PCS Gear 3 values alone are insufficient. D11
-then compiled an HS-G3 bootstrap limit, but the selected vendor overlay replaced
-the root compatible and prevented its hotdog guard from matching at runtime.
-D12 recognizes the resulting `qcom,sm8150-mtp` plus OnePlus `dtsi_no` identity
-and emits explicit controller, gear, and PHY-start diagnostics. Hardware logs
-confirm that the revision-4.1.0 controller was limited to HS-G3 Rate B, but its
-first NOP still failed with `-11`. D13 added the downstream revision-2 Gear 3
-TX/RX lane calibration and reproduced the same failure within 5 ms of D12.
-D14 then moved the UFS device-reset request after mainline's last host reset,
-but reproduced the same first-NOP failure. GPIO 175 is the SM8150's special
-`UFS_RESET` pad and has no readable input bit, so D14's generic GPIO readback is
-not electrically meaningful. D15 moved the UFS PCS software-reset sequence
-around PHY calibration to match the working downstream 4.14 driver, but the
-first NOP still failed. D16 followed one property from the external ClearStaff
-hotdog DTS by omitting the attached-device `reset-gpios` property. It remained
-without USB or SSH for roughly 8 hours 48 minutes until manual recovery. The
-subsequent verified R6 boot found no persistent console, so D16 proves that
-removing this property does not produce a usable direct boot but does not
-identify whether the first NOP changed. A full-tree comparison then showed that
-the external 663-line DTS is structurally different from this project's
-OnePlus-common plus filtered-vendor-DTBO tree. Reproducing that complete
-external baseline is the next controlled test.
+V32 isolated the former UFS failure to DMA addressability: the controller was
+operational and consumed its doorbell, but an UTRL allocated above 4 GiB kept
+`OCS=0xf` and received no response UPIU while UFS was running without the Apps
+SMMU. V33 conditionally constrains coherent UFS DMA to 32 bits only for the
+SM8150 host whose temporary bring-up DT omits `iommus`. With every other boot
+component unchanged, the phone enumerated `/dev/sda`, discovered the nested
+`pmOS_boot` and `pmOS_root`, and entered the real rootfs. See the
+[direct mainline rootfs evidence](docs/evidence/2026-08-03-direct-mainline-rootfs.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
 corrected the MSM DSI command-mode packetization for the panel's two 720-pixel
 DSC slices, and V30 added the generated 128-byte DSC PPS sent by the downstream
 driver after its vendor panel-on commands. V30 produces readable kernel and
-postmarketOS initramfs output on the physical panel. Dense scrolling currently
-appears repeated vertically, so V31 keeps every V30 display artifact identical
-and replaces only `rdinit` with a five-band static geometry test and a `tty0`
-BusyBox shell. See the
+postmarketOS output on the physical panel. V33 keeps that path while reaching
+the real rootfs. Dense scrolling currently appears repeated vertically, so the
+remaining display work is scanout/DSI geometry rather than basic panel power or
+kernel-console visibility. See the
 [native display evidence](docs/evidence/2026-08-03-native-display.md).
 
 An attempted live register comparison against R6 was stopped permanently after
@@ -76,18 +57,18 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; the mainline-oriented ClearStaff 6.16 image starts directly from the OnePlus bootloader. |
-| UFS storage | Working through the 4.14 bridge; direct link incomplete | The bridge path exposes the Samsung UFS and all partitions. Direct mainline binds the native host and PHY but fails its first NOP with `-11`. |
-| postmarketOS rootfs | Working through the bridge | The nested `pmOS_root` mounts read-write through kexec. Direct boot remains blocked before storage enumeration. |
+| UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
+| postmarketOS rootfs | Working directly | V33 mounts nested `pmOS_root` read-write as `/dev/loop1` and completes `switch_root` without kexec. |
 | USB networking | Working through the bridge | NCM uses host `172.16.42.2` and device `172.16.42.1`; direct-mainline gadget registration remains incomplete. |
-| SSH | Working through the bridge | OpenSSH starts from the real postmarketOS userspace after kexec. |
+| SSH | Working through the bridge; direct transport pending | V33 reaches the real rootfs directly, but DWC3 has not yet exposed NCM or ACM. |
 | USB serial | Working through the bridge | ACM exposes `ttyGS0` after kexec; direct-mainline ACM remains incomplete. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Active initramfs, UFS blocked | Direct boot completes all 986 initcalls, crosses EL1 to EL0, executes PID 1, and reaches postmarketOS stage two. The current filtered-DTBO path reaches native UFS initialization but no block device. |
+| Persistent direct mainline | Rootfs boot working | V33 boots from persistent `boot_b`, enumerates storage, mounts rootfs, starts `udevd`, and launches the visible rootfs shell. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
 | Mainline panel | Partial | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel initialize. Dense fbcon output is repeated vertically; V31 isolates scanout geometry with a non-scrolling test. |
-| RAM | Partial | Only about 448 MiB is currently exposed. |
+| RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
 | Touch, Wi-Fi, Bluetooth, audio, modem, cameras | Not validated | These remain bring-up work. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
@@ -96,12 +77,12 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["Downstream 4.14 bridge in boot_b"]
-    B --> C["kexec Linux 6.17 + hotdog DTB"]
-    C --> D["Wrapped postmarketOS initramfs"]
-    D --> E["UFS and nested GPT discovery"]
-    E --> F["postmarketOS rootfs"]
-    F --> G["OpenRC, USB NCM, ACM and SSH"]
+    A["OnePlus bootloader"] --> B["ClearStaff Linux 6.16 V33"]
+    B --> C["Native DPU, DSI and fbcon"]
+    B --> D["UFS with temporary 32-bit DMA"]
+    D --> E["Nested pmOS GPT discovery"]
+    E --> F["Read-write postmarketOS rootfs"]
+    F --> G["udevd and visible tty1 shell"]
 ```
 
 The bridge is a temporary engineering tool. The long-term target is a normal
@@ -257,6 +238,9 @@ the following bring-up changes:
     driver.
 14. Keep direct-boot command lines at 511 characters or fewer. The tested ABL
     drops byte 512 and ignores the header-v2 `extra_cmdline` field.
+15. While the Apps SMMU is bypassed, constrain coherent SM8150 UFS DMA to 32
+    bits. V32 proved that an UTRL above 4 GiB was consumed without descriptor
+    completion; V33 changed only this mask and reached the read-write rootfs.
 
 These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
 ICE removal, reduced memory map, and timing waits all need proper replacements.
