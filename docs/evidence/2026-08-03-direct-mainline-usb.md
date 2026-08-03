@@ -122,7 +122,22 @@ The captured logs are intentionally kept outside the public repository under
 | V42 command line | `de6f08f3690798e6ec3b20f5ca3b4683fd9efc15dd76ea5c970366afe2aeb4b3` |
 | V42 AVB `boot.img` | `baeeeffc6a96f2416038a6468260b609950e63b8bd8b1f4c08d5980d812fe824` |
 
-V42 is a validation candidate, not a new USB fix. It keeps the V41 DTB,
+V42 is the validated clean baseline, not a new USB fix. It keeps the V41 DTB,
 initramfs, translated-IOMMU command line, and direct-entry window, removes the
 high-frequency V39 EP0 diagnostics, and selects the built-in Terminus 16x32
-console font. It performs no automatic reboot or recovery action.
+console font. It reached verified SSH 19 seconds after reboot, reported a
+90x97 framebuffer console instead of V41's 180x195 console, and contained no
+`HOTDOG_V39` or unknown-endpoint messages. It performs no automatic reboot or
+recovery action.
+
+V43 is prepared to test whether the generic DWC3 source changes used during
+localization are unnecessary once the translated SMMU domain is present. It is
+built from pinned ClearStaff commit `403b56c33e2c` plus the public patch series,
+with no delta under generic USB or IOMMU code. Its V42 DTB, initramfs, command
+line, and font are byte-identical. Hardware validation is pending.
+
+| V43 component | SHA256 |
+|---|---|
+| Kernel `Image` | `9d403b2a4acbbcf4953f221fde0a35376b81e004954c4ffcb1ed2be1b537efd2` |
+| Raw boot image | `ea5069b9916954f2ef44736dab1d6e54e1a7fcba5205d504da1f98530dda2dc0` |
+| AVB `boot.img` | `a77e789f4991483eddb1671d03895a504faf1e1a6b9e1a3e78daadab5b87c2fd` |

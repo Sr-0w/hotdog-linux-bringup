@@ -5,12 +5,11 @@ Subject: [PATCH 2/2] drm: msm: enable the native OnePlus hotdog DSC panel
 
 ---
  .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  29 ++
- arch/arm64/configs/sm8150.config              |   7 +-
  drivers/gpu/drm/msm/dsi/dsi_host.c            |  24 +-
  drivers/gpu/drm/panel/Kconfig                 |   2 +-
  .../gpu/drm/panel/panel-samsung-oneplus-dsc.c | 351 ++++++++++++++++++
  include/drm/display/drm_dsc.h                 |   6 +
- 6 files changed, 401 insertions(+), 18 deletions(-)
+ 5 files changed, 396 insertions(+), 16 deletions(-)
  create mode 100644 drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
 
 diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
@@ -76,24 +75,6 @@ index 9fbee4ea93fc..1c4f34e36f46 100644
  };
  
  &mdss_dsi0_phy {
-diff --git a/arch/arm64/configs/sm8150.config b/arch/arm64/configs/sm8150.config
-index 91521bdf23e1..f04d002f97ee 100644
---- a/arch/arm64/configs/sm8150.config
-+++ b/arch/arm64/configs/sm8150.config
-@@ -17,8 +17,11 @@ CONFIG_SND_SOC_TAS2562=m
- CONFIG_NFC_NXP_NCI=m
- CONFIG_NFC_NXP_NCI_I2C=m
- 
--# Oneplus 7 Pro
--CONFIG_TOUCHSCREEN_S6SY761=m
-+# Oneplus 7 Pro
-+CONFIG_TOUCHSCREEN_S6SY761=m
-+
-+# OnePlus 7T Pro
-+CONFIG_DRM_PANEL_SAMSUNG_ONEPLUS_DSC=y
- 
- # Google Pixel 4
- # CONFIG_EFI_ZBOOT=y
 diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
 index 4d75529c0e85..8c096d18d0d8 100644
 --- a/drivers/gpu/drm/msm/dsi/dsi_host.c

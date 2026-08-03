@@ -36,7 +36,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | OpenRC userspace | Working directly | V41 completes `switch_root`, starts OpenRC, NetworkManager, `sshd`, and the normal postmarketOS user session from `/dev/loop1`. |
 | USB NCM | Working directly | DWC3 uses Apps SMMU stream `0x140` with a translated domain. V41 exposes `usb0` at `172.16.42.1`; host ping and SSH are stable. |
 | USB ACM | Enumerating directly | V41 exposes CDC ACM and creates `ttyGS0`. An interactive serial-session check remains pending. |
-| Early console | Working through native fbcon | V30 switches `tty0` to a 180x195 color framebuffer console and displays readable kernel and postmarketOS initramfs output. |
+| Early console | Working through native fbcon | V42 switches `tty0` to a 90x97 color framebuffer console with the built-in Terminus 16x32 font and displays kernel plus postmarketOS output. |
 | DRM/panel | Partial | Native SM8150 DPU, DSI, TE, DSC, and the OnePlus Samsung panel bind and scan out. Dense console output appears repeated vertically, so final geometry is not yet validated. |
 | Framebuffer | Working for direct-boot diagnostics | Mainline registers `fb0: msm`; both kernel fbcon and PID 1 framebuffer writes are visible. V31 adds a non-scrolling five-band geometry test and a `tty0` BusyBox shell. |
 | RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
@@ -67,10 +67,9 @@ possible.
 
 ## Definition of the next milestone
 
-The immediate validation candidate is V42, which reproduces V41 with the noisy
-EP0 trace removed and a built-in Terminus 16x32 console font. After that, the
-next milestone is to
-carry the validated display, UFS, DWC3 SMMU, rootfs, and USB setup into a
+V42 has reproduced V41 with the noisy EP0 trace removed and a built-in
+Terminus 16x32 console font. The next milestone is to carry the validated
+display, UFS, DWC3 SMMU, rootfs, and USB setup into a
 pmbootstrap-built pmaports package. Hardware enablement can then proceed over
 stable SSH: battery and charging, touch and remaining keys, Wi-Fi/Bluetooth,
 audio, modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
@@ -377,11 +376,17 @@ descriptions before submission.
     SSH validation confirms Linux `6.16.0-sm8150+`, the postmarketOS rootfs,
     OpenRC, and `usb0` at `172.16.42.1`. Its AVB image SHA256 is
     `f7d2f9f51a3c7818df2148c1bf25c72cf7ee1545ac38c9c3847793820bf9b604`.
-87. Validate V42 before starting another subsystem. It retains V41's DTB,
+87. Keep V42 as the clean direct-mainline baseline. It retains V41's DTB,
     initramfs, translated-IOMMU setup, and direct-entry window, removes only
     the high-frequency EP0 trace from the kernel, and selects the built-in
-    Terminus 16x32 console font. Its AVB image SHA256 is
+    Terminus 16x32 console font. It reached verified SSH in 19 seconds and
+    reported a 90x97 fbcon. Its AVB image SHA256 is
     `baeeeffc6a96f2416038a6468260b609950e63b8bd8b1f4c08d5980d812fe824`.
+88. Validate V43 as the minimal-source candidate. It rebuilds from pinned
+    ClearStaff commit `403b56c33e2c` plus the public patch series and refuses
+    any delta under generic USB or IOMMU code. Its DTB, initramfs, command line,
+    translated DWC3 domain, and font match V42. Its AVB image SHA256 is
+    `a77e789f4991483eddb1671d03895a504faf1e1a6b9e1a3e78daadab5b87c2fd`.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

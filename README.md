@@ -46,8 +46,12 @@ passthrough domain. V41 changed only `iommu.passthrough=1` to `0`; DWC3 then
 completed EP0 transfers, exposed NCM and ACM, and postmarketOS became reachable
 at `172.16.42.1` over SSH. See the
 [direct mainline USB evidence](docs/evidence/2026-08-03-direct-mainline-usb.md).
-V42 is prepared as a behavior-preserving confirmation build: it removes the
-high-frequency EP0 trace and uses a larger Terminus 16x32 console font.
+V42 reproduces that result with the high-frequency EP0 trace removed and a
+larger Terminus 16x32 console font. It reached verified SSH in 19 seconds; the
+fbcon geometry changed from 180x195 to 90x97 characters as expected.
+V43 is prepared from the pinned ClearStaff commit and the public patch series
+only. It leaves generic DWC3, USB gadget, and IOMMU source untouched while
+retaining V42's validated DTB and translated-domain setup.
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a

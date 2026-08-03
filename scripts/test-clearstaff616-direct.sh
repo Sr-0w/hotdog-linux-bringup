@@ -10,6 +10,14 @@ VARIANT="${HOTDOG_CLEARSTAFF_VARIANT:-mainline617-d13-passive-replay}"
 CANDIDATE_LABEL="ClearStaff Linux 6.16"
 TARGET_KERNEL=6.16.0-sm8150+
 case "$VARIANT" in
+	direct-entry-v43-upstream-dwc3)
+		CANDIDATE_LABEL="ClearStaff Linux 6.16 V43 upstream DWC3"
+		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-214000-clearstaff616-direct-entry-v43-upstream-dwc3"
+		BOOT_SHA=a77e789f4991483eddb1671d03895a504faf1e1a6b9e1a3e78daadab5b87c2fd
+		BOOT_CMDLINE_SHA=de6f08f3690798e6ec3b20f5ca3b4683fd9efc15dd76ea5c970366afe2aeb4b3
+		CANDIDATE_DTBO="$HOTDOG_ROOT/images/pmos-experiments/2026-07-31-014429-d7-mainline-native-ufs/dtbo_b-d7-ufs-gdsc-bridge-filtered-drop-fragment-46-drop-fragment-59-drop-fragment-60.img"
+		CANDIDATE_DTBO_SHA=d23564d42c989c2b86f760937cb6ea8d570074b20b74bd8c0bc0b94d2ba0d8cd
+		;;
 	direct-entry-v42-clean-console)
 		CANDIDATE_LABEL="ClearStaff Linux 6.16 V42 clean 16x32 console"
 		BOOT_DIR="$HOTDOG_ROOT/images/pmos-experiments/2026-08-03-201500-clearstaff616-direct-entry-v42-clean-console"
