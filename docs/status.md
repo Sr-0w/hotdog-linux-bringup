@@ -26,7 +26,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
-| Mainline 6.16 pmaports image | Complete offline build; exact hardware test pending | Current pmaports produced `linux-oneplus-hotdog-mainline616-6.16.0-r3.apk` (`25,534,706` bytes, SHA256 `513ff02bc7f501b72061f50cbe44aa13e3ba9311ea414228a0792103aecebcee`), a normal initramfs, a header-v2 Android boot image, and split boot/root filesystems. The Image SHA256 is `86775a0b6b6db7ff0885c94cccb6b6521f2f517127154e8c9f1d9938b884d3f4`; the source-built DTB is `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`; the raw pmaports boot image is `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba`. |
+| Mainline 6.16 pmaports image | Complete offline build and AVB wrap; exact hardware test pending | Current pmaports produced `linux-oneplus-hotdog-mainline616-6.16.0-r3.apk` (`25,534,706` bytes, SHA256 `513ff02bc7f501b72061f50cbe44aa13e3ba9311ea414228a0792103aecebcee`), a normal initramfs, a header-v2 Android boot image, and split boot/root filesystems. The raw image SHA256 is `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba`; two independent AVB runs produced the same 96 MiB image, `df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca`. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Complete image generated; hardware test pending | The version-2 metadata and `kernel-cmdline.conf` generated a normal pmaports boot image. The 397-byte command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, and selects `TER16x32`. This does not validate hardware; `deviceinfo_drm` must remain absent from a submission until the runtime DRM path works. |
 | Persistent direct boot | Read-write rootfs and networking working | V43 boots from persistent `boot_b`, enumerates UFS, mounts nested `pmOS_root` on `/dev/loop1`, completes `switch_root`, and starts OpenRC, NCM, and SSH in about 15 seconds. |
@@ -73,9 +73,10 @@ and public patch series, without generic DWC3 or IOMMU modifications. The
 kernel, source-built DTB, and modules now build as a strict pmbootstrap aport,
 pass the encoded V43 hardware contract, and assemble through the normal current
 pmaports flow into an initramfs, Android boot image, and split installation.
-The next milestone is to add the validated partition-sized AVB envelope and
-boot that exact package output on hardware. Hardware enablement can then
-proceed over stable SSH:
+The validated partition-sized AVB envelope is now generated deterministically
+and verifies offline. The next milestone is to install the matching split
+rootfs safely and boot that exact package output on hardware. Hardware
+enablement can then proceed over stable SSH:
 battery and charging, touch and remaining keys, Wi-Fi/Bluetooth, audio,
 modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds must be replaced with upstreamable hardware
@@ -400,9 +401,13 @@ descriptions before submission.
 90. Keep the r3 current-pmaports build as the package-to-image milestone. It
     creates the normal initramfs, header-v2 Android boot image, `pmOS_boot`, and
     `pmOS_root`; its 397-byte command line preserves the translated DWC3 domain,
-    removes `quiet`/Plymouth, and stays below the measured ABL limit. Add the
-    96 MiB AVB envelope, verify it offline, then perform one guarded write and
-    exact readback before rebooting the hardware.
+    removes `quiet`/Plymouth, and stays below the measured ABL limit.
+91. Keep the deterministic AVB result as the source-to-partition-image
+    milestone. Two independent wrappers produced byte-identical 96 MiB images,
+    SHA256 `df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca`,
+    whose footer, descriptor, raw prefix, and extracted payloads verify. Install
+    the matching split rootfs, then perform one guarded write and exact readback
+    before rebooting the hardware.
 
 Exact timestamps, identities, and restore hashes for the checkpoint search are
 recorded in

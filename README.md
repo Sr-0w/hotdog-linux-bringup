@@ -67,7 +67,11 @@ the normal device flow into a complete initramfs, header-v2 Android boot image,
 and split `pmOS_boot`/`pmOS_root` filesystems. The generated command line is
 397 bytes, keeps the translated DWC3 SMMU contract and the Terminus 16x32
 console, and explicitly removes the distro's quiet/Plymouth defaults. The next
-gate is the partition-sized AVB wrapper followed by one exact hardware boot.
+stage wraps that raw image reproducibly into the validated 96 MiB OnePlus AVB
+contract. Two independent runs produced the same AVB image, SHA256
+`df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca`.
+The remaining gate is coherent rootfs installation followed by one guarded,
+exact hardware boot.
 See the [pmaports image evidence](docs/evidence/2026-08-03-mainline616-pmaports.md).
 
 An attempted live register comparison against R6 was stopped permanently after
@@ -89,7 +93,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Complete offline build; exact hardware test pending | Current pmaports produced the `6.16.0-r3` kernel APK, normal initramfs, header-v2 `boot.img`, and split boot/root filesystems. The Image is `86775a0b6b6db7ff0885c94cccb6b6521f2f517127154e8c9f1d9938b884d3f4`; the DTB is `d043e06a4fa685ef4527872bddc0788f82ff55ef4ad98358ec3b111da9b4379f`; the raw pmaports boot image is `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba`. |
+| Mainline 6.16 pmaports image | Complete offline build and AVB wrap; exact hardware test pending | Current pmaports produced the `6.16.0-r3` kernel APK, normal initramfs, header-v2 `boot.img`, and split boot/root filesystems. The raw image is `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba`; its deterministic 96 MiB AVB image is `df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca`. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | V33 mounts nested `pmOS_root` read-write as `/dev/loop1` and completes `switch_root` without kexec. |
 | USB networking | Working directly | V43 exposes NCM with host `172.16.42.2` and device `172.16.42.1` using unmodified generic DWC3/IOMMU source. |
@@ -255,8 +259,8 @@ source. Its DTB and initramfs remain controlled V42 artifacts. The new 6.16
 reference aport removes the prebuilt-DTB dependency, and the normal pmaports
 flow now assembles the kernel, source DTB, initramfs, and split installation.
 The SMMU bypasses, ICE removal, device-specific kernel package, debug command
-line, and final AVB/hardware validation still need to be resolved before
-submission.
+line, coherent rootfs installation, and final hardware validation still need
+to be resolved before submission.
 The technical evidence and rationale are documented in
 [docs/mainline-bringup.md](docs/mainline-bringup.md).
 
@@ -310,6 +314,18 @@ HOTDOG_PMBOOTSTRAP_WORK="$PWD/pmbootstrap-work-current" \
 
 The exact package and filesystem identities from the validated build are in
 [the 2026-08-03 pmaports evidence](docs/evidence/2026-08-03-mainline616-pmaports.md).
+
+Wrap the generated header-v2 image in the exact OnePlus boot-partition AVB
+contract without modifying the raw input:
+
+```bash
+./scripts/wrap-pmaports-boot-avb.sh \
+  --boot-image /path/to/generated/boot.img \
+  --outdir build/pmaports-mainline616-avb
+```
+
+The wrapper rejects incompatible headers, load addresses, command lines, and
+partition sizes, then verifies the AVB footer and records component hashes.
 
 The repository does not distribute ready-to-flash boot images. Generated
 kernels, initramfs archives, phone dumps, logs, and source checkouts stay in

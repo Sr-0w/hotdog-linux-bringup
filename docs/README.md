@@ -36,7 +36,8 @@ credentials, proprietary dumps, or workstation-specific paths.
   limit.
 - [evidence/2026-08-03-mainline616-pmaports.md](evidence/2026-08-03-mainline616-pmaports.md):
   strict source build and complete current-pmaports image assembly, including
-  exact APK, Image, DTB, initramfs, boot-image, and filesystem hashes.
+  exact APK, Image, DTB, initramfs, filesystem, deterministic AVB, and
+  boot-image hashes.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

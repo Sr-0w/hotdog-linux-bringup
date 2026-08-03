@@ -19,8 +19,8 @@ artifacts contain:
   packaged OnePlus firmware set.
 
 This closes the package-to-image build boundary. The exact output recorded
-below is offline-validated but has not yet been wrapped with the phone's
-partition-sized AVB footer or booted on hardware.
+below is offline-validated and has been wrapped reproducibly with the phone's
+partition-sized AVB footer. It has not yet been booted on hardware.
 
 ## Build environment
 
@@ -114,6 +114,31 @@ tools, the mainline module tree, and the required early Adreno firmware. The
 root image enables `sshd`, NetworkManager, `tqftpserv`, and `pd-mapper` through
 normal OpenRC runlevels.
 
+## Partition-sized AVB image
+
+`scripts/wrap-pmaports-boot-avb.sh` validates the generated Android image
+before copying it into the hardware-proven OnePlus boot-partition envelope. It
+checks the header version, page and load addresses, empty header-v2
+`extra_cmdline`, command-line length and required tokens, and the raw image's
+fit before adding a deterministic AVB hash footer.
+
+| Property | Value |
+|---|---|
+| Raw image size | 37,199,872 bytes |
+| Raw image SHA256 | `7a914b47b5cc993c0d3cc7a3d5430501f1d4da87be60b0acbf2621c392b8bfba` |
+| AVB image size | 100,663,296 bytes |
+| AVB image SHA256 | `df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca` |
+| AVB version | 1.0 |
+| Algorithm | `NONE` |
+| Partition name | `boot` |
+| Command-line size | 397 bytes |
+
+The AVB size, version, algorithm, and partition descriptor match the V43
+hardware-proven envelope. `avbtool verify_image` validates both the footer and
+the SHA-256 descriptor. The AVB operation leaves the complete 37,199,872-byte
+raw-image prefix unchanged. Two clean output directories produced
+byte-identical AVB images, establishing deterministic wrapping.
+
 ## Historical strict-build milestone
 
 The first strict build, `6.16.0-r0`, established that all 15 public patches
@@ -125,9 +150,9 @@ build metadata; the r0 identity must not be used for the hardware candidate.
 
 ## Remaining gate
 
-Before writing the phone, the raw pmaports `boot.img` must be copied into the
-validated 96 MiB OnePlus boot-partition envelope and receive a verified AVB
-hash footer. The exact AVB image then needs a guarded write, readback hash, and
-one direct hardware boot. Temporary UFS DMA32, UFS/QUP SMMU bypasses, ICE
-removal, the device-specific kernel package, and debug command-line options
-remain bring-up debt rather than an upstream submission design.
+The generated split rootfs must be installed coherently with the boot and root
+UUIDs embedded in this exact AVB image. Only then can the candidate receive a
+guarded boot-partition write, readback hash, and one direct hardware boot.
+Temporary UFS DMA32, UFS/QUP SMMU bypasses, ICE removal, the device-specific
+kernel package, and debug command-line options remain bring-up debt rather than
+an upstream submission design.
