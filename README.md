@@ -49,9 +49,15 @@ at `172.16.42.1` over SSH. See the
 V42 reproduces that result with the high-frequency EP0 trace removed and a
 larger Terminus 16x32 console font. It reached verified SSH in 19 seconds; the
 fbcon geometry changed from 180x195 to 90x97 characters as expected.
-V43 is prepared from the pinned ClearStaff commit and the public patch series
-only. It leaves generic DWC3, USB gadget, and IOMMU source untouched while
-retaining V42's validated DTB and translated-domain setup.
+V43 closes the kernel-source cleanup step. It was rebuilt from pinned
+ClearStaff commit `403b56c33e2c` plus the public patch series, with the builder
+refusing any source delta under generic USB or IOMMU code. After a verified
+write to `boot_b`, a normal reboot reached a fresh kernel, NCM, and SSH in about
+15 seconds. No V37/V39 DWC3 diagnostics or unknown-endpoint events remained.
+This proves that the temporary generic DWC3 changes used for localization are
+not required once DWC3 uses its translated SMMU domain. V43 deliberately keeps
+V42's validated DTB, initramfs, command line, and font byte-identical; producing
+those components through pmbootstrap is the next integration boundary.
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -71,15 +77,15 @@ and D14 ruled out its attempted reset-order change as sufficient.
 
 | Component | Status | Notes |
 |---|---|---|
-| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; the mainline-oriented ClearStaff 6.16 image starts directly from the OnePlus bootloader. |
+| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | V33 mounts nested `pmOS_root` read-write as `/dev/loop1` and completes `switch_root` without kexec. |
-| USB networking | Working directly | V41 exposes NCM with host `172.16.42.2` and device `172.16.42.1`; repeated ping and SSH sessions remain stable. |
-| SSH | Working directly | OpenSSH starts on the direct postmarketOS rootfs and reports `Linux hotdog 6.16.0-sm8150+`. |
-| USB serial | Enumerating directly | V41 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
+| USB networking | Working directly | V43 exposes NCM with host `172.16.42.2` and device `172.16.42.1` using unmodified generic DWC3/IOMMU source. |
+| SSH | Working directly | V43 reaches OpenSSH about 15 seconds after reboot and reports `Linux hotdog 6.16.0-sm8150+`. |
+| USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Rootfs boot working | V33 boots from persistent `boot_b`, enumerates storage, mounts rootfs, starts `udevd`, and launches the visible rootfs shell. |
+| Persistent direct mainline | Rootfs and transport working | V43 boots from persistent `boot_b`, enumerates storage, mounts the read-write rootfs, starts OpenRC, and exposes NCM/ACM plus SSH. |
 | Firmware packaging | Complete, runtime unvalidated | The `20241212-r0` split produces eight usrmerged APKs with all payloads under `/usr/lib/firmware`; peripheral runtime support remains pending. |
 | Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
 | Mainline panel | Partial | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel initialize. Dense fbcon output is repeated vertically; V31 isolates scanout geometry with a non-scrolling test. |
@@ -92,7 +98,7 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["ClearStaff Linux 6.16 V41"]
+    A["OnePlus bootloader"] --> B["Clean-source ClearStaff Linux 6.16 V43"]
     B --> C["Native DPU, DSI and fbcon"]
     B --> D["UFS with temporary 32-bit DMA"]
     D --> E["Nested pmOS GPT discovery"]
@@ -217,48 +223,26 @@ plus the [controlled test matrix](docs/direct-boot.md).
 
 ## Mainline fixes validated so far
 
-The successful boot is not a stock mainline device tree. It currently applies
-the following bring-up changes:
+The V43 kernel is rebuilt from the pinned public source and patch series. Its
+controlled device tree and userspace still carry these bring-up changes:
 
 1. Reserve the firmware-owned `0x89d00000-0x8b700000` memory gap as `no-map`.
-2. Temporarily remove `iommus` from UFS and QUP clients because the Apps SMMU
-   registration fails with `-EINVAL`.
-3. Remove the UFS `qcom,ice` link so UFS can probe without the failing ICE
-   clock path.
-4. Remove the DWC3 `iommus` link so the USB gadget does not remain deferred
-   behind the failed Apps SMMU.
-5. Boot with `iommu.passthrough=1 arm-smmu.disable_bypass=0`.
-6. Wait 120 seconds before the normal postmarketOS initramfs path. A 15-second
-   delay was tested and is insufficient.
-7. Keep the framebuffer probe in wait-only mode for its timing effect while
-   removing all red/green/blue framebuffer writes from the downstream 4.14
-   userspace probe; those RGB frames were not emitted by mainline.
-8. Discover the postmarketOS GPT nested inside the Android `super` partition
-   and expose its boot and root filesystems through loop devices.
-9. Capture the short-lived USB ACM console with host echo disabled so the
-   collector does not feed bytes back into the target during early boot.
-10. In the historical K1 configuration, load the matching `qcom-wdt.ko` after
-    userspace comes up when a restart-handler probe is required. The current r5
-    package instead builds this driver into the kernel and remains
-    hardware-untested as a complete package payload.
-11. Keep RAID6 enabled but disable `CONFIG_RAID6_PQ_BENCHMARK`. The benchmark
-    waits for `jiffies` to advance and blocked the forced-single-CPU direct path;
-    the no-benchmark candidate reached the next checkpoint on hardware.
-12. Clear the APSS watchdog enable register in `primary_entry` for the K1 kexec
-    payload. This exact Image reached postmarketOS SSH and remained stable; the
-    direct candidate using the same clear still encountered a later blocker.
-13. Release the diagnostic `early_memremap()` mapping before
-    `early_ioremap_reset()` and use `phys_to_virt()` only after `paging_init()`.
-    This is a diagnostic framebuffer lifetime fix, not a proposed display
-    driver.
-14. Keep direct-boot command lines at 511 characters or fewer. The tested ABL
-    drops byte 512 and ignores the header-v2 `extra_cmdline` field.
-15. While the Apps SMMU is bypassed, constrain coherent SM8150 UFS DMA to 32
-    bits. V32 proved that an UTRL above 4 GiB was consumed without descriptor
-    completion; V33 changed only this mask and reached the read-write rootfs.
+2. Temporarily bypass SMMU for UFS and selected QUP clients and omit the failing
+   UFS ICE dependency. In this exact no-`iommus` UFS configuration, constrain
+   coherent UFS DMA below 4 GiB.
+3. Keep DWC3 attached to Apps SMMU stream `0x140` and use a translated domain
+   with `iommu.passthrough=0`. An identity domain left the event ring unwritten.
+4. Enable the native DPU/DSI/DSC panel path and built-in Terminus 16x32 fbcon.
+5. Discover the postmarketOS GPT nested inside Android `super`, then expose and
+   mount its boot and root filesystems through loop devices.
+6. Keep the boot image command line at 511 characters or fewer because the
+   tested ABL drops byte 512 and ignores header-v2 `extra_cmdline`.
 
-These are bring-up fixes, not proposed upstream solutions. The SMMU bypasses,
-ICE removal, reduced memory map, and timing waits all need proper replacements.
+V43 contains no local modifications to generic DWC3, USB gadget, or IOMMU
+source. Its DTB and initramfs remain controlled V42 artifacts, so the current
+changes are bring-up fixes rather than proposed upstream solutions. The SMMU
+bypasses, ICE removal, nested-root wrapper, and prebuilt DTB handoff all need
+proper pmaports replacements.
 The technical evidence and rationale are documented in
 [docs/mainline-bringup.md](docs/mainline-bringup.md).
 

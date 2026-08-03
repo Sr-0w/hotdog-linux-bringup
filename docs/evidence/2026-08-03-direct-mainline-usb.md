@@ -130,11 +130,34 @@ console font. It reached verified SSH 19 seconds after reboot, reported a
 `HOTDOG_V39` or unknown-endpoint messages. It performs no automatic reboot or
 recovery action.
 
-V43 is prepared to test whether the generic DWC3 source changes used during
-localization are unnecessary once the translated SMMU domain is present. It is
-built from pinned ClearStaff commit `403b56c33e2c` plus the public patch series,
-with no delta under generic USB or IOMMU code. Its V42 DTB, initramfs, command
-line, and font are byte-identical. Hardware validation is pending.
+V43 proves that the generic DWC3 source changes used during localization are
+unnecessary once the translated SMMU domain is present. It was rebuilt from
+pinned ClearStaff commit `403b56c33e2c` plus the public patch series. The build
+fails if any source delta appears under `drivers/usb` or `drivers/iommu`; none
+did. Its V42 DTB, initramfs, command line, direct-entry window, and font are
+byte-identical.
+
+V43 was written from the running V42 system to `boot_b` with identity, size,
+hash, and full readback guards. The readback matched the candidate exactly. One
+normal reboot then reached a fresh kernel and verified SSH in about 15 seconds,
+without manual intervention:
+
+```text
+boot ID: 9f90f5bc-a2c9-4105-8827-eae7dc5addcd
+kernel:  Linux 6.16.0-sm8150+
+build:   #1 SMP PREEMPT Mon Aug 3 21:32:35 CEST 2026
+slot:    _b
+root:    /dev/loop1, read-write
+boot:    /dev/loop0, read-write
+NCM:     172.16.42.1
+fbcon:   90x97 characters
+```
+
+The running phone's `boot_b` SHA256 matched the V43 AVB image. Its kernel log
+contained no V37/V39 DWC3 diagnostics and no unknown-endpoint events. NCM, ACM,
+OpenRC, and SSH all worked with the upstream generic DWC3, gadget, and IOMMU
+source. This validates the kernel-source cleanup; a pmbootstrap-built DTB,
+initramfs, and rootfs remain the next reproducibility step.
 
 | V43 component | SHA256 |
 |---|---|
