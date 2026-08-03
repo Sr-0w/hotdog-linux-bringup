@@ -24,13 +24,15 @@ package-generated image. See the
 [project status](status.md), [historical r0 package evidence](evidence/k1-kernel-package.md),
 and [K1 DTB evidence](evidence/k1-dtb-source.md).
 
-The newer Linux 6.16 reference aport closes the next packaging boundary. From
-pmaports commit `918a1f4e4dd1ebcf0e4df226dbadc210a857fe9c`, the normal
+The newer Linux 6.16 reference aport closes the package-to-hardware boundary.
+From pmaports commit `918a1f4e4dd1ebcf0e4df226dbadc210a857fe9c`, the normal
 device flow produced the source-built kernel and DTB, mainline modules under
 `/usr/lib/modules`, a postmarketOS initramfs, a header-v2 Android boot image,
-and split boot/root filesystems. These exact outputs are offline-validated but
-not yet hardware-validated; they remain a reference for migration into the
-shared SM8150 package rather than the final submission layout. See the
+and split boot/root filesystems. Those exact outputs direct-booted on the HD1913
+and reached a writable rootfs plus stable USB networking and SSH. The temporary
+`userdata` nested-GPT deployment and deterministic partition-sized AVB wrapper
+are laboratory integration steps, so this remains a reference for migration
+into the shared SM8150 package rather than the final submission layout. See the
 [Linux 6.16 pmaports image evidence](evidence/2026-08-03-mainline616-pmaports.md).
 
 Relevant pmaports policy references are:

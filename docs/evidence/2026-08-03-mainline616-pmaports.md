@@ -18,9 +18,12 @@ artifacts contain:
 - OpenRC, SSH, NetworkManager, the Qualcomm modem support services, and the
   packaged OnePlus firmware set.
 
-This closes the package-to-image build boundary. The exact output recorded
-below is offline-validated and has been wrapped reproducibly with the phone's
-partition-sized AVB footer. It has not yet been booted on hardware.
+This closes the package-to-hardware boundary. The exact output recorded below
+was validated offline, wrapped reproducibly with the phone's partition-sized
+AVB footer, written with complete device readback verification, and direct-
+booted on the physical HD1913. It reached the matching read-write postmarketOS
+rootfs, USB networking, and SSH without executing the downstream kernel or
+using kexec.
 
 ## Build environment
 
@@ -139,6 +142,59 @@ the SHA-256 descriptor. The AVB operation leaves the complete 37,199,872-byte
 raw-image prefix unchanged. Two clean output directories produced
 byte-identical AVB images, establishing deterministic wrapping.
 
+## Hardware validation
+
+The split filesystem outputs were assembled by
+`scripts/assemble-pmaports-subpartition-image.sh` into a deterministic
+4096-byte-sector GPT containing exactly `pmOS_boot` and `pmOS_root`.
+
+| Staged output | Size | SHA256 |
+|---|---:|---|
+| Combined nested-GPT image | 1,534,066,688 bytes | `7bd3ab46012a9f73a5d2468a8a8d058fa7e3e527e1b9ed90f9392c4274db107c` |
+
+The combined image was written to the start of the dedicated test phone's
+`userdata` partition and read back in full with the same hash. Attaching that
+partition with 4096-byte logical sectors exposed the expected two partitions,
+their exact source sizes, and UUIDs. This placement preserves the V43 rootfs in
+`super` as a manual recovery environment; it is a controlled laboratory
+deployment, not the final installation method proposed for pmaports.
+
+The 100,663,296-byte AVB image was then written to `boot_b`. A full partition
+readback on the phone produced SHA256
+`df87c5442859caeaeba08bfe2abb4f7b723437124b9764d9bf8d63b8be7a4fca`,
+identical to the host artifact. One normal reboot produced this fresh identity:
+
+```text
+Boot ID: 03d2e4e7-46df-4589-a3ee-d61b06659e25
+Linux hotdog 6.16.0-sm8150 #4-oneplus-hotdog-mainline616 SMP PREEMPT 2025-08-22 17:25:08 aarch64 Linux
+```
+
+USB ping returned during startup and SSH verified the candidate 18 seconds
+after the reboot dispatch. The lack of the V43 `+` suffix, the package-specific
+build tag, both new UUIDs in `/proc/cmdline`, and the exact `boot_b` readback
+exclude the recovery baseline.
+
+The standard postmarketOS initramfs found the matching nested GPT on
+`/dev/sda22`, repaired the backup GPT location, expanded the root partition and
+filesystem to the available `userdata` capacity, and mounted:
+
+| Mount | Device | Filesystem | UUID |
+|---|---|---|---|
+| `/boot` | `/dev/loop0p1` | ext2, read-write | `d8b06efa-af97-4d07-ba75-95ca38704af1` |
+| `/` | `/dev/loop0p2` | ext4, read-write | `c0334266-a480-4c64-9faf-dd0c57a1e404` |
+
+The expanded root filesystem is 231,837,532,160 bytes. OpenRC started udev,
+DBus, NetworkManager, `sshd`, `pd-mapper`, and `tqftpserv`. The host retained
+`172.16.42.2/24`, received three successful pings from `172.16.42.1`, and kept
+stable SSH access. Native MSM DRM initialized, registered `fb0`, and displayed
+the kernel plus initramfs console on the panel.
+
+This exact boot also provides the initial hardware-support baseline. UFS,
+display/fbcon, the Power key, USB networking, and SSH work. No touchscreen,
+WLAN/rfkill device, ALSA sound card, or battery power-supply class was exposed;
+the kernel also reports that no GPU device was found. These are enablement
+targets rather than failures of the validated boot path.
+
 ## Historical strict-build milestone
 
 The first strict build, `6.16.0-r0`, established that all 15 public patches
@@ -148,11 +204,12 @@ Its APK SHA256 was
 Revision r3 adds current usrmerge module placement and deterministic kernel
 build metadata; the r0 identity must not be used for the hardware candidate.
 
-## Remaining gate
+## Remaining work
 
-The generated split rootfs must be installed coherently with the boot and root
-UUIDs embedded in this exact AVB image. Only then can the candidate receive a
-guarded boot-partition write, readback hash, and one direct hardware boot.
-Temporary UFS DMA32, UFS/QUP SMMU bypasses, ICE removal, the device-specific
-kernel package, and debug command-line options remain bring-up debt rather than
-an upstream submission design.
+The exact package-built image has passed its first direct hardware boot. Clean
+reboot-to-bootloader and reboot-to-recovery behavior still need validation.
+The temporary `userdata` deployment must be replaced by a documented standard
+installation path, and the device-specific reference package must migrate into
+the shared SM8150 kernel package. Temporary UFS DMA32, UFS/QUP SMMU bypasses,
+ICE removal, incomplete peripheral descriptions, and debug command-line options
+remain bring-up debt rather than an upstream submission design.
