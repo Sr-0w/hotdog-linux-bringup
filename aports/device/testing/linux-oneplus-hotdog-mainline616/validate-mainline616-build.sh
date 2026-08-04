@@ -67,6 +67,10 @@ if [ -n "$modules_dir" ]; then
 		die "no kernel modules under: $modules_dir"
 	find "$modules_dir" -type f -path '*/drivers/input/touchscreen/s6sy761.ko' \
 		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
+	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_mss.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm MPSS module"
+	find "$modules_dir" -type f -path '*/net/qrtr/qrtr.ko' \
+		-print -quit | grep -q . || die "missing QRTR module"
 fi
 
 if [ -n "$charger_source" ]; then
@@ -185,6 +189,10 @@ expect_config 'CONFIG_POWER_SUPPLY=y'
 expect_config 'CONFIG_POWER_SUPPLY_HWMON=y'
 expect_config 'CONFIG_BATTERY_QCOM_FG=y'
 expect_config 'CONFIG_CHARGER_QCOM_SMB2=y'
+expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
+expect_config 'CONFIG_QCOM_RMTFS_MEM=y'
+expect_config 'CONFIG_QRTR=m'
+expect_config 'CONFIG_QRTR_SMD=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -214,6 +222,9 @@ pon_resin=$pm8150/pon@800/resin
 te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
+mpss=$soc/remoteproc@4080000
+wifi=$soc/wifi@18800000
+rmtfs=$reserved/memory@f2901000
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -228,6 +239,17 @@ expect_value ramoops-ftrace 1000 \
 	fdtget -tx "$dtb" "$reserved/ramoops@a9800000" ftrace-size
 expect_value ramoops-pmsg 1000 \
 	fdtget -tx "$dtb" "$reserved/ramoops@a9800000" pmsg-size
+
+expect_value rmtfs-compatible qcom,rmtfs-mem \
+	fdtget -ts "$dtb" "$rmtfs" compatible
+expect_value rmtfs-address '0 f2901000 0 200000' \
+	fdtget -tx "$dtb" "$rmtfs" reg
+expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs" qcom,client-id
+expect_value rmtfs-vmid f fdtget -tx "$dtb" "$rmtfs" qcom,vmid
+expect_value mpss-status okay fdtget -ts "$dtb" "$mpss" status
+expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \
+	fdtget -ts "$dtb" "$mpss" firmware-name
+expect_value wifi-staged-disabled disabled fdtget -ts "$dtb" "$wifi" status
 
 expect_value framebuffer-compatible simple-framebuffer \
 	fdtget -ts "$dtb" /chosen/framebuffer@9c000000 compatible

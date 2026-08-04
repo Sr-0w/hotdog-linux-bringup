@@ -18,6 +18,13 @@ disabled on every probe failure. It also derives the arm64 Image window from
 the linked kernel size. This revision is reproducibly built but is not yet
 hardware-validated; the accepted runtime baseline remains `r6`.
 
+Revision `r11` stages modem bring-up independently from WiFi. It restores the
+2 MiB RMTFS region at `0xf2901000`, enables MPSS with the packaged hotdog modem
+firmware, and deliberately keeps WCN3990 disabled. The OpenRC device package
+starts `rmtfs` with its default no-write policy. This revision remains a
+preflight candidate until `r10` passes its power gate and MPSS is then tested
+on hardware.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -34,6 +41,8 @@ hardware-validated; the accepted runtime baseline remains `r6`.
   interconnect, and reserved-memory descriptions remain unchanged.
 - PM8150 PON provides Power and Volume Down, while PM8150 GPIO 6 provides the
   active-low, pulled-up Volume Up input through `gpio-keys`.
+- MPSS uses the handset-specific modem firmware and the downstream-compatible
+  high RMTFS address. WiFi remains disabled for the isolated MPSS gate.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -62,6 +71,18 @@ Volume Down, and Volume Up registered with their expected Linux key codes. The
 Adreno driver bound, exposed `/dev/dri/renderD128`, loaded GMU firmware
 v2.0.261, and completed two headless Vulkan workloads through Turnip without a
 GPU, GMU, or IOMMU fault.
+
+The current `r11` preflight build is also reproducible. One strict build used
+the normal cache and another used `--no-ccache`; both produced the same
+25,502,518-byte APK with SHA256
+`b499a6b3cf488e15d743e66a0965a74e30771e0cea6941040327498af154be6c`.
+Its kernel and DTB hashes are respectively
+`89c6a92678c39fcd7f8e540b8f3706e9e5118b25de2b6842f134fd967a9fa243`
+and `652bb1e48d974724ff0168ff40b60d54596d60b3a6dd232883c0ceb4abba291f`.
+The resulting deterministic AVB image has SHA256
+`4a4bffb60ce744f5fd5fc4070808699fb573a9350f24e60a5d59535aef5dc849`.
+These hashes are static preflight evidence only; `r11` has not been accepted on
+hardware.
 
 ## Temporary bring-up constraints
 

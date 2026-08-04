@@ -52,6 +52,17 @@ Its exact kernel and DTB direct-booted from completely read-back AVB image
 and registered the expected Power, Volume Down, Volume Up, and touchscreen
 input devices; see the
 [hardware-key evidence](evidence/2026-08-04-mainline616-volume-keys.md).
+Revision `r10` is a reproducible battery/charger preflight candidate with
+conservative PM8150B limits and an uncompleted hardware safety gate. Revision
+`r11` then stages MPSS and read-only RMTFS independently from WCN3990. Its two
+strict builds produced a byte-identical `25,502,518`-byte APK with SHA256
+`b499a6b3cf488e15d743e66a0965a74e30771e0cea6941040327498af154be6c`;
+two deterministic AVB assemblies produced image SHA256
+`4a4bffb60ce744f5fd5fc4070808699fb573a9350f24e60a5d59535aef5dc849`.
+Neither preflight revision is hardware-accepted, and neither changes the `r6`
+submission evidence baseline. See the
+[battery/charger preflight](evidence/2026-08-04-mainline616-battery-charger-preflight.md)
+and [MPSS/RMTFS preflight](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md).
 
 Relevant pmaports policy references are:
 

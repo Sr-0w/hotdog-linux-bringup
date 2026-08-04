@@ -50,6 +50,10 @@ credentials, proprietary dumps, or workstation-specific paths.
 - [evidence/2026-08-04-mainline616-battery-charger-preflight.md](evidence/2026-08-04-mainline616-battery-charger-preflight.md):
   reproducible `r10` battery/charger candidate, conservative limits, driver
   safeguards, artifact hashes, and the still-pending hardware acceptance gate.
+- [evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md):
+  reproducible `r11` MPSS/RMTFS candidate, downstream-compatible shared-memory
+  placement, read-only userspace policy, and the isolated hardware gate before
+  Wi-Fi enablement.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

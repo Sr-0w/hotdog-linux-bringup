@@ -58,10 +58,12 @@ workloads, and registered Power plus volume-key inputs.
 
 ## Priority 2: connectivity
 
-- runtime-validate the packaged Wi-Fi firmware
+- hardware-validate the reproducible read-only MPSS/RMTFS candidate
+- enable WCN3990 and runtime-validate the packaged Wi-Fi firmware only after
+  the isolated MPSS gate passes
 - enable Bluetooth
 - validate USB host mode and common docks
-- bring up QRTR/QMI and modem services without compromising recovery access
+- bring up QMI and modem services without compromising recovery access
 
 ## Priority 3: multimedia and power
 

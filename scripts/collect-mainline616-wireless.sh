@@ -10,6 +10,7 @@ PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 EXPECTED_KERNEL_MARKER="${EXPECTED_KERNEL_MARKER:-oneplus-hotdog-mainline616}"
 TARGET_SERIAL="${ANDROID_SERIAL:-$HOTDOG_TARGET_SERIAL}"
 REQUIRE_WORKING=0
+REQUIRE_MPSS=0
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/mainline616-wireless-$stamp}"
 
@@ -27,6 +28,7 @@ Options:
   --password PASS       SSH password. Defaults to PMOS_PASSWORD.
   --kernel-marker TEXT  Required substring in uname -a.
   --serial SERIAL       Required androidboot.serialno value.
+  --require-mpss        Fail unless read-only RMTFS and MPSS are running.
   --require-working     Fail unless MPSS is running and a WLAN netdev exists.
   --out DIR             Output directory.
   -h, --help            Show this help.
@@ -77,6 +79,10 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--require-working)
 			REQUIRE_WORKING=1
+			REQUIRE_MPSS=1
+			;;
+		--require-mpss)
+			REQUIRE_MPSS=1
 			;;
 		--out)
 			[ "$#" -ge 2 ] || die "missing value for --out"
@@ -117,11 +123,12 @@ if [ -n "$TARGET_SERIAL" ] && [[ "$cmdline" != *"androidboot.serialno=$TARGET_SE
 fi
 
 set +e
-ssh_base "sudo -n sh -s -- '$REQUIRE_WORKING'" \
+ssh_base "sudo -n sh -s -- '$REQUIRE_MPSS' '$REQUIRE_WORKING'" \
 	> >(tee "$OUT/snapshot.txt") 2> >(tee "$OUT/snapshot.stderr" >&2) <<'REMOTE'
 set -eu
 
-require_working="$1"
+require_mpss="$1"
+require_working="$2"
 
 section() {
 	printf '\n=== %s ===\n' "$1"
@@ -182,6 +189,41 @@ for service in qrtr-ns tqftpserv pd-mapper rmtfs; do
 		printf '%s=<not-installed>\n' "$service"
 	fi
 done
+
+section rmtfs
+rmtfs_device_found=0
+for device in /dev/qcom_rmtfs_mem*; do
+	[ -e "$device" ] || continue
+	rmtfs_device_found=1
+	ls -l "$device"
+done
+[ "$rmtfs_device_found" -eq 1 ] || echo 'rmtfs-device=<not-found>'
+
+rmtfs_process_found=0
+rmtfs_readonly=0
+for cmdline_file in /proc/[0-9]*/cmdline; do
+	[ -r "$cmdline_file" ] || continue
+	cmdline_text="$(tr '\000' ' ' < "$cmdline_file")"
+	case "$cmdline_text" in
+		*rmtfs*)
+			rmtfs_process_found=1
+			printf '%s\n' "$cmdline_text"
+			case " $cmdline_text " in
+				*' -r '*) rmtfs_readonly=1 ;;
+			esac
+			;;
+	esac
+done
+[ "$rmtfs_process_found" -eq 1 ] || echo 'rmtfs-process=<not-found>'
+printf 'rmtfs-read-only=%s\n' "$rmtfs_readonly"
+
+for device in /sys/bus/platform/devices/*f2901000*; do
+	[ -d "$device" ] || continue
+	printf 'platform-device=%s driver=' "$device"
+	readlink "$device/driver" 2>/dev/null || printf '<unbound>\n'
+	[ ! -r "$device/uevent" ] || sed 's/^/  /' "$device/uevent"
+done
+grep -Ei 'f2901000|rmtfs' /proc/iomem 2>/dev/null || true
 
 section modules
 if command -v lsmod >/dev/null 2>&1; then
@@ -248,22 +290,37 @@ ss -a 2>/dev/null | grep -i qrtr || true
 section dmesg
 dmesg | grep -Ei 'remoteproc|q6v5|mpss|modem|qrtr|rmtfs|pd.mapper|tqftp|ath10k|wcn3990|wlan|wifi|firmware' || true
 
-if [ "$require_working" -eq 1 ]; then
+if [ "$require_mpss" -eq 1 ]; then
+	[ "$rmtfs_device_found" -eq 1 ] || {
+		echo 'ERROR: RMTFS memory device is missing' >&2
+		exit 18
+	}
+	[ "$rmtfs_process_found" -eq 1 ] || {
+		echo 'ERROR: RMTFS process is not running' >&2
+		exit 19
+	}
+	[ "$rmtfs_readonly" -eq 1 ] || {
+		echo 'ERROR: RMTFS process is not in read-only mode' >&2
+		exit 20
+	}
 	[ "$mpss_found" -eq 1 ] || {
 		echo 'ERROR: MPSS remoteproc is missing' >&2
-		exit 20
+		exit 21
 	}
 	[ "$mpss_running" -eq 1 ] || {
 		echo 'ERROR: MPSS remoteproc is not running' >&2
-		exit 21
+		exit 22
 	}
+	fi
+
+if [ "$require_working" -eq 1 ]; then
 	[ "$wifi_found" -eq 1 ] || {
 		echo 'ERROR: WiFi platform device is missing' >&2
-		exit 22
+		exit 23
 	}
 	[ "$wlan_found" -eq 1 ] || {
 		echo 'ERROR: WLAN netdev is missing' >&2
-		exit 23
+		exit 24
 	}
 fi
 REMOTE

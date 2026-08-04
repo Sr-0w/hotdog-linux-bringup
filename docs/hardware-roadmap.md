@@ -205,7 +205,32 @@ error and restore the fuel-gauge-only or `r6` image. Do not raise current or
 voltage limits until the conservative profile has completed repeated cold
 boots and charge/discharge observations.
 
-## 8. Wi-Fi
+## 8. MPSS and RMTFS
+
+**Proven current state.** The accepted `r6` image does not run the modem remote
+processor. Revision `r11` is a reproducible preflight candidate that enables
+MPSS with the hotdog firmware, restores the 2 MiB RMTFS region at
+`0xf2901000`, and starts the packaged OpenRC RMTFS service with writes disabled.
+WCN3990 remains disabled. See the
+[MPSS/RMTFS preflight](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md).
+
+**Next experiment.** After `r10` passes its independent power gate, preserve
+the accepted `r6` fallback, write and read back only `r11`, then collect the
+RMTFS platform device, service command line, remoteproc state, QRTR endpoints,
+and filtered kernel log. Do not enable Wi-Fi or modem-management services in
+this run.
+
+**Success criteria.** RMTFS binds at the exact high address, the service runs
+with `-r`, MPSS loads firmware and remains `running`, and QRTR endpoints appear
+without a remoteproc restart, XPU violation, memory-assignment error, or
+regression in the accepted display, storage, USB, touch, GPU, key, and power
+paths.
+
+**Risks and fallback.** A wrong shared-memory address or firmware contract can
+crash MPSS or trigger an XPU fault. Keep the first run read-only, leave WCN3990
+disabled, and restore `r6` after any remoteproc loop or memory fault.
+
+## 9. Wi-Fi
 
 **Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
 validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
@@ -214,13 +239,13 @@ is recorded in [the status matrix](status.md#mainline-support-matrix).
 `CONFIG_ATH10K_SNOC=m` is present, but firmware load, memory assignment,
 clocks, and the Apps SMMU stream remain unproven together.
 
-**Hypothesis.** After Apps SMMU registration and the Wi-Fi stream are trusted,
-the existing WCN3990 description and packaged firmware are sufficient for an
-initial SNOC probe without enabling Bluetooth or the modem.
+**Hypothesis.** After the isolated `r11` MPSS/RMTFS gate passes, the existing
+WCN3990 description and packaged firmware are sufficient for an initial SNOC
+probe without enabling Bluetooth or modem-management services.
 
 **Single-variable experiment.** Enable only the Wi-Fi node on the accepted
-SMMU baseline. Keep Bluetooth, modem, and unrelated remote processors disabled
-and keep the firmware set unchanged.
+MPSS/RMTFS baseline. Keep Bluetooth and modem-management services disabled and
+keep the firmware set unchanged.
 
 **Success criteria.** Firmware loads without remoteproc or SMMU fault, a WLAN
 interface appears, a passive scan completes, and association plus sustained
@@ -232,7 +257,7 @@ crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
 networking as the fallback. Do not combine first Wi-Fi validation with
 Bluetooth or modem enablement.
 
-## 9. USB host mode
+## 10. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,
