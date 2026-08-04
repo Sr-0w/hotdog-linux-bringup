@@ -120,11 +120,13 @@ disappears, arm the persistent runtime monitor while SSH is available:
 scripts/monitor-mainline616-runtime.sh --duration 900 --interval 1
 ```
 
-It writes one compact UFS, block-device, UDC, and power-supply heartbeat per
-second to the existing ramoops pmsg channel while the host watches USB state.
-It never flashes or resets the handset. If `05c6:900e` appears, it releases the
-phone-operation lock and automatically performs only the bounded, read-only
-ramoops capture below.
+It writes one compact UFS, block-device, UDC, power-supply, Bluetooth rfkill,
+and Qualcomm in-band-sleep heartbeat per second to the existing ramoops pmsg
+channel while the host watches USB state. Bluetooth fields are best-effort and
+report `bt_ibs=absent` when no controller or debugfs data is available. The
+script never flashes or resets the handset. If `05c6:900e` appears, it releases
+the phone-operation lock and automatically performs only the bounded,
+read-only ramoops capture below.
 
 If an experimental watchdog enters Qualcomm Crashdump instead, inspect the
 tracked breadcrumb without dumping all RAM:

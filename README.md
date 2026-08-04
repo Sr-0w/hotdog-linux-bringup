@@ -148,10 +148,12 @@ Revision `r14` then enables the WCN3990 Bluetooth UART and its handset power
 rails without changing the accepted Wi-Fi and MPSS path. The direct boot reads
 the real controller identity, and a diagnostic firmware alias lets BlueZ power
 the controller and receive eight nearby devices. The handset subsequently
-entered Qualcomm `900e` while going to sleep, so active Bluetooth is proven
-but suspend/resume is not accepted. Revision `r15` selects the proven
-revision-21 firmware names directly; its strict build and AVB image pass, but
-hardware validation is pending. See the
+entered Qualcomm `900e`, so active Bluetooth was proven but stability remained
+open. Revision `r15` selects the revision-21 firmware names directly and boots
+as kernel build `#16-oneplus-hotdog-mainline616`. Scanning and real HID
+connections work. One `r15` run entered `900e` at 275 seconds without a panic
+or system-suspend entry, while subsequent Bluetooth-off and active-controller
+600-second windows completed cleanly. See the
 [Bluetooth evidence](docs/evidence/2026-08-04-mainline616-bluetooth.md).
 
 Device package revision `3-r4` also makes the tested Plasma Mobile application
@@ -197,11 +199,11 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | GPU | Working for accelerated display and rendering | The `r5` DTS enables the Adreno 640 and GMU. Turnip Vulkan workloads pass, `kmscube` holds approximately 60 FPS on the physical panel, and Weston plus Plasma Mobile render through Freedreno `FD640` without a GPU/GMU/IOMMU fault. Suspend/resume remains open. |
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
-| Wi-Fi | Scanning on hardware | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, exposes an unblocked NetworkManager-managed `wlan0`, and scans both 2.4 GHz and 5 GHz networks. Association, stable factory MAC handling, throughput, and power management remain open. |
-| Bluetooth | Basic active operation working; suspend unsafe | Revision `r14` registers the WCN3990 UART, loads the packaged revision-21 firmware through a diagnostic alias, exposes a powered BlueZ controller, and receives eight devices. The handset later entered `900e` while going to sleep. Revision `r15` carries the clean firmware-name selection but is not hardware-tested yet. |
+| Wi-Fi | Association and Internet reachability working | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, and scans both bands. Revision `r15` associates through NetworkManager and reaches both the local gateway and an external IPv4 endpoint without packet loss. Stable factory MAC handling, throughput, power management, and suspend remain open. |
+| Bluetooth | Scanning and HID connections working; suspend open | Revision `r15` loads the packaged revision-21 firmware by its native names, exposes a powered BlueZ controller, scans, and sustains real HID connections. One run entered `900e` without a panic, but two later 600-second isolation windows completed with Bluetooth blocked and active. Repeated stability and suspend/resume remain open. |
 | Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi scanning, MPSS startup, and basic active Bluetooth work. Telephony, audio, cameras, sensors, 90 Hz, extended charging policy, physical key validation, Bluetooth connections, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi association, MPSS startup, Bluetooth scanning, and HID connections work. Telephony, audio, cameras, sensors, 90 Hz, extended charging policy, physical key validation, stable radio addresses, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 

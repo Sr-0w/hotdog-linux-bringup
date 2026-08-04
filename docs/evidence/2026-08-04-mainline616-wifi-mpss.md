@@ -73,6 +73,13 @@ and 1170 Mbit/s on 5 GHz. This validates firmware loading, control-plane QMI,
 the MAC80211 interface, RF operation, and scan reception. Association and
 sustained traffic remain separate tests.
 
+The later direct-booted `r15` system associated through NetworkManager while
+Bluetooth was active. Three ICMP requests to the local gateway and three to an
+external IPv4 endpoint all returned without loss. Network identifiers,
+addresses, and the randomized interface MAC are intentionally omitted from
+the public evidence. This validates basic association, DHCP, routing, and
+concurrent Wi-Fi/Bluetooth operation; sustained throughput is still open.
+
 The live Plasma image initially contained `polkit-noelogind-libs`, so PolicyKit
 treated the local graphical session as inactive and rejected NetworkManager
 changes. Replacing it with `polkit-elogind` made the existing plugdev policy
@@ -84,8 +91,8 @@ future Plasma Mobile images.
 
 The firmware does not provide a valid factory MAC address through the current
 path, so `ath10k` selects a random address at boot. That must be replaced with
-a stable device address before submission. Wi-Fi association, throughput,
-power management, suspend/resume, and repeated cold boots also remain open.
+a stable device address before submission. Throughput, power management,
+suspend/resume, and repeated cold boots also remain open.
 
 MPSS startup is now a validated dependency for Wi-Fi, not a telephony result.
 ModemManager still exposes no WWAN device, and calls, SMS, mobile data, GNSS,

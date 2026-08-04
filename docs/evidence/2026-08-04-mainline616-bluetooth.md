@@ -4,17 +4,19 @@ Date: 2026-08-04
 
 Device: OnePlus 7T Pro HD1913 (`hotdog`)
 
-Result: revision `r14` boots directly from the OnePlus bootloader, registers
-the WCN3990 UART transport, reads the physical controller identity, loads the
-packaged revision-21 firmware through a temporary filename alias, registers a
-BlueZ controller, and receives advertisements from eight nearby devices.
-The handset later entered Qualcomm `05c6:900e` while going to sleep. Bluetooth
-is therefore validated for basic active operation, but suspend/resume is not
-safe or accepted yet.
+Result: revision `r15` boots directly from the OnePlus bootloader, selects the
+packaged revision-21 firmware through the standard device-tree property,
+registers a BlueZ controller, scans, and sustains real Bluetooth HID
+connections. Wi-Fi remains associated and passes local-gateway plus external
+IPv4 reachability tests at the same time.
 
-Revision `r15` selects the proven firmware names through the standard device
-tree property. It passes schema and package validation and has an AVB-valid
-boot image, but it has not yet been written to hardware.
+One `r15` run entered Qualcomm `05c6:900e` abruptly at 275 seconds of uptime,
+without a kernel panic or suspend entry in ramoops. The failure did not repeat
+in a clean isolation boot: the same image completed 600 seconds with Bluetooth
+blocked, then another 600 seconds with the controller enabled, scanning, and a
+Bluetooth game controller connected. Basic active Bluetooth is therefore
+hardware-validated. System suspend/resume and the cause of the isolated
+crashdump transition remain open.
 
 ## Isolated revisions
 
@@ -22,7 +24,7 @@ boot image, but it has not yet been written to hardware.
 |---|---|---|
 | `r14` | Enable QUPv3 UART13, the WCN3990 serdev child, sleep pins, interrupt, and four supplies | Direct boot succeeded. `ttyHS1`, `hci_uart`, `btqca`, Bluetooth rfkill, and the physical controller appeared. Generic firmware-name derivation requested files that were not packaged. |
 | `r14` live diagnostic | Alias the packaged revision-21 NVM and rampatch files to the requested revision-01 names, then reload only `hci_uart` | Firmware setup completed, BlueZ powered the controller, and an 18-second scan received eight devices. This was a runtime diagnosis, not the final package contract. |
-| `r15` | Select `crnv21.bin` and `crbtfw21.tlv` explicitly in the WCN3990 device-tree node | Schema, strict package build, image assembly, and AVB verification pass. Hardware validation is pending. |
+| `r15` | Select `crnv21.bin` and `crbtfw21.tlv` explicitly in the WCN3990 device-tree node | Direct boot, native firmware loading, scan, and HID connections succeed. One run entered `900e`; two subsequent 600-second isolation windows completed without a USB transition. |
 
 The UART13 description follows the SM8150 serial engine at `0xc8c000`. Its
 sleep state covers GPIOs 43 through 46, and the controller uses the PM8150 and
@@ -46,8 +48,9 @@ The flash record is retained under
 `logs/flash-boot-b-from-pmos-ssh-2026-08-04-191129`.
 
 The `r15` APK is 25,537,039 bytes. Its 96 MiB boot image is AVB-valid and keeps
-the accepted `r13` initramfs and command line. It remains a prepared candidate,
-not a hardware result.
+the accepted `r13` initramfs and command line. The image was written to
+`boot_b`, read back with the same SHA256, and then hardware-validated as kernel
+build `#16-oneplus-hotdog-mainline616`.
 
 ## Direct-boot result
 
@@ -84,35 +87,72 @@ Bluetooth: hci0: QCA setup on UART is completed
 
 BlueZ then exposed the controller as powered and pairable, with central and
 peripheral roles. A real 18-second scan received eight devices,
-including a named `65" OLED` endpoint and its advertised profiles. This proves
-UART communication, power rails, firmware execution, HCI registration, BlueZ
+including a nearby media endpoint and its advertised profiles. This proves UART
+communication, power rails, firmware execution, HCI registration, BlueZ
 control, and RF receive operation. Pairing, connections, audio profiles, and
-sustained traffic remain separate tests.
+sustained traffic remain separate tests for this `r14` run.
 
-## Sleep transition
+Revision `r15` removes the diagnostic aliases. A direct boot requested and
+loaded the packaged files by their real names:
 
-The Linux USB gadget appeared at host time 19:12:11. It disconnected at
-19:15:25, and Qualcomm `05c6:900e` enumerated one second later. The handset was
-going to sleep at that time. No reset was sent from crashdump mode.
+```text
+Bluetooth: hci0: QCA Downloading qca/crbtfw21.tlv
+Bluetooth: hci0: QCA Downloading qca/crnv21.bin
+Bluetooth: hci0: QCA setup on UART is completed
+```
 
-This establishes a strong temporal link to idle sleep, but not yet the failing
-driver or resume stage. The live `r14` diagnostic also reloaded the UART module
-and performed controller setup twice, including one command timeout, so a
-clean `r15` boot must be tested before assigning the crash to the Bluetooth
-driver. Persistent crash data must be collected immediately after the next
-manual return from `900e`.
+BlueZ powered the controller, a scan received twelve devices, and a previously
+paired Bluetooth HID keyboard connected and registered an input device. A
+later clean boot also connected a Bluetooth game controller and kept it active
+through the end of a 600-second observation. These results validate controller
+firmware, receive scanning, pairing state, L2CAP/HID traffic, and userspace HID
+delivery. Audio profiles and throughput remain untested.
+
+## Crashdump observations
+
+The `r14` diagnostic run disconnected from USB and enumerated as Qualcomm
+`05c6:900e` after roughly three minutes. That run had reloaded `hci_uart`,
+performed controller setup twice, and recorded one command timeout, so it was
+not a clean power-management baseline.
+
+The first clean `r15` boot also entered `900e`, at roughly 275 seconds of
+uptime. An `elogind-inhibit` block for both idle and sleep was active, so this
+was not a normal system-suspend transition. The bounded read-only ramoops
+capture contains no panic, oops, call trace, or suspend entry. Its last pmsg
+heartbeats show the root filesystem, UFS block device, USB gadget, and charger
+still present; UFS runtime PM was suspended for the final 20 seconds. Wi-Fi was
+associated and a Bluetooth HID keyboard had connected earlier in the run.
+
+UFS runtime suspend alone is ruled out as a sufficient trigger by the next
+boot. With Bluetooth soft-blocked and BlueZ stopped, 121 five-second samples
+completed from 117.12 through 720.97 seconds of uptime. UFS was runtime
+suspended for most of that interval while root storage, USB, SSH, and charging
+remained available.
+
+Bluetooth was then enabled on the same boot with no paired device initially.
+The controller entered Qualcomm in-band sleep with both clock votes off. A
+Bluetooth game controller later reconnected spontaneously and produced real
+wake/sleep traffic; a subsequent scan added discovery traffic. The complete
+121-sample window ran from 853.40 through 1457.24 seconds with no USB
+transition. IBS counters ended in the asleep state with both clock votes off.
+This does not explain the first `r15` crash, but it shows that controller idle,
+scanning, and a sustained HID connection are not independently sufficient to
+reproduce it. Powering off the connected game controller then produced another
+61-sample, 300-second window with no USB transition; the connection count
+stayed at zero and every IBS counter remained unchanged. A normal HID
+disconnect is therefore not sufficient either.
 
 ## Next validation
 
-1. Boot `r15` directly and capture the previous pstore record before it can be
-   overwritten.
-2. Inhibit automatic sleep temporarily and require direct loading of
-   `qca/crbtfw21.tlv` and `qca/crnv21.bin` without runtime aliases or module
-   reloads.
-3. Repeat controller enumeration and scanning, then hold an awake system for
-   longer than the `r14` failure interval.
-4. Test one controlled suspend/resume cycle only after the clean active path
-   is stable, with pstore capture prepared.
+1. Repeat the original keyboard connection while recording integrated IBS
+   counters and pmsg heartbeats.
+2. If the crash reproduces, separate display blanking from the Bluetooth
+   connection while keeping the system-sleep inhibitor active.
+3. Validate repeated cold boots, discovery, pairing, disconnect, reconnect,
+   and longer bidirectional HID traffic.
+4. Test one controlled suspend/resume cycle only after the active path is
+   repeatably stable, with automatic read-only ramoops capture armed.
 
-Until those checks pass, `r13` remains the accepted long-lived baseline and
-`r14` is only the basic active-Bluetooth hardware result.
+Revision `r15` is the current active-Bluetooth candidate. Revision `r13`
+remains the conservative long-lived fallback until the isolated `900e`
+transition is understood or disproved through repeated stability runs.

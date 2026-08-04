@@ -24,8 +24,9 @@ usage() {
 Usage: monitor-mainline616-runtime.sh [options]
 
 Record a low-rate mainline runtime heartbeat in ramoops pmsg while the host
-watches USB state. If Qualcomm 05c6:900e appears, capture the bounded 4 MiB
-ramoops reservation read-only. This script never flashes or resets the phone.
+watches USB state. Storage, USB, charging, and Bluetooth IBS state are sampled.
+If Qualcomm 05c6:900e appears, capture the bounded 4 MiB ramoops reservation
+read-only. This script never flashes or resets the phone.
 
 Options:
   --host HOST           SSH host. Default: 172.16.42.1.
@@ -102,6 +103,14 @@ ufs=/sys/bus/platform/devices/1d84000.ufshc
 battery=/sys/class/power_supply/qcom-battery
 charger=/sys/class/power_supply/pm8150b-charger
 
+# Bluetooth exposes its in-band-sleep counters through debugfs. Mounting the
+# virtual filesystem is best-effort so the core monitor still works when the
+# kernel omits debugfs or no controller is registered.
+if [ -d /sys/kernel/debug ] &&
+	! grep -qs ' /sys/kernel/debug debugfs ' /proc/mounts; then
+	mount -t debugfs none /sys/kernel/debug >/dev/null 2>&1 || true
+fi
+
 [ -c "$pmsg" ] || {
 	echo "ERROR: missing $pmsg" >&2
 	exit 20
@@ -129,10 +138,28 @@ udc_state() {
 	printf absent
 }
 
+bluetooth_rfkill_state() {
+	for rfkill_path in /sys/class/rfkill/rfkill*; do
+		[ -r "$rfkill_path/type" ] || continue
+		[ "$(cat "$rfkill_path/type")" = bluetooth ] || continue
+		read_one_line "$rfkill_path/state"
+		return
+	done
+	printf absent
+}
+
+bluetooth_ibs_dir() {
+	for ibs_path in /sys/kernel/debug/bluetooth/hci*/ibs; do
+		[ -d "$ibs_path" ] || continue
+		printf '%s' "$ibs_path"
+		return
+	done
+}
+
 sample_count=$((duration_sec / interval_sec + 1))
 sample=1
 while [ "$sample" -le "$sample_count" ]; do
-	line="HOTDOG_RUNTIME_V1"
+	line="HOTDOG_RUNTIME_V2"
 	line="$line seq=$sample/$sample_count"
 	line="$line uptime=$(cut -d' ' -f1 /proc/uptime)"
 	line="$line ufs_runtime=$(read_one_line "$ufs/power/runtime_status")"
@@ -147,6 +174,24 @@ while [ "$sample" -le "$sample_count" ]; do
 	line="$line battery_status=$(read_one_line "$battery/status")"
 	line="$line battery_voltage=$(read_one_line "$battery/voltage_now")"
 	line="$line battery_current=$(read_one_line "$battery/current_now")"
+	line="$line bt_hci=$(device_flag /sys/class/bluetooth/hci0)"
+	line="$line bt_rfkill=$(bluetooth_rfkill_state)"
+
+	ibs_dir="$(bluetooth_ibs_dir)"
+	if [ -n "$ibs_dir" ]; then
+		line="$line bt_tx=$(read_one_line "$ibs_dir/tx_ibs_state")"
+		line="$line bt_rx=$(read_one_line "$ibs_dir/rx_ibs_state")"
+		line="$line bt_sent_sleep=$(read_one_line "$ibs_dir/ibs_sent_sleeps")"
+		line="$line bt_sent_wake=$(read_one_line "$ibs_dir/ibs_sent_wakes")"
+		line="$line bt_sent_ack=$(read_one_line "$ibs_dir/ibs_sent_wake_acks")"
+		line="$line bt_recv_sleep=$(read_one_line "$ibs_dir/ibs_recv_sleeps")"
+		line="$line bt_recv_wake=$(read_one_line "$ibs_dir/ibs_recv_wakes")"
+		line="$line bt_recv_ack=$(read_one_line "$ibs_dir/ibs_recv_wake_acks")"
+		line="$line bt_tx_vote=$(read_one_line "$ibs_dir/tx_vote")"
+		line="$line bt_rx_vote=$(read_one_line "$ibs_dir/rx_vote")"
+	else
+		line="$line bt_ibs=absent"
+	fi
 
 	printf '<6>%s\n' "$line" > "$pmsg"
 	printf '%s\n' "$line"
