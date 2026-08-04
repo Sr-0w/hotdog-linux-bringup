@@ -126,8 +126,27 @@ No reset was sent from `900e`. The bounded memory image has SHA256
 
 This later transition does not change the measured PMIC programming or the
 completed charging trace, but it prevents treating `r8` as a long-duration
-stability result. The next validation should reproduce the run with persistent
-logging that remains useful after early userspace, separate the existing
-UFS/DWC3 runtime instability from the charger change, and then cover
-unplug/replug, charge termination, low state of charge, thermal limits, and
-suspend/resume.
+stability result.
+
+A second direct `r8` boot, ID `7c7e99b7-8714-4836-9ec2-e23b77732a08`, then
+ran the persistent runtime monitor for 600 seconds. It wrote one compact record
+per second to ramoops pmsg while also returning the records over SSH. All 601
+samples completed, spanning 98.24 through 716.96 seconds of system uptime:
+
+| Runtime signal | Observed result |
+|---|---|
+| UFS runtime state | 352 active, 245 suspended, 4 suspending |
+| `/dev/sda` and `/dev/loop0p2` | present in all 601 samples |
+| DWC3 UDC | `a600000.usb:configured` in all 601 samples |
+| USB input limit | 500,000 uA in all 601 samples |
+| Battery status | `Charging` in all 601 samples |
+| Battery voltage | 4,406,971 to 4,408,191 uV |
+| Battery current | -97,656 to -50,292 uA |
+
+No USB transition or `900e` identity occurred. The successful second run proves
+that the earlier transition is not a deterministic fixed-time failure and
+found no gradual loss of UFS, the mounted root, or the USB gadget. It does not
+erase the first failure: the next comparison should reduce host traffic while
+retaining pmsg breadcrumbs, then isolate UFS and DWC3 runtime power management
+before covering unplug/replug, charge termination, low state of charge,
+thermal limits, and suspend/resume.

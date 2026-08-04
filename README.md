@@ -117,7 +117,9 @@ from fully read-back AVB image
 `32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`.
 Physical register reads confirmed 4.40 V float voltage, 1.50 A fast-charge
 current, and a 500 mA USB input limit before and after a passing 180-second
-trace. See the
+trace. A second direct boot then completed 601 one-second runtime samples
+through 716.96 seconds of uptime with UFS, rootfs, and USB gadget availability
+preserved throughout. See the
 [SMB5 parameter evidence](docs/evidence/2026-08-04-mainline616-smb5-parameters.md).
 
 An attempted live register comparison against R6 was stopped permanently after

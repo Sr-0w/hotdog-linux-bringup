@@ -113,6 +113,19 @@ scripts/rescue-pmos-to-fastboot-when-visible.sh \
 This watcher does not flash partitions. Pair it with the prearmed fastboot
 restore watcher used by the direct-boot wrappers.
 
+For a candidate that reaches the normal mainline 6.16 userspace and then
+disappears, arm the persistent runtime monitor while SSH is available:
+
+```bash
+scripts/monitor-mainline616-runtime.sh --duration 900 --interval 1
+```
+
+It writes one compact UFS, block-device, UDC, and power-supply heartbeat per
+second to the existing ramoops pmsg channel while the host watches USB state.
+It never flashes or resets the handset. If `05c6:900e` appears, it releases the
+phone-operation lock and automatically performs only the bounded, read-only
+ramoops capture below.
+
 If an experimental watchdog enters Qualcomm Crashdump instead, inspect the
 tracked breadcrumb without dumping all RAM:
 
