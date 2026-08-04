@@ -13,7 +13,10 @@ validated touchscreen, GPU, USB, storage, and display contracts. Revision `r7`
 starts directly from that source and enables only the PM8150B fuel gauge and
 SMB5 charger device-tree nodes. Revision `r8` corrects the charger driver's
 SMB2/SMB5 conversion mismatch and programs conservative battery limits before
-enabling charging or USB input.
+enabling charging or USB input. Revisions `r9` through `r13` then stage the
+WCN3990 and its MPSS dependency. Revision `r12` restores the Hotdog-specific
+RMTFS reservation at `0xfc201000`; revision `r13` enables Wi-Fi after that
+shared-memory and remoteproc contract passes on hardware.
 
 ## Source contract
 
@@ -36,6 +39,10 @@ enabling charging or USB input.
 - SMB2 and SMB5 use their generation-specific voltage and current encodings.
   SMB5 probe keeps charging and USB input suspended until 4.40 V, 1.50 A, and
   500 mA limits have been programmed successfully.
+- MPSS loads the packaged Hotdog modem firmware and uses a 2 MiB RMTFS no-map
+  reservation at `0xfc201000`, with client ID 1 and VMID 15.
+- WCN3990 uses all five handset regulators, the existing WLAN MSA reservation,
+  and Apps SMMU stream `0x640` before binding through `ath10k_snoc`.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -43,7 +50,26 @@ enabling charging or USB input.
 DT invariant that was present during the successful hardware run. The package
 build fails if one of those invariants changes.
 
-## Strict build evidence
+## Current strict build evidence
+
+The accepted `r13` strict pmbootstrap build completed on 2026-08-04 and
+printed `hotdog mainline 6.16 build contract: PASS` before packaging:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r13.apk` | 25,536,878 bytes | `cc4f75b66974e51ec9c34e108f7adebe305c9194d581179fad1d976c7bd04b55` |
+| `boot/vmlinuz` | 27,572,232 bytes | `d0f06220b8b0cc8910fed56bf3efa55c2ecc1cf3a0a5a9357e2faf2957fa3ce6` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 139,848 bytes | `bd4323a5cea4e2df4f6c4b4aa5089bee97f8be77e8fec9b2d8cfa5c92f816189` |
+
+The exact package payload was assembled with the accepted pmaports initramfs,
+written to `boot_b`, and read back completely before reboot. The 96 MiB boot
+image SHA256 is
+`28bdfd685312cd3b9aca3855d039654bd45582582c31893a031847a6ec21e557`.
+The fresh boot reported `#14-oneplus-hotdog-mainline616`; USB SSH returned in
+9.95 seconds. MPSS reached `running`, WCN3990 firmware initialized, and
+NetworkManager exposed `wlan0`. A fresh scan found 2.4 GHz and 5 GHz networks.
+
+## Earlier r8 charging evidence
 
 Two accepted `r8` strict pmbootstrap builds completed on 2026-08-04. Each
 started from reset buildroots, printed
@@ -79,6 +105,10 @@ The UFS and QUP Apps SMMU links and the UFS inline-crypto reference are disabled
 in the device tree while their native paths are being repaired. Compatibility
 symbols for the filtered OnePlus DTBO are also temporary. These constraints are
 documented in source so each can be removed independently and tested.
+
+The current WCN3990 path does not recover a valid factory MAC address, so the
+driver chooses a random address at boot. Association, throughput, radio power
+management, Bluetooth, and suspend remain unvalidated.
 
 This device-specific package is a reference point, not the intended final
 pmaports architecture. Once the remaining hardware paths are stable, the

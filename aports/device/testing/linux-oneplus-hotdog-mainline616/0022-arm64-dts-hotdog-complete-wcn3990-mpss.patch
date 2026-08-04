@@ -1,0 +1,38 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 17:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: complete WCN3990 and enable MPSS
+
+The first WCN3990 hardware probe binds ath10k_snoc and the Apps SMMU stream,
+but reports the fifth WLAN rail as missing and never receives the WLFW QMI
+service while MPSS is disabled.
+
+Describe the remaining 3.3 V channel and start MPSS with the firmware path
+provided by firmware-oneplus-hotdog-modem. Keep the validated low-memory RMTFS
+layout unchanged.
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -231,7 +231,8 @@
+ };
+ 
+ &remoteproc_mpss {
+-	status = "disabled";
++	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
++	status = "okay";
+ };
+ 
+ &wifi {
+@@ -242,6 +243,7 @@
+ 	vdd-1.8-xo-supply = <&vreg_l7a_1p8>;
+ 	vdd-1.3-rfa-supply = <&vreg_l2c_1p3>;
+ 	vdd-3.3-ch0-supply = <&vreg_l11c_3p3>;
++	vdd-3.3-ch1-supply = <&vreg_l10c_3p3>;
+ };
+ 
+ &rmtfs_mem {
+-- 
+2.50.1

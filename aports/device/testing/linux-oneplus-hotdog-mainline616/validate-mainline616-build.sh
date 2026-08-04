@@ -109,6 +109,8 @@ if [ -n "$modules_dir" ]; then
 		die "no kernel modules under: $modules_dir"
 	find "$modules_dir" -type f -path '*/drivers/input/touchscreen/s6sy761.ko' \
 		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
+	find "$modules_dir" -type f -path '*/drivers/net/wireless/ath/ath10k/ath10k_snoc.ko' \
+		-print -quit | grep -q . || die "missing WCN3990 ath10k SNOC module"
 fi
 
 python3 - "$image" <<'PY'
@@ -162,6 +164,18 @@ expect_config 'CONFIG_POWER_SUPPLY=y'
 expect_config 'CONFIG_POWER_SUPPLY_HWMON=y'
 expect_config 'CONFIG_BATTERY_QCOM_FG=y'
 expect_config 'CONFIG_CHARGER_QCOM_SMB2=y'
+expect_config 'CONFIG_CFG80211=m'
+expect_config 'CONFIG_MAC80211=m'
+expect_config 'CONFIG_ATH10K=m'
+expect_config 'CONFIG_ATH10K_SNOC=m'
+expect_config 'CONFIG_QRTR=m'
+expect_config 'CONFIG_QCOM_RPROC_COMMON=m'
+expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
+expect_config 'CONFIG_QCOM_Q6V5_PAS=m'
+expect_config 'CONFIG_QCOM_SYSMON=m'
+expect_config 'CONFIG_QCOM_RMTFS_MEM=y'
+expect_config 'CONFIG_RPMSG_QCOM_GLINK_SMEM=m'
+expect_config 'CONFIG_QRTR_SMD=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -185,6 +199,10 @@ pm8150=$soc/spmi@c440000/pmic@0
 pm8150b=$soc/spmi@c440000/pmic@2
 pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
+remoteproc_mpss=$soc/remoteproc@4080000
+wifi=$soc/wifi@18800000
+wlan_mem=$reserved/memory@8bc00000
+rmtfs_mem=$reserved/memory@fc201000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
 pon_pwrkey=$pm8150/pon@800/pwrkey
 pon_resin=$pm8150/pon@800/resin
@@ -224,6 +242,40 @@ expect_value dwc3-speed high-speed fdtget -ts "$dtb" "$dwc3" maximum-speed
 expect_absent ufs-iommus fdtget "$dtb" "$ufs" iommus
 expect_absent ufs-ice fdtget "$dtb" "$ufs" qcom,ice
 expect_absent qup-iommus fdtget "$dtb" "$qup" iommus
+
+expect_value mpss-status okay fdtget -ts "$dtb" "$remoteproc_mpss" status
+expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \
+	fdtget -ts "$dtb" "$remoteproc_mpss" firmware-name
+expect_value rmtfs-hotdog-address '0 fc201000 0 200000' \
+	fdtget -tx "$dtb" "$rmtfs_mem" reg
+expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs_mem" qcom,client-id
+expect_value rmtfs-vmid f fdtget -tx "$dtb" "$rmtfs_mem" qcom,vmid
+expect_value wifi-compatible qcom,wcn3990-wifi \
+	fdtget -ts "$dtb" "$wifi" compatible
+expect_value wifi-status okay fdtget -ts "$dtb" "$wifi" status
+expect_value wifi-registers '0 18800000 0 800000' \
+	fdtget -tx "$dtb" "$wifi" reg
+expect_value wifi-iommus "$apps_smmu_phandle 640 1" \
+	fdtget -tx "$dtb" "$wifi" iommus
+wlan_mem_phandle=$(fdtget -tx "$dtb" "$wlan_mem" phandle) ||
+	die "missing WLAN MSA memory phandle"
+expect_value wifi-memory "$wlan_mem_phandle" \
+	fdtget -tx "$dtb" "$wifi" memory-region
+for supply in \
+	'vdd-0.8-cx-mx:vreg_l1a_0p75' \
+	'vdd-1.8-xo:vreg_l7a_1p8' \
+	'vdd-1.3-rfa:vreg_l2c_1p3' \
+	'vdd-3.3-ch0:vreg_l11c_3p3' \
+	'vdd-3.3-ch1:vreg_l10c_3p3'; do
+	supply_name=${supply%%:*}
+	supply_symbol=${supply#*:}
+	supply_path=$(fdtget -ts "$dtb" /__symbols__ "$supply_symbol") ||
+		die "missing Wi-Fi regulator symbol: $supply_symbol"
+	supply_phandle=$(fdtget -tx "$dtb" "$supply_path" phandle) ||
+		die "missing Wi-Fi regulator phandle: $supply_symbol"
+	expect_value "wifi-$supply_name-supply" "$supply_phandle" \
+		fdtget -tx "$dtb" "$wifi" "$supply_name-supply"
+done
 
 expect_value panel-compatible samsung,oneplus-dsc \
 	fdtget -ts "$dtb" "$panel" compatible

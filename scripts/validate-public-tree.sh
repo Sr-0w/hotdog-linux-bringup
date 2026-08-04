@@ -341,6 +341,50 @@ validate_mainline616_aport_inputs() {
 		"expected $((source_count - tar_count)) mainline 6.16 local inputs, found $local_count"
 }
 
+validate_hotdog_wifi_package_contract() {
+	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
+	local firmware_apkbuild="aports/device/testing/firmware-oneplus-hotdog/APKBUILD"
+
+	log "hotdog WCN3990 package contract"
+	grep -q 'firmware-oneplus-hotdog-wlan' "$device_apkbuild" ||
+		die "device firmware package does not depend on WLAN firmware"
+	grep -q 'firmware-oneplus-hotdog-modem' "$device_apkbuild" ||
+		die "device firmware package does not depend on MPSS firmware"
+	grep -q '^[[:space:]]*rmtfs$' "$device_apkbuild" ||
+		die "device firmware package does not depend on RMTFS"
+	grep -q '^[[:space:]]*rmtfs-openrc$' "$device_apkbuild" ||
+		die "device firmware package does not depend on the RMTFS OpenRC service"
+	grep -q '^rc-update add rmtfs boot$' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
+		die "device firmware package does not enable RMTFS at boot"
+	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
+		die "WLAN package does not install board-2.bin"
+	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||
+		die "WLAN package does not install firmware-5.bin"
+	grep -q '"$builddir"/wlanmdsp.mbn' "$firmware_apkbuild" ||
+		die "WLAN package does not install wlanmdsp.mbn"
+	grep -q '"$builddir"/modem.mbn' "$firmware_apkbuild" ||
+		die "modem package does not install modem.mbn"
+}
+
+validate_hotdog_plasma_apps_contract() {
+	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
+	local package=""
+
+	log "hotdog Plasma Mobile application contract"
+	grep -q '\$pkgname-plasma-mobile-apps:plasma_mobile_apps' "$device_apkbuild" ||
+		die "device package lacks the Plasma Mobile application subpackage"
+	grep -q 'install_if="\$pkgname=\$pkgver-r\$pkgrel postmarketos-ui-plasma-mobile"' \
+		"$device_apkbuild" || die "mobile applications are not gated on Plasma Mobile"
+	for package in \
+		angelfish discover discover-backend-flatpak dolphin flatpak kalk kclock \
+		koko konsole kweather megapixels merkuro okular-mobile plasma-dialer \
+		polkit-elogind spacebar xdg-user-dirs; do
+		grep -q "^[[:space:]]*$package$" "$device_apkbuild" ||
+			die "missing Plasma Mobile application dependency: $package"
+	done
+}
+
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
@@ -536,6 +580,8 @@ main() {
 	validate_k1_patch_copies
 	validate_k1_aport_inputs
 	validate_mainline616_aport_inputs
+	validate_hotdog_wifi_package_contract
+	validate_hotdog_plasma_apps_contract
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
 	validate_disabled_r6_ufs_probe

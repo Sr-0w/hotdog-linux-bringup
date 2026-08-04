@@ -8,9 +8,11 @@ logs/
 memory/
 pmbootstrap-work/
 pmbootstrap-work-current/
+pmbootstrap-work-*/
 reports/
 rootfs/
 pmbootstrap_v3.cfg
+pmbootstrap-*.cfg
 hotdog.env
 
 # External checkouts and cached tool trees

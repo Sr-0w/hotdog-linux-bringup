@@ -134,6 +134,23 @@ is not a general panel geometry failure. The accepted baseline remains 60 Hz;
 90 Hz, suspend/resume, and repeated graphical cold boots are still open. See
 the [graphical userspace evidence](docs/evidence/2026-08-04-mainline616-graphical-userspace.md).
 
+Revisions `r9` through `r13` bring up the WCN3990 and its MPSS dependency in
+isolated steps. Revision `r12` restores Hotdog's device-specific RMTFS
+reservation at `0xfc201000`; the direct-booted system then starts the modem
+remote processor and keeps `rmtfs`, `tqftpserv`, QRTR, USB networking, and SSH
+available. Revision `r13` changes only the fully described Wi-Fi node from
+disabled to okay. Its exact package payload direct-boots as kernel build
+`#14-oneplus-hotdog-mainline616`, exposes `wlan0` through `ath10k_snoc`, and
+scans 2.4 GHz and 5 GHz networks. See the
+[WCN3990 and MPSS evidence](docs/evidence/2026-08-04-mainline616-wifi-mpss.md).
+
+Device package revision `3-r4` also makes the tested Plasma Mobile application
+set reproducible. Its install-if subpackage selects Discover and its Flatpak
+backend, a mobile browser, terminal, file manager, messaging and phone tools,
+utilities, and `polkit-elogind` so the active local session can manage
+NetworkManager. A clean strict package build passes; a fresh full image remains
+to be assembled and hardware-tested.
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -153,25 +170,27 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. Revision `r8` preserves the accepted `r6` hardware stack, enables the PM8150B supplies, corrects SMB5 limit programming, and boots from fully read-back AVB image `32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`. |
+| Mainline 6.16 pmaports image | Direct hardware boot working | Revision `r13` preserves the accepted storage, display, touch, GPU, charging, rootfs, and USB stack while adding MPSS/RMTFS and WCN3990. The exact fully read-back AVB image is `28bdfd685312cd3b9aca3855d039654bd45582582c31893a031847a6ec21e557`. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
-| SSH | Working directly | The exact `r8` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #9-oneplus-hotdog-mainline616`. |
+| SSH | Working directly | The exact `r13` payload reaches OpenSSH in about 10 seconds and reports `Linux hotdog 6.16.0-sm8150 #14-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
 | Persistent direct mainline | Exact pmaports image working | The package-generated image boots from `boot_b`, enumerates storage, mounts the read-write pmaports rootfs, starts OpenRC, and exposes USB networking plus SSH. |
-| Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. The A630 SQE, A640 GMU, and handset ZAP payloads are now runtime-validated; other peripheral firmware remains pending. |
+| Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. GPU, MPSS, and WCN3990 payloads are runtime-validated; other peripheral firmware remains pending. |
 | Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
 | Mainline panel | Working at 60 Hz | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout under `kmscube`, Weston, and Plasma Mobile. Dense fbcon scrolling can still repeat; 90 Hz, blank/unblank, and suspend/resume remain open. |
 | Touchscreen | Working in graphical userspace | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots. Weston and Plasma Mobile confirm correct graphical orientation and responsive touch; suspend/resume remains open. |
 | GPU | Working for accelerated display and rendering | The `r5` DTS enables the Adreno 640 and GMU. Turnip Vulkan workloads pass, `kmscube` holds approximately 60 FPS on the physical panel, and Weston plus Plasma Mobile render through Freedreno `FD640` without a GPU/GMU/IOMMU fault. Suspend/resume remains open. |
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
+| Wi-Fi | Scanning on hardware | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, exposes an unblocked NetworkManager-managed `wlan0`, and scans both 2.4 GHz and 5 GHz networks. Association, stable factory MAC handling, throughput, and power management remain open. |
+| Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, and volume-key registration work. No sound card or Wi-Fi/rfkill device is exposed. Bluetooth, modem, cameras, sensors, 90 Hz, extended charging policy, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi scanning, and MPSS startup work. Bluetooth, telephony, audio, cameras, sensors, 90 Hz, extended charging policy, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 
@@ -179,7 +198,7 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r8"]
+    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r13"]
     B --> C["Native DPU, DSI and fbcon"]
     B --> D["UFS with temporary 32-bit DMA"]
     D --> E["Nested pmOS GPT discovery"]
@@ -190,6 +209,8 @@ flowchart LR
     B --> I["Adreno 640, GMU and Turnip"]
     B --> J["Power and volume-key inputs"]
     B --> K["PM8150B battery and corrected SMB5 limits"]
+    B --> M["MPSS and Hotdog-specific RMTFS"]
+    M --> N["WCN3990 and wlan0"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge

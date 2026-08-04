@@ -1,0 +1,66 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 17:40:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: use device-specific RMTFS
+
+The first MPSS-enabled hardware run proved that the generic SM8150 RMTFS
+address at 0x89b00000 is rejected by the handset secure monitor. A follow-up
+run using the OnePlus common address at 0xf2901000 did not reach USB or the
+root filesystem.
+
+Restore the explicit 0xfc201000 reservation from the original Hotdog device
+tree instead of inheriting the OnePlus common node. Keep WCN3990 disabled for
+this intermediate gate so the run isolates modem shared-memory assignment and
+remoteproc startup from the first WiFi service-consumer test.
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -14,6 +14,8 @@
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+ #include "sm8150-oneplus-common.dtsi"
+ 
++/delete-node/ &rmtfs_mem;
++
+ / {
+ 	model = "OnePlus 7T Pro";
+ 	compatible = "oneplus,hotdog", "oneplus,oneplus7", "qcom,sm8150";
+@@ -120,6 +122,14 @@
+ 			no-map;
+ 		};
+ 
++		rmtfs_mem: memory@fc201000 {
++			compatible = "qcom,rmtfs-mem";
++			reg = <0 0xfc201000 0 0x200000>;
++			no-map;
++			qcom,client-id = <1>;
++			qcom,vmid = <15>;
++		};
++
+ 		mtp_mem: memory@ac300000 {
+ 			reg = <0 0xac300000 0 0xb00000>;
+ 			no-map;
+@@ -236,7 +246,7 @@
+ };
+ 
+ &wifi {
+-	status = "okay";
++	status = "disabled";
+ 
+ 	vdd-0.8-cx-mx-supply = <&vreg_l1a_0p75>;
+ 	vdd-1.8-xo-supply = <&vreg_l7a_1p8>;
+@@ -245,10 +255,6 @@
+ 	vdd-3.3-ch1-supply = <&vreg_l10c_3p3>;
+ };
+ 
+-&rmtfs_mem {
+-	reg = <0x0 0x89b00000 0x0 0x200000>;
+-};
+-
+ &adsp_mem {
+ 	reg = <0x0 0x8be00000 0x0 0x1e00000>;
+ };
+-- 
+2.50.1

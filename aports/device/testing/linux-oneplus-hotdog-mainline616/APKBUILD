@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=8
+pkgrel=13
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -57,6 +57,10 @@ source="
 	0018-arm64-dts-hotdog-enable-volume-keys.patch
 	0019-arm64-dts-hotdog-enable-battery-charger.patch
 	0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
+	0021-arm64-dts-hotdog-enable-wcn3990-wifi.patch
+	0022-arm64-dts-hotdog-complete-wcn3990-mpss.patch
+	0023-arm64-dts-hotdog-isolate-mpss-rmtfs.patch
+	0024-arm64-dts-hotdog-enable-wifi-after-rmtfs.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -131,5 +135,9 @@ dcf5d8d6fe1038fbcacf7b772eab1c1ec0f326c376c5f44157131bcb885657040e0abcec4b5cb6d1
 bf81a85104a83abbf58cc22ea1d9a74aeef89647654f5d9d093407ea82c4551fbe7a9719ff547c5f78cb8732b3893f9ad6738b371bd9b1bdafc7996e77bfd6b8  0018-arm64-dts-hotdog-enable-volume-keys.patch
 123f6a1842793c0f00a984293cfc314f8787a68c12daeb687df3a3ead6119783dc2236cc05eb8fb613ea0632d94a35f9a852654494dbcc361411f02ec3ffb731  0019-arm64-dts-hotdog-enable-battery-charger.patch
 7b8777a11826e89e578c1141ad7d8c78a096d81ffebcf65ff79d966d53c803e963ed9e2df77d7064ebbeeae7281738c44744de535f25133a8ed12080459a307a  0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
-a341880bb2bbe38626a119602443d4d5cdb6b0c11a84cf4bada1aaba42502efa094b9f30ea8bef3f150d0403d5800b80aede7503aad3976715f4a1ac7cb6ec99  validate-mainline616-build.sh
+bbe410a1acd7ec816cae42df1f561b035c44397a22ca93021bdc1eb40f7267dfb8a1913ee9dcdbf0d7b622ecb6dc6be0915027c578f5ef1e57e4d03bebcd5b0f  0021-arm64-dts-hotdog-enable-wcn3990-wifi.patch
+3ce5ce51c988aa5882a4fc25763adbf98b402cac10354277a502ef599f5383a854060cf8aa62cdbc9ca9702c7b8ed841aadff981d1f6044ed3da4ebfc7e612aa  0022-arm64-dts-hotdog-complete-wcn3990-mpss.patch
+85f499a0386e57852b19bfc08c4e50ecfd8c0588ef3e10b65fa5cb711bd5cd8eb773347e87279b3a8b070c63b80aaae8c4cb551f5d6b39a2e029052ee6ec48eb  0023-arm64-dts-hotdog-isolate-mpss-rmtfs.patch
+f27bce45f51e92f7effa2c93005e8cb0a1c290feee013acedf8fae2747eb31a9ed44394b581d926e440bf3a5d440a4509f3942df9dc73c1eb29e10e9b6244790  0024-arm64-dts-hotdog-enable-wifi-after-rmtfs.patch
+cdc0eaacac9c8721f5363eada2291ea141d434b062e1da30e5a810e9b3678e6bf6c8df44d7772f1b615c932db0155854fd690abe7f7936c88e03e279390b7f42  validate-mainline616-build.sh
 "

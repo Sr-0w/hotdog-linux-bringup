@@ -89,6 +89,22 @@ does emit non-fatal `Could not create udmabuf: Invalid argument` messages, and
 the kernel had three earlier non-fatal DPU `encoder is disabled` messages over
 the long-running boot. Neither prevented KMS rendering or compositor use.
 
+## Packaged application set
+
+Device package revision `3-r4` adds an install-if subpackage for Plasma Mobile.
+It selects Discover with its Flatpak backend, Konsole, Angelfish, Dolphin,
+Kalk, KClock, KWeather, Koko, Merkuro, Okular Mobile, Plasma Dialer, Spacebar,
+Megapixels, and the supporting Flatpak and user-directory packages. It also
+selects `polkit-elogind`, which lets the active local Plasma session manage
+NetworkManager instead of inheriting the no-elogind PolicyKit variant.
+
+A clean strict pmbootstrap build produced:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `device-oneplus-hotdog-3-r4.apk` | 1,977 bytes | `ae537e2d0307b51ab21dfa97265757ca998ae7cde76a056d7982be26f6b97213` |
+| `device-oneplus-hotdog-plasma-mobile-apps-3-r4.apk` | 1,378 bytes | `6be671884e1c6f94d138cba40454e5f5a5e6fba2e21257e321b11274931e25cc` |
+
 ## Conclusions and remaining work
 
 The vertically repeated dense fbcon output is a console presentation issue,
@@ -97,12 +113,12 @@ Wayland compositors produce a correct 1440x3120 image.
 
 The following work remains before graphical support is complete:
 
-- integrate the Plasma Mobile package selection into a freshly assembled
-  pmaports image instead of installing it only into the live root filesystem;
+- assemble and hardware-test a fresh pmaports image using the validated
+  device-package application selection;
 - validate repeated direct boots into `tinydm` without manual service startup;
 - validate blank/unblank, suspend/resume, and touch wake;
 - expose and validate the panel's 90 Hz mode separately from the accepted
   60 Hz baseline;
 - investigate the non-fatal DPU IRQ and KWin udmabuf messages;
-- keep Wi-Fi, audio, modem, cameras, sensors, and other peripheral work as
-  separate subsystem changes.
+- keep Bluetooth, telephony, audio, cameras, sensors, and other peripheral
+  work as separate subsystem changes.

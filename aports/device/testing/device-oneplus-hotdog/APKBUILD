@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=3
+pkgrel=4
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -31,6 +31,7 @@ subpackages="
 	$pkgname-mainline-firmware:mainline_firmware
 	$pkgname-wireplumber:wireplumber
 	$pkgname-bringup:bringup
+	$pkgname-plasma-mobile-apps:plasma_mobile_apps
 "
 
 build() {
@@ -67,6 +68,31 @@ bringup() {
 		"$subpkgdir/etc/doas.d/90-hotdog-bringup.conf"
 }
 
+plasma_mobile_apps() {
+	pkgdesc="Mobile application set for Plasma Mobile"
+	depends="
+		angelfish
+		discover
+		discover-backend-flatpak
+		dolphin
+		flatpak
+		kalk
+		kclock
+		koko
+		konsole
+		kweather
+		megapixels
+		merkuro
+		okular-mobile
+		plasma-dialer
+		polkit-elogind
+		spacebar
+		xdg-user-dirs
+	"
+	install_if="$pkgname=$pkgver-r$pkgrel postmarketos-ui-plasma-mobile"
+	mkdir "$subpkgdir"
+}
+
 mainline_firmware() {
 	pkgdesc="Firmware support packages for mainline kernel"
 	depends="firmware-oneplus-hotdog-adreno"
@@ -88,6 +114,8 @@ nonfree_firmware() {
 		firmware-oneplus-hotdog-bluetooth
 		firmware-oneplus-hotdog-venus
 		msm-modem
+		rmtfs
+		rmtfs-openrc
 		pd-mapper
 		pd-mapper-openrc
 		tqftpserv
