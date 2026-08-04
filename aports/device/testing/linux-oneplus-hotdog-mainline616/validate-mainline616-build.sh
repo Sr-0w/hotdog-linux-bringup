@@ -41,6 +41,68 @@ expect_absent() {
 [ -s "$config" ] || die "missing config: $config"
 [ -s "$dtb" ] || die "missing DTB: $dtb"
 
+smbx_source=drivers/power/supply/qcom_smbx.c
+[ -s "$smbx_source" ] || die "missing SMB charger source: $smbx_source"
+
+python3 - "$smbx_source" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+
+
+def section(start: str, end: str) -> str:
+    try:
+        return source[source.index(start):source.index(end, source.index(start))]
+    except ValueError as exc:
+        raise SystemExit(f"missing SMB charger source section: {exc}") from exc
+
+
+pm8150b = section(
+    "static const struct smb_match_data pm8150b_match_data",
+    "static const struct smb_match_data pm7250b_match_data",
+)
+for setting in (
+    ".fv_min_uv = 3600000,",
+    ".fv_max_uv = 4790000,",
+    ".fv_step_uv = 10000,",
+    ".fcc_max_ua = 8000000,",
+    ".fcc_step_ua = 50000,",
+    ".icl_max_ua = 5000000,",
+    ".icl_step_ua = 50000,",
+):
+    if setting not in pm8150b:
+        raise SystemExit(f"missing PM8150B charge parameter: {setting}")
+
+smb5_init = section(
+    "static const struct smb_init_register smb5_init_seq[]",
+    "static const struct smb_init_register smb2_init_seq[]",
+)
+for unsafe_write in (
+    "{ .addr = USBIN_CMD_IL",
+    "{ .addr = CHARGING_ENABLE_CMD",
+    "{ .addr = FAST_CHARGE_CURRENT_CFG",
+):
+    if unsafe_write in smb5_init:
+        raise SystemExit(f"premature SMB5 init write remains: {unsafe_write}")
+
+probe = section("static int smb_probe", "static const struct of_device_id")
+for operation in (
+    "USBIN_SUSPEND_BIT, USBIN_SUSPEND_BIT",
+    "chip->batt_info->constant_charge_voltage_max_uv",
+    "float_voltage_sel",
+    "fast_charge_current_sel",
+    "smb_set_current_limit(chip, SDP_CURRENT_UA)",
+    "USBIN_SUSPEND_BIT, 0",
+    "charge limits: float=%u uV fast=%u uA input=%u uA",
+):
+    if operation not in probe:
+        raise SystemExit(f"missing fail-safe SMB5 probe operation: {operation}")
+
+if "return !!(val & mask);" not in source:
+    raise SystemExit("SMB overvoltage status does not test the register value")
+PY
+
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	find "$modules_dir" -type f -name '*.ko' -print -quit | grep -q . ||

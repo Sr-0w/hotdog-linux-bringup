@@ -106,6 +106,19 @@ kernel and DTB direct-boot from AVB image
 `dbc5210987b791774e67e7a6ad5fd796ecf950fca5ebe8e0a414f6112009c29f`,
 return USB SSH, and expose `qcom-battery` plus `pm8150b-charger`. See the
 [battery and charger evidence](docs/evidence/2026-08-04-mainline616-battery-charger.md).
+Direct register inspection then found that the driver applied SMB2 conversion
+factors to SMB5 hardware, so `r7` is retained only as discovery evidence and
+must not be used as a charging baseline.
+
+Revision `r8` fixes that generation mismatch and leaves SMB5 charging and USB
+input suspended until conservative limits have been programmed. Two strict
+builds produced the same APK byte-for-byte. The exact package payload booted
+from fully read-back AVB image
+`32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`.
+Physical register reads confirmed 4.40 V float voltage, 1.50 A fast-charge
+current, and a 500 mA USB input limit before and after a passing 180-second
+trace. See the
+[SMB5 parameter evidence](docs/evidence/2026-08-04-mainline616-smb5-parameters.md).
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -126,11 +139,11 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. Revision `r7` is derived directly from accepted `r6`, changes only the battery/charger DTS, and boots from fully read-back AVB image `dbc5210987b791774e67e7a6ad5fd796ecf950fca5ebe8e0a414f6112009c29f`. |
+| Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. Revision `r8` preserves the accepted `r6` hardware stack, enables the PM8150B supplies, corrects SMB5 limit programming, and boots from fully read-back AVB image `32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
-| SSH | Working directly | The exact `r7` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #8-oneplus-hotdog-mainline616`. |
+| SSH | Working directly | The exact `r8` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #9-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
@@ -141,9 +154,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Touchscreen | Working | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots; orientation under a graphical shell and suspend/resume remain open. |
 | GPU | Working for rendering | The `r5` DTS enables the Adreno 640 and GMU. MSM DRM exposes `renderD128`, Turnip identifies the A640, six OPPs are available, and two Vulkan workloads complete without a GPU/GMU/IOMMU fault. Accelerated graphical-shell scanout and suspend/resume remain open. |
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
-| Charging/battery | Detected; charging policy partial | The `r7` DTS exposes `qcom-battery` and `pm8150b-charger`; capacity, temperature, voltage, current, USB presence, and input limit update at runtime. SMB5 limit conversion, charging-state agreement, unplug/replug, thermal behavior, and suspend remain open. |
+| Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Power reporting, touchscreen, display, GPU rendering, and volume-key registration work. No sound card or Wi-Fi/rfkill device is exposed. Bluetooth, modem, cameras, sensors, charging policy, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, display, GPU rendering, and volume-key registration work. No sound card or Wi-Fi/rfkill device is exposed. Bluetooth, modem, cameras, sensors, extended charging policy, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 
@@ -151,7 +164,7 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r7"]
+    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r8"]
     B --> C["Native DPU, DSI and fbcon"]
     B --> D["UFS with temporary 32-bit DMA"]
     D --> E["Nested pmOS GPT discovery"]
@@ -160,7 +173,7 @@ flowchart LR
     B --> H["S6SY761 touch and multitouch"]
     B --> I["Adreno 640, GMU and Turnip"]
     B --> J["Power and volume-key inputs"]
-    B --> K["PM8150B battery and SMB5 charger"]
+    B --> K["PM8150B battery and corrected SMB5 limits"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge

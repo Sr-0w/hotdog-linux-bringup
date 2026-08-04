@@ -9,6 +9,13 @@ the PM8150B fuel gauge and SMB5 charger. It direct-boots from the OnePlus
 bootloader, retains USB networking and SSH, and exposes both power-supply class
 devices.
 
+Safety status: this `r7` discovery build is superseded and must not be used as
+an accepted charging baseline. A later register audit proved that the driver
+applied SMB2 conversion factors to PM8150B SMB5 registers, programming 4.85 V,
+3.90 A, and 1.00 A instead of the intended limits. Revision `r8` corrects the
+driver and is documented in
+[the SMB5 parameter evidence](2026-08-04-mainline616-smb5-parameters.md).
+
 ## Isolated source change
 
 The package starts from commit `952a98e`, the exact `r6` source baseline. It

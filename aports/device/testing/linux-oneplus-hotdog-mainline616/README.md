@@ -11,7 +11,9 @@ with the upstream MSM DRM driver and real Turnip Vulkan submissions. Revision
 `r6` adds the PM8150 Volume Down and Volume Up input paths while preserving the
 validated touchscreen, GPU, USB, storage, and display contracts. Revision `r7`
 starts directly from that source and enables only the PM8150B fuel gauge and
-SMB5 charger device-tree nodes.
+SMB5 charger device-tree nodes. Revision `r8` corrects the charger driver's
+SMB2/SMB5 conversion mismatch and programs conservative battery limits before
+enabling charging or USB input.
 
 ## Source contract
 
@@ -31,6 +33,9 @@ SMB5 charger device-tree nodes.
   active-low, pulled-up Volume Up input through `gpio-keys`.
 - A 4085 mAh battery description supplies conservative charge limits to the
   enabled PM8150B fuel gauge and SMB5 charger.
+- SMB2 and SMB5 use their generation-specific voltage and current encodings.
+  SMB5 probe keeps charging and USB input suspended until 4.40 V, 1.50 A, and
+  500 mA limits have been programmed successfully.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -40,27 +45,32 @@ build fails if one of those invariants changes.
 
 ## Strict build evidence
 
-Two accepted `r7` strict pmbootstrap builds completed on 2026-08-04. Both
-printed `hotdog mainline 6.16 build contract: PASS` before packaging and
-produced byte-identical APKs:
+Two accepted `r8` strict pmbootstrap builds completed on 2026-08-04. Each
+started from reset buildroots, printed
+`hotdog mainline 6.16 build contract: PASS` before packaging, and produced a
+byte-identical APK:
 
 | Output | Size | SHA256 |
 |---|---:|---|
-| `linux-oneplus-hotdog-mainline616-6.16.0-r7.apk` | 25,535,717 bytes | `7443a6e60eea3001370901a3a39064fd4a72909175a34cb99a6f9ee8b05b2e84` |
-| `boot/vmlinuz` | 27,572,232 bytes | `a295b1c7723c73aaabf546697a5c1f393092771c6164746f72426510f0b1c101` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r8.apk` | 25,536,679 bytes | `668c87bfb2e5f25b7e910e4c471414c85053d33e2fd52d9041136716a5967650` |
+| `boot/vmlinuz` | 27,572,232 bytes | `4bdf4c4c1e2fd8ffaa5428695ab51bbf7a9a7364eba84eb632250d9436575446` |
 | `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 139,672 bytes | `17e7dabb69f8376cbd294e82b01fcbd797d7bcc05d5f5a31b42939bf86ddad19` |
 
 The exact APK kernel and DTB were assembled with the validated pmaports
 initramfs, written to `boot_b`, read back completely, and booted directly on
 the HD1913. The 96 MiB boot image and full partition readback both have SHA256
-`dbc5210987b791774e67e7a6ad5fd796ecf950fca5ebe8e0a414f6112009c29f`.
-USB networking, SSH, and the S6SY761 touchscreen remained available. Power,
-Volume Down, and Volume Up registered with their expected Linux key codes. The
-Adreno driver bound, exposed `/dev/dri/renderD128`, loaded GMU firmware
-v2.0.261, and completed two headless Vulkan workloads through Turnip without a
-GPU, GMU, or IOMMU fault.
-The same boot exposes `pm8150b-charger` and `qcom-battery`; a 60-second trace
-recorded 31 samples while USB networking and SSH remained available.
+`32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`.
+The fresh boot reported kernel build `#9-oneplus-hotdog-mainline616`, returned
+USB networking and SSH, and retained the previously validated touchscreen,
+keys, and GPU contracts.
+
+Direct PMIC register reads before and after a 180-second trace confirmed float
+voltage `0x50` (4.40 V), fast-charge current `0x1e` (1.50 A), and USB input
+limit `0x0a` (500 mA). All 61 samples reported both supplies as charging. The
+battery remained between 4,407,459 and 4,408,680 uV without crossing the
+4.42 V guard. A later transition to Qualcomm `900e` remains under
+investigation; it occurred after the completed power trace, and the bounded
+ramoops reservation contained no populated record.
 
 ## Temporary bring-up constraints
 

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=7
+pkgrel=8
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -56,6 +56,7 @@ source="
 	0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
 	0018-arm64-dts-hotdog-enable-volume-keys.patch
 	0019-arm64-dts-hotdog-enable-battery-charger.patch
+	0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -129,5 +130,6 @@ dcf5d8d6fe1038fbcacf7b772eab1c1ec0f326c376c5f44157131bcb885657040e0abcec4b5cb6d1
 98628a884460c57dbaf5b0f59a7e666e800735d1e297d2da1736b6517dec6aca775fa999c76e28e3a1f7ca87e083135fb053854b79b8fe04e25a80ca70c9ff53  0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
 bf81a85104a83abbf58cc22ea1d9a74aeef89647654f5d9d093407ea82c4551fbe7a9719ff547c5f78cb8732b3893f9ad6738b371bd9b1bdafc7996e77bfd6b8  0018-arm64-dts-hotdog-enable-volume-keys.patch
 123f6a1842793c0f00a984293cfc314f8787a68c12daeb687df3a3ead6119783dc2236cc05eb8fb613ea0632d94a35f9a852654494dbcc361411f02ec3ffb731  0019-arm64-dts-hotdog-enable-battery-charger.patch
-a169f5f32f0fae3760160c2df7b134800708589e2fb65001cfe5c97c1c1795dc0070fe16038530cfa59b9494fa9b656a085e80dce8787eb5cac4c78628426256  validate-mainline616-build.sh
+7b8777a11826e89e578c1141ad7d8c78a096d81ffebcf65ff79d966d53c803e963ed9e2df77d7064ebbeeae7281738c44744de535f25133a8ed12080459a307a  0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
+a341880bb2bbe38626a119602443d4d5cdb6b0c11a84cf4bada1aaba42502efa094b9f30ea8bef3f150d0403d5800b80aede7503aad3976715f4a1ac7cb6ec99  validate-mainline616-build.sh
 "

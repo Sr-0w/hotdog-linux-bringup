@@ -48,8 +48,11 @@ credentials, proprietary dumps, or workstation-specific paths.
   reproducible `r6` package, exact direct-boot attestation, and registration of
   the Power, Volume Down, Volume Up, and touchscreen input devices.
 - [evidence/2026-08-04-mainline616-battery-charger.md](evidence/2026-08-04-mainline616-battery-charger.md):
-  clean R6-derived package build and direct hardware validation of the PM8150B
-  fuel gauge and SMB5 charger.
+  clean R6-derived discovery build, direct PM8150B registration, and the
+  superseded SMB2-conversion safety finding.
+- [evidence/2026-08-04-mainline616-smb5-parameters.md](evidence/2026-08-04-mainline616-smb5-parameters.md):
+  reproducible `r8` package, corrected generation-specific charger limits,
+  direct PMIC register verification, and the guarded 61-sample hardware trace.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.
