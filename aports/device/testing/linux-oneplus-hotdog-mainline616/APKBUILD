@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=11
+pkgrel=12
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -59,6 +59,7 @@ source="
 	0020-power-supply-qcom-smbx-fix-charge-parameters.patch
 	0021-arm64-hotdog-use-linked-image-size.patch
 	0022-arm64-dts-hotdog-enable-mpss-rmtfs.patch
+	0023-arm64-dts-hotdog-enable-adsp-remoteproc.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -145,5 +146,6 @@ bf81a85104a83abbf58cc22ea1d9a74aeef89647654f5d9d093407ea82c4551fbe7a9719ff547c5f
 af1aa78238bb70d4cb90be8037357682841b71c1dabf95fa7bf4a77b20b8d1872b616de92fb1fbec887b3fd965bc1e02ec1c1a44a4fe9e0f59a4213de88af7aa  0020-power-supply-qcom-smbx-fix-charge-parameters.patch
 87bcf53f4dcf919df98cde77a612f786e332a08a20053fc66787b4a4d1875aa8c4dc08fd310620a7eb8dc09c56634293a283366075e47218ca68d354e2406ff0  0021-arm64-hotdog-use-linked-image-size.patch
 e118d7f57b69301d67617ad419366103981945546274f9c6a59cbd396b6d105ed5a4244c94fb78af6adf5b98c4efd9fa3e6b113fc41faeaf943baeddd3f45a1e  0022-arm64-dts-hotdog-enable-mpss-rmtfs.patch
-14e2c0404f529b6fd0d4b52e08d3bbbfb3e79a3489662a40ba53bce38521d4ab8d4ee32b53cb33cf356a2993dbee1d93454fdc22951facfdb824cd7c6f428265  validate-mainline616-build.sh
+eb0a00bc1fc2dbc814b98ee7fb42a62900a636a8f90742ef7b847582b3525d1eab05001e5cfb5aa16eb0554ee3530606bf63a56799b2f6d371666fe025cd4cc9  0023-arm64-dts-hotdog-enable-adsp-remoteproc.patch
+fc12bb25bd3bc408d7809c0463b6294273026cca887b8c7d08b1d12b5fc9474831da86e654e83eab9c955db4b488cad1d81022a00cf648c4e5997f73741769da  validate-mainline616-build.sh
 "

@@ -54,6 +54,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   reproducible `r11` MPSS/RMTFS candidate, downstream-compatible shared-memory
   placement, read-only userspace policy, and the isolated hardware gate before
   Wi-Fi enablement.
+- [evidence/2026-08-04-mainline616-adsp-preflight.md](evidence/2026-08-04-mainline616-adsp-preflight.md):
+  reproducible `r12` ADSP remoteproc candidate, exact firmware and reserved
+  memory contract, deliberate audio-topology exclusions, and isolated runtime
+  acceptance gate.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

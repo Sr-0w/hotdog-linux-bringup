@@ -69,6 +69,12 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
 	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_mss.ko' \
 		-print -quit | grep -q . || die "missing Qualcomm MPSS module"
+	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_pas.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm PAS remoteproc module"
+	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_sysmon.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm sysmon module"
+	find "$modules_dir" -type f -path '*/drivers/rpmsg/qcom_glink_smem.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm GLINK SMEM module"
 	find "$modules_dir" -type f -path '*/net/qrtr/qrtr.ko' \
 		-print -quit | grep -q . || die "missing QRTR module"
 fi
@@ -190,6 +196,10 @@ expect_config 'CONFIG_POWER_SUPPLY_HWMON=y'
 expect_config 'CONFIG_BATTERY_QCOM_FG=y'
 expect_config 'CONFIG_CHARGER_QCOM_SMB2=y'
 expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
+expect_config 'CONFIG_QCOM_Q6V5_PAS=m'
+expect_config 'CONFIG_QCOM_SYSMON=m'
+expect_config 'CONFIG_RPMSG_QCOM_GLINK_SMEM=m'
+expect_config 'CONFIG_QCOM_APR=y'
 expect_config 'CONFIG_QCOM_RMTFS_MEM=y'
 expect_config 'CONFIG_QRTR=m'
 expect_config 'CONFIG_QRTR_SMD=m'
@@ -223,8 +233,14 @@ te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
 mpss=$soc/remoteproc@4080000
+adsp=$soc/remoteproc@17300000
+cdsp=$soc/remoteproc@8300000
 wifi=$soc/wifi@18800000
 rmtfs=$reserved/memory@f2901000
+adsp_mem=$reserved/memory@8be00000
+slim=$soc/slim-ngd@171c0000
+i2c4=$soc/geniqup@8c0000/i2c@890000
+sound=/sound
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -250,6 +266,24 @@ expect_value mpss-status okay fdtget -ts "$dtb" "$mpss" status
 expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \
 	fdtget -ts "$dtb" "$mpss" firmware-name
 expect_value wifi-staged-disabled disabled fdtget -ts "$dtb" "$wifi" status
+
+expect_value adsp-memory-address '0 8be00000 0 1e00000' \
+	fdtget -tx "$dtb" "$adsp_mem" reg
+adsp_mem_phandle=$(fdtget -tx "$dtb" "$adsp_mem" phandle) ||
+	die "missing ADSP reserved-memory phandle"
+expect_value adsp-compatible qcom,sm8150-adsp-pas \
+	fdtget -ts "$dtb" "$adsp" compatible
+expect_value adsp-status okay fdtget -ts "$dtb" "$adsp" status
+expect_value adsp-firmware qcom/sm8150/oneplus/hotdog/adsp.mbn \
+	fdtget -ts "$dtb" "$adsp" firmware-name
+expect_value adsp-memory-region "$adsp_mem_phandle" \
+	fdtget -tx "$dtb" "$adsp" memory-region
+expect_value cdsp-staged-disabled disabled fdtget -ts "$dtb" "$cdsp" status
+expect_absent cdsp-firmware fdtget "$dtb" "$cdsp" firmware-name
+expect_value slim-staged-disabled disabled fdtget -ts "$dtb" "$slim" status
+expect_value speaker-i2c-staged-disabled disabled fdtget -ts "$dtb" "$i2c4" status
+expect_absent speaker-codec fdtget -p "$dtb" "$i2c4/audio-codec@34"
+expect_absent sound-card-compatible fdtget "$dtb" "$sound" compatible
 
 expect_value framebuffer-compatible simple-framebuffer \
 	fdtget -ts "$dtb" /chosen/framebuffer@9c000000 compatible

@@ -15,6 +15,7 @@ Options:
   --to-pmaports        Copy ./aports into the canonical pmaports checkout.
   --target-pmaports D  Canonical pmaports checkout. Default:
                        $HOTDOG_PMAPORTS_SM8150
+  --only REL           Synchronize only this package path. May be repeated.
   -h, --help           Show this help.
 USAGE
 }
@@ -44,6 +45,7 @@ snapshot_rels=(
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 )
+selected_rels=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -61,6 +63,11 @@ while [ "$#" -gt 0 ]; do
 			target_pmaports="$2"
 			shift
 			;;
+		--only)
+			[ "$#" -ge 2 ] || die "--only requires a value"
+			selected_rels+=("$2")
+			shift
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -72,6 +79,20 @@ while [ "$#" -gt 0 ]; do
 	esac
 	shift
 done
+
+if [ "${#selected_rels[@]}" -gt 0 ]; then
+	for selected_rel in "${selected_rels[@]}"; do
+		known=0
+		for rel in "${snapshot_rels[@]}"; do
+			if [ "$selected_rel" = "$rel" ]; then
+				known=1
+				break
+			fi
+		done
+		[ "$known" -eq 1 ] || die "unknown package path for --only: $selected_rel"
+	done
+	snapshot_rels=("${selected_rels[@]}")
+fi
 
 [ -d "$snapshot_root" ] || die "missing snapshot root: $snapshot_root"
 [ -d "$target_pmaports" ] || die "missing target pmaports checkout: $target_pmaports"

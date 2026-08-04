@@ -230,7 +230,33 @@ paths.
 crash MPSS or trigger an XPU fault. Keep the first run read-only, leave WCN3990
 disabled, and restore `r6` after any remoteproc loop or memory fault.
 
-## 9. Wi-Fi
+## 9. ADSP remote processor
+
+**Proven current state.** The accepted `r6` image does not run the audio DSP
+and exposes no ALSA sound card. Revision `r12` is a reproducible preflight
+candidate that enables only the SM8150 ADSP PAS remote processor with the
+packaged hotdog firmware and the existing 30 MiB reserve at `0x8be00000`.
+CDSP, SLIMbus, the external speaker-codec bus, and the sound-card topology stay
+disabled. See the
+[ADSP preflight](evidence/2026-08-04-mainline616-adsp-preflight.md).
+
+**Next experiment.** After `r10` and `r11` pass their independent gates,
+preserve the accepted `r6` fallback, write and read back only `r12`, attest the
+fresh image, and observe ADSP remoteproc state for at least 60 seconds. Do not
+enable a sound card or load a substitute codec description in this run.
+
+**Success criteria.** The PAS platform driver binds, the exact handset
+firmware loads, ADSP remains `running`, and an APR or GLINK endpoint appears
+without a crash, watchdog, authentication failure, timeout, or regression in
+the accepted display, storage, USB, touch, GPU, key, power, and MPSS paths.
+
+**Risks and fallback.** Signed firmware or memory-assignment failures can
+restart the remote processor without producing an ALSA card. Treat remoteproc
+stability as its own dependency gate. The handset uses an external TFA9894
+speaker amplifier that is not represented by the current mainline binding;
+do not describe it as TFA9895 merely to make a later sound card probe.
+
+## 10. Wi-Fi
 
 **Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
 validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
@@ -257,7 +283,7 @@ crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
 networking as the fallback. Do not combine first Wi-Fi validation with
 Bluetooth or modem enablement.
 
-## 10. USB host mode
+## 11. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

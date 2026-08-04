@@ -67,7 +67,11 @@ workloads, and registered Power plus volume-key inputs.
 
 ## Priority 3: multimedia and power
 
-- audio routing and codecs
+- hardware-validate the isolated `r12` ADSP remoteproc candidate before
+  enabling an audio transport or sound card
+- enable LPASS/SLIMbus and construct a codec topology without misrepresenting
+  the unsupported TFA9894 external speaker amplifier
+- validate earpiece, microphone, headphone, and speaker routing separately
 - suspend, resume, and idle power
 - camera sensors and ISP integration
 - thermal management and performance states

@@ -64,6 +64,16 @@ submission evidence baseline. See the
 [battery/charger preflight](evidence/2026-08-04-mainline616-battery-charger-preflight.md)
 and [MPSS/RMTFS preflight](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md).
 
+Revision `r12` adds only the ADSP PAS remote processor and exact handset
+firmware selection. Its two strict builds produced a byte-identical
+`25,502,535`-byte APK with SHA256
+`4753bcfd5494a3d97c8c84a78bd57c58360bff55a4cb986c560d86e48fc37ebd`;
+two deterministic AVB assemblies produced image SHA256
+`390c16cefad408322672cc4c4a94a691af1e79dacd6aba2c0869eadc4d8ca80d`.
+It deliberately leaves every sound-card and external-codec path disabled and
+does not change the `r6` submission evidence baseline. See the
+[ADSP preflight](evidence/2026-08-04-mainline616-adsp-preflight.md).
+
 Relevant pmaports policy references are:
 
 - *Device Categorization*, sections "Testing" and "Community";

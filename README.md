@@ -116,6 +116,15 @@ assemblies are byte-for-byte reproducible. This is still an unflashed
 preflight candidate; see the
 [MPSS/RMTFS preflight](docs/evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md).
 
+Revision `r12` prepares the ADSP remote processor without enabling an audio
+card. It selects the packaged hotdog ADSP firmware while deliberately keeping
+CDSP, SLIMbus, the external TFA9894 speaker path, and the sound topology
+disabled. Two strict builds and two boot-image assemblies are byte-for-byte
+reproducible, and the sorted-DTS delta from `r11` contains only the ADSP status
+and firmware properties. This is an unflashed dependency candidate, not an
+audio-support claim; see the
+[ADSP preflight](docs/evidence/2026-08-04-mainline616-adsp-preflight.md).
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -152,8 +161,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | Battery and charging | Reproducible candidate; hardware validation pending | The `r10` DTB enables the PM8150B fuel gauge and charger with conservative limits. The package and AVB image pass reproducibility and static safety gates, but neither has been accepted on the phone yet. |
 | MPSS and RMTFS | Reproducible candidate; hardware validation pending | The unflashed `r11` image enables MPSS, restores the modem-expected RMTFS region at `0xf2901000`, and starts RMTFS read-only. WCN3990 remains disabled so the first runtime test measures only this dependency layer. |
+| ADSP remoteproc | Reproducible candidate; hardware validation pending | The unflashed `r12` image enables only the SM8150 ADSP PAS remote processor with the packaged hotdog firmware. Sound, SLIMbus, CDSP, and the unsupported TFA9894 speaker path remain disabled for an isolated runtime gate. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. The accepted `r6` image still exposes no sound card, Wi-Fi/rfkill device, battery class, or running MPSS; unflashed `r10` power and `r11` MPSS/RMTFS candidates are ready for separate validation. Bluetooth, modem services, cameras, sensors, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. The accepted `r6` image still exposes no sound card, Wi-Fi/rfkill device, battery class, MPSS, or ADSP. Unflashed `r10` power, `r11` MPSS/RMTFS, and `r12` ADSP candidates are ready for separate validation. Audio transports/codecs, Bluetooth, modem services, cameras, sensors, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 

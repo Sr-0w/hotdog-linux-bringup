@@ -25,6 +25,12 @@ starts `rmtfs` with its default no-write policy. This revision remains a
 preflight candidate until `r10` passes its power gate and MPSS is then tested
 on hardware.
 
+Revision `r12` stages the ADSP remote processor independently from the audio
+card. It uses the packaged hotdog ADSP firmware and the existing 30 MiB ADSP
+reserve while keeping CDSP, SLIMbus, the speaker-codec bus, and the sound-card
+topology disabled. It is reproducibly built but remains a preflight candidate
+until the `r10` and `r11` gates pass and ADSP stability is tested on hardware.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -43,6 +49,9 @@ on hardware.
   active-low, pulled-up Volume Up input through `gpio-keys`.
 - MPSS uses the handset-specific modem firmware and the downstream-compatible
   high RMTFS address. WiFi remains disabled for the isolated MPSS gate.
+- ADSP uses the handset-specific firmware and existing reserved memory. CDSP,
+  SLIMbus, the TFA9894 speaker path, and the sound card remain disabled for the
+  isolated ADSP gate.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -83,6 +92,18 @@ The resulting deterministic AVB image has SHA256
 `4a4bffb60ce744f5fd5fc4070808699fb573a9350f24e60a5d59535aef5dc849`.
 These hashes are static preflight evidence only; `r11` has not been accepted on
 hardware.
+
+The current `r12` preflight build is reproducible across a normal strict build
+and a strict `--no-ccache` build. Both produced the same 25,502,535-byte APK
+with SHA256
+`4753bcfd5494a3d97c8c84a78bd57c58360bff55a4cb986c560d86e48fc37ebd`.
+Its kernel and DTB hashes are respectively
+`c9f8d11c7669c17620c96087524457dde7ffc592dcfa87a44e236b007d7ee852`
+and `d4dc7528492befbd9683bb144e1a9e14741c226f9a70fc3935f2ef5ef53647da`.
+Two deterministic AVB assemblies produced SHA256
+`390c16cefad408322672cc4c4a94a691af1e79dacd6aba2c0869eadc4d8ca80d`.
+These hashes are static preflight evidence only; `r12` has not been accepted on
+hardware and does not claim a working sound card.
 
 ## Temporary bring-up constraints
 
