@@ -92,6 +92,14 @@ directly from a fully read-back AVB image, exposed `/dev/dri/renderD128`, and
 completed two Turnip Vulkan workloads without a GPU, GMU, or IOMMU fault. See
 the [GPU evidence](docs/evidence/2026-08-04-mainline616-gpu.md).
 
+Revision `r6` enables the two missing volume-key paths. Two strict builds
+produced the same APK byte-for-byte. Its exact kernel and DTB booted directly
+from fully read-back AVB image
+`33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`
+and registered Power, Volume Down, Volume Up, and the S6SY761 touchscreen as
+separate input devices. Physical volume-key events remain to be captured; see
+the [hardware-key evidence](docs/evidence/2026-08-04-mainline616-volume-keys.md).
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -111,11 +119,11 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. The exact reproducible `r5` APK kernel and DTB boot from AVB image `14da6a2e2f0b49b85eb1431f1c9e9e32a08250fa42149ebfd50881970bf9cf44`, read back exactly from `boot_b`, and return fresh SSH. |
+| Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. The exact reproducible `r6` APK kernel and DTB boot from AVB image `33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`, read back exactly from `boot_b`, and return fresh SSH. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
-| SSH | Working directly | The exact `r5` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #6-oneplus-hotdog-mainline616`. |
+| SSH | Working directly | The exact `r6` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #7-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
@@ -125,8 +133,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Mainline panel | Partial | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel initialize. Dense fbcon output is repeated vertically; V31 isolates scanout geometry with a non-scrolling test. |
 | Touchscreen | Working | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots; orientation under a graphical shell and suspend/resume remain open. |
 | GPU | Working for rendering | The `r5` DTS enables the Adreno 640 and GMU. MSM DRM exposes `renderD128`, Turnip identifies the A640, six OPPs are available, and two Vulkan workloads complete without a GPU/GMU/IOMMU fault. Accelerated graphical-shell scanout and suspend/resume remain open. |
+| Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Power, touchscreen, display, and GPU rendering work. No sound card, Wi-Fi/rfkill device, battery power-supply class, or remaining keys are exposed. Bluetooth, modem, cameras, sensors, charging, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. No sound card, Wi-Fi/rfkill device, or battery power-supply class is exposed. Bluetooth, modem, cameras, sensors, charging, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 
@@ -134,7 +143,7 @@ See [docs/status.md](docs/status.md) for the detailed support matrix.
 
 ```mermaid
 flowchart LR
-    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r5"]
+    A["OnePlus bootloader"] --> B["pmaports Linux 6.16 r6"]
     B --> C["Native DPU, DSI and fbcon"]
     B --> D["UFS with temporary 32-bit DMA"]
     D --> E["Nested pmOS GPT discovery"]
@@ -142,6 +151,7 @@ flowchart LR
     F --> G["OpenRC, NCM/ACM and SSH"]
     B --> H["S6SY761 touch and multitouch"]
     B --> I["Adreno 640, GMU and Turnip"]
+    B --> J["Power and volume-key inputs"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=5
+pkgrel=6
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -54,6 +54,7 @@ source="
 	0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
 	0016-arm64-dts-hotdog-enable-s6sy761-touchscreen.patch
 	0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
+	0018-arm64-dts-hotdog-enable-volume-keys.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -125,5 +126,6 @@ be58bea49d34fc71c3920266193567270711c0b61915b44f5a9914784ef4d0a65fbec826c9df1a0b
 2ce75fcf65fd535f110bc70da1ecdf673639bb40ad1c42ac60419cea0627974b56ff0590aa71ef7a85e0e0800bf37a1c9dc5e67c86a9250b325a6eded7f342f1  0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
 dcf5d8d6fe1038fbcacf7b772eab1c1ec0f326c376c5f44157131bcb885657040e0abcec4b5cb6d159446eb48d4ba94e7c8a43c748c8bc6b506fb2ad0f038ce1  0016-arm64-dts-hotdog-enable-s6sy761-touchscreen.patch
 98628a884460c57dbaf5b0f59a7e666e800735d1e297d2da1736b6517dec6aca775fa999c76e28e3a1f7ca87e083135fb053854b79b8fe04e25a80ca70c9ff53  0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
-9d311cd3698f736900b1da4dbc1f3a12abb47751188015cde5bcbdfbc98330f9d11f918c6314447c2c9ed5306ba202934629cd3875046ca795e5ff0259e04251  validate-mainline616-build.sh
+bf81a85104a83abbf58cc22ea1d9a74aeef89647654f5d9d093407ea82c4551fbe7a9719ff547c5f78cb8732b3893f9ad6738b371bd9b1bdafc7996e77bfd6b8  0018-arm64-dts-hotdog-enable-volume-keys.patch
+7e93596457fabd4c2daee06404f197d5a87940e59450a52d77aaf3cc52b3f44deac2beac7b3a264042536fde0118b0e5fa64059ffefd53b91085bc4755819eec  validate-mainline616-build.sh
 "

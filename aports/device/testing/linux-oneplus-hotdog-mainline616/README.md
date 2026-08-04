@@ -7,7 +7,9 @@ functions, and SSH without using a downstream bridge kernel or `kexec`.
 Revision `r4` also enables and hardware-validates the Samsung S6SY761
 touchscreen, including multitouch coordinate and pressure events. Revision
 `r5` enables the Adreno 640 and GMU and validates the resulting render node
-with the upstream MSM DRM driver and real Turnip Vulkan submissions.
+with the upstream MSM DRM driver and real Turnip Vulkan submissions. Revision
+`r6` adds the PM8150 Volume Down and Volume Up input paths while preserving the
+validated touchscreen, GPU, USB, storage, and display contracts.
 
 ## Source contract
 
@@ -23,6 +25,8 @@ with the upstream MSM DRM driver and real Turnip Vulkan submissions.
 - The SM8150 Adreno 640 and GMU are enabled with the handset-specific signed
   ZAP firmware path. Their existing upstream SMMU, OPP, power-domain, clock,
   interconnect, and reserved-memory descriptions remain unchanged.
+- PM8150 PON provides Power and Volume Down, while PM8150 GPIO 6 provides the
+  active-low, pulled-up Volume Up input through `gpio-keys`.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -37,16 +41,17 @@ The accepted strict pmbootstrap build completed on 2026-08-04 and printed
 
 | Output | Size | SHA256 |
 |---|---:|---|
-| `linux-oneplus-hotdog-mainline616-6.16.0-r5.apk` | 25,534,915 bytes | `276be937d54b8d7120c3665c202f06f0a0231e56058e0bf221e6aba5c2e200fb` |
-| `boot/vmlinuz` | 27,572,232 bytes | `c7caaefb00dfc7eac00d57bb151ebddfc4cd4b32ab0c18b1e0ba2d11fb63cb65` |
-| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 138,618 bytes | `45512bdf5f4126c49ca28c0152ec6e2c1a8848dd872593f6be2c33d02b97bf55` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r6.apk` | 25,535,120 bytes | `17af600197825164ceb791606cbb00cd7f19d587746432fd58140c5d24c85e6e` |
+| `boot/vmlinuz` | 27,572,232 bytes | `b35176a252b10d51d33b182e4ca7e1ab4ceadccf191cba987a359c0093a2f5d5` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 139,174 bytes | `fec8bf455c4c922737d7676d9dc96e9220ccea3eb87297665c8b19bee577e106` |
 
 Two strict builds produced the same APK hash. The exact APK kernel and DTB were
 then assembled with the validated pmaports initramfs, written to `boot_b`, read
 back completely, and booted directly on the HD1913. The 96 MiB boot image and
 full partition readback both have SHA256
-`14da6a2e2f0b49b85eb1431f1c9e9e32a08250fa42149ebfd50881970bf9cf44`.
-USB networking, SSH, and the S6SY761 touchscreen remained available. The
+`33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`.
+USB networking, SSH, and the S6SY761 touchscreen remained available. Power,
+Volume Down, and Volume Up registered with their expected Linux key codes. The
 Adreno driver bound, exposed `/dev/dri/renderD128`, loaded GMU firmware
 v2.0.261, and completed two headless Vulkan workloads through Turnip without a
 GPU, GMU, or IOMMU fault.

@@ -5,10 +5,10 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
-The accepted hardware baseline is now the reproducible 6.16 `r5` package. Its
+The accepted hardware baseline is now the reproducible 6.16 `r6` package. Its
 exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
-S6SY761 multitouch, and an Adreno 640 render node that completes Turnip Vulkan
-workloads.
+S6SY761 multitouch, an Adreno 640 render node that completes Turnip Vulkan
+workloads, and registered Power plus volume-key inputs.
 
 ## Priority 0: reproducible mainline boot
 
@@ -53,7 +53,8 @@ workloads.
   pacing, and suspend/resume after the working headless Vulkan bring-up
 - validate S6SY761 orientation and suspend/resume after the working multitouch
   bring-up
-- validate buttons, haptics, battery reporting, and charging
+- capture physical volume-key events, then validate wake behavior
+- validate haptics, battery reporting, and charging
 
 ## Priority 2: connectivity
 

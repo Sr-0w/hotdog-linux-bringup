@@ -91,6 +91,11 @@ expect_config 'CONFIG_QCOM_GENI_SE=y'
 expect_config 'CONFIG_QCOM_GPI_DMA=y'
 expect_config 'CONFIG_I2C_QCOM_GENI=y'
 expect_config 'CONFIG_TOUCHSCREEN_S6SY761=m'
+expect_config 'CONFIG_INPUT=y'
+expect_config 'CONFIG_INPUT_EVDEV=y'
+expect_config 'CONFIG_KEYBOARD_GPIO=y'
+expect_config 'CONFIG_INPUT_PM8941_PWRKEY=y'
+expect_config 'CONFIG_PINCTRL_QCOM_SPMI_PMIC=y'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -107,6 +112,12 @@ adreno_smmu=$soc/iommu@2ca0000
 gpu_zap=$gpu/zap-shader
 dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
+gpio_keys=/gpio-keys
+volume_up=$gpio_keys/volume-up
+pm8150=$soc/spmi@c440000/pmic@0
+volume_up_state=$pm8150/gpio@c000/volume-up-state
+pon_pwrkey=$pm8150/pon@800/pwrkey
+pon_resin=$pm8150/pon@800/resin
 te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
@@ -172,6 +183,42 @@ expect_value touchscreen-reset-pin gpio54 fdtget -ts "$dtb" "$ts_reset" pins
 expect_value touchscreen-irq-pin gpio122 fdtget -ts "$dtb" "$ts_int" pins
 fdtget "$dtb" "$ts_reset" output-high >/dev/null ||
 	die "touchscreen reset pin must default high"
+
+expect_value volume-key-compatible gpio-keys \
+	fdtget -ts "$dtb" "$gpio_keys" compatible
+expect_value volume-up-label volume_up fdtget -ts "$dtb" "$volume_up" label
+expect_value volume-up-code 73 fdtget -tx "$dtb" "$volume_up" linux,code
+expect_value volume-up-input-type 1 \
+	fdtget -tx "$dtb" "$volume_up" linux,input-type
+expect_value volume-up-debounce f \
+	fdtget -tx "$dtb" "$volume_up" debounce-interval
+fdtget "$dtb" "$volume_up" wakeup-source >/dev/null ||
+	die "volume-up must be a wakeup source"
+pm8150_gpios_path=$(fdtget -ts "$dtb" /__symbols__ pm8150_gpios) ||
+	die "missing pm8150_gpios symbol"
+pm8150_gpios_phandle=$(fdtget -tx "$dtb" "$pm8150_gpios_path" phandle) ||
+	die "missing PM8150 GPIO phandle"
+expect_value volume-up-gpio "$pm8150_gpios_phandle 6 1" \
+	fdtget -tx "$dtb" "$volume_up" gpios
+volume_up_state_phandle=$(fdtget -tx "$dtb" "$volume_up_state" phandle) ||
+	die "missing Volume Up pinctrl phandle"
+expect_value volume-up-pinctrl "$volume_up_state_phandle" \
+	fdtget -tx "$dtb" "$gpio_keys" pinctrl-0
+expect_value volume-up-pin gpio6 fdtget -ts "$dtb" "$volume_up_state" pins
+expect_value volume-up-function normal \
+	fdtget -ts "$dtb" "$volume_up_state" function
+expect_value volume-up-power-source 1 \
+	fdtget -tx "$dtb" "$volume_up_state" power-source
+expect_value volume-up-drive-strength 0 \
+	fdtget -tx "$dtb" "$volume_up_state" qcom,drive-strength
+fdtget "$dtb" "$volume_up_state" input-enable >/dev/null ||
+	die "volume-up pin must be an input"
+fdtget "$dtb" "$volume_up_state" bias-pull-up >/dev/null ||
+	die "volume-up pin must use a pull-up"
+expect_value power-key-status okay fdtget -ts "$dtb" "$pon_pwrkey" status
+expect_value power-key-code 74 fdtget -tx "$dtb" "$pon_pwrkey" linux,code
+expect_value volume-down-status okay fdtget -ts "$dtb" "$pon_resin" status
+expect_value volume-down-code 72 fdtget -tx "$dtb" "$pon_resin" linux,code
 
 expect_value gpu-status okay fdtget -ts "$dtb" "$gpu" status
 expect_value gpu-compatible 'qcom,adreno-640.1 qcom,adreno' \

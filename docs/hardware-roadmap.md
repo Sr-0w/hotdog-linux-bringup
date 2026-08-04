@@ -2,10 +2,11 @@
 
 This roadmap follows the
 [direct-boot completion criteria](direct-boot.md#completion-criteria). The
-accepted 6.16 `r5` pmaports baseline starts directly from the OnePlus
+accepted 6.16 `r6` pmaports baseline starts directly from the OnePlus
 bootloader without the downstream kexec bridge, mounts the postmarketOS root
 read-write, and retains USB NCM, USB ACM, SSH, the S6SY761 touchscreen, and the
-Adreno 640 render path. The current support claims are recorded in the
+Adreno 640 render path. It also registers Power, Volume Down, and Volume Up as
+separate input devices. The current support claims are recorded in the
 [hardware status matrix](status.md). Earlier K1 workarounds remain historical
 diagnostic evidence in the [mainline bring-up record](mainline-bringup.md) and
 the [K1 evidence record](evidence/2026-07-11-mainline-k1.md).
@@ -114,7 +115,7 @@ still repeat vertically, so final scanout geometry and userspace handoff are
 not yet accepted.
 
 **Next experiment.** Start a minimal DRM/KMS userspace compositor on the
-accepted `r5` image while retaining SSH. Keep the panel mode and DTS fixed so
+accepted `r6` image while retaining SSH. Keep the panel mode and DTS fixed so
 the experiment measures scanout, orientation, and handoff rather than another
 kernel variable.
 
@@ -126,7 +127,7 @@ mode changes are separate tests.
 
 **Risks and fallback.** A userspace atomic modeset can blank the only local
 console even when the kernel remains healthy. Keep SSH active, preserve the
-accepted `r5` image, and avoid changing panel commands, refresh rate, and
+accepted `r6` image, and avoid changing panel commands, refresh rate, and
 compositor configuration in the same experiment.
 
 ## 5. Samsung S6SY761 touchscreen

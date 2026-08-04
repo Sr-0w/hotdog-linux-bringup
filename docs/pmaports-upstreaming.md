@@ -44,6 +44,14 @@ The exact package kernel and DTB direct-booted from a completely read-back AVB
 image, exposed a DRM render node, and completed Turnip Vulkan workloads without
 a GPU, GMU, or IOMMU fault; see the
 [GPU evidence](evidence/2026-08-04-mainline616-gpu.md).
+Revision `r6` adds the two volume-key paths. Two clean strict builds produced a
+byte-identical `25,535,120`-byte APK with SHA256
+`17af600197825164ceb791606cbb00cd7f19d587746432fd58140c5d24c85e6e`.
+Its exact kernel and DTB direct-booted from completely read-back AVB image
+`33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`
+and registered the expected Power, Volume Down, Volume Up, and touchscreen
+input devices; see the
+[hardware-key evidence](evidence/2026-08-04-mainline616-volume-keys.md).
 
 Relevant pmaports policy references are:
 
