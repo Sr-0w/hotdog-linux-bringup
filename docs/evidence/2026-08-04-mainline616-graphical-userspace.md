@@ -117,8 +117,8 @@ The following work remains before graphical support is complete:
   device-package application selection;
 - validate repeated direct boots into `tinydm` without manual service startup;
 - validate blank/unblank, suspend/resume, and touch wake;
-- expose and validate the panel's 90 Hz mode separately from the accepted
-  60 Hz baseline;
+- retain the separately validated fixed 90 Hz mode and implement panel-aware
+  dynamic 60/90 Hz switching;
 - investigate the non-fatal DPU IRQ and KWin udmabuf messages;
 - keep Bluetooth, telephony, audio, cameras, sensors, and other peripheral
   work as separate subsystem changes.

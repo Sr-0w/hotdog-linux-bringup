@@ -56,6 +56,9 @@ credentials, proprietary dumps, or workstation-specific paths.
 - [evidence/2026-08-04-mainline616-graphical-userspace.md](evidence/2026-08-04-mainline616-graphical-userspace.md):
   physical KMS acceleration, correct 1440x3120 Weston scanout, graphical touch
   validation, and a usable Plasma Mobile session on direct-mainline `r8`.
+- [evidence/2026-08-04-mainline616-display-90hz.md](evidence/2026-08-04-mainline616-display-90hz.md):
+  stock-DTBO timing derivation, reproducible `r16` package and boot image, and
+  direct hardware proof of an active 1440x3120 90 Hz DRM mode.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

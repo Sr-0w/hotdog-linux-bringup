@@ -14,7 +14,9 @@ One `r15` run entered Qualcomm `05c6:900e` abruptly at 275 seconds of uptime,
 without a kernel panic or suspend entry in ramoops. The failure did not repeat
 in a clean isolation boot: the same image completed 600 seconds with Bluetooth
 blocked, then another 600 seconds with the controller enabled, scanning, and a
-Bluetooth game controller connected. Basic active Bluetooth is therefore
+Bluetooth game controller connected. After the controller was powered off, a
+separate 900-second window also completed without a USB transition. Basic
+active Bluetooth and an ordinary HID disconnect are therefore
 hardware-validated. System suspend/resume and the cause of the isolated
 crashdump transition remain open.
 
@@ -24,7 +26,7 @@ crashdump transition remain open.
 |---|---|---|
 | `r14` | Enable QUPv3 UART13, the WCN3990 serdev child, sleep pins, interrupt, and four supplies | Direct boot succeeded. `ttyHS1`, `hci_uart`, `btqca`, Bluetooth rfkill, and the physical controller appeared. Generic firmware-name derivation requested files that were not packaged. |
 | `r14` live diagnostic | Alias the packaged revision-21 NVM and rampatch files to the requested revision-01 names, then reload only `hci_uart` | Firmware setup completed, BlueZ powered the controller, and an 18-second scan received eight devices. This was a runtime diagnosis, not the final package contract. |
-| `r15` | Select `crnv21.bin` and `crbtfw21.tlv` explicitly in the WCN3990 device-tree node | Direct boot, native firmware loading, scan, and HID connections succeed. One run entered `900e`; two subsequent 600-second isolation windows completed without a USB transition. |
+| `r15` | Select `crnv21.bin` and `crbtfw21.tlv` explicitly in the WCN3990 device-tree node | Direct boot, native firmware loading, scan, and HID connections succeed. One run entered `900e`; two subsequent 600-second isolation windows and a 900-second post-disconnect window completed without a USB transition. |
 
 The UART13 description follows the SM8150 serial engine at `0xc8c000`. Its
 sleep state covers GPIOs 43 through 46, and the controller uses the PM8150 and
@@ -138,9 +140,10 @@ transition. IBS counters ended in the asleep state with both clock votes off.
 This does not explain the first `r15` crash, but it shows that controller idle,
 scanning, and a sustained HID connection are not independently sufficient to
 reproduce it. Powering off the connected game controller then produced another
-61-sample, 300-second window with no USB transition; the connection count
-stayed at zero and every IBS counter remained unchanged. A normal HID
-disconnect is therefore not sufficient either.
+181-sample, 900-second window, from 2423.89 through 3333.95 seconds of uptime,
+with no USB transition. The connection count stayed at zero, UFS spent most
+samples runtime-suspended, and every IBS counter remained unchanged. A normal
+HID disconnect is therefore not sufficient either.
 
 ## Next validation
 
@@ -153,6 +156,7 @@ disconnect is therefore not sufficient either.
 4. Test one controlled suspend/resume cycle only after the active path is
    repeatably stable, with automatic read-only ramoops capture armed.
 
-Revision `r15` is the current active-Bluetooth candidate. Revision `r13`
-remains the conservative long-lived fallback until the isolated `900e`
+Revision `r15` establishes the current active-Bluetooth contract, which is
+retained unchanged by the later display-only `r16` candidate. Revision `r13`
+remains the conservative no-Bluetooth fallback until the isolated `900e`
 transition is understood or disproved through repeated stability runs.

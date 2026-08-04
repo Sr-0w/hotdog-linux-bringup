@@ -48,7 +48,7 @@ The status terms below follow the postmarketOS device-page convention:
 | USB networking | Works | CDC NCM, ping and SSH are stable at `172.16.42.1`. |
 | Internal storage | Partial | UFS and the read-write rootfs work with a temporary DMA32/SMMU workaround. |
 | Battery | Partial | Battery reporting and conservative SMB5 charging limits work; transitions, termination, thermal policy, and suspend remain open. |
-| Screen | Works | Native KMS produces correct 1440x3120 scanout under `kmscube`, Weston, and Plasma Mobile at 60 Hz. The 90 Hz mode is not yet validated. |
+| Screen | Works | Native KMS produces correct 1440x3120 scanout under `kmscube`, Weston, and Plasma Mobile. Fixed 60 Hz and stock 90 Hz modes are hardware-validated; dynamic switching remains open. |
 | Touchscreen | Works | S6SY761 multitouch works with correct graphical orientation under Weston and Plasma Mobile. Suspend/resume remains open. |
 | Graphical interface | Works | postmarketOS Plasma Mobile 6.7.3 runs through `tinydm` with accelerated KWin/Wayland rendering. |
 | Physical keyboard | N/A | |
@@ -68,8 +68,8 @@ The status terms below follow the postmarketOS device-page convention:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Wi-Fi | Partial | WCN3990 exposes `wlan0` and scans 2.4 GHz and 5 GHz networks. Association, stable MAC handling, throughput, power management, and suspend remain open. |
-| Bluetooth | Partial | WCN3990 UART, firmware, HCI, BlueZ, and RF scanning work. Pairing, sustained connections, profiles, and suspend/resume remain open; the first sleep test entered Qualcomm crashdump mode. |
+| Wi-Fi | Partial | WCN3990 exposes `wlan0`, scans both bands, associates through NetworkManager, and reaches the Internet. Stable MAC handling, throughput, power management, and suspend remain open. |
+| Bluetooth | Partial | WCN3990 UART, firmware, HCI, BlueZ, RF scanning, and HID connections work. One isolated run entered Qualcomm crashdump mode; later blocked, connected, and disconnected observation windows completed cleanly. Audio profiles and suspend/resume remain open. |
 | Ethernet | Untested | USB host mode has not been validated. |
 | GPS | Untested | |
 | NFC | Untested | |
@@ -115,11 +115,12 @@ The standard postmarketOS initramfs enumerates UFS, discovers the nested
 completes `switch_root`, starts OpenRC, and exposes USB networking and SSH. The
 validated package boot reached SSH 18 seconds after reboot.
 
-The port is not ready for normal use. Native 60 Hz display, touch, GPU
-acceleration, Plasma Mobile, basic battery and charging support, Wi-Fi scans,
-and basic active Bluetooth are validated. Temporary UFS and SMMU workarounds,
-90 Hz, reliable suspend/resume, Wi-Fi association, Bluetooth connections,
-audio, cameras, sensors, and telephony still require device-specific work.
+The port is not ready for normal use. Native fixed 60/90 Hz display, touch, GPU
+acceleration, Plasma Mobile, basic battery and charging support, Wi-Fi
+association, and Bluetooth HID connections are validated. Temporary UFS and
+SMMU workarounds, dynamic refresh switching, reliable suspend/resume, stable
+radio addresses, audio, cameras, sensors, and telephony still require
+device-specific work.
 
 ## Contributors
 
@@ -184,8 +185,8 @@ The complete build and hardware record is available in the
 
 ## Known issues
 
-- **Display:** native DPU, DSI, DSC and fbcon work, but dense console output is
-  repeated vertically.
+- **Display:** native DPU, DSI, DSC and fixed 60/90 Hz scanout work, but dense
+  console output is repeated vertically and dynamic switching is not ready.
 - **UFS:** storage works only with a temporary coherent DMA32 constraint while
   the UFS SMMU relationship is bypassed.
 - **UFS ICE:** inline-encryption integration is not working in the validated

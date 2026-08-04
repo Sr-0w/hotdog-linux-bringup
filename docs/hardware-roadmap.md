@@ -111,26 +111,28 @@ SM8150 DPU, display clock controller, DSI host, 7 nm DSI PHY, TE signal, DSC,
 and the OnePlus Samsung command-mode panel. DRM registers `fb0`, and fbcon
 shows kernel plus initramfs output with the built-in Terminus 16x32 font. The
 `r5` baseline also binds the Adreno GPU to the DPU. Physical KMS validation is
-now complete at 60 Hz: `kmscube` holds approximately 60 FPS, Weston reports a
+complete at fixed 60 Hz: `kmscube` holds approximately 60 FPS, Weston reports a
 preferred/current 1440x3120 `DSI-1` mode, and Plasma Mobile 6.7.3 starts through
-the packaged `tinydm` path. Both compositors show correct geometry without the
-vertical repetition seen during dense fbcon scrolling. See the
-[graphical userspace evidence](evidence/2026-08-04-mainline616-graphical-userspace.md).
+the packaged `tinydm` path. Revision `r16` separately direct-boots with the
+stock HD1913 90 Hz command and timing; DRM reports the active CRTC at
+1440x3120, 90 Hz, and 415457 kHz under Plasma Mobile. See the
+[graphical userspace evidence](evidence/2026-08-04-mainline616-graphical-userspace.md)
+and [90 Hz display evidence](evidence/2026-08-04-mainline616-display-90hz.md).
 
-**Next experiment.** Reproduce the Plasma Mobile package selection in a fresh
-pmaports image and perform repeated direct boots into `tinydm` while retaining
-SSH. Validate screen blank/unblank before changing the panel mode. Exposing the
-90 Hz mode is a separate, later experiment on the accepted 60 Hz baseline.
+**Next experiment.** Repeat direct boots into `tinydm` with the fixed 90 Hz
+candidate while retaining SSH, then validate screen blank/unblank. After that
+stable checkpoint, implement a panel-aware dynamic 60/90 Hz mode switch so the
+DSI command and DRM timing change atomically.
 
 **Success criteria.** Three direct boots reach a correctly oriented 1440x3120
 Plasma Mobile session without manual service startup, duplicated rows, tearing,
 or panel timeout. Touch remains aligned, Freedreno acceleration is selected,
-blank/unblank is repeatable, and USB SSH remains stable. A later 90 Hz test must
-retain those properties and return cleanly to 60 Hz.
+blank/unblank is repeatable, and USB SSH remains stable. Dynamic refresh must
+switch repeatedly in both directions without a blank panel or stale command.
 
 **Risks and fallback.** A userspace atomic modeset can blank the only local
 console even when the kernel remains healthy. Keep SSH active, preserve the
-accepted `r8` image, and avoid changing panel commands, refresh rate, and
+accepted `r15` image, and avoid changing panel commands, refresh rate, and
 compositor configuration in the same experiment.
 
 ## 5. Samsung S6SY761 touchscreen
@@ -184,13 +186,14 @@ the `r5` headless Vulkan test as a control when debugging compositor failures.
 
 **Proven current state.** Revision `r13` starts MPSS with Hotdog's RMTFS
 reservation, loads the WCN3990 firmware, binds `ath10k_snoc`, exposes `wlan0`,
-and scans ten access points across 2.4 GHz and 5 GHz. USB networking and SSH
-remain available. The driver currently chooses a random MAC address.
+and scans access points across 2.4 GHz and 5 GHz. Revision `r15` associates
+through NetworkManager and reaches both the local gateway and an external IPv4
+endpoint while Bluetooth is active. USB networking and SSH remain available.
+The driver currently chooses a random MAC address.
 
-**Next experiment.** Establish a stable device address, associate through
-NetworkManager, and sustain bidirectional traffic while recording firmware,
-SMMU, and disconnect events. Keep the accepted 60 Hz display and USB gadget
-configuration unchanged.
+**Next experiment.** Establish a stable device address and sustain
+bidirectional traffic while recording firmware, SMMU, and disconnect events.
+Keep the accepted display and USB gadget configuration unchanged.
 
 **Success criteria.** Repeated boots preserve the same MAC address, association
 survives sustained traffic, and Wi-Fi recovers after radio disable/enable. A
@@ -202,16 +205,18 @@ exact `r13` image as the no-Bluetooth radio fallback.
 
 ## 8. Bluetooth
 
-**Proven current state.** Revision `r14` registers UART13 and the physical
-WCN3990 controller. The packaged revision-21 firmware completes setup through
-a temporary diagnostic alias, BlueZ powers the controller, and an 18-second
-scan receives eight devices. The handset later enters Qualcomm `900e` while
-going to sleep.
+**Proven current state.** Revision `r15` registers UART13 and the physical
+WCN3990 controller, selects the packaged revision-21 firmware directly, and
+supports BlueZ scans plus real HID connections. Separate 600-second windows
+with Bluetooth blocked and with a controller connected completed cleanly. A
+900-second window after powering off the connected controller also completed
+without a USB transition. One earlier run entered Qualcomm `900e` without a
+panic or system-suspend entry, so the isolated transition remains unexplained.
 
-**Next experiment.** Boot the schema-checked `r15` image, which selects
-`crnv21.bin` and `crbtfw21.tlv` directly in the DT. First inhibit automatic
-sleep, prove a clean controller setup without aliases or module reloads, and
-hold the active system beyond the `r14` failure interval.
+**Next experiment.** Repeat the original keyboard connection while recording
+integrated IBS and pmsg state, then exercise repeated pair, disconnect, and
+reconnect cycles. Attempt controlled system suspend only after the active path
+remains repeatably stable.
 
 **Success criteria.** Direct firmware loading, repeated scans, pairing, and a
 sustained connection work without UART timeouts. Only then run one controlled
@@ -219,7 +224,7 @@ suspend/resume cycle with pstore capture prepared.
 
 **Risks and fallback.** The current crash is correlated with sleep but is not
 yet localized to Bluetooth, Wi-Fi, UFS, USB, or a shared power domain. Retain
-`r13` as the accepted long-lived baseline and do not reset a phone exposed as
+`r15` as the fixed-60-Hz radio fallback and do not reset a phone exposed as
 Qualcomm `900e` or `9008` from software.
 
 ## 9. USB host mode

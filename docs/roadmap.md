@@ -5,12 +5,12 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
-The accepted long-lived hardware baseline is now the reproducible 6.16 `r13`
-package. Its
+The current hardware candidate is the reproducible 6.16 `r16` package. Its
 exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
 S6SY761 multitouch, an Adreno 640 render node that completes Turnip Vulkan
 workloads, corrected conservative SMB5 limits, registered Power plus volume-key
-inputs, correct 60 Hz KMS scanout, and a usable Plasma Mobile session.
+inputs, a fixed stock 90 Hz KMS mode, Wi-Fi association, Bluetooth HID, and a
+usable Plasma Mobile session. Revision `r15` remains the fixed-60-Hz fallback.
 
 ## Priority 0: reproducible mainline boot
 
@@ -53,8 +53,8 @@ inputs, correct 60 Hz KMS scanout, and a usable Plasma Mobile session.
   persistent framebuffer console while the userspace package is finalized
 - reproduce the validated Plasma Mobile package selection in a fresh image and
   run repeated direct boots into the graphical session
-- validate 90 Hz separately from the accepted 60 Hz mode, then validate frame
-  pacing, blank/unblank, and suspend/resume
+- retain the validated fixed 90 Hz mode, then implement panel-aware dynamic
+  60/90 Hz switching and validate frame pacing, blank/unblank, and suspend/resume
 - validate S6SY761 suspend/resume and touch wake after the successful Weston
   and Plasma Mobile orientation tests
 - capture physical volume-key events, then validate wake behavior
@@ -63,9 +63,10 @@ inputs, correct 60 Hz KMS scanout, and a usable Plasma Mobile session.
 
 ## Priority 2: connectivity
 
-- validate Wi-Fi association, stable MAC handling, and sustained traffic
-- validate the prepared `r15` direct Bluetooth firmware selection, then
-  pairing and sustained connections
+- validate stable Wi-Fi MAC handling and sustained traffic after the successful
+  NetworkManager association test
+- extend the validated `r15` Bluetooth firmware, scan, HID connection, and
+  disconnect path with repeated reconnects and longer bidirectional traffic
 - validate USB host mode and common docks
 - bring up QRTR/QMI and modem services without compromising recovery access
 

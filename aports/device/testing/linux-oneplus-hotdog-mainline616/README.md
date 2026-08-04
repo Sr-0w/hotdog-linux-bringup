@@ -19,7 +19,10 @@ RMTFS reservation at `0xfc201000`; revision `r13` enables Wi-Fi after that
 shared-memory and remoteproc contract passes on hardware. Revision `r14`
 enables the WCN3990 UART and proves basic Bluetooth operation. Revision `r15`
 selects the hardware-validated revision-21 NVM and rampatch filenames directly
-from the device tree; its hardware test is pending.
+from the device tree; scanning and real HID connections are hardware-validated.
+Revision `r16` selects the stock HD1913 90 Hz panel command and timing. It
+direct-boots into Plasma Mobile with the DRM CRTC running at 1440x3120 and
+90 Hz.
 
 ## Source contract
 
@@ -48,14 +51,37 @@ from the device tree; its hardware test is pending.
   and Apps SMMU stream `0x640` before binding through `ath10k_snoc`.
 - WCN3990 Bluetooth uses UART13 at `0xc8c000`, its four-wire sleep pin state,
   the stock handset supplies, and explicit revision-21 NVM and rampatch names.
+- The Samsung command-mode panel uses the stock HD1913 90 Hz vertical timing
+  and control-display command. Revision `r16` exposes only that mode so this
+  first validation cannot silently select a mismatched 60 Hz command.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
-`validate-mainline616-build.sh` checks the direct-entry Image window and every
-DT invariant that was present during the successful hardware run. The package
-build fails if one of those invariants changes.
+`validate-mainline616-build.sh` checks the direct-entry Image window, every DT
+invariant that was present during the successful hardware run, and the exact
+90 Hz panel contract. The package build fails if one of those invariants
+changes.
 
 ## Current strict build evidence
+
+Two independent strict `r16` pmbootstrap builds completed on 2026-08-04 and
+produced byte-identical APKs. Both printed
+`hotdog mainline 6.16 build contract: PASS` before packaging:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r16.apk` | 25,537,088 bytes | `da7ebd249db076fa1a08058699141f08044197c9c84a6517c72e2cca2654b67f` |
+| `boot/vmlinuz` | 27,572,232 bytes | `c5ca9d015d8be4902c0567c564c51e150bb6f7d032f75a57cdca5811c03c9407` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 140,573 bytes | `512f71ef5bd70198cbe45ce6a9738370e8e43d294d2b3b3e9d33e54c54be3bf0` |
+
+The exact package kernel was assembled with the accepted `r15` DTB, initramfs,
+and command line. The resulting AVB-valid 96 MiB image has SHA256
+`387f306785211f19542df9b3775018961da476995382d4abbfcb8f6caaa4f797`.
+It was written to `boot_b`, read back completely with the same digest, and
+direct-booted as `#17-oneplus-hotdog-mainline616`. DRM reports the active mode
+as 1440x3120 at 90 Hz with a 415457 kHz pixel clock.
+
+## Earlier radio build evidence
 
 The accepted `r13` strict pmbootstrap build completed on 2026-08-04 and
 printed `hotdog mainline 6.16 build contract: PASS` before packaging:
@@ -82,7 +108,7 @@ BlueZ exposed a powered controller and received eight nearby devices. The
 handset later entered Qualcomm `900e` while going to sleep, so this is an
 active-operation result rather than suspend validation.
 
-The prepared `r15` strict build printed the same package contract PASS. Its
+The `r15` strict build printed the same package contract PASS. Its
 25,537,039-byte APK has SHA256
 `ca030a9fdbbf8fdd580f50b421a83713b2038ca3ed8651332771b79176aab76e`.
 Its 96 MiB AVB boot image has SHA256
@@ -90,7 +116,8 @@ Its 96 MiB AVB boot image has SHA256
 The source-built kernel and DTB have SHA256
 `be4728aa5d860c4c2eeb203e99d28ddaa89e1c58367d19bafabe9d7368a8a408`
 and `512f71ef5bd70198cbe45ce6a9738370e8e43d294d2b3b3e9d33e54c54be3bf0`.
-This image is schema-checked and AVB-verified but is not yet a hardware result.
+This image is schema-checked, AVB-verified, and hardware-validated for direct
+boot, Wi-Fi association, Bluetooth scanning, and HID connections.
 
 ## Earlier r8 charging evidence
 
@@ -130,10 +157,11 @@ symbols for the filtered OnePlus DTBO are also temporary. These constraints are
 documented in source so each can be removed independently and tested.
 
 The current WCN3990 Wi-Fi path does not recover a valid factory MAC address,
-so the driver chooses a random address at boot. Association, throughput, radio
-power management, Bluetooth pairing and sustained connections, and system
-suspend remain unvalidated. The observed `r14` sleep transition to `900e` must
-be isolated before suspend can be enabled for normal use.
+so the driver chooses a random address at boot. Stable address handling,
+sustained throughput, radio power management, Bluetooth audio profiles, and
+system suspend remain unvalidated. The isolated `r14`/`r15` transition to
+`900e` is still unexplained, although blocked, active, connected, and normal
+HID-disconnect observation windows have all completed without reproducing it.
 
 This device-specific package is a reference point, not the intended final
 pmaports architecture. Once the remaining hardware paths are stable, the
