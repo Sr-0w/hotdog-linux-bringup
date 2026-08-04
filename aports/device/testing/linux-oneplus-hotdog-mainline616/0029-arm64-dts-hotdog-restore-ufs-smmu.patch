@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000029 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 01:15:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: restore the UFS Apps SMMU stream
+
+The temporary UFS SMMU bypass was sufficient to reach the root filesystem
+after constraining DMA to 32 bits, but buffered OSTree imports still make the
+device enter Qualcomm crashdump without a preceding Linux panic or UFS error.
+The same class of abrupt failure on DWC3 was resolved by restoring its Apps
+SMMU attachment and selecting a translated domain.
+
+Restore the upstream SM8150 UFS stream ID while leaving the currently failing
+ICE dependency disabled. The conditional no-iommus DMA workaround remains in
+the source but no longer applies to this node.
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -239,7 +239,7 @@ &spss_mem {
+ };
+ 
+ &ufs_mem_hc {
+-	/delete-property/ iommus;
++	iommus = <&apps_smmu 0x300 0>;
+ 	/delete-property/ qcom,ice;
+ };
+ 
+-- 
+2.50.1

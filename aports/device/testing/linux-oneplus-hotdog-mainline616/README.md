@@ -22,9 +22,11 @@ selects the hardware-validated revision-21 NVM and rampatch filenames directly
 from the device tree; scanning and real HID connections are hardware-validated.
 Revision `r16` selects the stock HD1913 90 Hz panel command and timing. It
 direct-boots into Plasma Mobile with the DRM CRTC running at 1440x3120 and
-90 Hz. Revision `r17` is the next source candidate: it exposes both stock
-timings, keeps 90 Hz preferred, and selects the matching panel command from
-the committed DRM mode during each full modeset. Its hardware test is pending.
+90 Hz. Revision `r17` exposes both stock timings, keeps 90 Hz preferred, and
+selects the matching panel command during each full modeset; both modes are
+hardware-validated. Revision `r18` restores only UFS Apps SMMU stream `0x300`
+after a pull-only Flatpak workload reproduced an abrupt Qualcomm crashdump in
+the temporary no-IOMMU configuration.
 
 ## Source contract
 
@@ -33,6 +35,8 @@ the committed DRM mode during each full modeset. Its hardware test is pending.
 - Generic DWC3, USB gadget, and IOMMU drivers remain unchanged from that base.
 - The DWC3 stream keeps the upstream Apps SMMU binding and boots with a
   translated domain (`iommu.passthrough=0`).
+- Revision `r18` restores the upstream UFS Apps SMMU stream `0x300` while
+  leaving the currently failing ICE dependency disabled.
 - The native Samsung DSC panel, TE signal, and 16x32 framebuffer console are
   built in.
 - QUPv3 wrapper 2, GPI DMA 2, I2C17, and the schema-complete S6SY761 node are
@@ -65,7 +69,7 @@ invariant that was present during the successful hardware run, and the exact
 dual-mode panel contract. The package build fails if one of those invariants
 changes.
 
-## Prepared r17 build evidence
+## Hardware-tested r17 build evidence
 
 Two independent strict `r17` pmbootstrap builds completed on 2026-08-04 and
 produced byte-identical APKs. Both ran the dual-mode panel contract before and
@@ -81,10 +85,35 @@ The source-built kernel reports build marker
 `#18-oneplus-hotdog-mainline616`. It was assembled offline with the accepted
 DTB, initramfs, and command line into a 96 MiB AVB-valid image, SHA256
 `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`.
-This candidate has not yet been written to the handset; `r16` remains the
-current hardware result.
+The image was written to `boot_b`, read back, and direct-booted. Both stock
+refresh modes were selected through KScreen and Plasma Settings while the
+touchscreen, compositor, USB networking, and SSH remained available.
 
-## Current hardware evidence
+## Prepared r18 UFS SMMU candidate
+
+Revision `r18` changes only the UFS device-tree attachment from the temporary
+no-IOMMU path to Apps SMMU stream `0x300`; UFS ICE remains disabled. A DTB-only
+hardware A/B keeps the exact tested `r17` kernel, initramfs, command line, and
+all other DT properties.
+
+Two independent strict builds completed with the build contract passing before
+and after module installation. They produced byte-identical packages:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r18.apk` | 25,537,448 bytes | `06327deb007561a7acb7c2950d2714e640e2316996ca8815db46424405c5239e` |
+| `boot/vmlinuz` | 27,572,232 bytes | `8115ce2bf6c126171ac0dd6afb1bec64a035d3aec8b76b89d12df2c6bfcf7e20` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 140,597 bytes | `5df7f6adc14d92f47379da0bfb13e814f00c52b8934840d78e7fed4306174f17` |
+
+The isolated A/B DTB SHA256 is
+`018006a67c60bf309a14fa70f224f0172d2aa718443a4deb4e0e6b5af2ad44be`, and
+the AVB-valid boot image SHA256 is
+`45bdebbd239b06bc15ea4f724a91321f897841c767822ab8f199a5be0ae2688c`.
+Its normalized tree is identical to the source-built DTB. The binary hashes
+differ only because `fdtput` and `dtc` serialize the added property differently.
+Hardware validation is pending.
+
+## Earlier fixed-90-Hz evidence
 
 Two independent strict `r16` pmbootstrap builds completed on 2026-08-04 and
 produced byte-identical APKs. Both printed

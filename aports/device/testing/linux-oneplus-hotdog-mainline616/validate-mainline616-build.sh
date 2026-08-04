@@ -296,7 +296,8 @@ expect_value dwc3-iommus "$apps_smmu_phandle 140 0" \
 	fdtget -tx "$dtb" "$dwc3" iommus
 expect_value dwc3-role peripheral fdtget -ts "$dtb" "$dwc3" dr_mode
 expect_value dwc3-speed high-speed fdtget -ts "$dtb" "$dwc3" maximum-speed
-expect_absent ufs-iommus fdtget "$dtb" "$ufs" iommus
+expect_value ufs-iommus "$apps_smmu_phandle 300 0" \
+	fdtget -tx "$dtb" "$ufs" iommus
 expect_absent ufs-ice fdtget "$dtb" "$ufs" qcom,ice
 expect_absent qup-iommus fdtget "$dtb" "$qup" iommus
 

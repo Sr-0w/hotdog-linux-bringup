@@ -54,13 +54,13 @@ which represents DSI timeout and FIFO status bits. Similar messages were seen
 on the fixed-mode predecessor, so this is tracked as a panel blank/unblank
 robustness issue rather than a failed dynamic-refresh implementation.
 
-A later unattended monitor ended in Qualcomm `900e` while a package installation
-was being attempted through Discover. The last persistent samples showed the
-UFS controller alternating between runtime-active and runtime-suspended states;
-there was no panic, oops, or call trace. Repeated user observations associate
-these crashdump transitions with software installation and storage activity.
-That failure is being isolated in the UFS path and is not counted as a refresh
-switch failure.
+A later controlled package-install test ended in Qualcomm `900e`. The failure
+was reproduced during a Flatpak pull with deployment disabled and the UFS
+controller forced to `active/on`; there was no panic, oops, call trace, UFS
+error, or ext4 error. Direct read/write and random-I/O controls passed. The
+remaining boundary is a large buffered OSTree import, documented in the
+[Flatpak/UFS evidence](2026-08-05-mainline616-flatpak-ufs.md). It is not counted
+as a refresh-switch failure.
 
 ## Remaining work
 

@@ -29,6 +29,10 @@ SM8150 host whose temporary bring-up DT omits `iommus`. With every other boot
 component unchanged, the phone enumerated `/dev/sda`, discovered the nested
 `pmOS_boot` and `pmOS_root`, and entered the real rootfs. See the
 [direct mainline rootfs evidence](docs/evidence/2026-08-03-direct-mainline-rootfs.md).
+Large buffered Flatpak imports later exposed an abrupt `900e` boundary that is
+not reproduced by direct-I/O stress. Revision `r18` restores UFS Apps SMMU
+stream `0x300` as a single-variable hardware candidate; see the
+[Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
 corrected the MSM DSI command-mode packetization for the panel's two 720-pixel
@@ -219,7 +223,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
 | Mainline 6.16 pmaports image | Direct hardware boot working | Revision `r17` preserves the accepted hardware stack and exposes both stock 60 Hz and 90 Hz modes. Its hardware-tested AVB image is `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`. |
-| UFS storage | Direct boot working; load stability under investigation | V33 enumerates the Samsung UFS with a temporary 32-bit coherent-DMA constraint while Apps SMMU is bypassed. Repeated package-install attempts correlate with abrupt `900e` transitions, so runtime-power and sustained-I/O stability are not yet accepted. |
+| UFS storage | Direct boot working; buffered-import stability under investigation | V33 enumerates the Samsung UFS with a temporary 32-bit DMA constraint while Apps SMMU is bypassed. Direct-I/O stress passes with runtime power held on, but a pull-only Flatpak import reproducibly enters `900e`. Revision `r18` restores UFS Apps SMMU stream `0x300` for the next hardware A/B. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
@@ -385,9 +389,9 @@ The V43 kernel is rebuilt from the pinned public source and patch series. Its
 controlled device tree and userspace still carry these bring-up changes:
 
 1. Reserve the firmware-owned `0x89d00000-0x8b700000` memory gap as `no-map`.
-2. Temporarily bypass SMMU for UFS and selected QUP clients and omit the failing
-   UFS ICE dependency. In this exact no-`iommus` UFS configuration, constrain
-   coherent UFS DMA below 4 GiB.
+2. Keep selected QUP clients on the temporary SMMU bypass and omit the failing
+   UFS ICE dependency. The accepted `r17` baseline also bypasses UFS and
+   constrains DMA below 4 GiB; the `r18` candidate restores UFS stream `0x300`.
 3. Keep DWC3 attached to Apps SMMU stream `0x140` and use a translated domain
    with `iommu.passthrough=0`. An identity domain left the event ring unwritten.
 4. Enable the native DPU/DSI/DSC panel path and built-in Terminus 16x32 fbcon.
