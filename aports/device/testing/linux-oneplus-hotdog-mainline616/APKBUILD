@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=16
+pkgrel=17
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -64,6 +64,7 @@ source="
 	0025-arm64-dts-hotdog-enable-wcn3990-bluetooth.patch
 	0026-arm64-dts-hotdog-select-wcn3990-firmware.patch
 	0027-drm-panel-oneplus-select-stock-90hz-mode.patch
+	0028-drm-panel-oneplus-dsc-expose-stock-60-and-90-Hz-mode.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -145,5 +146,6 @@ f27bce45f51e92f7effa2c93005e8cb0a1c290feee013acedf8fae2747eb31a9ed44394b581d926e
 f704279f3ceb78b053b793f8064a6033c1d5cd6a4c508d7fdda7208d667581111c8c61b94d426755110b80639fc0f431c3b8d5223d63db94a94373f8f668fc7f  0025-arm64-dts-hotdog-enable-wcn3990-bluetooth.patch
 ac4c3bb5a1ecf2da526b142b9fb03301d60f307858a79758189c3f46704e59354e5ac35f7448b17f5ae6263e908450435e35e0eace5d358b3f71aca8729ec56d  0026-arm64-dts-hotdog-select-wcn3990-firmware.patch
 5e668ed13f346fd97ead89fbfff1d5eafaf8a98da2bf5076038ecaf2a92f34128621f73aa86ee8212b56bcd881bc9e96e076c4e3fd23ba11260741e1fc5eaaad  0027-drm-panel-oneplus-select-stock-90hz-mode.patch
-b6889da89658d8c628e9f2f951bde6a2983f069c05b70cc5015d07f5ddb1c7e75297eb2b5464774660f3a065c71a0ad51c2e2748c0620125b957667eb1a519a7  validate-mainline616-build.sh
+61e6112c9d819c26ded347a0b7cd4d675e536b5afcb53aa3d8037b00dcb61e777a7969df52f78e68d7be4c2b3f704e282c8b25bc227fd87e89d6264f43ad95a8  0028-drm-panel-oneplus-dsc-expose-stock-60-and-90-Hz-mode.patch
+b862ae3eb43d6cc05baa8b39ed003c61de316d0748abe51275292f5b41d30a03f5c9ef09c4346aef06748bf1db517104f773bc19efdd43029edf0be6538e4b41  validate-mainline616-build.sh
 "

@@ -112,24 +112,38 @@ import sys
 source = pathlib.Path(sys.argv[1]).read_text()
 
 required = (
-    "MIPI_DCS_WRITE_CONTROL_DISPLAY,\n\t\t\t\t     0x30);",
+    "struct drm_connector *connector;",
+    "static const struct drm_display_mode samsung_oneplus_dsc_60hz_mode",
+    ".clock = (1440 + 16 + 8 + 8) * (3120 + 400 + 28 + 1156) * 60 / 1000,",
+    ".vsync_start = 3120 + 400,",
+    ".vsync_end = 3120 + 400 + 28,",
+    ".vtotal = 3120 + 400 + 28 + 1156,",
     "static const struct drm_display_mode samsung_oneplus_dsc_90hz_mode",
     ".clock = (1440 + 16 + 8 + 8) * (3120 + 4 + 4 + 8) * 90 / 1000,",
     ".vsync_start = 3120 + 4,",
     ".vsync_end = 3120 + 4 + 4,",
     ".vtotal = 3120 + 4 + 4 + 8,",
-    "&samsung_oneplus_dsc_90hz_mode",
+    "DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK",
+    "return 0x20;",
+    "return 0x30;",
+    "u8 control_display_cmd[] = { MIPI_DCS_WRITE_CONTROL_DISPLAY, control_display };",
+    "mipi_dsi_dcs_write_buffer_multi(&dsi_ctx, control_display_cmd,",
+    "ctx->connector = connector;",
+    "mode->type |= DRM_MODE_TYPE_PREFERRED;",
 )
 for value in required:
     if value not in source:
-        raise SystemExit(f"missing stock 90 Hz panel contract: {value!r}")
+        raise SystemExit(f"missing stock dual-mode panel contract: {value!r}")
 
-for old_value in (
-    "(3120 + 400 + 28 + 1156) * 60 / 1000",
-    ".vsync_start = 3120 + 400,",
+mode_list = source[source.index("static const struct drm_display_mode * const modes[]") :]
+mode_list = mode_list[:mode_list.index("};")]
+if mode_list.index("&samsung_oneplus_dsc_90hz_mode") > mode_list.index(
+    "&samsung_oneplus_dsc_60hz_mode"
 ):
-    if old_value in source:
-        raise SystemExit(f"legacy 60 Hz-only panel value remains: {old_value!r}")
+    raise SystemExit("90 Hz must remain the preferred first panel mode")
+
+if "drm_connector_helper_get_modes_fixed" in source:
+    raise SystemExit("fixed single-mode panel helper remains")
 PY
 
 if [ -n "$modules_dir" ]; then

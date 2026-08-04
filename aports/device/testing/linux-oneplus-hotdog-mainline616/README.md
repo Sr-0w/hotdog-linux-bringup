@@ -22,7 +22,9 @@ selects the hardware-validated revision-21 NVM and rampatch filenames directly
 from the device tree; scanning and real HID connections are hardware-validated.
 Revision `r16` selects the stock HD1913 90 Hz panel command and timing. It
 direct-boots into Plasma Mobile with the DRM CRTC running at 1440x3120 and
-90 Hz.
+90 Hz. Revision `r17` is the next source candidate: it exposes both stock
+timings, keeps 90 Hz preferred, and selects the matching panel command from
+the committed DRM mode during each full modeset. Its hardware test is pending.
 
 ## Source contract
 
@@ -51,18 +53,38 @@ direct-boots into Plasma Mobile with the DRM CRTC running at 1440x3120 and
   and Apps SMMU stream `0x640` before binding through `ath10k_snoc`.
 - WCN3990 Bluetooth uses UART13 at `0xc8c000`, its four-wire sleep pin state,
   the stock handset supplies, and explicit revision-21 NVM and rampatch names.
-- The Samsung command-mode panel uses the stock HD1913 90 Hz vertical timing
-  and control-display command. Revision `r16` exposes only that mode so this
-  first validation cannot silently select a mismatched 60 Hz command.
+- The Samsung command-mode panel exposes the stock HD1913 60 Hz and 90 Hz
+  timings. Revision `r17` keeps the validated 90 Hz path preferred and selects
+  control-display value `0x20` or `0x30` from the committed DRM mode during
+  panel preparation.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
 `validate-mainline616-build.sh` checks the direct-entry Image window, every DT
 invariant that was present during the successful hardware run, and the exact
-90 Hz panel contract. The package build fails if one of those invariants
+dual-mode panel contract. The package build fails if one of those invariants
 changes.
 
-## Current strict build evidence
+## Prepared r17 build evidence
+
+Two independent strict `r17` pmbootstrap builds completed on 2026-08-04 and
+produced byte-identical APKs. Both ran the dual-mode panel contract before and
+after module installation:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r17.apk` | 25,537,453 bytes | `e0b719869300370ea5aafe5a3f08ff628adc4334ccacde501da6303446197912` |
+| `boot/vmlinuz` | 27,572,232 bytes | `69aa8aba33e268538cabeec405ac0fc7baf802138219f161b2ad6832ce350f1c` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 140,573 bytes | `512f71ef5bd70198cbe45ce6a9738370e8e43d294d2b3b3e9d33e54c54be3bf0` |
+
+The source-built kernel reports build marker
+`#18-oneplus-hotdog-mainline616`. It was assembled offline with the accepted
+DTB, initramfs, and command line into a 96 MiB AVB-valid image, SHA256
+`d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`.
+This candidate has not yet been written to the handset; `r16` remains the
+current hardware result.
+
+## Current hardware evidence
 
 Two independent strict `r16` pmbootstrap builds completed on 2026-08-04 and
 produced byte-identical APKs. Both printed
