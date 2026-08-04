@@ -1,0 +1,57 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 02:16:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable battery and charger
+
+Describe the non-replaceable 4085 mAh OnePlus battery using the limits from
+the downstream HD191x battery profile. Enable the PM8150B Gen4 fuel gauge and
+SMB5 charger against that description.
+
+Keep the dedicated-charger current limit at a conservative 1.5 A and use a
+4.40 V float-voltage limit for initial hardware validation. The battery's
+4.42 V design maximum remains described separately. USB SDP and CDP limits
+remain selected by the SMB5 driver.
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -29,6 +29,17 @@
+ 	oplus,dtsi_no = <19801>;
+ 	oplus,pcb_range = <0 55>;
+ 
++	battery: battery {
++		compatible = "simple-battery";
++		device-chemistry = "lithium-ion-polymer";
++		charge-full-design-microamp-hours = <4085000>;
++		voltage-min-design-microvolt = <3300000>;
++		voltage-max-design-microvolt = <4420000>;
++		constant-charge-current-max-microamp = <1500000>;
++		constant-charge-voltage-max-microvolt = <4400000>;
++		charge-term-current-microamp = <310000>;
++	};
++
+ 	gpio_keys: gpio-keys {
+ 		compatible = "gpio-keys";
+ 		pinctrl-names = "default";
+@@ -315,6 +326,17 @@
+ 	status = "okay";
+ };
+ 
++&pm8150b_charger {
++	monitored-battery = <&battery>;
++	status = "okay";
++};
++
++&pm8150b_fg {
++	monitored-battery = <&battery>;
++	power-supplies = <&pm8150b_charger>;
++	status = "okay";
++};
++
+ &pon_pwrkey {
+ 	status = "okay";
+ };
+-- 
+2.50.1

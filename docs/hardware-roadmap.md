@@ -173,7 +173,39 @@ suspend/resume and repeated cold boots. Resolve or justify the non-fatal dummy
 alive. Keep the exact `r4` touch image as a GPU-disabled fallback and preserve
 the `r5` headless Vulkan test as a control when debugging compositor failures.
 
-## 7. Wi-Fi
+## 7. PM8150B battery and charger
+
+**Proven current state.** The accepted `r6` image has no power-supply class
+device. The source-built `r10` candidate enables the PM8150B Gen4 fuel gauge
+and SMB5 charger against a 4,085 mAh battery description. Its initial limits
+are 4.40 V constant-charge voltage, 1.50 A constant-charge current, and 500 mA
+USB input current. Two strict builds, one without `ccache`, produced identical
+APKs, and the resulting 96 MiB AVB image verifies. This is preflight evidence,
+not a working-hardware claim; see the
+[battery/charger preflight](evidence/2026-08-04-mainline616-battery-charger-preflight.md).
+
+**Next experiment.** Preserve the accepted `r6` fallback, write and read back
+only the `r10` candidate slot, then boot once with the USB recovery path
+observed. Confirm the fresh kernel and boot-image identities before collecting
+ten minutes of battery, charger, PMIC-register, and kernel-log evidence. Do not
+combine Wi-Fi, audio, modem, suspend, or userspace power-management changes
+with this run.
+
+**Success criteria.** Both power-supply devices bind; voltage, current,
+capacity, temperature, health, and USB type remain plausible; the charger
+selectors match 4.40 V, 1.50 A, and no more than 1.50 A USB input; and no
+overvoltage, thermal, watchdog, PMIC, USB, storage, or kernel fault appears.
+The previously accepted display, touch, GPU, keys, rootfs, USB gadget, and SSH
+paths must remain available.
+
+**Risks and fallback.** Charger programming is persistent hardware activity,
+so a successful probe is not sufficient evidence. Stop the run on any voltage
+above 4.42 V, implausible temperature/current, repeated charger IRQ, or PMIC
+error and restore the fuel-gauge-only or `r6` image. Do not raise current or
+voltage limits until the conservative profile has completed repeated cold
+boots and charge/discharge observations.
+
+## 8. Wi-Fi
 
 **Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
 validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
@@ -200,7 +232,7 @@ crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
 networking as the fallback. Do not combine first Wi-Fi validation with
 Bluetooth or modem enablement.
 
-## 8. USB host mode
+## 9. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

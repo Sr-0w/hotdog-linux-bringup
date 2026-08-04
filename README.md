@@ -100,6 +100,14 @@ and registered Power, Volume Down, Volume Up, and the S6SY761 touchscreen as
 separate input devices. Physical volume-key events remain to be captured; see
 the [hardware-key evidence](docs/evidence/2026-08-04-mainline616-volume-keys.md).
 
+Revision `r10` is the first battery and charger preflight candidate. It enables
+the PM8150B fuel gauge and SMB5 charger with a 4.40 V, 1.50 A battery profile,
+starts USB input at 500 mA, and keeps charging disabled until every limit and
+IRQ is configured. Two strict builds, including one without `ccache`, produced
+the same APK byte-for-byte. The candidate has not yet been flashed or accepted
+on hardware; see the
+[battery/charger preflight](docs/evidence/2026-08-04-mainline616-battery-charger-preflight.md).
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -134,8 +142,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Touchscreen | Working | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots; orientation under a graphical shell and suspend/resume remain open. |
 | GPU | Working for rendering | The `r5` DTS enables the Adreno 640 and GMU. MSM DRM exposes `renderD128`, Turnip identifies the A640, six OPPs are available, and two Vulkan workloads complete without a GPU/GMU/IOMMU fault. Accelerated graphical-shell scanout and suspend/resume remain open. |
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
+| Battery and charging | Reproducible candidate; hardware validation pending | The `r10` DTB enables the PM8150B fuel gauge and charger with conservative limits. The package and AVB image pass reproducibility and static safety gates, but neither has been accepted on the phone yet. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. No sound card, Wi-Fi/rfkill device, or battery power-supply class is exposed. Bluetooth, modem, cameras, sensors, charging, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. The accepted `r6` image still exposes no sound card, Wi-Fi/rfkill device, or battery class; an unflashed `r10` battery/charger candidate is ready for validation. Bluetooth, modem, cameras, sensors, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 

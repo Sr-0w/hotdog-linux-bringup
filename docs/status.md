@@ -53,7 +53,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Audio | Not enabled | The exact pmaports boot reports no ALSA sound cards. Codec, routing, DSP, and userspace configuration remain open. |
 | Modem | Not validated | QRTR/QMI and modem firmware integration remain open. |
 | Cameras | Not validated | Camera pipeline support is not started. |
-| Charging/battery | Not enabled | The exact pmaports boot exposes no power-supply class device. Power and charging support need dedicated enablement and validation. |
+| Charging/battery | Reproducible candidate; hardware validation pending | The accepted `r6` boot exposes no power-supply class device. The unflashed `r10` candidate enables the PM8150B fuel gauge and SMB5 charger with 4.40 V, 1.50 A and initial 500 mA USB limits. Two strict builds produced identical APKs, and the AVB image passes static safety gates; runtime acceptance remains pending. |
 | USB host/dock | Not validated | Device-role USB is proven; host-role operation is not. |
 
 ## Downstream support

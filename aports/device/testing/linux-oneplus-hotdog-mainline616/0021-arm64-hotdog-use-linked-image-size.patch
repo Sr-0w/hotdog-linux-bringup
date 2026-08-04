@@ -1,0 +1,31 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 04:42:00 +0200
+Subject: [PATCH] arm64: hotdog: derive image window from linked kernel
+
+The fixed 0x01ad0000 image-size field matched the previously validated
+kernel, but became stale as soon as built-in charger code changed the linked
+image by 64 KiB. The bootloader places later payloads according to the actual
+kernel length, while Linux requires the full advertised image window to remain
+free. Keeping the old value can therefore overlap those payloads during early
+boot.
+
+Restore the standard linked size symbol so the header always follows
+_end - _text as the kernel evolves.
+---
+ arch/arm64/kernel/head.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -147,7 +147,7 @@
+ #endif
+ 	.quad	0x00080000			// Image load offset from start of RAM, little-endian
+-	.quad	0x01ad0000			// Exact linked image window used by the proven V13 entry
++	le64sym	_kernel_size_le			// Effective linked image size, little-endian
+ 	le64sym	_kernel_flags_le		// Informative flags, little-endian
+ 	.quad	0				// reserved
+ 	.quad	0				// reserved
+ 	.quad	0				// reserved
+-- 
+2.50.1

@@ -11,6 +11,13 @@ with the upstream MSM DRM driver and real Turnip Vulkan submissions. Revision
 `r6` adds the PM8150 Volume Down and Volume Up input paths while preserving the
 validated touchscreen, GPU, USB, storage, and display contracts.
 
+Revision `r10` adds a preflight-only PM8150B fuel-gauge and charger candidate.
+It uses conservative 4.40 V, 1.50 A battery limits and a 500 mA initial USB
+input limit, corrects SMB2/SMB5 selector conversions, and leaves charging
+disabled on every probe failure. It also derives the arm64 Image window from
+the linked kernel size. This revision is reproducibly built but is not yet
+hardware-validated; the accepted runtime baseline remains `r6`.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit

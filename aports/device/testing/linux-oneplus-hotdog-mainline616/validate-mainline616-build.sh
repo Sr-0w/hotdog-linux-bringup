@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
-	echo "usage: $0 IMAGE CONFIG DTB [MODULES_DIR]" >&2
+if [ "$#" -lt 3 ] || [ "$#" -gt 6 ]; then
+	echo "usage: $0 IMAGE CONFIG DTB [MODULES_DIR [CHARGER_SOURCE [VMLINUX]]]" >&2
 	exit 2
 fi
 
@@ -10,6 +10,8 @@ image=$1
 config=$2
 dtb=$3
 modules_dir=${4:-}
+charger_source=${5:-}
+vmlinux=${6:-}
 
 die() {
 	echo "hotdog mainline 6.16 validation: $*" >&2
@@ -37,6 +39,24 @@ expect_absent() {
 	fi
 }
 
+expect_source() {
+	grep -Fq "$1" "$charger_source" ||
+		die "missing charger source invariant: $1"
+}
+
+expect_source_absent() {
+	if grep -Fq "$1" "$charger_source"; then
+		die "forbidden charger source pattern: $1"
+	fi
+}
+
+expect_source_order() {
+	first=$(grep -nF "$1" "$charger_source" | head -n 1 | cut -d: -f1)
+	second=$(grep -nF "$2" "$charger_source" | head -n 1 | cut -d: -f1)
+	[ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ] ||
+		die "charger source ordering violation: '$1' must precede '$2'"
+}
+
 [ -s "$image" ] || die "missing Image: $image"
 [ -s "$config" ] || die "missing config: $config"
 [ -s "$dtb" ] || die "missing DTB: $dtb"
@@ -49,12 +69,58 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
 fi
 
-python3 - "$image" <<'PY'
+if [ -n "$charger_source" ]; then
+	[ -s "$charger_source" ] || die "missing charger source: $charger_source"
+	expect_source '.fv_min_uv = 3600000,'
+	expect_source '.fv_step_uv = 10000,'
+	expect_source '.fcc_max_ua = 8000000,'
+	expect_source '.fcc_step_ua = 50000,'
+	expect_source '.icl_max_ua = 5000000,'
+	expect_source '.icl_step_ua = 50000,'
+	expect_source '.fcc_step_ua = 25000,'
+	expect_source '.icl_step_ua = 25000,'
+	expect_source 'constant_charge_current_max_ua'
+	expect_source 'constant_charge_voltage_max_uv'
+	expect_source 'fast_charge_current_ua / match_data->fcc_step_ua'
+	expect_source 'val_raw = val / chip->icl_step_ua'
+	expect_source 'return !!(val & mask);'
+	expect_source 'chip->base + BARK_BITE_WDOG_PET'
+	expect_source 'CHARGING_ENABLE_CMD_BIT, 0);'
+	expect_source 'smb_set_current_limit(chip, SDP_CURRENT_UA);'
+	expect_source 'CHARGING_ENABLE_CMD_BIT);'
+	expect_source_order 'CHARGING_ENABLE_CMD_BIT, 0);' \
+		'smb_set_current_limit(chip, SDP_CURRENT_UA);'
+	expect_source_order 'smb_set_current_limit(chip, SDP_CURRENT_UA);' \
+		'CHARGING_ENABLE_CMD_BIT);'
+	if sed -n '/smb5_init_seq\[\]/,/^};/p' "$charger_source" |
+		grep -Fq 'CHARGING_ENABLE_CMD'; then
+		die "SMB5 init sequence enables charging before limits are set"
+	fi
+	if sed -n '/smb2_init_seq\[\]/,/^};/p' "$charger_source" |
+		grep -Fq 'CHARGING_ENABLE_CMD'; then
+		die "SMB2 init sequence enables charging before limits are set"
+	fi
+	if sed -n '/smb_handle_wdog_bark/,/^}/p' "$charger_source" |
+		grep -Fq 'regmap_write(chip->regmap, BARK_BITE_WDOG_PET'; then
+		die "charger watchdog pet omits the charger register base"
+	fi
+	expect_source_absent '1950000 /'
+	expect_source_absent 'return !!(reg & mask);'
+fi
+
+if [ -n "$vmlinux" ]; then
+	[ -s "$vmlinux" ] || die "missing vmlinux: $vmlinux"
+fi
+
+python3 - "$image" "$vmlinux" <<'PY'
 import pathlib
+import shutil
 import struct
+import subprocess
 import sys
 
 image = pathlib.Path(sys.argv[1]).read_bytes()
+vmlinux = sys.argv[2]
 if len(image) < 64:
     raise SystemExit("arm64 Image header is truncated")
 
@@ -62,12 +128,31 @@ load_offset, image_size = struct.unpack_from("<QQ", image, 8)
 magic = struct.unpack_from("<I", image, 56)[0]
 if load_offset != 0x80000:
     raise SystemExit(f"unexpected arm64 load offset: {load_offset:#x}")
-if image_size != 0x1AD0000:
-    raise SystemExit(f"unexpected direct-entry window: {image_size:#x}")
+if image_size == 0 or image_size & 0xFFFF:
+    raise SystemExit(f"invalid 64 KiB-aligned image window: {image_size:#x}")
 if len(image) > image_size:
     raise SystemExit(f"Image exceeds direct-entry window: {len(image):#x}")
 if magic != 0x644D5241:
     raise SystemExit(f"invalid arm64 Image magic: {magic:#x}")
+
+if vmlinux:
+    nm = shutil.which("llvm-nm") or shutil.which("nm")
+    if not nm:
+        raise SystemExit("neither llvm-nm nor nm is available")
+    output = subprocess.check_output([nm, "-n", vmlinux], text=True)
+    symbols = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[-1] in {"_text", "_end"}:
+            symbols[parts[-1]] = int(parts[0], 16)
+    if set(symbols) != {"_text", "_end"}:
+        raise SystemExit("vmlinux is missing _text or _end")
+    linked_size = symbols["_end"] - symbols["_text"]
+    if image_size != linked_size:
+        raise SystemExit(
+            f"Image header window {image_size:#x} does not match "
+            f"linked kernel size {linked_size:#x}"
+        )
 PY
 
 expect_config 'CONFIG_DRM_MSM=y'
@@ -96,6 +181,10 @@ expect_config 'CONFIG_INPUT_EVDEV=y'
 expect_config 'CONFIG_KEYBOARD_GPIO=y'
 expect_config 'CONFIG_INPUT_PM8941_PWRKEY=y'
 expect_config 'CONFIG_PINCTRL_QCOM_SPMI_PMIC=y'
+expect_config 'CONFIG_POWER_SUPPLY=y'
+expect_config 'CONFIG_POWER_SUPPLY_HWMON=y'
+expect_config 'CONFIG_BATTERY_QCOM_FG=y'
+expect_config 'CONFIG_CHARGER_QCOM_SMB2=y'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -112,9 +201,13 @@ adreno_smmu=$soc/iommu@2ca0000
 gpu_zap=$gpu/zap-shader
 dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
+battery=/battery
 gpio_keys=/gpio-keys
 volume_up=$gpio_keys/volume-up
 pm8150=$soc/spmi@c440000/pmic@0
+pm8150b=$soc/spmi@c440000/pmic@2
+pm8150b_charger=$pm8150b/charger@1000
+pm8150b_fg=$pm8150b/fuel-gauge@4000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
 pon_pwrkey=$pm8150/pon@800/pwrkey
 pon_resin=$pm8150/pon@800/resin
@@ -219,6 +312,39 @@ expect_value power-key-status okay fdtget -ts "$dtb" "$pon_pwrkey" status
 expect_value power-key-code 74 fdtget -tx "$dtb" "$pon_pwrkey" linux,code
 expect_value volume-down-status okay fdtget -ts "$dtb" "$pon_resin" status
 expect_value volume-down-code 72 fdtget -tx "$dtb" "$pon_resin" linux,code
+
+expect_value battery-compatible simple-battery \
+	fdtget -ts "$dtb" "$battery" compatible
+expect_value battery-chemistry lithium-ion-polymer \
+	fdtget -ts "$dtb" "$battery" device-chemistry
+expect_value battery-capacity 4085000 \
+	fdtget -tu "$dtb" "$battery" charge-full-design-microamp-hours
+expect_value battery-min-voltage 3300000 \
+	fdtget -tu "$dtb" "$battery" voltage-min-design-microvolt
+expect_value battery-max-voltage 4420000 \
+	fdtget -tu "$dtb" "$battery" voltage-max-design-microvolt
+expect_value battery-charge-current 1500000 \
+	fdtget -tu "$dtb" "$battery" constant-charge-current-max-microamp
+expect_value battery-charge-voltage 4400000 \
+	fdtget -tu "$dtb" "$battery" constant-charge-voltage-max-microvolt
+expect_value battery-termination-current 310000 \
+	fdtget -tu "$dtb" "$battery" charge-term-current-microamp
+battery_phandle=$(fdtget -tx "$dtb" "$battery" phandle) ||
+	die "missing battery phandle"
+charger_phandle=$(fdtget -tx "$dtb" "$pm8150b_charger" phandle) ||
+	die "missing PM8150B charger phandle"
+expect_value charger-compatible qcom,pm8150b-charger \
+	fdtget -ts "$dtb" "$pm8150b_charger" compatible
+expect_value charger-status okay fdtget -ts "$dtb" "$pm8150b_charger" status
+expect_value charger-battery "$battery_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_charger" monitored-battery
+expect_value fuel-gauge-compatible qcom,pm8150b-fg \
+	fdtget -ts "$dtb" "$pm8150b_fg" compatible
+expect_value fuel-gauge-status okay fdtget -ts "$dtb" "$pm8150b_fg" status
+expect_value fuel-gauge-battery "$battery_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_fg" monitored-battery
+expect_value fuel-gauge-charger "$charger_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_fg" power-supplies
 
 expect_value gpu-status okay fdtget -ts "$dtb" "$gpu" status
 expect_value gpu-compatible 'qcom,adreno-640.1 qcom,adreno' \
