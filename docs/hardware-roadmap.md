@@ -182,32 +182,47 @@ the `r5` headless Vulkan test as a control when debugging compositor failures.
 
 ## 7. Wi-Fi
 
-**Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
-validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
-working USB network path is the current remote channel. The support boundary
-is recorded in [the status matrix](status.md#mainline-support-matrix).
-`CONFIG_ATH10K_SNOC=m` is present, but firmware load, memory assignment,
-clocks, and the Apps SMMU stream remain unproven together.
+**Proven current state.** Revision `r13` starts MPSS with Hotdog's RMTFS
+reservation, loads the WCN3990 firmware, binds `ath10k_snoc`, exposes `wlan0`,
+and scans ten access points across 2.4 GHz and 5 GHz. USB networking and SSH
+remain available. The driver currently chooses a random MAC address.
 
-**Hypothesis.** After Apps SMMU registration and the Wi-Fi stream are trusted,
-the existing WCN3990 description and packaged firmware are sufficient for an
-initial SNOC probe without enabling Bluetooth or the modem.
+**Next experiment.** Establish a stable device address, associate through
+NetworkManager, and sustain bidirectional traffic while recording firmware,
+SMMU, and disconnect events. Keep the accepted 60 Hz display and USB gadget
+configuration unchanged.
 
-**Single-variable experiment.** Enable only the Wi-Fi node on the accepted
-SMMU baseline. Keep Bluetooth, modem, and unrelated remote processors disabled
-and keep the firmware set unchanged.
+**Success criteria.** Repeated boots preserve the same MAC address, association
+survives sustained traffic, and Wi-Fi recovers after radio disable/enable. A
+separate controlled suspend/resume test must preserve both Wi-Fi and USB SSH.
 
-**Success criteria.** Firmware loads without remoteproc or SMMU fault, a WLAN
-interface appears, a passive scan completes, and association plus sustained
-traffic work while USB SSH remains available. Reboot and suspend must not
-leave the firmware path wedged.
+**Risks and fallback.** MPSS, RMTFS, Wi-Fi, and Bluetooth share radio resources.
+Change only one power-management or address source at a time, and retain the
+exact `r13` image as the no-Bluetooth radio fallback.
 
-**Risks and fallback.** Incorrect firmware, memory regions, or stream IDs can
-crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
-networking as the fallback. Do not combine first Wi-Fi validation with
-Bluetooth or modem enablement.
+## 8. Bluetooth
 
-## 8. USB host mode
+**Proven current state.** Revision `r14` registers UART13 and the physical
+WCN3990 controller. The packaged revision-21 firmware completes setup through
+a temporary diagnostic alias, BlueZ powers the controller, and an 18-second
+scan receives eight devices. The handset later enters Qualcomm `900e` while
+going to sleep.
+
+**Next experiment.** Boot the schema-checked `r15` image, which selects
+`crnv21.bin` and `crbtfw21.tlv` directly in the DT. First inhibit automatic
+sleep, prove a clean controller setup without aliases or module reloads, and
+hold the active system beyond the `r14` failure interval.
+
+**Success criteria.** Direct firmware loading, repeated scans, pairing, and a
+sustained connection work without UART timeouts. Only then run one controlled
+suspend/resume cycle with pstore capture prepared.
+
+**Risks and fallback.** The current crash is correlated with sleep but is not
+yet localized to Bluetooth, Wi-Fi, UFS, USB, or a shared power domain. Retain
+`r13` as the accepted long-lived baseline and do not reset a phone exposed as
+Qualcomm `900e` or `9008` from software.
+
+## 9. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

@@ -144,6 +144,16 @@ disabled to okay. Its exact package payload direct-boots as kernel build
 scans 2.4 GHz and 5 GHz networks. See the
 [WCN3990 and MPSS evidence](docs/evidence/2026-08-04-mainline616-wifi-mpss.md).
 
+Revision `r14` then enables the WCN3990 Bluetooth UART and its handset power
+rails without changing the accepted Wi-Fi and MPSS path. The direct boot reads
+the real controller identity, and a diagnostic firmware alias lets BlueZ power
+the controller and receive eight nearby devices. The handset subsequently
+entered Qualcomm `900e` while going to sleep, so active Bluetooth is proven
+but suspend/resume is not accepted. Revision `r15` selects the proven
+revision-21 firmware names directly; its strict build and AVB image pass, but
+hardware validation is pending. See the
+[Bluetooth evidence](docs/evidence/2026-08-04-mainline616-bluetooth.md).
+
 Device package revision `3-r4` also makes the tested Plasma Mobile application
 set reproducible. Its install-if subpackage selects Discover and its Flatpak
 backend, a mobile browser, terminal, file manager, messaging and phone tools,
@@ -180,7 +190,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
 | K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
 | Persistent direct mainline | Exact pmaports image working | The package-generated image boots from `boot_b`, enumerates storage, mounts the read-write pmaports rootfs, starts OpenRC, and exposes USB networking plus SSH. |
-| Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. GPU, MPSS, and WCN3990 payloads are runtime-validated; other peripheral firmware remains pending. |
+| Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. GPU, MPSS, WCN3990 Wi-Fi, and revision-21 Bluetooth payloads are runtime-validated; other peripheral firmware remains pending. |
 | Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
 | Mainline panel | Working at 60 Hz | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout under `kmscube`, Weston, and Plasma Mobile. Dense fbcon scrolling can still repeat; 90 Hz, blank/unblank, and suspend/resume remain open. |
 | Touchscreen | Working in graphical userspace | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots. Weston and Plasma Mobile confirm correct graphical orientation and responsive touch; suspend/resume remains open. |
@@ -188,9 +198,10 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
 | Wi-Fi | Scanning on hardware | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, exposes an unblocked NetworkManager-managed `wlan0`, and scans both 2.4 GHz and 5 GHz networks. Association, stable factory MAC handling, throughput, and power management remain open. |
+| Bluetooth | Basic active operation working; suspend unsafe | Revision `r14` registers the WCN3990 UART, loads the packaged revision-21 firmware through a diagnostic alias, exposes a powered BlueZ controller, and receives eight devices. The handset later entered `900e` while going to sleep. Revision `r15` carries the clean firmware-name selection but is not hardware-tested yet. |
 | Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi scanning, and MPSS startup work. Bluetooth, telephony, audio, cameras, sensors, 90 Hz, extended charging policy, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi scanning, MPSS startup, and basic active Bluetooth work. Telephony, audio, cameras, sensors, 90 Hz, extended charging policy, physical key validation, Bluetooth connections, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 
@@ -211,6 +222,7 @@ flowchart LR
     B --> K["PM8150B battery and corrected SMB5 limits"]
     B --> M["MPSS and Hotdog-specific RMTFS"]
     M --> N["WCN3990 and wlan0"]
+    B --> O["WCN3990 Bluetooth UART and BlueZ"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge

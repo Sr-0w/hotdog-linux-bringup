@@ -90,4 +90,6 @@ power management, suspend/resume, and repeated cold boots also remain open.
 MPSS startup is now a validated dependency for Wi-Fi, not a telephony result.
 ModemManager still exposes no WWAN device, and calls, SMS, mobile data, GNSS,
 SIM handling, and emergency-call behavior are untested. Bluetooth has not yet
-registered an HCI device.
+registered an HCI device in this `r13` result. The later Bluetooth bring-up is
+documented separately in
+[the revision r14/r15 evidence](2026-08-04-mainline616-bluetooth.md).

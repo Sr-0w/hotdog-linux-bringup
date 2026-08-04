@@ -111,6 +111,10 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
 	find "$modules_dir" -type f -path '*/drivers/net/wireless/ath/ath10k/ath10k_snoc.ko' \
 		-print -quit | grep -q . || die "missing WCN3990 ath10k SNOC module"
+	find "$modules_dir" -type f -path '*/drivers/bluetooth/hci_uart.ko' \
+		-print -quit | grep -q . || die "missing Bluetooth HCI UART module"
+	find "$modules_dir" -type f -path '*/drivers/bluetooth/btqca.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm Bluetooth module"
 fi
 
 python3 - "$image" <<'PY'
@@ -168,6 +172,13 @@ expect_config 'CONFIG_CFG80211=m'
 expect_config 'CONFIG_MAC80211=m'
 expect_config 'CONFIG_ATH10K=m'
 expect_config 'CONFIG_ATH10K_SNOC=m'
+expect_config 'CONFIG_SERIAL_QCOM_GENI=y'
+expect_config 'CONFIG_BT=m'
+expect_config 'CONFIG_BT_QCA=m'
+expect_config 'CONFIG_BT_HCIUART=m'
+expect_config 'CONFIG_BT_HCIUART_SERDEV=y'
+expect_config 'CONFIG_BT_HCIUART_H4=y'
+expect_config 'CONFIG_BT_HCIUART_QCA=y'
 expect_config 'CONFIG_QRTR=m'
 expect_config 'CONFIG_QCOM_RPROC_COMMON=m'
 expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
@@ -201,6 +212,8 @@ pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
 remoteproc_mpss=$soc/remoteproc@4080000
 wifi=$soc/wifi@18800000
+uart13=$qup2/serial@c8c000
+bluetooth=$uart13/bluetooth
 wlan_mem=$reserved/memory@8bc00000
 rmtfs_mem=$reserved/memory@fc201000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
@@ -209,6 +222,7 @@ pon_resin=$pm8150/pon@800/resin
 te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
+uart13_sleep=$soc/pinctrl@3100000/qup-uart13-sleep-state
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -275,6 +289,32 @@ for supply in \
 		die "missing Wi-Fi regulator phandle: $supply_symbol"
 	expect_value "wifi-$supply_name-supply" "$supply_phandle" \
 		fdtget -tx "$dtb" "$wifi" "$supply_name-supply"
+done
+
+expect_value uart13-status okay fdtget -ts "$dtb" "$uart13" status
+expect_value uart13-pinctrl-names 'default sleep' \
+	fdtget -ts "$dtb" "$uart13" pinctrl-names
+expect_value bluetooth-compatible qcom,wcn3990-bt \
+	fdtget -ts "$dtb" "$bluetooth" compatible
+expect_value bluetooth-firmware 'crnv21.bin crbtfw21.tlv' \
+	fdtget -ts "$dtb" "$bluetooth" firmware-name
+expect_value bluetooth-speed 30d400 \
+	fdtget -tx "$dtb" "$bluetooth" max-speed
+expect_value bluetooth-sleep-pins 'gpio43 gpio44 gpio45 gpio46' \
+	fdtget -ts "$dtb" "$uart13_sleep/pinmux" pins
+for supply in \
+	'vddio:vreg_l1a_0p75' \
+	'vddxo:vreg_l7a_1p8' \
+	'vddrf:vreg_l2c_1p3' \
+	'vddch0:vreg_l11c_3p3'; do
+	supply_name=${supply%%:*}
+	supply_symbol=${supply#*:}
+	supply_path=$(fdtget -ts "$dtb" /__symbols__ "$supply_symbol") ||
+		die "missing Bluetooth regulator symbol: $supply_symbol"
+	supply_phandle=$(fdtget -tx "$dtb" "$supply_path" phandle) ||
+		die "missing Bluetooth regulator phandle: $supply_symbol"
+	expect_value "bluetooth-$supply_name-supply" "$supply_phandle" \
+		fdtget -tx "$dtb" "$bluetooth" "$supply_name-supply"
 done
 
 expect_value panel-compatible samsung,oneplus-dsc \

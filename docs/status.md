@@ -49,9 +49,9 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
 | Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
 | Touch and keys | Touchscreen working in graphical userspace; volume keys registered | The `r6` DTB exposes `pm8941_pwrkey` as `event0`, PM8150 PON `resin` / `KEY_VOLUMEDOWN` as `event1`, PM8150 GPIO 6 / `KEY_VOLUMEUP` as `event2`, and the S6SY761 as `event3`. Taps, drags, pressure, continuous X/Y coordinates, and multiple contact slots were hardware-validated on `r4`; Weston and Plasma Mobile confirm correct orientation and responsive touch. Physical volume-key press/release and suspend/resume remain open. |
-| Firmware packages | Packaging complete, GPU and radio runtime validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads under `/usr/lib/firmware`. The A630 SQE, A640 GMU, handset ZAP, MPSS, and WCN3990 payloads are now runtime-validated. Other payloads and redistribution approval remain separate requirements. |
+| Firmware packages | Packaging complete, GPU and radio runtime validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads under `/usr/lib/firmware`. The A630 SQE, A640 GMU, handset ZAP, MPSS, WCN3990 Wi-Fi, and revision-21 Bluetooth payloads are now runtime-validated. Other payloads and redistribution approval remain separate requirements. |
 | Wi-Fi | Hardware scan working | Revision `r13` boots MPSS, binds `ath10k_snoc` to WCN3990, exposes `wlan0`, and completes a root-authorized NetworkManager scan of ten access points across 2.4 GHz and 5 GHz. Association, sustained traffic, factory MAC recovery, power management, and suspend remain open. |
-| Bluetooth | Not enabled | The firmware package exists, but no Bluetooth HCI device or Bluetooth rfkill endpoint is registered. |
+| Bluetooth | Basic active operation working; suspend unsafe | Revision `r14` registers UART13 and WCN3990, reads the physical QCA controller, and loads packaged revision-21 firmware through a diagnostic alias. BlueZ exposes a powered controller and an 18-second scan receives eight devices. The handset later enters `900e` while going to sleep. Revision `r15` selects the same firmware through the standard DT property, passes schema and strict image validation, and awaits hardware testing. Pairing, sustained connections, profiles, power management, and suspend/resume remain open. |
 | Audio | Not enabled | The exact pmaports boot reports no ALSA sound cards. Codec, routing, DSP, and userspace configuration remain open. |
 | Modem | Remote processor running; telephony not validated | Revision `r12` proves the `0xfc201000` RMTFS assignment and boots MPSS to `running`; `rmtfs`, `tqftpserv`, QRTR, and PD mapper support are present. This enables WCN3990 services but does not yet provide a WWAN device, calls, SMS, data, GNSS, or SIM handling. |
 | Cameras | Not validated | Camera pipeline support is not started. |
@@ -77,11 +77,11 @@ deterministic AVB envelope were written with complete readback verification;
 fresh SSH proved the new kernel and filesystem UUIDs. Hardware enablement can
 therefore proceed over the package-built system:
 the S6SY761 touchscreen, Adreno 640 render path, native 60 Hz scanout, Plasma
-Mobile session, MPSS startup, and WCN3990 scanning are complete at basic
-runtime level, and both volume-key devices now register. The remaining queue
-is Wi-Fi association and stable MAC handling, Bluetooth, extended charging
-policy, physical key validation, 90 Hz, telephony, audio, sensors, cameras,
-and suspend. Temporary DMA and
+Mobile session, MPSS startup, WCN3990 scanning, and basic active Bluetooth are
+complete at basic runtime level, and both volume-key devices now register. The
+remaining queue is a clean `r15` Bluetooth boot, Wi-Fi association and stable
+MAC handling, Bluetooth connections, extended charging policy, physical key
+validation, 90 Hz, telephony, audio, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds, the laboratory `userdata` deployment, and the
 device-specific kernel package must be replaced with upstreamable integration
 before submission.

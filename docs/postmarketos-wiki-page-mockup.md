@@ -68,8 +68,8 @@ The status terms below follow the postmarketOS device-page convention:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Wi-Fi | Broken | No WLAN or rfkill device is exposed. |
-| Bluetooth | Broken | Firmware is packaged, but runtime support is not enabled. |
+| Wi-Fi | Partial | WCN3990 exposes `wlan0` and scans 2.4 GHz and 5 GHz networks. Association, stable MAC handling, throughput, power management, and suspend remain open. |
+| Bluetooth | Partial | WCN3990 UART, firmware, HCI, BlueZ, and RF scanning work. Pairing, sustained connections, profiles, and suspend/resume remain open; the first sleep test entered Qualcomm crashdump mode. |
 | Ethernet | Untested | USB host mode has not been validated. |
 | GPS | Untested | |
 | NFC | Untested | |
@@ -78,7 +78,7 @@ The status terms below follow the postmarketOS device-page convention:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Calls | Untested | Modem and remoteproc integration remain open. |
+| Calls | Untested | MPSS remoteproc runs as a Wi-Fi dependency, but no telephony interface has been validated. |
 | SMS | Untested | |
 | Mobile data | Untested | |
 
@@ -115,11 +115,11 @@ The standard postmarketOS initramfs enumerates UFS, discovers the nested
 completes `switch_root`, starts OpenRC, and exposes USB networking and SSH. The
 validated package boot reached SSH 18 seconds after reboot.
 
-The port is not ready for normal use. Display output is suitable for kernel and
-userspace diagnostics, but the panel geometry remains imperfect and no
-graphical session has been validated. Touch, GPU acceleration, battery,
-charging, Wi-Fi, Bluetooth, audio and the modem still require device-specific
-enablement.
+The port is not ready for normal use. Native 60 Hz display, touch, GPU
+acceleration, Plasma Mobile, basic battery and charging support, Wi-Fi scans,
+and basic active Bluetooth are validated. Temporary UFS and SMMU workarounds,
+90 Hz, reliable suspend/resume, Wi-Fi association, Bluetooth connections,
+audio, cameras, sensors, and telephony still require device-specific work.
 
 ## Contributors
 

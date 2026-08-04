@@ -5,7 +5,8 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
-The accepted hardware baseline is now the reproducible 6.16 `r8` package. Its
+The accepted long-lived hardware baseline is now the reproducible 6.16 `r13`
+package. Its
 exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
 S6SY761 multitouch, an Adreno 640 render node that completes Turnip Vulkan
 workloads, corrected conservative SMB5 limits, registered Power plus volume-key
@@ -62,8 +63,9 @@ inputs, correct 60 Hz KMS scanout, and a usable Plasma Mobile session.
 
 ## Priority 2: connectivity
 
-- runtime-validate the packaged Wi-Fi firmware
-- enable Bluetooth
+- validate Wi-Fi association, stable MAC handling, and sustained traffic
+- validate the prepared `r15` direct Bluetooth firmware selection, then
+  pairing and sustained connections
 - validate USB host mode and common docks
 - bring up QRTR/QMI and modem services without compromising recovery access
 

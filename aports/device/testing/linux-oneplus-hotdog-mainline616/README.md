@@ -16,7 +16,10 @@ SMB2/SMB5 conversion mismatch and programs conservative battery limits before
 enabling charging or USB input. Revisions `r9` through `r13` then stage the
 WCN3990 and its MPSS dependency. Revision `r12` restores the Hotdog-specific
 RMTFS reservation at `0xfc201000`; revision `r13` enables Wi-Fi after that
-shared-memory and remoteproc contract passes on hardware.
+shared-memory and remoteproc contract passes on hardware. Revision `r14`
+enables the WCN3990 UART and proves basic Bluetooth operation. Revision `r15`
+selects the hardware-validated revision-21 NVM and rampatch filenames directly
+from the device tree; its hardware test is pending.
 
 ## Source contract
 
@@ -43,6 +46,8 @@ shared-memory and remoteproc contract passes on hardware.
   reservation at `0xfc201000`, with client ID 1 and VMID 15.
 - WCN3990 uses all five handset regulators, the existing WLAN MSA reservation,
   and Apps SMMU stream `0x640` before binding through `ath10k_snoc`.
+- WCN3990 Bluetooth uses UART13 at `0xc8c000`, its four-wire sleep pin state,
+  the stock handset supplies, and explicit revision-21 NVM and rampatch names.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -68,6 +73,24 @@ image SHA256 is
 The fresh boot reported `#14-oneplus-hotdog-mainline616`; USB SSH returned in
 9.95 seconds. MPSS reached `running`, WCN3990 firmware initialized, and
 NetworkManager exposed `wlan0`. A fresh scan found 2.4 GHz and 5 GHz networks.
+
+Revision `r14` then direct-booted as kernel build
+`#15-oneplus-hotdog-mainline616`, registered `ttyHS1`, read the physical QCA
+controller identity, and completed firmware setup after a live diagnostic
+mapped the requested revision-01 names to the packaged revision-21 files.
+BlueZ exposed a powered controller and received eight nearby devices. The
+handset later entered Qualcomm `900e` while going to sleep, so this is an
+active-operation result rather than suspend validation.
+
+The prepared `r15` strict build printed the same package contract PASS. Its
+25,537,039-byte APK has SHA256
+`ca030a9fdbbf8fdd580f50b421a83713b2038ca3ed8651332771b79176aab76e`.
+Its 96 MiB AVB boot image has SHA256
+`f003985db63b6f60d1bf311b313882568c9279c3a32ce6ad76902115bc51a8c4`.
+The source-built kernel and DTB have SHA256
+`be4728aa5d860c4c2eeb203e99d28ddaa89e1c58367d19bafabe9d7368a8a408`
+and `512f71ef5bd70198cbe45ce6a9738370e8e43d294d2b3b3e9d33e54c54be3bf0`.
+This image is schema-checked and AVB-verified but is not yet a hardware result.
 
 ## Earlier r8 charging evidence
 
@@ -106,9 +129,11 @@ in the device tree while their native paths are being repaired. Compatibility
 symbols for the filtered OnePlus DTBO are also temporary. These constraints are
 documented in source so each can be removed independently and tested.
 
-The current WCN3990 path does not recover a valid factory MAC address, so the
-driver chooses a random address at boot. Association, throughput, radio power
-management, Bluetooth, and suspend remain unvalidated.
+The current WCN3990 Wi-Fi path does not recover a valid factory MAC address,
+so the driver chooses a random address at boot. Association, throughput, radio
+power management, Bluetooth pairing and sustained connections, and system
+suspend remain unvalidated. The observed `r14` sleep transition to `900e` must
+be isolated before suspend can be enabled for normal use.
 
 This device-specific package is a reference point, not the intended final
 pmaports architecture. Once the remaining hardware paths are stable, the

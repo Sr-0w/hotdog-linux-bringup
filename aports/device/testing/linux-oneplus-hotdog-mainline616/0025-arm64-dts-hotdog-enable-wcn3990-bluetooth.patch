@@ -1,0 +1,84 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 19:05:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable WCN3990 Bluetooth
+
+The HD1913 stock DTBO enables the four-wire QUPv3 serial engine at
+0xc8c000 for Bluetooth and supplies the WCN3990 from PM8150 L7,
+PM8150L L2, and PM8150L L11. These match the SM8150 mainline UART13
+description and the WCN3990 supplies used by other upstream SM8150
+devices. Add the WCN3990 serdev child, its logic supply, and the
+device-specific sleep pin state for GPIOs 43 through 46.
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 51 ++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -213,6 +213,37 @@
+ 		drive-strength = <2>;
+ 		bias-disable;
+ 	};
++
++	qup_uart13_sleep: qup-uart13-sleep-state {
++		pinmux {
++			pins = "gpio43", "gpio44", "gpio45", "gpio46";
++			function = "gpio";
++		};
++
++		cts-pins {
++			pins = "gpio43";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		rts-pins {
++			pins = "gpio44";
++			drive-strength = <2>;
++			bias-pull-down;
++		};
++
++		tx-pins {
++			pins = "gpio45";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		rx-pins {
++			pins = "gpio46";
++			drive-strength = <2>;
++			bias-disable;
++		};
++	};
+ };
+ 
+ &qupv3_id_2 {
+@@ -255,6 +286,26 @@
+ 	vdd-3.3-ch1-supply = <&vreg_l10c_3p3>;
+ };
+ 
++&uart13 {
++	status = "okay";
++
++	/delete-property/ interrupts;
++	interrupts-extended = <&intc GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>,
++			      <&tlmm 46 IRQ_TYPE_EDGE_FALLING>;
++
++	pinctrl-names = "default", "sleep";
++	pinctrl-1 = <&qup_uart13_sleep>;
++
++	bluetooth {
++		compatible = "qcom,wcn3990-bt";
++		vddio-supply = <&vreg_l1a_0p75>;
++		vddxo-supply = <&vreg_l7a_1p8>;
++		vddrf-supply = <&vreg_l2c_1p3>;
++		vddch0-supply = <&vreg_l11c_3p3>;
++		max-speed = <3200000>;
++	};
++};
++
+ &adsp_mem {
+ 	reg = <0x0 0x8be00000 0x0 0x1e00000>;
+ };
+-- 
+2.50.1
