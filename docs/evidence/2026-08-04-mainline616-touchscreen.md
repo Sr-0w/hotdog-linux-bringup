@@ -98,10 +98,14 @@ tested handset.
 ## Remaining touchscreen work
 
 - validate suspend and resume;
-- validate orientation and coordinate transforms in a graphical shell;
 - verify behavior across every advertised contact slot;
 - test other `hotdog` regional variants before generalizing the GPIO and rail
   contract.
+
+Later `r8` testing validated the orientation and coordinate transform under
+both Weston and Plasma Mobile. Touches tracked the correctly oriented
+1440x3120 output and the mobile shell responded normally. See the
+[graphical userspace evidence](2026-08-04-mainline616-graphical-userspace.md).
 
 Wi-Fi/Bluetooth, audio, GPU binding, battery/charging, modem, cameras, sensors,
 USB host mode, and system suspend remain separate bring-up tasks.

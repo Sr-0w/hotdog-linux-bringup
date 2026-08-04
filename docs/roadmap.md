@@ -5,10 +5,11 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
-The accepted hardware baseline is now the reproducible 6.16 `r6` package. Its
+The accepted hardware baseline is now the reproducible 6.16 `r8` package. Its
 exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
 S6SY761 multitouch, an Adreno 640 render node that completes Turnip Vulkan
-workloads, and registered Power plus volume-key inputs.
+workloads, corrected conservative SMB5 limits, registered Power plus volume-key
+inputs, correct 60 Hz KMS scanout, and a usable Plasma Mobile session.
 
 ## Priority 0: reproducible mainline boot
 
@@ -47,14 +48,17 @@ workloads, and registered Power plus volume-key inputs.
 
 ## Priority 1: local interaction
 
-- bring up display clocks, DSI, DSC, and the Samsung panel under mainline
-- keep a persistent framebuffer or DRM console after userspace starts
-- validate Adreno-accelerated graphical-shell scanout, orientation, frame
-  pacing, and suspend/resume after the working headless Vulkan bring-up
-- validate S6SY761 orientation and suspend/resume after the working multitouch
-  bring-up
+- preserve the working native display clocks, DSI, DSC, Samsung panel, and
+  persistent framebuffer console while the userspace package is finalized
+- reproduce the validated Plasma Mobile package selection in a fresh image and
+  run repeated direct boots into the graphical session
+- validate 90 Hz separately from the accepted 60 Hz mode, then validate frame
+  pacing, blank/unblank, and suspend/resume
+- validate S6SY761 suspend/resume and touch wake after the successful Weston
+  and Plasma Mobile orientation tests
 - capture physical volume-key events, then validate wake behavior
-- validate haptics, battery reporting, and charging
+- validate haptics and extend the working basic battery/charging support to
+  cable transitions, termination, thermal limits, and suspend
 
 ## Priority 2: connectivity
 

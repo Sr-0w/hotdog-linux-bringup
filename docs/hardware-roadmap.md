@@ -110,24 +110,27 @@ first conclusive failure. If the direct result matches K1, investigate
 SM8150 DPU, display clock controller, DSI host, 7 nm DSI PHY, TE signal, DSC,
 and the OnePlus Samsung command-mode panel. DRM registers `fb0`, and fbcon
 shows kernel plus initramfs output with the built-in Terminus 16x32 font. The
-`r5` baseline also binds the Adreno GPU to the DPU. Dense fbcon output can
-still repeat vertically, so final scanout geometry and userspace handoff are
-not yet accepted.
+`r5` baseline also binds the Adreno GPU to the DPU. Physical KMS validation is
+now complete at 60 Hz: `kmscube` holds approximately 60 FPS, Weston reports a
+preferred/current 1440x3120 `DSI-1` mode, and Plasma Mobile 6.7.3 starts through
+the packaged `tinydm` path. Both compositors show correct geometry without the
+vertical repetition seen during dense fbcon scrolling. See the
+[graphical userspace evidence](evidence/2026-08-04-mainline616-graphical-userspace.md).
 
-**Next experiment.** Start a minimal DRM/KMS userspace compositor on the
-accepted `r6` image while retaining SSH. Keep the panel mode and DTS fixed so
-the experiment measures scanout, orientation, and handoff rather than another
-kernel variable.
+**Next experiment.** Reproduce the Plasma Mobile package selection in a fresh
+pmaports image and perform repeated direct boots into `tinydm` while retaining
+SSH. Validate screen blank/unblank before changing the panel mode. Exposing the
+90 Hz mode is a separate, later experiment on the accepted 60 Hz baseline.
 
-**Success criteria.** A compositor presents a correctly oriented 1440x3120
-surface without duplicated rows, tearing, or panel timeout. Touch coordinates
-match the displayed corners, GPU acceleration is selected, console handoff is
-clean, and USB SSH remains stable. Validate 60 Hz first; 90 Hz and repeated
-mode changes are separate tests.
+**Success criteria.** Three direct boots reach a correctly oriented 1440x3120
+Plasma Mobile session without manual service startup, duplicated rows, tearing,
+or panel timeout. Touch remains aligned, Freedreno acceleration is selected,
+blank/unblank is repeatable, and USB SSH remains stable. A later 90 Hz test must
+retain those properties and return cleanly to 60 Hz.
 
 **Risks and fallback.** A userspace atomic modeset can blank the only local
 console even when the kernel remains healthy. Keep SSH active, preserve the
-accepted `r6` image, and avoid changing panel commands, refresh rate, and
+accepted `r8` image, and avoid changing panel commands, refresh rate, and
 compositor configuration in the same experiment.
 
 ## 5. Samsung S6SY761 touchscreen
@@ -143,11 +146,12 @@ S6SY761 interrupts during the test. The exact APK kernel and DTB booted
 directly with USB SSH intact. See the
 [touchscreen evidence](evidence/2026-08-04-mainline616-touchscreen.md).
 
-**Remaining validation.** Exercise every advertised contact slot, validate
-orientation in a graphical shell, and test suspend/resume repeatedly. The
-driver emits a legacy `ABS_X`/`ABS_Y` warning while correctly exposing the
-multitouch axes; keep that distinction visible until userspace validation is
-complete.
+Weston and Plasma Mobile now validate the graphical coordinate transform and
+responsive touch on the correctly oriented native output. **Remaining
+validation.** Exercise every advertised contact slot and test blank/unblank,
+suspend/resume, and touch wake repeatedly. The driver emits a legacy
+`ABS_X`/`ABS_Y` warning while correctly exposing the multitouch axes; keep that
+distinction visible until power-state validation is complete.
 
 **Risks and fallback.** Other regional `hotdog` variants may use different
 rails or GPIO assignments. Keep the accepted `r4` boot image available and
@@ -164,10 +168,13 @@ exposes `/dev/dri/renderD128`, and publishes six frequencies from 257 to
 or IOMMU fault. See the
 [GPU evidence](evidence/2026-08-04-mainline616-gpu.md).
 
-**Remaining validation.** Run an accelerated graphical shell through the
-physical KMS display, validate sustained mixed GPU/display load, then test
+Physical-display validation is now complete at the basic runtime level:
+`kmscube` holds approximately 60 FPS and both Weston and Plasma Mobile render
+through Freedreno `FD640` without a GPU, GMU, or IOMMU fault. **Remaining
+validation.** Exercise sustained mixed GPU/display load, then test
 suspend/resume and repeated cold boots. Resolve or justify the non-fatal dummy
-`vdd` and `vddcx` regulator warnings before upstream submission.
+`vdd` and `vddcx` regulator warnings before upstream submission, and investigate
+KWin's non-fatal udmabuf fallback.
 
 **Risks and fallback.** GPU faults can wedge display scanout while USB remains
 alive. Keep the exact `r4` touch image as a GPU-disabled fallback and preserve

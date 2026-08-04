@@ -3,8 +3,7 @@
 > [!NOTE]
 > Project-side preview of a possible device page. This file is not the
 > postmarketOS Wiki page and does not describe an accepted pmaports port.
-> Status values reflect the hardware-tested public baseline at commit
-> `f280c8c`.
+> Status values reflect the current hardware-tested public baseline.
 
 ![OnePlus 7T Pro booting postmarketOS](https://wiki.postmarketos.org/wiki/Special:Redirect/file/hotdog-mainline.jpg)
 
@@ -48,9 +47,10 @@ The status terms below follow the postmarketOS device-page convention:
 | Flashing with pmbootstrap | Partial | The exact pmaports output boots, but the current deployment still uses project-side assembly and guarded flashing helpers. |
 | USB networking | Works | CDC NCM, ping and SSH are stable at `172.16.42.1`. |
 | Internal storage | Partial | UFS and the read-write rootfs work with a temporary DMA32/SMMU workaround. |
-| Battery | Broken | No power-supply class device is exposed. |
-| Screen | Partial | Native DRM/fbcon is readable; dense output is repeated vertically. |
-| Touchscreen | Broken | No touchscreen device is exposed by the validated baseline. |
+| Battery | Partial | Battery reporting and conservative SMB5 charging limits work; transitions, termination, thermal policy, and suspend remain open. |
+| Screen | Works | Native KMS produces correct 1440x3120 scanout under `kmscube`, Weston, and Plasma Mobile at 60 Hz. The 90 Hz mode is not yet validated. |
+| Touchscreen | Works | S6SY761 multitouch works with correct graphical orientation under Weston and Plasma Mobile. Suspend/resume remains open. |
+| Graphical interface | Works | postmarketOS Plasma Mobile 6.7.3 runs through `tinydm` with accelerated KWin/Wayland rendering. |
 | Physical keyboard | N/A | |
 | Touchpad | N/A | |
 | Stylus | N/A | |
@@ -59,7 +59,7 @@ The status terms below follow the postmarketOS device-page convention:
 
 | Feature | Status | Notes |
 |---|---|---|
-| 3D acceleration | Broken | The validated kernel reports that no GPU device was found. |
+| 3D acceleration | Works | Turnip Vulkan, physical `kmscube`, Weston, and Plasma Mobile render through the Adreno 640 / Freedreno `FD640`. |
 | Audio | Broken | No ALSA sound card is exposed. |
 | Cameras | Untested | Camera support has not been brought up. |
 | Camera flash | Untested | |

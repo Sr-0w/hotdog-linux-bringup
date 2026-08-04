@@ -35,9 +35,10 @@ corrected the MSM DSI command-mode packetization for the panel's two 720-pixel
 DSC slices, and V30 added the generated 128-byte DSC PPS sent by the downstream
 driver after its vendor panel-on commands. V30 produces readable kernel and
 postmarketOS output on the physical panel. V33 keeps that path while reaching
-the real rootfs. Dense scrolling currently appears repeated vertically, so the
-remaining display work is scanout/DSI geometry rather than basic panel power or
-kernel-console visibility. See the
+the real rootfs. Dense fbcon scrolling can appear repeated vertically, but
+later physical KMS tests prove that this is console-specific: `kmscube`, Weston,
+and Plasma Mobile scan out a correctly proportioned 1440x3120 surface at 60 Hz.
+See the
 [native display evidence](docs/evidence/2026-08-03-native-display.md).
 
 Direct USB networking and SSH now work from the bootloader-started mainline
@@ -122,6 +123,17 @@ through 716.96 seconds of uptime with UFS, rootfs, and USB gadget availability
 preserved throughout. See the
 [SMB5 parameter evidence](docs/evidence/2026-08-04-mainline616-smb5-parameters.md).
 
+The same long-running `r8` direct boot now validates the complete graphical
+userspace path. `kmscube` renders on the physical panel at approximately 60
+FPS through Mesa Freedreno `FD640`; Weston selects native DRM atomic modesetting
+and maps the S6SY761 touchscreen to the correctly oriented `DSI-1` output.
+The packaged postmarketOS Plasma Mobile 6.7.3 session then starts through
+`tinydm`, presents a correct full-screen shell, accepts touch input, and remains
+reachable over USB SSH. This establishes that the repeated dense fbcon output
+is not a general panel geometry failure. The accepted baseline remains 60 Hz;
+90 Hz, suspend/resume, and repeated graphical cold boots are still open. See
+the [graphical userspace evidence](docs/evidence/2026-08-04-mainline616-graphical-userspace.md).
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -144,6 +156,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Mainline 6.16 pmaports image | Direct hardware boot working | The complete `r3` image established the normal initramfs and split rootfs path. Revision `r8` preserves the accepted `r6` hardware stack, enables the PM8150B supplies, corrects SMB5 limit programming, and boots from fully read-back AVB image `32d5e2a4cea4d31c4200dbf6da82abfc7e2a25b717f3a3c7a017a688c3cf6376`. |
 | UFS storage | Working directly with a temporary DMA constraint | V33 enumerates the Samsung UFS directly. While Apps SMMU is bypassed, coherent UFS DMA is conditionally constrained below 4 GiB. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
+| Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
 | SSH | Working directly | The exact `r8` payload reaches OpenSSH and reports `Linux hotdog 6.16.0-sm8150 #9-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
@@ -152,13 +165,13 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Persistent direct mainline | Exact pmaports image working | The package-generated image boots from `boot_b`, enumerates storage, mounts the read-write pmaports rootfs, starts OpenRC, and exposes USB networking plus SSH. |
 | Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. The A630 SQE, A640 GMU, and handset ZAP payloads are now runtime-validated; other peripheral firmware remains pending. |
 | Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
-| Mainline panel | Partial | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel initialize. Dense fbcon output is repeated vertically; V31 isolates scanout geometry with a non-scrolling test. |
-| Touchscreen | Working | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots; orientation under a graphical shell and suspend/resume remain open. |
-| GPU | Working for rendering | The `r5` DTS enables the Adreno 640 and GMU. MSM DRM exposes `renderD128`, Turnip identifies the A640, six OPPs are available, and two Vulkan workloads complete without a GPU/GMU/IOMMU fault. Accelerated graphical-shell scanout and suspend/resume remain open. |
+| Mainline panel | Working at 60 Hz | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout under `kmscube`, Weston, and Plasma Mobile. Dense fbcon scrolling can still repeat; 90 Hz, blank/unblank, and suspend/resume remain open. |
+| Touchscreen | Working in graphical userspace | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots. Weston and Plasma Mobile confirm correct graphical orientation and responsive touch; suspend/resume remains open. |
+| GPU | Working for accelerated display and rendering | The `r5` DTS enables the Adreno 640 and GMU. Turnip Vulkan workloads pass, `kmscube` holds approximately 60 FPS on the physical panel, and Weston plus Plasma Mobile render through Freedreno `FD640` without a GPU/GMU/IOMMU fault. Suspend/resume remains open. |
 | Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
 | Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, display, GPU rendering, and volume-key registration work. No sound card or Wi-Fi/rfkill device is exposed. Bluetooth, modem, cameras, sensors, extended charging policy, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, 60 Hz display, GPU rendering, Plasma Mobile, and volume-key registration work. No sound card or Wi-Fi/rfkill device is exposed. Bluetooth, modem, cameras, sensors, 90 Hz, extended charging policy, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 
@@ -172,6 +185,7 @@ flowchart LR
     D --> E["Nested pmOS GPT discovery"]
     E --> F["Read-write postmarketOS rootfs"]
     F --> G["OpenRC, NCM/ACM and SSH"]
+    F --> L["Tinydm and Plasma Mobile 6.7.3"]
     B --> H["S6SY761 touch and multitouch"]
     B --> I["Adreno 640, GMU and Turnip"]
     B --> J["Power and volume-key inputs"]
