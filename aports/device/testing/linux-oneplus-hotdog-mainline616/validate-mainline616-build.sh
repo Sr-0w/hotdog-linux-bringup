@@ -43,6 +43,8 @@ expect_absent() {
 
 smbx_source=drivers/power/supply/qcom_smbx.c
 [ -s "$smbx_source" ] || die "missing SMB charger source: $smbx_source"
+panel_source=drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
+[ -s "$panel_source" ] || die "missing OnePlus panel source: $panel_source"
 
 python3 - "$smbx_source" <<'PY'
 import pathlib
@@ -101,6 +103,33 @@ for operation in (
 
 if "return !!(val & mask);" not in source:
     raise SystemExit("SMB overvoltage status does not test the register value")
+PY
+
+python3 - "$panel_source" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+
+required = (
+    "MIPI_DCS_WRITE_CONTROL_DISPLAY,\n\t\t\t\t     0x30);",
+    "static const struct drm_display_mode samsung_oneplus_dsc_90hz_mode",
+    ".clock = (1440 + 16 + 8 + 8) * (3120 + 4 + 4 + 8) * 90 / 1000,",
+    ".vsync_start = 3120 + 4,",
+    ".vsync_end = 3120 + 4 + 4,",
+    ".vtotal = 3120 + 4 + 4 + 8,",
+    "&samsung_oneplus_dsc_90hz_mode",
+)
+for value in required:
+    if value not in source:
+        raise SystemExit(f"missing stock 90 Hz panel contract: {value!r}")
+
+for old_value in (
+    "(3120 + 400 + 28 + 1156) * 60 / 1000",
+    ".vsync_start = 3120 + 400,",
+):
+    if old_value in source:
+        raise SystemExit(f"legacy 60 Hz-only panel value remains: {old_value!r}")
 PY
 
 if [ -n "$modules_dir" ]; then
