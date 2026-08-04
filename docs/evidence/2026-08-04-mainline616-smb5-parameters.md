@@ -116,12 +116,18 @@ with `POWER_VALIDATION_PASS`; no sample crossed the guard.
 
 After the completed trace, USB and SSH disappeared and the handset exposed
 Qualcomm `05c6:900e`. A read-only Sahara capture recovered the complete 4 MiB
-ramoops reservation, but no populated console zone was present. No reset was
-sent from `900e`.
+ramoops reservation. The original scanner assumed 256 KiB zones and skipped
+the two populated 4 KiB zones at the end of the reservation. Geometry-aware
+extraction recovered a 4,084-byte kernel-console ring and an 814-byte pmsg
+record. The console ends at 17.382699 seconds with normal deferred-probe
+messages; it contains no panic, oops, charger fault, UFS error, or USB fault.
+No reset was sent from `900e`. The bounded memory image has SHA256
+`88378af94ba17724e9fa8d0c8479f1a2b1f016bba78db7e9219c7d5079dfc8cc`.
 
 This later transition does not change the measured PMIC programming or the
 completed charging trace, but it prevents treating `r8` as a long-duration
 stability result. The next validation should reproduce the run with persistent
-panic logging, separate the existing UFS/DWC3 runtime instability from the
-charger change, and then cover unplug/replug, charge termination, low state of
-charge, thermal limits, and suspend/resume.
+logging that remains useful after early userspace, separate the existing
+UFS/DWC3 runtime instability from the charger change, and then cover
+unplug/replug, charge termination, low state of charge, thermal limits, and
+suspend/resume.

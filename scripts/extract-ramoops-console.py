@@ -95,18 +95,32 @@ def scan_reservation(args: argparse.Namespace) -> int:
         offset = reservation.find(signature, offset)
         if offset < 0:
             break
-        if offset + args.zone_size > len(reservation):
+        if offset + HEADER_SIZE > len(reservation):
             break
-        zone = reservation[offset : offset + args.zone_size]
-        try:
-            payload = decode_pstore_payload(
-                extract_zone(zone),
-                raw=args.raw_pstore,
-            )
-        except ValueError:
-            offset += 1
-            continue
-        if payload:
+
+        _, start, size = struct.unpack_from("<III", reservation, offset)
+        dynamic_size = HEADER_SIZE + max(start, size)
+        candidate_sizes = []
+        if size and offset + dynamic_size <= len(reservation):
+            candidate_sizes.append(dynamic_size)
+        if (
+            args.zone_size not in candidate_sizes
+            and offset + args.zone_size <= len(reservation)
+        ):
+            candidate_sizes.append(args.zone_size)
+
+        for zone_size in candidate_sizes:
+            zone = reservation[offset : offset + zone_size]
+            try:
+                payload = decode_pstore_payload(
+                    extract_zone(zone),
+                    raw=args.raw_pstore,
+                )
+            except ValueError:
+                continue
+            if not payload:
+                continue
+
             populated += 1
             sys.stdout.buffer.write(
                 f"\n--- RAMOOPS_ZONE offset=0x{offset:x} bytes={len(payload)} ---\n".encode()
@@ -114,6 +128,7 @@ def scan_reservation(args: argparse.Namespace) -> int:
             sys.stdout.buffer.write(payload)
             if not payload.endswith(b"\n"):
                 sys.stdout.buffer.write(b"\n")
+            break
         offset += 1
 
     if not populated:

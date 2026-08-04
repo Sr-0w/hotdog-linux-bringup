@@ -69,8 +69,9 @@ voltage `0x50` (4.40 V), fast-charge current `0x1e` (1.50 A), and USB input
 limit `0x0a` (500 mA). All 61 samples reported both supplies as charging. The
 battery remained between 4,407,459 and 4,408,680 uV without crossing the
 4.42 V guard. A later transition to Qualcomm `900e` remains under
-investigation; it occurred after the completed power trace, and the bounded
-ramoops reservation contained no populated record.
+investigation. A read-only Sahara capture recovered the 4 KiB ramoops console
+and pmsg zones; they contain a normal boot through OpenRC handoff and no panic
+or oops before the abrupt transition.
 
 ## Temporary bring-up constraints
 

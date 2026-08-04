@@ -463,6 +463,62 @@ validate_disabled_r6_ufs_probe() {
 		die "R6 UFS probe documentation lacks the unsafe binary identity"
 }
 
+validate_ramoops_extractor() {
+	local extractor="scripts/extract-ramoops-console.py"
+
+	[ -x "$extractor" ] || die "missing executable ramoops extractor: $extractor"
+	log "mixed-size ramoops extraction"
+	python3 - "$extractor" <<'PY'
+import pathlib
+import struct
+import subprocess
+import sys
+import tempfile
+
+extractor = pathlib.Path(sys.argv[1]).resolve()
+signature = 0x43474244
+header_size = 12
+zone_size = 0x1000
+capacity = zone_size - header_size
+reservation = bytearray(0x5000)
+
+stored = b"ABCDE" + b"K" * (capacity - 5)
+reservation[0x3000:0x3000 + header_size] = struct.pack(
+    "<III", signature, 5, capacity
+)
+reservation[0x3000 + header_size:0x4000] = stored
+
+pmsg = b"stage-two-pmsg\n"
+reservation[0x4000:0x4000 + header_size] = struct.pack(
+    "<III", signature, 0, len(pmsg)
+)
+reservation[0x4000 + header_size:0x4000 + header_size + len(pmsg)] = pmsg
+
+with tempfile.NamedTemporaryFile() as image:
+    image.write(reservation)
+    image.flush()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(extractor),
+            "--ddr-phys-base", "0",
+            "--reservation-phys", "0",
+            "--reservation-size", hex(len(reservation)),
+            "--scan-reservation",
+            image.name,
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+
+expected_ring = stored[5:] + stored[:5]
+assert b"RAMOOPS_ZONE offset=0x3000 bytes=4084" in result.stdout
+assert expected_ring in result.stdout
+assert b"RAMOOPS_ZONE offset=0x4000 bytes=15" in result.stdout
+assert pmsg in result.stdout
+PY
+}
+
 main() {
 	local command_name
 
@@ -483,6 +539,7 @@ main() {
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
 	validate_disabled_r6_ufs_probe
+	validate_ramoops_extractor
 
 	log "all checks passed"
 }
