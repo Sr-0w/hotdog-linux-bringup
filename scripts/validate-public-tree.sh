@@ -369,6 +369,7 @@ validate_hotdog_wifi_package_contract() {
 
 validate_hotdog_plasma_apps_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
+	local powerdevil_config="aports/device/testing/device-oneplus-hotdog/powerdevilrc"
 	local package=""
 
 	log "hotdog Plasma Mobile application contract"
@@ -383,6 +384,16 @@ validate_hotdog_plasma_apps_contract() {
 		grep -q "^[[:space:]]*$package$" "$device_apkbuild" ||
 			die "missing Plasma Mobile application dependency: $package"
 	done
+	grep -q '"$subpkgdir/etc/xdg/powerdevilrc"' "$device_apkbuild" ||
+		die "Plasma Mobile subpackage does not install the PowerDevil defaults"
+	[ -f "$powerdevil_config" ] ||
+		die "missing PowerDevil defaults: $powerdevil_config"
+	for profile in AC Battery LowBattery; do
+		grep -Fq "[$profile][SuspendAndShutdown]" "$powerdevil_config" ||
+			die "PowerDevil defaults lack the $profile suspend group"
+	done
+	[ "$(grep -c '^AutoSuspendAction=0$' "$powerdevil_config")" -eq 3 ] ||
+		die "automatic suspend must be disabled for all three PowerDevil profiles"
 }
 
 validate_rescue_supervisor_source() {

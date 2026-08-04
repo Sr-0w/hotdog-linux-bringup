@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 ## Tested hardware
 
@@ -26,20 +26,20 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
-| Mainline 6.16 pmaports image | Exact direct hardware boot working | Revision `r16` preserves the accepted storage, rootfs, USB, touch, GPU, charging, MPSS, Wi-Fi, and Bluetooth stack while selecting the stock 90 Hz panel mode. Two strict builds produced the same 25,537,088-byte APK, SHA256 `da7ebd249db076fa1a08058699141f08044197c9c84a6517c72e2cca2654b67f`. The package kernel booted from fully read-back AVB image `387f306785211f19542df9b3775018961da476995382d4abbfcb8f6caaa4f797`, returned SSH as `#17-oneplus-hotdog-mainline616`, and exposed an active 1440x3120 90 Hz DRM mode. |
+| Mainline 6.16 pmaports image | Exact direct hardware boot working | Revision `r17` preserves the accepted hardware stack and exposes the stock 1440x3120 60 Hz and 90 Hz modes. Two strict builds produced the same kernel and DTB payloads. The hardware-tested AVB image `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0` returned SSH as `#18-oneplus-hotdog-mainline616`; scripted KScreen changes and manual Plasma Settings selection both work. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
-| Device package metadata | Complete image hardware-validated | The version-2 metadata and `kernel-cmdline.conf` generated the pmaports image used on hardware. Its command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, selects `TER16x32`, and boots successfully. Native 1440x3120 KMS scanout is validated at both fixed 60 Hz and fixed 90 Hz; dynamic mode selection remains open. |
+| Device package metadata | Complete image hardware-validated | The version-2 metadata and `kernel-cmdline.conf` generated the pmaports image used on hardware. Its command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, selects `TER16x32`, and boots successfully. Native 1440x3120 KMS scanout and dynamic selection between stock 60 Hz and 90 Hz are hardware-validated. |
 | Persistent direct boot | Exact pmaports rootfs and networking working | The package-generated image boots from persistent `boot_b`, enumerates UFS, mounts the matching nested `pmOS_root` on `/dev/loop0p2`, completes `switch_root`, and starts OpenRC, USB networking, and SSH in 18 seconds. The current laboratory deployment stores the nested GPT in `userdata`; the final installation target remains open. |
 | Device tree | Bring-up quality | Boots with temporary memory, SMMU, and ICE workarounds. |
-| UFS | Working directly with a temporary DMA constraint | V32 isolated an inaccessible UTRL above 4 GiB while SMMU was bypassed. V33 conditionally forces 32-bit coherent DMA for this exact SM8150 no-`iommus` configuration and enumerates the Samsung UFS. |
+| UFS | Direct boot working; load stability under investigation | V32 isolated an inaccessible UTRL above 4 GiB while SMMU was bypassed. V33 conditionally forces 32-bit coherent DMA for this exact SM8150 no-`iommus` configuration and enumerates the Samsung UFS. Repeated software-install attempts correlate with abrupt Qualcomm `900e` transitions, without a Linux panic; runtime power management and sustained I/O are the next isolation boundary. |
 | postmarketOS root | Working directly | The standard pmaports initramfs selects UUID `c0334266-a480-4c64-9faf-dd0c57a1e404`, expands it to the available space, mounts `/dev/loop0p2` read-write, and completes `switch_root`. |
 | postmarketOS boot | Working directly | The matching `pmOS_boot` UUID is mounted read-write from `/dev/loop0p1`. |
 | OpenRC userspace | Working directly | The exact pmaports rootfs starts OpenRC, NetworkManager, `sshd`, `rmtfs`, `pd-mapper`, and `tqftpserv`; host SSH is stable. |
-| Plasma Mobile | Working on the direct-mainline system | The live root runs Plasma Mobile 6.7.3 through `tinydm`, with a usable full-screen shell, accelerated KWin, touch input, and USB SSH. Device package `3-r4` now selects Discover with its Flatpak backend, Konsole, Angelfish, Dolphin, Kalk, KClock, KWeather, Koko, Merkuro, Okular Mobile, Plasma Dialer, Spacebar, Megapixels, and `polkit-elogind`. A clean strict build produced the 1,378-byte application subpackage with SHA256 `6be671884e1c6f94d138cba40454e5f5a5e6fba2e21257e321b11274931e25cc`; a freshly assembled image remains to be hardware-tested. |
+| Plasma Mobile | Working on the direct-mainline system | The live root runs Plasma Mobile 6.7.3 through `tinydm`, with a usable full-screen shell, accelerated KWin, touch input, and USB SSH. Device package `3-r5` selects the standard mobile application set and `polkit-elogind`, then disables PowerDevil automatic suspend in all three profiles until resume is reliable. Two strict builds produced identical normalized metadata and installed configuration. A fresh-image hardware test remains pending. |
 | USB NCM | Working directly | The pmaports image uses Apps SMMU stream `0x140` with a translated domain and unmodified generic DWC3/IOMMU source. It exposes the device at `172.16.42.1`; host ping and SSH are stable. |
 | USB ACM | Enumerating directly | V43 exposes CDC ACM and creates `ttyGS0`. An interactive serial-session check remains pending. |
 | Early console | Working through native fbcon | V42 switches `tty0` to a 90x97 color framebuffer console with the built-in Terminus 16x32 font and displays kernel plus postmarketOS output. |
-| DRM/panel | Working at fixed 60 Hz and fixed 90 Hz | Native SM8150 DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout. `kmscube`, Weston, and Plasma Mobile validate the 60 Hz path. Revision `r16` uses the stock 90 Hz command/timing and DRM reports the CRTC active at 90 Hz under Plasma Mobile. An unattended run remained healthy through 919.76 seconds, then blanked and left USB at the 15-minute idle deadline without entering a Qualcomm mode; probable system suspend remains unconfirmed. Dynamic switching, blank/unblank, and suspend/resume remain open. |
+| DRM/panel | Dynamic 60/90 Hz working | Native SM8150 DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout. Revision `r17` exposes both stock modes and sends the matching panel command during atomic changes. KScreen and Plasma Settings selection work. Lock/unlock recovered one purple scanout while USB SSH stayed alive; repeated blank/unblank and complete suspend/resume remain open. |
 | Framebuffer | Working for direct-boot diagnostics | Mainline registers `fb0: msm`; both kernel fbcon and PID 1 framebuffer writes are visible. V31 adds a non-scrolling five-band geometry test and a `tty0` BusyBox shell. Repeated dense console output is now isolated from the correct KMS userspace path. |
 | GPU | Working for rendering and accelerated scanout | The `r5` DT enables the Adreno 640 and GMU with the handset ZAP firmware path. Turnip Mesa 26.1.6 completes headless Vulkan workloads, while `kmscube` renders at approximately 60 FPS on the physical panel and Weston plus Plasma Mobile use Freedreno `FD640`. No post-test GPU/GMU/IOMMU fault or recovery was found. Suspend/resume remains untested. |
 | RAM | Direct map working; bridge map constrained | Direct boot receives the bootloader's multi-gigabyte memory map. The historical kexec payload deliberately uses the low-bank window. |
@@ -76,12 +76,12 @@ kernel, source-built DTB, standard initramfs, split installation, and
 deterministic AVB envelope were written with complete readback verification;
 fresh SSH proved the new kernel and filesystem UUIDs. Hardware enablement can
 therefore proceed over the package-built system:
-the S6SY761 touchscreen, Adreno 640 render path, native fixed 60/90 Hz scanout, Plasma
+the S6SY761 touchscreen, Adreno 640 render path, native dynamic 60/90 Hz scanout, Plasma
 Mobile session, MPSS startup, WCN3990 association, and Bluetooth HID
 connections are complete at basic runtime level, and both volume-key devices
 now register. The remaining queue is stable Wi-Fi and Bluetooth addressing,
 radio power management, extended charging policy, physical key validation,
-dynamic refresh switching, telephony, audio, sensors, cameras, and suspend. Temporary DMA and
+display blank/unblank reliability, telephony, audio, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds, the laboratory `userdata` deployment, and the
 device-specific kernel package must be replaced with upstreamable integration
 before submission.

@@ -1,0 +1,10 @@
+# Automatic suspend is disabled until USB gadget and storage resume are
+# reliable. Display blanking, locking, and explicit suspend remain available.
+[AC][SuspendAndShutdown]
+AutoSuspendAction=0
+
+[Battery][SuspendAndShutdown]
+AutoSuspendAction=0
+
+[LowBattery][SuspendAndShutdown]
+AutoSuspendAction=0

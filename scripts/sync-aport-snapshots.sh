@@ -91,6 +91,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:51-qcom-sm8150.lua | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
+		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \

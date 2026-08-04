@@ -35,8 +35,9 @@ control-display payload. The implementation is tracked as
 The first hardware candidate intentionally exposes only the 90 Hz mode. The
 generic panel interface used by this driver has no mode-set callback, so simply
 advertising both modes would let userspace select 60 Hz without sending the
-matching `0x20` panel command. Dynamic 60/90 Hz switching remains a separate
-implementation task.
+matching `0x20` panel command. Revision `r17` subsequently implements and
+hardware-validates that transition; see the
+[dynamic refresh evidence](2026-08-05-mainline616-dynamic-refresh.md).
 
 ## Reproducible package
 
@@ -100,20 +101,21 @@ The host then recorded the postmarketOS USB device disconnecting 923 seconds
 after enumeration, while the panel became black. No Qualcomm `900e` or `9008`
 device, bootloader, recovery, or replacement USB personality appeared. Cycling
 both halves of the handset's physical USB port from the host did not wake it.
-The timing matches a 15-minute graphical-session idle deadline, so a system
-suspend request is the leading hypothesis, but it is not yet proven. This event
-is not counted as either a 90 Hz display failure or a successful suspend/resume
-cycle until the next boot can provide pstore evidence or the same boot can be
-resumed interactively.
+Ramoops later confirmed a PowerDevil-triggered `s2idle` entry at 924.79 seconds.
+DWC3 reported that its high-speed PHY had not reached L2, S6SY761 returned
+`-ENODEV` from resume, and the kernel exited suspend immediately. A short
+power-button press much later restored the same boot and USB SSH. The event is
+not a 90 Hz display failure, but it is also not a successful suspend/resume
+cycle. See the
+[idle-suspend policy](2026-08-05-mainline616-suspend-policy.md).
 
 ## Remaining display work
 
-1. Repeat the fixed-90-Hz window with automatic suspend inhibited.
-2. Reproduce the 15-minute transition with pstore capture and a known wake
-   source, then validate blank/unblank and touch wake without losing USB SSH.
-3. Add a panel-aware atomic 60/90 Hz switch with matching DCS commands.
-4. Measure frame pacing and sustained GPU/display load at 90 Hz.
-5. Validate suspend/resume only after the active display path is repeatable.
+1. Repair DWC3 and touchscreen suspend/resume, then validate blank/unblank and
+   touch wake without losing USB SSH.
+2. Make repeated panel blank/unblank reliable without DSI timeout/FIFO errors.
+3. Measure frame pacing and sustained GPU/display load at 60 Hz and 90 Hz.
+4. Validate suspend/resume only after the active display path is repeatable.
 
-The earlier fixed 60 Hz image remains the display fallback while dynamic mode
-selection and power-state handling are developed.
+The earlier fixed 60 Hz image remains the display fallback while power-state
+handling is developed.

@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=4
+pkgrel=5
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -22,6 +22,7 @@ source="
 	30-initramfs-firmware.files
 	51-qcom-sm8150.lua
 	90-hotdog-bringup-doas.conf
+	powerdevilrc
 "
 
 subpackages="
@@ -90,7 +91,8 @@ plasma_mobile_apps() {
 		xdg-user-dirs
 	"
 	install_if="$pkgname=$pkgver-r$pkgrel postmarketos-ui-plasma-mobile"
-	mkdir "$subpkgdir"
+	install -Dm644 "$srcdir/powerdevilrc" \
+		"$subpkgdir/etc/xdg/powerdevilrc"
 }
 
 mainline_firmware() {
@@ -137,4 +139,5 @@ sha512sums="
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
 7743ff21c39fc4991cec30ba61edf5b261d44d33a0693cd6f3021da7374c430a8c6bf4bd3619bb5ff48fe5fa41fd01eb8c40ad2a162ddc4869ef8d37901779b5  90-hotdog-bringup-doas.conf
+4839584eb202655d6e55695e8e09559514c8d12a8d85db97ca0854c636c89ebdb82e2c671bc52607c07b4601f0284bab3430639a103ae3a8e22c26acd146919f  powerdevilrc
 "
