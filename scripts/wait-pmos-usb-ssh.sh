@@ -139,7 +139,7 @@ collect_logs() {
   ssh_base 'dmesg' > "$out/dmesg.txt" 2>&1 || true
   ssh_base 'dmesg | grep -Ei "simple.?fb|fbcon|framebuffer|pstore|ramoops|console|tty0" || true' > "$out/dmesg-display-pstore-grep.txt" 2>&1 || true
   ssh_base 'if command -v sudo >/dev/null 2>&1; then sudo -n sh -c "mkdir -p /sys/fs/pstore; mount -t pstore pstore /sys/fs/pstore 2>/dev/null || true; mount | grep pstore || true; ls -la /sys/fs/pstore 2>&1 || true; for f in /sys/fs/pstore/*; do [ -f \"$f\" ] || continue; echo ---$f---; sed -n \"1,220p\" \"$f\" 2>&1 || true; done"; else mount | grep pstore || true; ls -la /sys/fs/pstore 2>&1 || true; fi' > "$out/pstore.txt" 2>&1 || true
-  ssh_base 'find /sys/class/power_supply -maxdepth 2 -type f -print -exec cat {} \;' > "$out/power-supply.txt" 2>&1 || true
+  ssh_base 'for supply in /sys/class/power_supply/*; do [ -e "$supply" ] || continue; echo "---$supply---"; cat "$supply/uevent"; done' > "$out/power-supply.txt" 2>&1 || true
   ssh_base 'find /sys/class/net -maxdepth 2 -type f -name address -print -exec cat {} \;' > "$out/net-addresses.txt" 2>&1 || true
   log "Done: $out"
 }

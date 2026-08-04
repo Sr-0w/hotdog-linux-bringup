@@ -26,7 +26,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Subsystem | State | Evidence or limitation |
 |---|---|---|
 | Kernel entry | Working directly and through kexec | The 4.14 bridge loads Linux 6.17, and the OnePlus bootloader directly starts the mainline-oriented ClearStaff 6.16 image through PID 1. |
-| Mainline 6.16 pmaports image | Exact direct hardware boot working | The complete `r3` pmaports image established the normal initramfs, split boot/root filesystems, read-write root, and USB SSH path. Revision `r6` (`25,535,120` bytes, SHA256 `17af600197825164ceb791606cbb00cd7f19d587746432fd58140c5d24c85e6e`) contains the source-built touchscreen, GPU, and volume-key fixes. Two strict builds produced the same APK. Its exact kernel and DTB booted from fully read-back 96 MiB AVB image `33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e` and returned fresh SSH with kernel build `#7-oneplus-hotdog-mainline616`. |
+| Mainline 6.16 pmaports image | Exact direct hardware boot working | Revision `r7` is rebuilt directly from accepted `r6` and adds only the PM8150B battery/charger DTS. Two strict builds produced the same 25,535,717-byte APK (SHA256 `7443a6e60eea3001370901a3a39064fd4a72909175a34cb99a6f9ee8b05b2e84`). The package kernel and DTB booted from fully read-back AVB image `dbc5210987b791774e67e7a6ad5fd796ecf950fca5ebe8e0a414f6112009c29f` and returned fresh SSH with kernel build `#8-oneplus-hotdog-mainline616`. |
 | K1 kernel package | Current r5 build evidence, package hardware test pending | One `6.17.0-r5` strict pmbootstrap build produced a `27,172,103`-byte APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its `28,901,384`-byte `vmlinuz` is `417475432ab2db0a84a4a13d3b5c3dfd6b2c3b60236b58467fca4aafb110b118`; the transformed DTB remains `cf63ae7f686bc76b912520f54e14c589b4c23c833069e45ba9097157a0665440`. The embedded config was verified with RAID6 enabled, its benchmark disabled, and the Qualcomm watchdog built in. The complete r5 package payload has not yet been hardware-tested or double-built. |
 | Device package metadata | Complete image hardware-validated | The version-2 metadata and `kernel-cmdline.conf` generated the pmaports image used on hardware. Its 397-byte command line removes `quiet`/Plymouth, keeps `iommu.passthrough=0`, selects `TER16x32`, and boots successfully. `deviceinfo_drm` remains absent because desktop scanout and final geometry are not yet validated. |
 | Persistent direct boot | Exact pmaports rootfs and networking working | The package-generated image boots from persistent `boot_b`, enumerates UFS, mounts the matching nested `pmOS_root` on `/dev/loop0p2`, completes `switch_root`, and starts OpenRC, USB networking, and SSH in 18 seconds. The current laboratory deployment stores the nested GPT in `userdata`; the final installation target remains open. |
@@ -53,7 +53,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Audio | Not enabled | The exact pmaports boot reports no ALSA sound cards. Codec, routing, DSP, and userspace configuration remain open. |
 | Modem | Not validated | QRTR/QMI and modem firmware integration remain open. |
 | Cameras | Not validated | Camera pipeline support is not started. |
-| Charging/battery | Not enabled | The exact pmaports boot exposes no power-supply class device. Power and charging support need dedicated enablement and validation. |
+| Charging/battery | Detected; policy partial | The `r7` boot exposes `pm8150b-charger` and `qcom-battery`. A 31-sample trace validates live capacity, temperature, voltage, current, USB presence, and input-limit reporting. Fuel-gauge voltage exceeded the 4.42 V design value while the two status fields disagreed, so SMB5 conversion/limit programming, charge policy, cable transitions, thermal handling, and suspend remain open. |
 | USB host/dock | Not validated | Device-role USB is proven; host-role operation is not. |
 
 ## Downstream support
@@ -76,7 +76,7 @@ fresh SSH proved the new kernel and filesystem UUIDs. Hardware enablement can
 therefore proceed over the package-built system:
 the S6SY761 touchscreen and Adreno 640 render path are complete at basic
 runtime level, and both volume-key devices now register. The remaining queue
-is battery and charging, physical key validation, Wi-Fi/Bluetooth, audio,
+is SMB5 charging policy, physical key validation, Wi-Fi/Bluetooth, audio,
 modem/remoteproc, sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds, the laboratory `userdata` deployment, and the
 device-specific kernel package must be replaced with upstreamable integration

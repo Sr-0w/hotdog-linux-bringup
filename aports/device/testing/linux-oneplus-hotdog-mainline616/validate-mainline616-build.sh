@@ -96,6 +96,10 @@ expect_config 'CONFIG_INPUT_EVDEV=y'
 expect_config 'CONFIG_KEYBOARD_GPIO=y'
 expect_config 'CONFIG_INPUT_PM8941_PWRKEY=y'
 expect_config 'CONFIG_PINCTRL_QCOM_SPMI_PMIC=y'
+expect_config 'CONFIG_POWER_SUPPLY=y'
+expect_config 'CONFIG_POWER_SUPPLY_HWMON=y'
+expect_config 'CONFIG_BATTERY_QCOM_FG=y'
+expect_config 'CONFIG_CHARGER_QCOM_SMB2=y'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -112,9 +116,13 @@ adreno_smmu=$soc/iommu@2ca0000
 gpu_zap=$gpu/zap-shader
 dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
+battery=/battery
 gpio_keys=/gpio-keys
 volume_up=$gpio_keys/volume-up
 pm8150=$soc/spmi@c440000/pmic@0
+pm8150b=$soc/spmi@c440000/pmic@2
+pm8150b_charger=$pm8150b/charger@1000
+pm8150b_fg=$pm8150b/fuel-gauge@4000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
 pon_pwrkey=$pm8150/pon@800/pwrkey
 pon_resin=$pm8150/pon@800/resin
@@ -219,6 +227,39 @@ expect_value power-key-status okay fdtget -ts "$dtb" "$pon_pwrkey" status
 expect_value power-key-code 74 fdtget -tx "$dtb" "$pon_pwrkey" linux,code
 expect_value volume-down-status okay fdtget -ts "$dtb" "$pon_resin" status
 expect_value volume-down-code 72 fdtget -tx "$dtb" "$pon_resin" linux,code
+
+expect_value battery-compatible simple-battery \
+	fdtget -ts "$dtb" "$battery" compatible
+expect_value battery-chemistry lithium-ion-polymer \
+	fdtget -ts "$dtb" "$battery" device-chemistry
+expect_value battery-capacity 4085000 \
+	fdtget -tu "$dtb" "$battery" charge-full-design-microamp-hours
+expect_value battery-min-voltage 3300000 \
+	fdtget -tu "$dtb" "$battery" voltage-min-design-microvolt
+expect_value battery-max-voltage 4420000 \
+	fdtget -tu "$dtb" "$battery" voltage-max-design-microvolt
+expect_value battery-charge-current 1500000 \
+	fdtget -tu "$dtb" "$battery" constant-charge-current-max-microamp
+expect_value battery-charge-voltage 4400000 \
+	fdtget -tu "$dtb" "$battery" constant-charge-voltage-max-microvolt
+expect_value battery-termination-current 310000 \
+	fdtget -tu "$dtb" "$battery" charge-term-current-microamp
+battery_phandle=$(fdtget -tx "$dtb" "$battery" phandle) ||
+	die "missing battery phandle"
+charger_phandle=$(fdtget -tx "$dtb" "$pm8150b_charger" phandle) ||
+	die "missing PM8150B charger phandle"
+expect_value charger-compatible qcom,pm8150b-charger \
+	fdtget -ts "$dtb" "$pm8150b_charger" compatible
+expect_value charger-status okay fdtget -ts "$dtb" "$pm8150b_charger" status
+expect_value charger-battery "$battery_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_charger" monitored-battery
+expect_value fuel-gauge-compatible qcom,pm8150b-fg \
+	fdtget -ts "$dtb" "$pm8150b_fg" compatible
+expect_value fuel-gauge-status okay fdtget -ts "$dtb" "$pm8150b_fg" status
+expect_value fuel-gauge-battery "$battery_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_fg" monitored-battery
+expect_value fuel-gauge-charger "$charger_phandle" \
+	fdtget -tx "$dtb" "$pm8150b_fg" power-supplies
 
 expect_value gpu-status okay fdtget -ts "$dtb" "$gpu" status
 expect_value gpu-compatible 'qcom,adreno-640.1 qcom,adreno' \

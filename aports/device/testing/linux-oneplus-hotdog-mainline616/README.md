@@ -9,7 +9,9 @@ touchscreen, including multitouch coordinate and pressure events. Revision
 `r5` enables the Adreno 640 and GMU and validates the resulting render node
 with the upstream MSM DRM driver and real Turnip Vulkan submissions. Revision
 `r6` adds the PM8150 Volume Down and Volume Up input paths while preserving the
-validated touchscreen, GPU, USB, storage, and display contracts.
+validated touchscreen, GPU, USB, storage, and display contracts. Revision `r7`
+starts directly from that source and enables only the PM8150B fuel gauge and
+SMB5 charger device-tree nodes.
 
 ## Source contract
 
@@ -27,6 +29,8 @@ validated touchscreen, GPU, USB, storage, and display contracts.
   interconnect, and reserved-memory descriptions remain unchanged.
 - PM8150 PON provides Power and Volume Down, while PM8150 GPIO 6 provides the
   active-low, pulled-up Volume Up input through `gpio-keys`.
+- A 4085 mAh battery description supplies conservative charge limits to the
+  enabled PM8150B fuel gauge and SMB5 charger.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -36,25 +40,27 @@ build fails if one of those invariants changes.
 
 ## Strict build evidence
 
-The accepted strict pmbootstrap build completed on 2026-08-04 and printed
-`hotdog mainline 6.16 build contract: PASS` before packaging:
+Two accepted `r7` strict pmbootstrap builds completed on 2026-08-04. Both
+printed `hotdog mainline 6.16 build contract: PASS` before packaging and
+produced byte-identical APKs:
 
 | Output | Size | SHA256 |
 |---|---:|---|
-| `linux-oneplus-hotdog-mainline616-6.16.0-r6.apk` | 25,535,120 bytes | `17af600197825164ceb791606cbb00cd7f19d587746432fd58140c5d24c85e6e` |
-| `boot/vmlinuz` | 27,572,232 bytes | `b35176a252b10d51d33b182e4ca7e1ab4ceadccf191cba987a359c0093a2f5d5` |
-| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 139,174 bytes | `fec8bf455c4c922737d7676d9dc96e9220ccea3eb87297665c8b19bee577e106` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r7.apk` | 25,535,717 bytes | `7443a6e60eea3001370901a3a39064fd4a72909175a34cb99a6f9ee8b05b2e84` |
+| `boot/vmlinuz` | 27,572,232 bytes | `a295b1c7723c73aaabf546697a5c1f393092771c6164746f72426510f0b1c101` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 139,672 bytes | `17e7dabb69f8376cbd294e82b01fcbd797d7bcc05d5f5a31b42939bf86ddad19` |
 
-Two strict builds produced the same APK hash. The exact APK kernel and DTB were
-then assembled with the validated pmaports initramfs, written to `boot_b`, read
-back completely, and booted directly on the HD1913. The 96 MiB boot image and
-full partition readback both have SHA256
-`33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`.
+The exact APK kernel and DTB were assembled with the validated pmaports
+initramfs, written to `boot_b`, read back completely, and booted directly on
+the HD1913. The 96 MiB boot image and full partition readback both have SHA256
+`dbc5210987b791774e67e7a6ad5fd796ecf950fca5ebe8e0a414f6112009c29f`.
 USB networking, SSH, and the S6SY761 touchscreen remained available. Power,
 Volume Down, and Volume Up registered with their expected Linux key codes. The
 Adreno driver bound, exposed `/dev/dri/renderD128`, loaded GMU firmware
 v2.0.261, and completed two headless Vulkan workloads through Turnip without a
 GPU, GMU, or IOMMU fault.
+The same boot exposes `pm8150b-charger` and `qcom-battery`; a 60-second trace
+recorded 31 samples while USB networking and SSH remained available.
 
 ## Temporary bring-up constraints
 
