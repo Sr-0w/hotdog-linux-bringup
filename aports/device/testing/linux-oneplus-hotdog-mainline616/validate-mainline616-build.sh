@@ -473,13 +473,13 @@ expect_value sound-mm1-name MultiMedia1 \
 	fdtget -ts "$dtb" "$sound_mm1" link-name
 expect_value sound-mm1-cpu "$q6asmdai_phandle 0" \
 	fdtget -tx "$dtb" "$sound_mm1/cpu" sound-dai
-expect_value sound-slim-name 'SLIM Playback 1' \
+expect_value sound-slim-name 'SLIM Playback 6' \
 	fdtget -ts "$dtb" "$sound_slim" link-name
-expect_value sound-slim-cpu "$q6afedai_phandle 2" \
+expect_value sound-slim-cpu "$q6afedai_phandle e" \
 	fdtget -tx "$dtb" "$sound_slim/cpu" sound-dai
 expect_value sound-slim-platform "$q6routing_phandle" \
 	fdtget -tx "$dtb" "$sound_slim/platform" sound-dai
-expect_value sound-slim-codec "$wcd9340_phandle 0" \
+expect_value sound-slim-codec "$wcd9340_phandle 6" \
 	fdtget -tx "$dtb" "$sound_slim/codec" sound-dai
 expect_value sound-slimcap-name 'SLIM Capture 1' \
 	fdtget -ts "$dtb" "$sound_slimcap" link-name
