@@ -43,6 +43,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   filesystem validation, application inventory, automatic deterministic AVB
   generation, verified `super`/`boot_b` staging, direct hardware boot, and
   smooth 0 A.D. gameplay on the clean image.
+- [evidence/2026-08-05-mainline616-adsp.md](evidence/2026-08-05-mainline616-adsp.md):
+  strict `r23` package and AVB hashes, complete `boot_b` readback, and direct
+  hardware validation of the ADSP firmware, remoteproc state, and APR audio
+  services before codec or sound-card enablement.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.
