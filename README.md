@@ -35,7 +35,10 @@ allocated Flatpak page-cache folios inside stock-owned memory omitted from the
 mainline DT. Revision `r22` completes all three missing HD1913 reservations.
 Its exact-image hardware test direct-booted, passed a complete `boot_b`
 readback, completed the formerly failing 3.7 GB pull and deployment, and ran
-0 A.D. without a UFS error, Linux panic, or Qualcomm transition. See the
+0 A.D. without a UFS error, Linux panic, or Qualcomm transition. The exact
+source-built `r22` package payload then direct-booted as
+`#23-oneplus-hotdog-mainline616` and sustained a synchronized 6 GiB buffered
+write plus a 180-second runtime observation. See the
 [Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
@@ -226,7 +229,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Direct hardware boot working | Revision `r17` preserves the accepted hardware stack and exposes both stock 60 Hz and 90 Hz modes. Its hardware-tested AVB image is `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`. |
+| Mainline 6.16 pmaports image | Source package direct hardware boot working | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. Its source-built kernel and DTB direct-boot as `#23-oneplus-hotdog-mainline616`; the tested 96 MiB AVB image is `83ffc265b3f46042b840caa43d653dbbe2d1f8dd893169884ee7efcee9584b5d`. |
 | UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, and application launch without a UFS error or Qualcomm transition. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |

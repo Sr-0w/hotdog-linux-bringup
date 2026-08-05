@@ -51,8 +51,11 @@ every other DT property unchanged.
 reservations, and completed both pull and deployment. USB SSH, display, touch,
 GPU, and Wi-Fi remained available; the installed game launched and ran.
 
-**Follow-up.** Boot the source-built `r22` package payload, repeat a bounded
-storage soak, and keep the exact `r20` image as the binary control.
+**Package result.** The source-built `r22` kernel, DTB, modules, and standard
+`boot-deploy` output direct-boot as `#23-oneplus-hotdog-mainline616`. A
+synchronized 6 GiB buffered write and a subsequent 180-second runtime window
+completed without a UFS error or USB transition. Keep the exact `r20` image as
+the binary control while moving the packaged stack into a fresh image test.
 
 ## 2. Apps SMMU
 

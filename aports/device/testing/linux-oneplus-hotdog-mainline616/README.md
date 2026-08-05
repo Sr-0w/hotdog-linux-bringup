@@ -215,6 +215,24 @@ reported the 3.7 GB application as installed, and a physical launch confirmed
 that the game starts and runs. This hardware result accepts the `r22`
 reservation fix.
 
+The exact source-built package was then installed over the older laboratory
+package. Its installed `vmlinuz`, DTB, and generated initramfs matched the
+strict-build artifacts above. Standard `boot-deploy` reproduced the same raw
+Android image as the offline builder:
+
+| Source-package boot output | SHA256 |
+|---|---|
+| Raw `boot.img` | `aa20629e92f560ed0fd4377f5d247445a8a646978b3a14e03c96b04b469a5c11` |
+| 96 MiB AVB image | `83ffc265b3f46042b840caa43d653dbbe2d1f8dd893169884ee7efcee9584b5d` |
+
+The full AVB image was written and read back from `boot_b`, then direct-booted
+as `#23-oneplus-hotdog-mainline616` with package `6.16.0-r22`. USB networking,
+Wi-Fi, Plasma, DRM, the render node, touch, keys, Bluetooth, and MPSS returned.
+All three reservations were present in the live source-built DT. A subsequent
+6,442,450,944-byte buffered write synchronized at 382.9 MB/s, and all 181
+one-second health samples completed without a USB transition or UFS/ext4
+error. This closes the source-package hardware integration check.
+
 Two independent strict `r21` builds produced byte-identical packages and ran
 the updated DT contract before and after module installation:
 

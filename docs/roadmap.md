@@ -12,8 +12,10 @@ corrected conservative SMB5 limits, registered Power plus volume-key inputs,
 dynamic stock 60/90 Hz KMS modes, Wi-Fi association, Bluetooth HID, and a
 usable Plasma Mobile session. The isolated `r22` DT hardware test fixes the
 reproducible large buffered-import crash by completing the stock HD1913 memory
-reservation union. Booting the exact source-built `r22` kernel and DTB is the
-next integration check. Revision `r20` remains the binary control.
+reservation union. The exact source-built `r22` kernel, DTB, modules, and
+standard `boot-deploy` image also direct-booted and passed a synchronized 6 GiB
+buffered-write soak. A fresh image assembled only from the public pmaports tree
+is the next reproducibility gate. Revision `r20` remains the binary control.
 
 ## Priority 0: reproducible mainline boot
 

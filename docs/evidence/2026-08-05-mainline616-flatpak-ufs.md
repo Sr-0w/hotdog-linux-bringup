@@ -374,6 +374,40 @@ either phase.
 This result accepts the complete stock reservation union as the fix for the
 reproducible buffered-import crash.
 
+## R22 source-package boot
+
+The hardware-accepted DT fix was then tested through the complete packaging
+path. Package `linux-oneplus-hotdog-mainline616-6.16.0-r22.apk` was installed
+on the running system. The installed kernel and DTB matched the two strict
+builds, and `boot-deploy` generated a raw Android image identical to the
+offline builder:
+
+| Artifact | SHA256 |
+|---|---|
+| Installed `/boot/vmlinuz` | `2adc3b38891da479b7e14ee71d33e45564e76639b222cc6c78ed423c33c086b7` |
+| Installed `/boot/sm8150-oneplus-hotdog.dtb` | `984d54b14ff0acaf47619e78451800db23eb3edaf98938290f5bbfbcc327b5ca` |
+| Installed `/boot/initramfs` | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| Raw source-package image | `aa20629e92f560ed0fd4377f5d247445a8a646978b3a14e03c96b04b469a5c11` |
+| 96 MiB AVB source-package image | `83ffc265b3f46042b840caa43d653dbbe2d1f8dd893169884ee7efcee9584b5d` |
+
+A full `boot_b` readback matched the AVB hash before reboot. The image then
+direct-booted as Linux `6.16.0-sm8150 #23-oneplus-hotdog-mainline616`; the
+installed package reported `6.16.0-r22`. USB NCM and SSH, Wi-Fi association,
+Plasma Mobile, native DRM, the Adreno render node, S6SY761 touch, keys,
+Bluetooth, and MPSS were present. The live DT again exposed the exact three
+`no-map` intervals listed above.
+
+A 6,442,450,944-byte buffered file was then written and synchronized in
+16.05 seconds, or 382.9 MB/s, before being removed and synchronized again.
+A separate 180-second monitor completed all 181 samples with UFS, the root
+loop device, USB NCM, charging, and Bluetooth continuously observable. UFS
+runtime suspend and resume continued normally. There was no Qualcomm USB
+transition and the post-test kernel scan contained no UFS, ext4, I/O, panic,
+oops, or lockup error. The installed 3.7 GB 0 A.D. deployment remained intact.
+
+This result accepts both the reservation fix and its pmaports package output
+on hardware.
+
 ## Safety
 
 `test-flatpak-ufs-finalization.sh` never flashes or resets the phone. It splits
