@@ -35,11 +35,15 @@ allocated Flatpak page-cache folios inside stock-owned memory omitted from the
 mainline DT. Revision `r22` completes all three missing HD1913 reservations.
 Its exact-image hardware test direct-booted, passed a complete `boot_b`
 readback, completed the formerly failing 3.7 GB pull and deployment, and ran
-0 A.D. without a UFS error, Linux panic, or Qualcomm transition. The exact
+interactive 0 A.D. gameplay smoothly without a UFS error, Linux panic, or
+Qualcomm transition. The exact
 source-built `r22` package payload then direct-booted as
 `#23-oneplus-hotdog-mainline616` and sustained a synchronized 6 GiB buffered
 write plus a 180-second runtime observation. See the
 [Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
+The same published package directories also complete a clean strict rebuild
+and assemble a filesystem-checked Plasma Mobile image from pinned pmaports;
+see the [public-image evidence](docs/evidence/2026-08-05-mainline616-public-image.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
 corrected the MSM DSI command-mode packetization for the panel's two 720-pixel

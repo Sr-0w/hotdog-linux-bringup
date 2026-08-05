@@ -38,6 +38,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   strict source build and complete current-pmaports image assembly, including
   exact APK, Image, DTB, initramfs, filesystem, deterministic AVB, and
   boot-image hashes.
+- [evidence/2026-08-05-mainline616-public-image.md](evidence/2026-08-05-mainline616-public-image.md):
+  clean public-package rebuild and a complete Plasma Mobile image, including
+  filesystem validation, application inventory, and remaining installation
+  metadata gates.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.
