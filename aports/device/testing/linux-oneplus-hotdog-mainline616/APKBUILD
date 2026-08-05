@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=26
+pkgrel=27
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -73,6 +73,7 @@ source="
 	0034-arm64-dts-hotdog-enable-wcd9340.patch
 	0035-arm64-dts-hotdog-add-internal-audio-card.patch
 	0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
+	0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -163,5 +164,6 @@ d390936462c39a7f5048f6b52781c64f1396c1d6eb917c4d7c707a0f6544c9cf7704651bda01fa0f
 822d609cbb03856c56ac158431daa96bac81d0c51caa500fbdbf303d2b0905a9330f679c7285b801cccc99256d0522b0eb1b9696314945b359e53447efa14115  0034-arm64-dts-hotdog-enable-wcd9340.patch
 e801913fe7c3d6f98e095af3f0a478e8608abff4df9d3fb7a9ddd70d6b4f9f91f0e8315f84625e211cbc503d43da2bec7f8523e1cbfaf1255d187c836ec77db1  0035-arm64-dts-hotdog-add-internal-audio-card.patch
 6717661469b798ffc7697779c04c9a08e22e1febc05b85d41357b01562075954214bcf7c316d24ff0978e7adcb10463f51e3ae84ec977c4e44c7b17426523316  0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
-ce3ad0bca4472b34074b9d392b3533fda72e73a30ddd685085312e62263a1dae5f3134ee703ec6593e3f9387b83c69711486b47628c8763a81409ae946221764  validate-mainline616-build.sh
+673ffb44a96b150c2f038488b29bb5553b598f105a3de645fa2077f062e355698e3919622bbbd7a686d3f49804119993fd281bfe0a2959ede8d023894fc3d5e4  0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
+49d091c76ccf2922e89347a3ddc09ab1d4ccabafe1556a775b2c6c098921957e4680920f09174b2ab9d8a2869785d3d44fe4b7ca017e35be620d9fd0ca1756b8  validate-mainline616-build.sh
 "

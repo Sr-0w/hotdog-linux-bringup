@@ -290,6 +290,9 @@ expect_config 'CONFIG_SND_SOC_QDSP6_AFE_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ASM_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ROUTING=m'
 expect_config 'CONFIG_SND_SOC_SM8150=m'
+expect_config 'CONFIG_I2C_QCOM_GENI=y'
+expect_config 'CONFIG_TYPEC=y'
+expect_config 'CONFIG_TYPEC_MUX_FSA4480=y'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -299,8 +302,13 @@ stock_cdsp_gap=$reserved/memory@99517000
 soc=/soc@0
 ufs=$soc/ufshc@1d84000
 qup=$soc/geniqup@ac0000
+qup0=$soc/geniqup@8c0000
 qup2=$soc/geniqup@cc0000
+gpi0=$soc/dma-controller@800000
 gpi2=$soc/dma-controller@c00000
+i2c4=$qup0/i2c@890000
+fsa4480=$i2c4/typec-mux@42
+fsa4480_endpoint=$fsa4480/port/endpoint
 i2c17=$qup2/i2c@c80000
 touch=$i2c17/touchscreen@48
 gpu=$soc/gpu@2c00000
@@ -316,6 +324,7 @@ pm8150=$soc/spmi@c440000/pmic@0
 pm8150b=$soc/spmi@c440000/pmic@2
 pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
+pm8150b_typec=$pm8150b/typec@1500
 remoteproc_mpss=$soc/remoteproc@4080000
 remoteproc_adsp=$soc/remoteproc@17300000
 slim=$soc/slim-ngd@171c0000
@@ -344,6 +353,7 @@ ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
 uart13_sleep=$soc/pinctrl@3100000/qup-uart13-sleep-state
 wcd_intr=$soc/pinctrl@3100000/wcd-intr-default-state
+fsa_usbc_ana_en=$soc/pinctrl@3100000/fsa-usbc-ana-en-state
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -390,6 +400,42 @@ expect_value ufs-iommus "$apps_smmu_phandle 300 0" \
 	fdtget -tx "$dtb" "$ufs" iommus
 expect_absent ufs-ice fdtget "$dtb" "$ufs" qcom,ice
 expect_absent qup-iommus fdtget "$dtb" "$qup" iommus
+expect_value qupv3-id0-status okay fdtget -ts "$dtb" "$qup0" status
+expect_absent qupv3-id0-iommus fdtget "$dtb" "$qup0" iommus
+expect_value gpi-dma0-status disabled fdtget -ts "$dtb" "$gpi0" status
+expect_value i2c4-status okay fdtget -ts "$dtb" "$i2c4" status
+expect_value i2c4-clock-frequency 186a0 \
+	fdtget -tx "$dtb" "$i2c4" clock-frequency
+expect_absent i2c4-dmas fdtget "$dtb" "$i2c4" dmas
+expect_absent i2c4-dma-names fdtget "$dtb" "$i2c4" dma-names
+expect_value fsa4480-compatible fcs,fsa4480 \
+	fdtget -ts "$dtb" "$fsa4480" compatible
+expect_value fsa4480-address 42 fdtget -tx "$dtb" "$fsa4480" reg
+fdtget "$dtb" "$fsa4480" mode-switch >/dev/null ||
+	die "FSA4480 mode-switch capability is missing"
+fdtget "$dtb" "$fsa4480" orientation-switch >/dev/null ||
+	die "FSA4480 orientation-switch capability is missing"
+fdtget -p "$dtb" "$fsa4480_endpoint" >/dev/null ||
+	die "FSA4480 future Type-C endpoint is missing"
+expect_absent fsa4480-remote-endpoint \
+	fdtget "$dtb" "$fsa4480_endpoint" remote-endpoint
+expect_value fsa4480-enable-pin gpio100 \
+	fdtget -ts "$dtb" "$fsa_usbc_ana_en" pins
+expect_value fsa4480-enable-function gpio \
+	fdtget -ts "$dtb" "$fsa_usbc_ana_en" function
+expect_value fsa4480-enable-drive-strength 2 \
+	fdtget -tx "$dtb" "$fsa_usbc_ana_en" drive-strength
+fdtget "$dtb" "$fsa_usbc_ana_en" output-low >/dev/null ||
+	die "FSA4480 active-low enable state is missing"
+fsa_usbc_ana_en_phandle=$(fdtget -tx "$dtb" "$fsa_usbc_ana_en" phandle) ||
+	die "missing FSA4480 enable-state phandle"
+expect_value fsa4480-pinctrl "$fsa_usbc_ana_en_phandle" \
+	fdtget -tx "$dtb" "$fsa4480" pinctrl-0
+expect_value pm8150b-typec-status disabled \
+	fdtget -ts "$dtb" "$pm8150b_typec" status
+if fdtget -l "$dtb" "$i2c4" | grep -Eq 'audio-codec|tfa98'; then
+	die "unsupported TFA9894 speaker amplifiers must remain absent"
+fi
 
 expect_value mpss-status okay fdtget -ts "$dtb" "$remoteproc_mpss" status
 expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \

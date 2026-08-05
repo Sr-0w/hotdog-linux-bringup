@@ -1,0 +1,78 @@
+From 66ec785cf39803a7cd209017de5ca5df9654aede Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 18:07:07 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable FSA4480 discovery
+
+The HD1913 stock runtime tree places the FSA4480 USB-C analog switch at
+address 0x42 on QUPv3 wrapper 0 serial engine 4. Its active-low enable is
+GPIO 100. Describe that hardware using the upstream FSA4480 binding.
+
+Keep this first step independent from Type-C policy: expose the switch
+endpoint for later connection to the PM8150B Type-C controller, but do not
+enable that controller yet. Run the I2C serial engine in FIFO mode and
+detach the otherwise unused wrapper IOMMU so this discovery step does not
+add a GPI DMA domain to the proven boot configuration.
+
+The two TFA9894 speaker amplifiers sharing this bus remain undescribed
+until their unsupported mainline driver and safe calibration path are
+resolved.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 35 ++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -203,6 +203,14 @@ volume_up_state: volume-up-state {
+ };
+ 
+ &tlmm {
++	fsa_usbc_ana_en: fsa-usbc-ana-en-state {
++		pins = "gpio100";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-low;
++	};
++
+ 	panel_avdd_default: panel-avdd-default-state {
+ 		pins = "gpio130";
+ 		function = "gpio";
+@@ -264,6 +272,33 @@ rx-pins {
+ 	};
+ };
+ 
++&qupv3_id_0 {
++	/delete-property/ iommus;
++	status = "okay";
++};
++
++&i2c4 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <100000>;
++	status = "okay";
++
++	typec-mux@42 {
++		compatible = "fcs,fsa4480";
++		reg = <0x42>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&fsa_usbc_ana_en>;
++
++		mode-switch;
++		orientation-switch;
++
++		port {
++			fsa4480_sbu_mux: endpoint {};
++		};
++	};
++};
++
+ &qupv3_id_2 {
+ 	status = "okay";
+ };
+-- 
+2.50.1
