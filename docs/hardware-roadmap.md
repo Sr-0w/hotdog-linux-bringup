@@ -242,28 +242,30 @@ WCD9340 over SLIMbus and SoundWire, and register the SM8150 ALSA card with a
 `MultiMedia1` playback/capture PCM. Revision `r26` selects the stock-derived
 Hotdog `SLIMBUS_6_RX` to `AIF4_PB` playback backend. A silent 48 kHz stereo
 S24_LE stream opens without a DSP or transport error while ADSP and MPSS remain
-running. See the [r26 audio evidence](evidence/2026-08-05-mainline616-headphone-backend.md).
+running. Revisions `r31` and `r32` reproduce the stock QUAT MI2S format, clock,
+and TFA9874 slot mapping. Independent webcam-microphone captures validate both
+internal speakers. Device package `3-r8` exposes the route through UCM and
+normal Plasma/PulseAudio playback while preserving automatic power-down. See
+the [speaker evidence](evidence/2026-08-05-mainline616-internal-speakers.md).
 
-**Next experiment.** Package a minimal UCM2 profile and the stock-derived
-WCD9340 wired-headphone controls. In parallel, add a read-only TFA9874 probe
-that keeps both amplifiers powered down, then port the stock quaternary-MI2S
-ADSP message path. The exact two-device container, profiles, TDM slots and AFE
-module identifiers have been recovered from OxygenOS; see the
+**Next experiment.** Validate the packaged speaker profile after a complete
+image installation and reboot, then run bounded thermal and repeated
+open/suspend tests at conservative volume. Add the stock-derived WCD9340
+wired-headphone controls as a separate UCM device and validate them first with
+a silent stream. The exact two-device container, profiles, TDM slots and AFE
+module identifiers remain documented in the
 [stock hardware reference](evidence/2026-08-05-oxygenos-hardware-reference.md).
-No audible speaker test is allowed until the ADSP protection profile loads.
 
-**Success criteria.** Plasma and ALSA select the same UCM profile, a short test
-is audible through wired headphones without clipping or codec/DSP errors, and
-route teardown returns every control and PCM to an idle state. Both TFA9874s
-must identify correctly, load their own protected profile through ADSP, expose
-the correct feedback slots, and remain within conservative gain and thermal
-limits. Headset detect, buttons, microphones and earpiece switching remain
-separate follow-up tests.
+**Success criteria.** Repeated Plasma playback and suspend cycles preserve
+clock lock while active, return both amplifiers to power-down, and remain
+within conservative thermal limits. Wired headphones must then produce a
+bounded test without clipping or codec/DSP errors. Headset detect, buttons,
+microphones and earpiece switching remain separate follow-up tests.
 
 **Risks and fallback.** Codec mixers can expose unsafe gain or connect an
 unintended physical endpoint. Do not copy the complete Android mixer state.
-Enable the minimum internal-headphone controls only, retain the silent r26
-test as the control, and keep all external amplifier links disabled.
+Keep the speaker-only r8 UCM profile as the fallback and add each remaining
+physical endpoint behind its own independently validated route.
 
 ## 10. USB host mode
 

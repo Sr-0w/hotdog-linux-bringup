@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=7
+pkgrel=8
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -11,6 +11,7 @@ arch="aarch64"
 options="!check !archcheck"
 install="$pkgname-nonfree-firmware.post-install"
 depends="
+	alsa-ucm-conf
 	android-tools-avbtool
 	postmarketos-base
 	mkbootimg
@@ -18,7 +19,9 @@ depends="
 "
 makedepends="devicepkg-dev"
 source="
+	HiFi.conf
 	deviceinfo
+	hotdog.conf
 	kernel-cmdline.conf
 	30-initramfs-firmware.files
 	51-qcom-sm8150.lua
@@ -43,6 +46,10 @@ build() {
 
 package() {
 	devicepkg_package $startdir $pkgname
+	install -Dm644 "$srcdir/HiFi.conf" \
+		"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"
+	install -Dm644 "$srcdir/hotdog.conf" \
+		"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"
 	install -Dm755 "$srcdir/postprocess-boot-avb.sh" \
 		"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"
 }
@@ -138,7 +145,9 @@ wireplumber() {
 }
 
 sha512sums="
+deea667e253e8c5d453d94a63db00a5a8a8e5ea901931a5df5d1ba2776f5b90a2d8a08a874463ff57467d6c4cc65de34073e011108cc5bbedb2949aa964c51ac  HiFi.conf
 e827bb5e870adbd8ea3c19d85bef975f40c2b863620e80c850bc5fe67a65dba7a88a67d4237f9bc97733cfb013210611047cebeb5aae905533e0eaab93e9b8ad  deviceinfo
+7ac03c906d00ef0f4800db4f0f3bcf0c823fbab7aec7b9d6415ebfa94712801e68715aed5ccb62d9f0a0e4dac9edbbfd08f1c6da7b90041221f3cc8336ec7494  hotdog.conf
 99eb9b254b9b40de66cc6d737645aca960bf8164d0bada7571fbe01eae52655303975c07690b27f52a5828dfc0e19a194979a61c488e9ed09fd4b6e344d75add  kernel-cmdline.conf
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua

@@ -396,6 +396,43 @@ validate_hotdog_plasma_apps_contract() {
 		die "automatic suspend must be disabled for all three PowerDevil profiles"
 }
 
+validate_hotdog_ucm_contract() {
+	local aport_dir="aports/device/testing/device-oneplus-hotdog"
+	local apkbuild="$aport_dir/APKBUILD"
+	local master="$aport_dir/hotdog.conf"
+	local hifi="$aport_dir/HiFi.conf"
+	local expected
+
+	log "hotdog internal-speaker UCM contract"
+	grep -q '^[[:space:]]*alsa-ucm-conf$' "$apkbuild" ||
+		die "device package does not depend on alsa-ucm-conf"
+	for input in HiFi.conf hotdog.conf; do
+		grep -q "^[[:space:]]*$input$" "$apkbuild" ||
+			die "device package does not source $input"
+		expected="$(awk -v file="$input" '$2 == file { print $1 }' "$apkbuild")"
+		[[ "$expected" =~ ^[0-9a-f]{128}$ ]] ||
+			die "device package has no unique SHA512 for $input"
+		verify_sha512 "$expected" "$aport_dir/$input"
+	done
+
+	grep -Fq 'File "/OnePlus/hotdog/HiFi.conf"' "$master" ||
+		die "hotdog UCM master does not select the packaged HiFi profile"
+	grep -Fq 'SectionDevice."Speaker"' "$hifi" ||
+		die "hotdog UCM profile does not expose the internal speakers"
+	grep -Fq 'PlaybackPCM "hw:${CardId},0"' "$hifi" ||
+		die "hotdog UCM profile does not select MultiMedia1"
+	grep -Fq "cset \"name='QUAT_MI2S_RX Audio Mixer MultiMedia1' 1\"" "$hifi" ||
+		die "hotdog UCM profile does not enable the validated speaker route"
+	grep -Fq "cset \"name='QUAT_MI2S_RX Audio Mixer MultiMedia1' 0\"" "$hifi" ||
+		die "hotdog UCM profile does not disable the validated speaker route"
+	[ "$(grep -c '^[[:space:]]*cset ' "$hifi")" -eq 2 ] ||
+		die "hotdog UCM profile must not touch unvalidated mixer controls"
+	grep -Fq '"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"' "$apkbuild" ||
+		die "device package does not install the hotdog HiFi profile"
+	grep -Fq '"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"' \
+		"$apkbuild" || die "device package does not install the hotdog UCM card mapping"
+}
+
 validate_hotdog_avb_contract() {
 	local aport_dir="aports/device/testing/device-oneplus-hotdog"
 	local apkbuild="$aport_dir/APKBUILD"
@@ -632,6 +669,7 @@ main() {
 	validate_mainline616_aport_inputs
 	validate_hotdog_wifi_package_contract
 	validate_hotdog_plasma_apps_contract
+	validate_hotdog_ucm_contract
 	validate_hotdog_avb_contract
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source

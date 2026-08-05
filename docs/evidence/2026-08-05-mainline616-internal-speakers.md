@@ -123,9 +123,40 @@ closed, the mixer route is off, and both codecs report `active=0`,
 | `webcam-mic-s24-minus48dbfs-left-r32.wav` | `b1637a35b84b55abb819c529fca398e77dc98090880e69908512803ec449a5cf` |
 | `webcam-mic-s24-minus48dbfs-right-r32.wav` | `9aeb2736bdd2b2a5c981574fa975f5ea98dfd1fcf99b9ad92e525c60b3500d05` |
 
+## Plasma and PulseAudio integration
+
+Device package `device-oneplus-hotdog-3-r8.apk` adds a minimal UCM2 profile
+containing only the validated speaker route. The 3,548-byte APK has SHA256
+`9247f67021f8da13ba7355bc0b848fbe9cb2ae7f4e9b201cfd9bb3f2480a39e5`.
+It installs:
+
+- the SM8150 card mapping for ALSA long name `OnePlus 7T Pro`;
+- a `HiFi` verb with one `Speaker` device on `hw:${CardId},0`;
+- one enable and one disable operation for
+  `QUAT_MI2S_RX Audio Mixer MultiMedia1`.
+
+No gain, microphone, headphone, WCD9340, reset, or protection control is
+changed. `alsaucm` discovers the `HiFi` verb and `Speaker` device. After a
+PulseAudio reload from the installed package, Plasma exposes the sink as
+`Built-in Audio Internal speakers`.
+
+A regular `paplay` invocation sent a one-second stereo 1 kHz WAV at -48 dBFS
+through that sink. Both codecs reported clock lock and `active=1`; the
+synchronized webcam recording measured an approximately -46.8 dBFS 1 kHz
+component against an approximately -73 dBFS median baseline. PulseAudio then
+suspended the sink, closed the PCM, and returned both codecs to `active=0`.
+
+Changing the Plasma/PulseAudio sink volume from 100% to 25% changed no ALSA
+mixer control, confirming software attenuation rather than an unvalidated
+hardware-gain write.
+
+| Evidence file | SHA256 |
+|---|---|
+| `webcam-mic-pulseaudio-speaker-minus48dbfs-r32.wav` | `09b0100f9e9f28480ee0bb0c5c00d786d88d0bdd4013a0734367bafa606b385d` |
+
 ## Next gate
 
-Expose the validated stereo route through ALSA UCM and normal Plasma volume
-controls, then verify playback from a regular desktop application. Headphones,
-the earpiece, microphones, headset detection, calibrated gain policy, and
-longer thermal/protection validation remain separate gates.
+Validate the same packaged route after a full image installation and reboot,
+then establish conservative default volume and longer thermal/protection
+coverage. Headphones, the earpiece, microphones, and headset detection remain
+separate hardware gates.
