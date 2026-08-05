@@ -12,6 +12,7 @@ deviceinfo_arch="aarch64"
 
 # Device related
 deviceinfo_chassis="handset"
+deviceinfo_drm="true"
 deviceinfo_screen_width="1440"
 deviceinfo_screen_height="3120"
 

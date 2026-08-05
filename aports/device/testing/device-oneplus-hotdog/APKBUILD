@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=5
+pkgrel=6
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -134,7 +134,7 @@ wireplumber() {
 }
 
 sha512sums="
-9ef83842446000e103e04ab5b8c155bba111b3e3ce2a9b84ed19182dd59a5fb9e5dd9d4b81f6a71351f86efa6fe7b4baf5be4c62331b516d02cef43bd034a860  deviceinfo
+b44495a94735c984ae69399a2ad6b3d4d62bacd11f7e99425a5b8427d9dad1ea6848b79a265603458988b0c257b4104edcecfef87c069729405e4b4057555c37  deviceinfo
 99eb9b254b9b40de66cc6d737645aca960bf8164d0bada7571fbe01eae52655303975c07690b27f52a5828dfc0e19a194979a61c488e9ed09fd4b6e344d75add  kernel-cmdline.conf
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
