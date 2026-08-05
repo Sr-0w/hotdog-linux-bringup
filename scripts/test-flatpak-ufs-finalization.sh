@@ -28,8 +28,8 @@ Separate Flatpak's storage-heavy installation into two observable phases:
 
 The test keeps UFS runtime power active, streams kernel messages, syscall
 metadata, and high-rate storage state to the host, and performs a read-only
-Sahara region-table listing plus a bounded ramoops capture if Qualcomm
-05c6:900e appears. It never resets or flashes the phone.
+Sahara region-table listing plus bounded ramoops and firmware KMSG captures if
+Qualcomm 05c6:900e appears. It never resets or flashes the phone.
 
 Environment:
   APP_ID                  Flatpak application ID (default: com.play0ad.zeroad)
@@ -204,6 +204,7 @@ case "$PHASE" in
 esac
 [[ "$APP_ID" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid Flatpak application ID: $APP_ID" 2
 [ -n "$PMOS_PASSWORD" ] || die "set PMOS_PASSWORD or HOTDOG_PMOS_PASSWORD" 2
+hotdog_require_target_serial || die "set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
 for command_name in grep lsusb ping ssh sshpass tee; do
 	command -v "$command_name" >/dev/null 2>&1 || die "missing command: $command_name" 127
 done
@@ -283,7 +284,7 @@ case "$transition" in
 			tee "$OUT/result.txt"
 		phone_lock_release
 		"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
-			--list-memory-regions --extract-ramoops || true
+			--list-memory-regions --extract-ramoops --extract-kmsg || true
 		exit 10
 		;;
 	fastboot)

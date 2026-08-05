@@ -108,6 +108,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--memory-length", type=bounded_memory_length)
     parser.add_argument("--memory-output", type=Path)
     parser.add_argument(
+        "--memory-region",
+        action="append",
+        nargs=2,
+        default=[],
+        metavar=("NAME", "OUTPUT"),
+        help=(
+            "dump one named Sahara memory-debug region to OUTPUT; may be "
+            "specified more than once"
+        ),
+    )
+    parser.add_argument(
         "--list-memory-regions",
         action="store_true",
         help="read and print the Sahara memory-debug table without dumping it",
@@ -128,31 +139,36 @@ def parse_args() -> argparse.Namespace:
         )
     if args.action != "inspect" and args.memory_address is not None:
         parser.error("physical memory reads require the inspect action")
+    if args.action != "inspect" and args.memory_region:
+        parser.error("named memory-region reads require the inspect action")
     if args.action != "inspect" and args.list_memory_regions:
         parser.error("memory-region listing requires the inspect action")
     return args
 
 
-def print_memory_regions(protocol, response) -> bool:
-    """Read and print the crashdump region table without resetting the target."""
+def read_memory_regions(protocol, response, *, emit: bool) -> list[dict] | None:
+    """Read the crashdump region table once and optionally print its entries."""
 
     memory_table_addr = response["data"].memory_table_addr
     memory_table_length = response["data"].memory_table_length
     packet_size = 64 if protocol.bit64 else 52
 
-    print(f"memory_table_address=0x{memory_table_addr:016x}")
-    print(f"memory_table_length=0x{memory_table_length:x}")
-    print(f"memory_table_entry_size={packet_size}")
+    if emit:
+        print(f"memory_table_address=0x{memory_table_addr:016x}")
+        print(f"memory_table_length=0x{memory_table_length:x}")
+        print(f"memory_table_entry_size={packet_size}")
     if memory_table_length == 0 or memory_table_length % packet_size:
         print("error=invalid-memory-table-length", file=sys.stderr)
-        return False
+        return None
 
     table = protocol.read_memory(memory_table_addr, memory_table_length)
     if table is None or len(table) != memory_table_length:
         print("error=short-memory-table-read", file=sys.stderr)
-        return False
+        return None
 
-    print(f"memory_region_count={len(table) // packet_size}")
+    regions = []
+    if emit:
+        print(f"memory_region_count={len(table) // packet_size}")
     for index in range(0, len(table), packet_size):
         entry_data = table[index : index + packet_size]
         if protocol.bit64:
@@ -161,13 +177,44 @@ def print_memory_regions(protocol, response) -> bool:
             entry = protocol.ch.parttbl(entry_data)
         filename = entry.filename.rstrip(b"\x00").decode("utf-8", "replace")
         description = entry.desc.rstrip(b"\x00").decode("utf-8", "replace")
-        print(
-            "memory_region="
-            f"{index // packet_size}\t{filename}\t{description}\t"
-            f"0x{entry.mem_base:016x}\t0x{entry.length:x}\t"
-            f"0x{entry.save_pref:x}"
+        region = {
+            "index": index // packet_size,
+            "filename": filename,
+            "description": description,
+            "address": entry.mem_base,
+            "length": entry.length,
+            "save_preference": entry.save_pref,
+        }
+        regions.append(region)
+        if emit:
+            print(
+                "memory_region="
+                f"{region['index']}\t{filename}\t{description}\t"
+                f"0x{entry.mem_base:016x}\t0x{entry.length:x}\t"
+                f"0x{entry.save_pref:x}"
+            )
+    return regions
+
+
+def dump_memory(protocol, address: int, length: int, output_path: Path) -> bool:
+    """Write one bounded physical-memory range and fsync it before returning."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"memory_read_address=0x{address:016x}")
+    print(f"memory_read_length=0x{length:x}")
+    print(f"memory_read_output={output_path}")
+    with output_path.open("wb") as output:
+        result = protocol.read_memory(
+            address,
+            length,
+            display=True,
+            wf=output,
         )
-    return True
+        output.flush()
+        os.fsync(output.fileno())
+        bytes_written = output.tell()
+    print(f"memory_read_bytes={bytes_written}")
+    return result is not None and bytes_written == length
 
 
 def main() -> int:
@@ -266,8 +313,15 @@ def main() -> int:
             print("error=memory-debug-transfer-unavailable", file=sys.stderr)
             return 8
 
-        if args.list_memory_regions and not print_memory_regions(protocol, response):
-            return 14
+        regions = None
+        if args.list_memory_regions or args.memory_region:
+            regions = read_memory_regions(
+                protocol,
+                response,
+                emit=args.list_memory_regions,
+            )
+            if regions is None:
+                return 14
 
         breadcrumb = protocol.read_memory(0xA9BFF000, 0x40)
         restart_reason = protocol.read_memory(0x146BF65C, 0x04)
@@ -312,27 +366,48 @@ def main() -> int:
                     print(f"early_breadcrumb_{field}={value}")
 
         if args.memory_address is not None:
-            args.memory_output.parent.mkdir(parents=True, exist_ok=True)
-            print(
-                "memory_read_address="
-                f"0x{args.memory_address:016x}"
-            )
-            print(f"memory_read_length=0x{args.memory_length:x}")
-            print(f"memory_read_output={args.memory_output}")
-            with args.memory_output.open("wb") as output:
-                result = protocol.read_memory(
-                    args.memory_address,
-                    args.memory_length,
-                    display=True,
-                    wf=output,
-                )
-                output.flush()
-                os.fsync(output.fileno())
-                bytes_written = output.tell()
-            print(f"memory_read_bytes={bytes_written}")
-            if result is None or bytes_written != args.memory_length:
+            if not dump_memory(
+                protocol,
+                args.memory_address,
+                args.memory_length,
+                args.memory_output,
+            ):
                 print("error=short-bounded-memory-read", file=sys.stderr)
                 return 11
+
+        for region_name, output_name in args.memory_region:
+            matches = [
+                region
+                for region in regions or []
+                if region["filename"] == region_name
+            ]
+            if len(matches) != 1:
+                print(
+                    "error=memory-region-match "
+                    f"name={region_name} count={len(matches)}",
+                    file=sys.stderr,
+                )
+                return 15
+            region = matches[0]
+            if not 1 <= region["length"] <= 0x01000000:
+                print(
+                    "error=memory-region-length-out-of-bounds "
+                    f"name={region_name} length=0x{region['length']:x}",
+                    file=sys.stderr,
+                )
+                return 16
+            print(f"memory_region_read_name={region_name}")
+            if not dump_memory(
+                protocol,
+                region["address"],
+                region["length"],
+                Path(output_name),
+            ):
+                print(
+                    f"error=short-memory-region-read name={region_name}",
+                    file=sys.stderr,
+                )
+                return 17
         return 0
     finally:
         cdc.close()

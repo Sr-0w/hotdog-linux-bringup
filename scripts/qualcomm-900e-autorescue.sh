@@ -17,7 +17,7 @@ usage() {
 	cat <<'USAGE'
 Usage: qualcomm-900e-autorescue.sh inspect [--early-breadcrumb-address ADDRESS]
        [--read-memory ADDRESS LENGTH] [--extract-ramoops]
-       [--list-memory-regions]
+       [--extract-kmsg] [--list-memory-regions]
        qualcomm-900e-autorescue.sh recover
        qualcomm-900e-autorescue.sh state-reset
        qualcomm-900e-autorescue.sh reset
@@ -32,6 +32,8 @@ of these actions reads or writes phone storage. ADDRESS accepts decimal or a
 record. --read-memory stores one bounded physical-memory range (maximum 16
 MiB) in the new run directory without resetting the target. --extract-ramoops
 reads and decodes the pinned 4 MiB hotdog ramoops reservation.
+--extract-kmsg reads the firmware-provided KMSG.txt region by name in the same
+fresh Sahara session. It can be combined with --extract-ramoops.
 --list-memory-regions reads and prints the Sahara crashdump table without
 dumping regions or resetting the target.
 USAGE
@@ -70,6 +72,7 @@ early_breadcrumb_address="${HOTDOG_EARLY_BREADCRUMB_PHYS:-}"
 memory_address=""
 memory_length=""
 extract_ramoops=0
+extract_kmsg=0
 list_memory_regions=0
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -89,6 +92,11 @@ while [ "$#" -gt 0 ]; do
 		--extract-ramoops)
 			[ "$action" = inspect ] || die "Ramoops extraction requires inspect" 2
 			extract_ramoops=1
+			shift
+			;;
+		--extract-kmsg)
+			[ "$action" = inspect ] || die "KMSG extraction requires inspect" 2
+			extract_kmsg=1
 			shift
 			;;
 		--list-memory-regions)
@@ -113,9 +121,11 @@ command -v lsusb >/dev/null 2>&1 || die "Missing command: lsusb" 127
 [ -x "$PYTHON_BIN" ] || die "Missing EDL Python runtime: $PYTHON_BIN" 127
 [ -d "$EDL_SOURCE/edlclient" ] || die "Missing bkerler/edl source: $EDL_SOURCE" 127
 [ -r "$HELPER" ] || die "Missing Sahara helper: $HELPER" 127
-if [ "$extract_ramoops" -eq 1 ]; then
+if [ "$extract_ramoops" -eq 1 ] || [ "$extract_kmsg" -eq 1 ]; then
 	command -v python3 >/dev/null 2>&1 || die "Missing command: python3" 127
 	command -v sha256sum >/dev/null 2>&1 || die "Missing command: sha256sum" 127
+fi
+if [ "$extract_ramoops" -eq 1 ]; then
 	[ -r "$RAMOOPS_EXTRACTOR" ] || die "Missing ramoops extractor: $RAMOOPS_EXTRACTOR" 127
 fi
 lsusb -d 05c6:900e 2>/dev/null | grep -q . || die "Qualcomm 05c6:900e is not visible" 3
@@ -153,6 +163,11 @@ if [ "$action" = inspect ] && [ "$list_memory_regions" -eq 1 ]; then
 	helper_args+=(--list-memory-regions)
 	log "Sahara memory-region table: read-only listing"
 fi
+if [ "$action" = inspect ] && [ "$extract_kmsg" -eq 1 ]; then
+	kmsg_output="$run_dir/KMSG.txt"
+	helper_args+=(--memory-region KMSG.txt "$kmsg_output")
+	log "Firmware KMSG region: read-only named extraction -> $kmsg_output"
+fi
 
 "$PYTHON_BIN" -u "$HELPER" "${helper_args[@]}"
 log "Sahara $action completed"
@@ -164,10 +179,21 @@ if [ "$extract_ramoops" -eq 1 ]; then
 		--reservation-phys "$RAMOOPS_PHYS" \
 		--reservation-size "$RAMOOPS_SIZE" \
 		--scan-reservation "$memory_output" > "$ramoops_console"; then
-		sha256sum "$memory_output" "$ramoops_console" > "$run_dir/SHA256SUMS"
 		log "Ramoops console extracted: $ramoops_console"
 	else
 		rm -f "$ramoops_console"
 		die "No populated ramoops zone found in bounded capture" 5
 	fi
+fi
+
+if [ "$extract_ramoops" -eq 1 ] || [ "$extract_kmsg" -eq 1 ]; then
+	capture_files=()
+	if [ "$extract_ramoops" -eq 1 ]; then
+		capture_files+=("$memory_output" "$ramoops_console")
+	fi
+	if [ "$extract_kmsg" -eq 1 ]; then
+		capture_files+=("$kmsg_output")
+		log "Firmware KMSG extracted: $kmsg_output"
+	fi
+	sha256sum "${capture_files[@]}" > "$run_dir/SHA256SUMS"
 fi
