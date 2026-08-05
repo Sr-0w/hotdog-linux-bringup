@@ -190,6 +190,8 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing Bluetooth HCI UART module"
 	find "$modules_dir" -type f -path '*/drivers/bluetooth/btqca.ko' \
 		-print -quit | grep -q . || die "missing Qualcomm Bluetooth module"
+	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_pas.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm PAS remoteproc module"
 fi
 
 python3 - "$image" <<'PY'
@@ -289,10 +291,12 @@ pm8150b=$soc/spmi@c440000/pmic@2
 pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
 remoteproc_mpss=$soc/remoteproc@4080000
+remoteproc_adsp=$soc/remoteproc@17300000
 wifi=$soc/wifi@18800000
 uart13=$qup2/serial@c8c000
 bluetooth=$uart13/bluetooth
 wlan_mem=$reserved/memory@8bc00000
+adsp_mem=$reserved/memory@8be00000
 rmtfs_mem=$reserved/memory@fc201000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
 pon_pwrkey=$pm8150/pon@800/pwrkey
@@ -351,6 +355,17 @@ expect_absent qup-iommus fdtget "$dtb" "$qup" iommus
 expect_value mpss-status okay fdtget -ts "$dtb" "$remoteproc_mpss" status
 expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \
 	fdtget -ts "$dtb" "$remoteproc_mpss" firmware-name
+expect_value adsp-status okay fdtget -ts "$dtb" "$remoteproc_adsp" status
+expect_value adsp-firmware qcom/sm8150/oneplus/hotdog/adsp.mbn \
+	fdtget -ts "$dtb" "$remoteproc_adsp" firmware-name
+expect_value adsp-address '0 8be00000 0 1e00000' \
+	fdtget -tx "$dtb" "$adsp_mem" reg
+fdtget -p "$dtb" "$adsp_mem" | grep -qx no-map ||
+	die "ADSP reservation is missing no-map"
+adsp_mem_phandle=$(fdtget -tx "$dtb" "$adsp_mem" phandle) ||
+	die "missing ADSP memory phandle"
+expect_value adsp-memory "$adsp_mem_phandle" \
+	fdtget -tx "$dtb" "$remoteproc_adsp" memory-region
 expect_value rmtfs-hotdog-address '0 fc201000 0 200000' \
 	fdtget -tx "$dtb" "$rmtfs_mem" reg
 expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs_mem" qcom,client-id

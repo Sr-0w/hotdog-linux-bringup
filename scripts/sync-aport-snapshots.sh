@@ -13,6 +13,8 @@ Options:
   --apply              Copy after a difference is found. Default: check-only.
   --to-snapshots       Copy canonical pmaports into ./aports. Default.
   --to-pmaports        Copy ./aports into the canonical pmaports checkout.
+  --package REL        Limit the operation to one tracked package path. May be
+                       repeated; without it all tracked packages are checked.
   --target-pmaports D  Canonical pmaports checkout. Default:
                        $HOTDOG_PMAPORTS_SM8150
   -h, --help           Show this help.
@@ -44,6 +46,7 @@ snapshot_rels=(
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 )
+selected_rels=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -55,6 +58,11 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--to-pmaports)
 			direction="to-pmaports"
+			;;
+		--package)
+			[ "$#" -ge 2 ] || die "--package requires a value"
+			selected_rels+=("$2")
+			shift
 			;;
 		--target-pmaports)
 			[ "$#" -ge 2 ] || die "--target-pmaports requires a value"
@@ -73,6 +81,21 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
+if [ "${#selected_rels[@]}" -eq 0 ]; then
+	selected_rels=("${snapshot_rels[@]}")
+else
+	for selected in "${selected_rels[@]}"; do
+		known=0
+		for rel in "${snapshot_rels[@]}"; do
+			if [ "$selected" = "$rel" ]; then
+				known=1
+				break
+			fi
+		done
+		[ "$known" -eq 1 ] || die "untracked package path: $selected"
+	done
+fi
+
 [ -d "$snapshot_root" ] || die "missing snapshot root: $snapshot_root"
 [ -d "$target_pmaports" ] || die "missing target pmaports checkout: $target_pmaports"
 for command_name in cp diff file find mv; do
@@ -90,6 +113,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:30-initramfs-firmware.files | \
 		device/testing/device-oneplus-hotdog:51-qcom-sm8150.lua | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
+		device/testing/device-oneplus-hotdog:postprocess-boot-avb.sh | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
@@ -233,7 +257,7 @@ sync_dir() {
 }
 
 status=0
-for rel in "${snapshot_rels[@]}"; do
+for rel in "${selected_rels[@]}"; do
 	sync_dir "$rel" || status=$?
 done
 exit "$status"
