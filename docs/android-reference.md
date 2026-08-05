@@ -14,12 +14,27 @@ Useful facts to capture include:
 - battery, charger, USB role, audio, camera, modem, Wi-Fi, and Bluetooth data
 - firmware file names and vendor configuration paths
 
-The repository provides read-only collectors:
+The repository provides read-only collectors for a running Android system:
 
 ```bash
 ./scripts/collect-adb-reference.sh
 ./scripts/collect-fastboot-reference.sh
 ```
+
+For an offline OxygenOS dump, mount the extracted logical partitions read-only
+and generate a hash-only hardware inventory:
+
+```bash
+./scripts/inventory-oxygenos-assets.py \
+  --root vendor=/mnt/oxygenos/vendor \
+  --root odm=/mnt/oxygenos/odm \
+  --images /path/to/decrypted-images \
+  > oxygenos-hardware-assets.json
+```
+
+The inventory separates reusable firmware and calibration from 4.14 kernel
+modules and Android HAL binaries. The latter two are reference inputs and
+cannot be loaded directly into the mainline postmarketOS image.
 
 Review their output before sharing it. Remove serial numbers, network
 identifiers, account information, and proprietary blobs.

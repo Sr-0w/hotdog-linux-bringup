@@ -245,13 +245,19 @@ S24_LE stream opens without a DSP or transport error while ADSP and MPSS remain
 running. See the [r26 audio evidence](evidence/2026-08-05-mainline616-headphone-backend.md).
 
 **Next experiment.** Package a minimal UCM2 profile and the stock-derived
-WCD9340 wired-headphone controls. Keep the TFA98xx speaker amplifiers absent,
-start with silence, and raise only the headphone path to a conservative level.
+WCD9340 wired-headphone controls. In parallel, add a read-only TFA9874 probe
+that keeps both amplifiers powered down, then port the stock quaternary-MI2S
+ADSP message path. The exact two-device container, profiles, TDM slots and AFE
+module identifiers have been recovered from OxygenOS; see the
+[stock hardware reference](evidence/2026-08-05-oxygenos-hardware-reference.md).
+No audible speaker test is allowed until the ADSP protection profile loads.
 
 **Success criteria.** Plasma and ALSA select the same UCM profile, a short test
 is audible through wired headphones without clipping or codec/DSP errors, and
-route teardown returns every control and PCM to an idle state. Headset detect,
-buttons, microphones, earpiece, and each external speaker amplifier require
+route teardown returns every control and PCM to an idle state. Both TFA9874s
+must identify correctly, load their own protected profile through ADSP, expose
+the correct feedback slots, and remain within conservative gain and thermal
+limits. Headset detect, buttons, microphones and earpiece switching remain
 separate follow-up tests.
 
 **Risks and fallback.** Codec mixers can expose unsafe gain or connect an
