@@ -32,9 +32,10 @@ component unchanged, the phone enumerated `/dev/sda`, discovered the nested
 Large buffered Flatpak imports later exposed an abrupt `900e` boundary that is
 not reproduced by direct-I/O stress. Revisions `r18` and `r19` reproduce that
 boundary with translated DMA64 and DMA32 respectively, ruling out the UFS Apps
-SMMU attachment and DMA aperture as sole causes. Revision `r20` keeps the
-translated DMA32 contract and restores legacy UFS completions to hardirq
-context as the next single-variable hardware candidate; see the
+SMMU attachment and DMA aperture as sole causes. Revision `r20` also
+reproduces the failure after restoring legacy UFS completions to hardirq
+context, ruling out completion threading as the sole cause. The next A/B keeps
+the exact `r20` image and limits UFS requests to 128 KiB at runtime; see the
 [Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
@@ -226,7 +227,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
 | Mainline 6.16 pmaports image | Direct hardware boot working | Revision `r17` preserves the accepted hardware stack and exposes both stock 60 Hz and 90 Hz modes. Its hardware-tested AVB image is `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`. |
-| UFS storage | Direct boot working; buffered-import stability under investigation | V33 enumerates the Samsung UFS with a temporary 32-bit DMA constraint while Apps SMMU is bypassed. Direct-I/O stress passes with runtime power held on, but a pull-only Flatpak import reproducibly enters `900e` with both translated DMA64 (`r18`) and translated DMA32 (`r19`). Revision `r20` changes only legacy UFS completion handling back to hardirq context for the next hardware A/B. |
+| UFS storage | Direct boot working; buffered-import stability under investigation | Direct-I/O stress passes, but a pull-only Flatpak import reproducibly enters `900e` with translated DMA64 (`r18`), translated DMA32 (`r19`), and legacy hardirq completions (`r20`). The next exact-image A/B limits block requests to 128 KiB. Fresh crashes are collected as a full 8 GiB Sahara RAM dump before any secondary read. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |

@@ -34,6 +34,24 @@ This populates the ignored `src/` directory and fetches the pinned Qualcomm
 SM8150 kernel used by the reproducible K1 build. Add `--kernel-mainline` or
 `--linux-next` only when those comparison trees are required.
 
+Build the pinned QDL crashdump reader separately:
+
+```bash
+./scripts/bootstrap-qdl.sh
+```
+
+The repository patch adds `qdl ramdump --skip-reset`. This is required by the
+Flatpak/UFS harness so a fresh Qualcomm `05c6:900e` session can be read in full
+without sending a reset command. The collector downloads every firmware-offered
+RAM segment and extracts the ramoops reservation from the first DDR range:
+
+```bash
+./scripts/capture-qdl-900e-ramdump.sh capture
+```
+
+The HD1913 exposes four 2 GiB DDR segments, so allow at least 9 GiB of free
+host storage for each full capture.
+
 For a fresh checkout, apply the reviewed public aport snapshots to the local
 pmaports checkout only after a check-only comparison:
 

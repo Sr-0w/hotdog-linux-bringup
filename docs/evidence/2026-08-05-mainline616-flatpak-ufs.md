@@ -170,13 +170,53 @@ its ramdisk, serialized DTB, and command line are byte-identical:
 | Exact R18/R19 DTB | `018006a67c60bf309a14fa70f224f0172d2aa718443a4deb4e0e6b5af2ad44be` |
 | AVB boot image | `9de1c7fcb58dea7ba6b0f73b8a2585f73f4211eee763b002cf65c82fe2d9fc38` |
 
-Hardware validation remains pending.
+## R20 hardware result
+
+Revision `r20` booted directly as `#21-oneplus-hotdog-mainline616`, mounted the
+root filesystem read-write, restored USB networking and SSH, and retained the
+translated UFS IOMMU domain plus the 32-bit DMA aperture. The interrupt table
+showed the legacy UFS interrupt without a threaded handler, confirming that
+the hardirq-only completion patch was active.
+
+The same pull-only Flatpak workload still entered `05c6:900e` at about 190.3
+seconds while importing the same 3,508,827,314-byte object. The final sample
+reported 540,340 KiB dirty, no active writeback, and 6,360,440 sectors written
+through both `sda` and the root loop device. Restoring the legacy completion
+context therefore does not resolve the failure.
+
+The first Sahara session exposed 48 regions, including four 2 GiB DDR ranges.
+The bounded ramoops capture retained heartbeats through sample 325 without a
+panic, oops, UFS error, ext4 error, or IOMMU fault. The firmware-provided
+`KMSG.txt` region contained stale binary data rather than the running mainline
+kernel log, so it is not usable as crash evidence.
+
+Revisions `r17` through `r20` now rule out UFS runtime autosuspend, the Apps
+SMMU attachment, 64-bit versus 32-bit DMA, and threaded versus hardirq legacy
+completion handling as sole causes. All failures remain clustered during a
+large buffered OSTree import after roughly 6.2-6.4 million sectors have been
+written.
+
+## Request-size A/B and full RAM capture
+
+The mainline UFS host advertises a 1 MiB maximum request, a 256 KiB maximum
+segment, and an unrestricted scatter-gather table. The next runtime A/B keeps
+the exact `r20` image and temporarily sets
+`/sys/block/sda/queue/max_sectors_kb` to 128 before repeating the pull. This
+isolates request size and scatter-gather pressure without another kernel
+change; the harness records all original and effective queue limits.
+
+Crash collection now uses a pinned `linux-msm/qdl` build as the first reader
+of a fresh `900e` Sahara session. A small public patch adds
+`qdl ramdump --skip-reset`, allowing all offered regions, including the full 8
+GiB DDR image, to be downloaded without resetting the phone. Ramoops is then
+extracted from the DDR image. If the firmware offers kernel ELF metadata, QDL
+also assembles `minidump.elf`; otherwise the raw DDR ranges are retained for
+analysis with the exact unstripped kernel.
 
 ## Safety
 
 `test-flatpak-ufs-finalization.sh` never flashes or resets the phone. It splits
 the operation into `pull` and `deploy`, streams the kernel and storage state to
-the host, and performs only a read-only Sahara region-table listing plus bounded
-ramoops and firmware `KMSG.txt` captures after `900e`. All reads share the
-first crashdump session. A manual return to fastboot remains required from
-Qualcomm crashdump mode.
+the host, and invokes the read-only QDL full-RAM collector first if `900e`
+appears. The collector itself is built with a verified no-reset option. A
+manual return to fastboot remains required from Qualcomm crashdump mode.

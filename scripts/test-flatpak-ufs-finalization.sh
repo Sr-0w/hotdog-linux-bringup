@@ -13,6 +13,7 @@ PMOS_USER="${PMOS_USER:-$HOTDOG_PMOS_USER}"
 PMOS_PASSWORD="${PMOS_PASSWORD:-$HOTDOG_PMOS_PASSWORD}"
 EXPECTED_KERNEL_MARKER="${EXPECTED_KERNEL_MARKER:-oneplus-hotdog-mainline616}"
 APP_ID="${APP_ID:-com.play0ad.zeroad}"
+MAX_SECTORS_KB="${MAX_SECTORS_KB:-}"
 PHASE="${1:-}"
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/flatpak-ufs-${PHASE:-unknown}-$stamp}"
@@ -35,6 +36,7 @@ Environment:
   APP_ID                  Flatpak application ID (default: com.play0ad.zeroad)
   OUT                     Host output directory
   EXPECTED_KERNEL_MARKER  Required substring in uname -a
+  MAX_SECTORS_KB          Optional temporary /sys/block/sda queue limit
 USAGE
 }
 
@@ -95,16 +97,34 @@ run_root_program() {
 setup_program() {
 	cat <<'REMOTE'
 set -eu
+max_sectors_kb="$1"
 ufs=/sys/bus/platform/devices/1d84000.ufshc
+queue=/sys/block/sda/queue
 [ -d "$ufs" ] || { echo "missing UFS host: $ufs" >&2; exit 20; }
+[ -d "$queue" ] || { echo "missing UFS queue: $queue" >&2; exit 22; }
 [ -c /dev/pmsg0 ] || { echo 'missing /dev/pmsg0' >&2; exit 21; }
 command -v flatpak >/dev/null
 command -v strace >/dev/null
 echo on > "$ufs/power/control"
-printf '<6>HOTDOG_FLATPAK_TEST phase=prepared ufs_control=%s uptime=%s\n' \
-	"$(cat "$ufs/power/control")" "$(cut -d' ' -f1 /proc/uptime)" > /dev/pmsg0
 printf 'ufs_control=%s\n' "$(cat "$ufs/power/control")"
 printf 'ufs_runtime=%s\n' "$(cat "$ufs/power/runtime_status")"
+for attribute in max_sectors_kb max_hw_sectors_kb max_segments max_segment_size nr_requests scheduler; do
+	if [ -r "$queue/$attribute" ]; then
+		printf 'queue_%s_before=%s\n' "$attribute" "$(cat "$queue/$attribute")"
+	fi
+done
+if [ -n "$max_sectors_kb" ]; then
+	[ -w "$queue/max_sectors_kb" ] || {
+		echo "UFS queue max_sectors_kb is not writable" >&2
+		exit 23
+	}
+	printf '%s\n' "$max_sectors_kb" > "$queue/max_sectors_kb"
+fi
+effective_max_sectors_kb="$(cat "$queue/max_sectors_kb")"
+printf 'queue_max_sectors_kb_after=%s\n' "$effective_max_sectors_kb"
+printf '<6>HOTDOG_FLATPAK_TEST phase=prepared ufs_control=%s max_sectors_kb=%s uptime=%s\n' \
+	"$(cat "$ufs/power/control")" "$effective_max_sectors_kb" \
+	"$(cut -d' ' -f1 /proc/uptime)" > /dev/pmsg0
 REMOTE
 }
 
@@ -203,17 +223,24 @@ case "$PHASE" in
 		;;
 esac
 [[ "$APP_ID" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid Flatpak application ID: $APP_ID" 2
+if [ -n "$MAX_SECTORS_KB" ]; then
+	[[ "$MAX_SECTORS_KB" =~ ^[1-9][0-9]*$ ]] ||
+		die "MAX_SECTORS_KB must be a positive integer" 2
+fi
 [ -n "$PMOS_PASSWORD" ] || die "set PMOS_PASSWORD or HOTDOG_PMOS_PASSWORD" 2
 hotdog_require_target_serial || die "set ANDROID_SERIAL or HOTDOG_TARGET_SERIAL" 2
 for command_name in grep lsusb ping ssh sshpass tee; do
 	command -v "$command_name" >/dev/null 2>&1 || die "missing command: $command_name" 127
 done
+"$HOTDOG_ROOT/scripts/capture-qdl-900e-ramdump.sh" preflight ||
+	die "QDL full-RAM crash capture preflight failed" 127
 
 mkdir -p "$OUT"
 exec > >(tee "$OUT/run.log") 2>&1
 log "Run directory: $OUT"
 log "Phase: $PHASE"
 log "Application: $APP_ID"
+log "UFS max_sectors_kb override: ${MAX_SECTORS_KB:-unchanged}"
 log "Reset policy: never"
 phone_lock_acquire "Flatpak UFS finalization test ($PHASE)" 0 ||
 	die "could not acquire phone-operation lock" 4
@@ -223,7 +250,7 @@ printf '%s\n' "$uname_output" | tee "$OUT/uname.txt"
 [[ "$uname_output" == *"$EXPECTED_KERNEL_MARKER"* ]] ||
 	die "running kernel does not contain marker: $EXPECTED_KERNEL_MARKER" 6
 
-run_root_program 'sh -s' setup_program | tee "$OUT/setup.txt"
+run_root_program "sh -s -- '$MAX_SECTORS_KB'" setup_program | tee "$OUT/setup.txt"
 
 run_root_program 'sh -s' dmesg_program \
 	> >(tee "$OUT/dmesg-live.txt") \
@@ -283,8 +310,8 @@ case "$transition" in
 		printf 'result=qualcomm-900e phase=%s command_status=%s\n' "$PHASE" "$test_status" |
 			tee "$OUT/result.txt"
 		phone_lock_release
-		"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
-			--list-memory-regions --extract-ramoops --extract-kmsg || true
+		OUT="$OUT/qdl-900e-ramdump" \
+			"$HOTDOG_ROOT/scripts/capture-qdl-900e-ramdump.sh" capture || true
 		exit 10
 		;;
 	fastboot)

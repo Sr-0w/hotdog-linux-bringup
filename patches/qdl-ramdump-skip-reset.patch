@@ -1,0 +1,152 @@
+diff --git a/include/qdl.h b/include/qdl.h
+index df96f7e..d3d5609 100644
+--- a/include/qdl.h
++++ b/include/qdl.h
+@@ -171,7 +171,8 @@ int firehose_provision(struct qdl_device *qdl, bool skip_reset);
+ int firehose_read_buf(struct qdl_device *qdl, struct firehose_op *read_op, void *out_buf, size_t out_size);
+ int sahara_run(struct qdl_device *qdl, const struct sahara_image *images,
+ 	       const char *ramdump_path,
+-	       const char *ramdump_filter);
++	       const char *ramdump_filter,
++	       bool skip_reset);
+ int load_sahara_image(struct qdl_zip *zip, const char *filename, struct sahara_image *image);
+ void sahara_images_free(struct sahara_image *images, size_t count);
+ void print_hex_dump(const char *prefix, const void *buf, size_t len);
+diff --git a/src/qdl.c b/src/qdl.c
+index 11559fb..0235ca0 100644
+--- a/src/qdl.c
++++ b/src/qdl.c
+@@ -472,7 +472,7 @@ static void print_usage(FILE *out)
+ 	fprintf(out, "       %s [options] <prog.mbn> (erase <address>)...\n", __progname);
+ 	fprintf(out, "       %s [options] <prog.mbn> (sha256 <address>)...\n", __progname);
+ 	fprintf(out, "       %s list\n", __progname);
+-	fprintf(out, "       %s ramdump [--debug] [-o <ramdump-path>] [<segment-filter>,...]\n", __progname);
++	fprintf(out, "       %s ramdump [--debug] [--skip-reset] [-o <ramdump-path>] [<segment-filter>,...]\n", __progname);
+ 	fprintf(out, "       %s ks -p <sahara-dev-node> -s <id:file-path>...\n", __progname);
+ 	fprintf(out, "       %s flash (<flashmap>[::specifier] | <contents>[::<specifier>])\n", __progname);
+ 	fprintf(out, "       %s create-zip <zipfile> <contents>[::<specifier>]\n", __progname);
+@@ -488,7 +488,7 @@ static void print_usage(FILE *out)
+ 	fprintf(out, " -t, --create-digests=T\t\tGenerate table of digests in the T folder\n");
+ 	fprintf(out, " -T, --slot=T\t\t\tSet slot number T for multiple storage devices\n");
+ 	fprintf(out, " -D, --vip-table-path=T\t\tUse digest tables in the T folder for VIP\n");
+-	fprintf(out, " -R, --skip-reset\t\tDo not send the reset command after flashing completes\n");
++	fprintf(out, " -R, --skip-reset\t\tDo not send the final reset after flashing or ramdump\n");
+ 	fprintf(out, "     --backend=B\t\tSelect device backend B: <auto|usb|qud> (default: auto)\n");
+ 	fprintf(out, "     --skipblock=M\t\tUse readback mechanism M to skip <program> entries already on flash;\n");
+ 	fprintf(out, "                 \t\tM: <none|sha256> (default: none)\n");
+@@ -555,6 +555,7 @@ static int qdl_ramdump(int argc, char **argv)
+ 	char *ramdump_path = ".";
+ 	char *filter = NULL;
+ 	char *serial = NULL;
++	bool skip_reset = false;
+ 	enum QDL_DEVICE_TYPE qdl_dev_type = QDL_DEVICE_AUTO;
+ 	int ret = 0;
+ 	int opt;
+@@ -564,12 +565,13 @@ static int qdl_ramdump(int argc, char **argv)
+ 		{"version", no_argument, 0, 'v'},
+ 		{"output", required_argument, 0, 'o'},
+ 		{"serial", required_argument, 0, 'S'},
++		{"skip-reset", no_argument, 0, 'R'},
+ 		{"backend", required_argument, 0, OPT_BACKEND},
+ 		{"help", no_argument, 0, 'h'},
+ 		{0, 0, 0, 0}
+ 	};
+ 
+-	while ((opt = getopt_long(argc, argv, "dvo:S:h", options, NULL)) != -1) {
++	while ((opt = getopt_long(argc, argv, "dvo:S:Rh", options, NULL)) != -1) {
+ 		switch (opt) {
+ 		case 'd':
+ 			qdl_debug = true;
+@@ -583,6 +585,9 @@ static int qdl_ramdump(int argc, char **argv)
+ 		case 'S':
+ 			serial = optarg;
+ 			break;
++		case 'R':
++			skip_reset = true;
++			break;
+ 		case OPT_BACKEND:
+ 			if (decode_backend(optarg, &qdl_dev_type) < 0)
+ 				errx(1, "unknown backend \"%s\" (expected auto|usb|qud)", optarg);
+@@ -627,7 +632,7 @@ static int qdl_ramdump(int argc, char **argv)
+ 		goto out_cleanup;
+ 	}
+ 
+-	ret = sahara_run(qdl, NULL, ramdump_path, filter);
++	ret = sahara_run(qdl, NULL, ramdump_path, filter, skip_reset);
+ 	if (ret < 0) {
+ 		ret = 1;
+ 		goto out_cleanup;
+@@ -742,7 +747,7 @@ static int qdl_ks(int argc, char **argv)
+ 		goto out;
+ 	}
+ 
+-	if (sahara_run(&qdl, mappings, NULL, NULL) < 0)
++	if (sahara_run(&qdl, mappings, NULL, NULL, false) < 0)
+ 		ret = 1;
+ 
+ 	close(qdl.fd);
+@@ -1243,7 +1248,7 @@ static int qdl_flash(int argc, char **argv)
+ 	if (ret)
+ 		goto out_cleanup;
+ 
+-	ret = sahara_run(qdl, sahara_images, NULL, NULL);
++	ret = sahara_run(qdl, sahara_images, NULL, NULL, false);
+ 	if (ret < 0)
+ 		goto out_cleanup;
+ 
+diff --git a/src/sahara.c b/src/sahara.c
+index 9212255..6e2de48 100644
+--- a/src/sahara.c
++++ b/src/sahara.c
+@@ -690,7 +690,8 @@ out_free:
+ }
+ 
+ static void sahara_debug64(struct qdl_device *qdl, struct sahara_pkt *pkt,
+-			   const char *ramdump_path, const char *filter)
++			   const char *ramdump_path, const char *filter,
++			   bool skip_reset)
+ {
+ 	struct sahara_debug_region64 *table;
+ 	struct sahara_pkt read_req;
+@@ -699,7 +700,8 @@ static void sahara_debug64(struct qdl_device *qdl, struct sahara_pkt *pkt,
+ 
+ 	if (pkt->length != SAHARA_MEM_DEBUG64_LENGTH) {
+ 		ux_err("unexpected MEM_DEBUG64 packet length %u\n", pkt->length);
+-		sahara_send_reset(qdl);
++		if (!skip_reset)
++			sahara_send_reset(qdl);
+ 		return;
+ 	}
+ 
+@@ -754,7 +756,8 @@ static void sahara_debug64(struct qdl_device *qdl, struct sahara_pkt *pkt,
+ 
+ 	free(table);
+ 
+-	sahara_send_reset(qdl);
++	if (!skip_reset)
++		sahara_send_reset(qdl);
+ }
+ 
+ static bool sahara_has_done_pending_quirk(const struct sahara_image *images)
+@@ -787,7 +790,8 @@ static void sahara_debug_list_images(const struct sahara_image *images)
+ 
+ int sahara_run(struct qdl_device *qdl, const struct sahara_image *images,
+ 	       const char *ramdump_path,
+-	       const char *ramdump_filter)
++	       const char *ramdump_filter,
++	       bool skip_reset)
+ {
+ 	/*
+ 	 * Auto-detect that the device is already running the Firehose
+@@ -875,7 +879,10 @@ int sahara_run(struct qdl_device *qdl, const struct sahara_image *images,
+ 				done = true;
+ 			break;
+ 		case SAHARA_MEM_DEBUG64_CMD:
+-			sahara_debug64(qdl, pkt, ramdump_path, ramdump_filter);
++			sahara_debug64(qdl, pkt, ramdump_path, ramdump_filter,
++				       skip_reset);
++			if (ramdump_path && skip_reset)
++				done = true;
+ 			break;
+ 		case SAHARA_READ_DATA64_CMD:
+ 			if (sahara_read64(qdl, pkt, images) < 0)
