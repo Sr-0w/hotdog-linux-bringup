@@ -4,8 +4,10 @@
 
 This record closes the host-side reproducibility gate between the validated
 `r22` hardware image and a normal postmarketOS image assembled only from the
-published package directories. It does not claim that the newly generated
-root filesystem or its unwrapped boot image has been flashed to hardware.
+published package directories. The expanded root filesystem has since been
+written to the handset's unused `super` partition with complete SHA-256
+readback verification. Its matching boot image has not yet been booted, so
+this record does not claim a successful clean-image hardware boot.
 
 ## Clean input tree
 
@@ -50,6 +52,7 @@ containing a 4096-byte-sector GPT, `pmOS_boot`, and `pmOS_root`:
 | Sparse image size | 3,861,847,276 bytes |
 | Expanded image size | 14,002,683,904 bytes |
 | Sparse image SHA256 | `919463c947fcb709461a9b3475803bede3ea8c0aa8e66c5da836fef0ca4e3d43` |
+| Expanded image SHA256 | `4eeac156cca4a2bbe5f70074901d5067c561a6cbdfae9d69574fdf5fa40d7f88` |
 | Boot filesystem UUID | `e409622e-17bb-484a-a813-7cb4b01fb56e` |
 | Root filesystem UUID | `0531b306-49b7-48ff-ac31-d5773e12f7b1` |
 | Installed packages | 1,523 |
@@ -93,12 +96,40 @@ not missing nftables code.
 
 The standard raw `boot.img` has not yet been accepted on the OnePlus
 bootloader. Hardware tests so far use a deterministic 96 MiB AVB envelope.
-The new filesystem must not replace the current working development system
-until the raw-image/AVB installation contract and a recovery path are pinned.
+The clean rootfs is therefore paired with a deterministic AVB-wrapped boot
+image for its first test. The working development image remains intact in
+`userdata` as a separately addressable fallback.
+
+## Verified hardware staging
+
+The clean expanded image was staged from the running source-package `r22`
+system with
+[`stage-super-rootfs-from-pmos-ssh.sh`](../../scripts/stage-super-rootfs-from-pmos-ssh.sh).
+The source root was backed by `userdata`; `super` was unused and had a physical
+capacity of 15,032,385,536 bytes. Before opening the target for writing, the
+tool required all of the following:
+
+- the expected handset serial and hotdog project, platform, and brand tokens;
+- the exact source boot ID and kernel release;
+- a physical block device whose sysfs `PARTNAME` is `super`;
+- enough target capacity for the 14,002,683,904-byte image;
+- no mount, swap, holder, loop backing, or active-root relationship involving
+  the target;
+- an exact SHA-256 match before transfer, after staging, and immediately before
+  block access.
+
+The writer used direct I/O and then read exactly the image length back from
+`super`. The final digest was
+`4eeac156cca4a2bbe5f70074901d5067c561a6cbdfae9d69574fdf5fa40d7f88`,
+identical to the host image. The phone remained on the same source boot, and a
+post-operation kernel scan found no runtime UFS error, block I/O error, panic,
+oops, watchdog reset, or Qualcomm crash transition. The staging data was
+removed only after the full readback passed. No reboot was issued.
 
 ## Hardware continuity
 
 The already accepted source-package `r22` system remained booted while this
 image was assembled. A physical 0 A.D. 0.28.0 session launched, accepted
 input, and rendered gameplay smoothly. A post-session kernel scan contained
-no UFS, ext4, Adreno, panic, oops, or Qualcomm-transition failure.
+no UFS, ext4, Adreno, panic, oops, or Qualcomm-transition failure. The later
+verified `super` staging operation preserved that same healthy source boot.

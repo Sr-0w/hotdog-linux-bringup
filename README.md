@@ -42,7 +42,11 @@ source-built `r22` package payload then direct-booted as
 write plus a 180-second runtime observation. See the
 [Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
 The same published package directories also complete a clean strict rebuild
-and assemble a filesystem-checked Plasma Mobile image from pinned pmaports;
+and assemble a filesystem-checked Plasma Mobile image from pinned pmaports.
+Its 14,002,683,904-byte expanded image was written to the otherwise unused
+`super` partition with direct I/O and read back to the exact host SHA-256 while
+the accepted `userdata` system stayed online. The matching clean boot image
+still requires its first direct-boot test;
 see the [public-image evidence](docs/evidence/2026-08-05-mainline616-public-image.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
@@ -233,10 +237,10 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Source package direct hardware boot working | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. Its source-built kernel and DTB direct-boot as `#23-oneplus-hotdog-mainline616`; the tested 96 MiB AVB image is `83ffc265b3f46042b840caa43d653dbbe2d1f8dd893169884ee7efcee9584b5d`. |
+| Mainline 6.16 pmaports image | Source package direct boot working; clean rootfs staged | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. Its source-built kernel and DTB direct-boot as `#23-oneplus-hotdog-mainline616`. A clean public-tree Plasma image is installed in unused `super` with complete SHA-256 readback; its matching boot image still awaits the first direct boot. |
 | UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, and application launch without a UFS error or Qualcomm transition. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
-| Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
+| Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The clean public-tree replacement rootfs is now staged and fully read back; its first boot remains pending. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
 | SSH | Working directly | Revision `r17` returns OpenSSH over USB and reports `Linux hotdog 6.16.0-sm8150 #18-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
