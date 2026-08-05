@@ -206,6 +206,14 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing SoundWire bus module"
 	find "$modules_dir" -type f -path '*/drivers/soundwire/soundwire-qcom.ko' \
 		-print -quit | grep -q . || die "missing Qualcomm SoundWire module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6afe-dai.ko' \
+		-print -quit | grep -q . || die "missing Q6AFE DAI module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6asm-dai.ko' \
+		-print -quit | grep -q . || die "missing Q6ASM DAI module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6routing.ko' \
+		-print -quit | grep -q . || die "missing Q6 routing module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/snd-soc-sm8150.ko' \
+		-print -quit | grep -q . || die "missing SM8150 machine sound module"
 fi
 
 python3 - "$image" <<'PY'
@@ -278,6 +286,10 @@ expect_config 'CONFIG_QCOM_SYSMON=m'
 expect_config 'CONFIG_QCOM_RMTFS_MEM=y'
 expect_config 'CONFIG_RPMSG_QCOM_GLINK_SMEM=m'
 expect_config 'CONFIG_QRTR_SMD=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_AFE_DAI=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_ASM_DAI=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_ROUTING=m'
+expect_config 'CONFIG_SND_SOC_SM8150=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -313,6 +325,11 @@ wcd9340=$slim_ngd/codec@1,0
 wcd9340_gpio=$wcd9340/gpio-controller@42
 wcd9340_swm=$wcd9340/soundwire@c85
 sound=/sound
+q6asmdai=$remoteproc_adsp/glink-edge/apr/apr-service@7/dais
+q6asm_mm1=$q6asmdai/dai@0
+sound_mm1=$sound/mm1-dai-link
+sound_slim=$sound/slim-dai-link
+sound_slimcap=$sound/slimcap-dai-link
 wifi=$soc/wifi@18800000
 uart13=$qup2/serial@c8c000
 bluetooth=$uart13/bluetooth
@@ -429,7 +446,53 @@ expect_value wcd9340-soundwire-compatible qcom,soundwire-v1.3.0 \
 	fdtget -ts "$dtb" "$wcd9340_swm" compatible
 expect_value wcd9340-soundwire-range 'c85 40' \
 	fdtget -tx "$dtb" "$wcd9340_swm" reg
-expect_absent sound-compatible fdtget "$dtb" "$sound" compatible
+expect_value sound-compatible qcom,sm8150-sndcard \
+	fdtget -ts "$dtb" "$sound" compatible
+expect_value sound-model 'OnePlus 7T Pro' fdtget -ts "$dtb" "$sound" model
+expect_value sound-status okay fdtget -ts "$dtb" "$sound" status
+expect_value sound-routing 'RX_BIAS MCLK' \
+	fdtget -ts "$dtb" "$sound" audio-routing
+expect_value q6asm-mm1-address 0 fdtget -tx "$dtb" "$q6asm_mm1" reg
+q6asmdai_path=$(fdtget -ts "$dtb" /__symbols__ q6asmdai) ||
+	die "missing Q6ASM DAI symbol"
+q6asmdai_phandle=$(fdtget -tx "$dtb" "$q6asmdai_path" phandle) ||
+	die "missing Q6ASM DAI phandle"
+q6afedai_path=$(fdtget -ts "$dtb" /__symbols__ q6afedai) ||
+	die "missing Q6AFE DAI symbol"
+q6afedai_phandle=$(fdtget -tx "$dtb" "$q6afedai_path" phandle) ||
+	die "missing Q6AFE DAI phandle"
+q6routing_path=$(fdtget -ts "$dtb" /__symbols__ q6routing) ||
+	die "missing Q6 routing symbol"
+q6routing_phandle=$(fdtget -tx "$dtb" "$q6routing_path" phandle) ||
+	die "missing Q6 routing phandle"
+wcd9340_path=$(fdtget -ts "$dtb" /__symbols__ wcd9340) ||
+	die "missing WCD9340 symbol"
+wcd9340_phandle=$(fdtget -tx "$dtb" "$wcd9340_path" phandle) ||
+	die "missing WCD9340 phandle"
+expect_value sound-mm1-name MultiMedia1 \
+	fdtget -ts "$dtb" "$sound_mm1" link-name
+expect_value sound-mm1-cpu "$q6asmdai_phandle 0" \
+	fdtget -tx "$dtb" "$sound_mm1/cpu" sound-dai
+expect_value sound-slim-name 'SLIM Playback 1' \
+	fdtget -ts "$dtb" "$sound_slim" link-name
+expect_value sound-slim-cpu "$q6afedai_phandle 2" \
+	fdtget -tx "$dtb" "$sound_slim/cpu" sound-dai
+expect_value sound-slim-platform "$q6routing_phandle" \
+	fdtget -tx "$dtb" "$sound_slim/platform" sound-dai
+expect_value sound-slim-codec "$wcd9340_phandle 0" \
+	fdtget -tx "$dtb" "$sound_slim/codec" sound-dai
+expect_value sound-slimcap-name 'SLIM Capture 1' \
+	fdtget -ts "$dtb" "$sound_slimcap" link-name
+expect_value sound-slimcap-cpu "$q6afedai_phandle 3" \
+	fdtget -tx "$dtb" "$sound_slimcap/cpu" sound-dai
+expect_value sound-slimcap-platform "$q6routing_phandle" \
+	fdtget -tx "$dtb" "$sound_slimcap/platform" sound-dai
+expect_value sound-slimcap-codec "$wcd9340_phandle 1" \
+	fdtget -tx "$dtb" "$sound_slimcap/codec" sound-dai
+expect_absent sound-aux-devices fdtget "$dtb" "$sound" aux-devs
+if fdtget -l "$dtb" "$sound" | grep -Eq 'speaker|tfa'; then
+	die "external speaker amplifier link must remain absent"
+fi
 expect_value rmtfs-hotdog-address '0 fc201000 0 200000' \
 	fdtget -tx "$dtb" "$rmtfs_mem" reg
 expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs_mem" qcom,client-id

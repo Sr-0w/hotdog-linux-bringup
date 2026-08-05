@@ -1,0 +1,110 @@
+From 77703d4a2238eff2767745e0aef89a8d365390bd Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 17:20:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: add the internal audio card
+
+The ADSP, APR services, Qualcomm NGD SLIMbus controller, physical WCD9340
+codec, GPIO child and SoundWire controller are now independently validated
+on the HD1913.
+
+Add one bidirectional Q6ASM front end and the WCD9340 AIF1 playback and
+capture back ends. This is the smallest topology that can register an ALSA
+card and exercise the internal codec transport. Keep the external TFA98xx
+speaker amplifiers absent until the card and internal routes are stable.
+
+The SM8150 machine driver already matches qcom,sm8150-sndcard. Add that
+compatible to the existing Qualcomm sound-card schema so the new node can be
+checked with dtbs_check.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../bindings/sound/qcom,sm8250.yaml            |  1 +
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts    | 56 ++++++++++++++++++
+ 2 files changed, 57 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -13,6 +13,8 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/sound/qcom,q6asm.h>
++#include <dt-bindings/sound/qcom,wcd934x.h>
+ #include "sm8150-oneplus-common.dtsi"
+ #include "sm8150-wcd9340.dtsi"
+ 
+@@ -297,6 +299,60 @@
+ 	status = "okay";
+ };
+ 
++&q6asmdai {
++	dai@0 {
++		reg = <MSM_FRONTEND_DAI_MULTIMEDIA1>;
++	};
++};
++
++&sound {
++	compatible = "qcom,sm8150-sndcard";
++	model = "OnePlus 7T Pro";
++	status = "okay";
++
++	audio-routing = "RX_BIAS", "MCLK";
++
++	mm1-dai-link {
++		link-name = "MultiMedia1";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
++		};
++	};
++
++	slim-dai-link {
++		link-name = "SLIM Playback 1";
++
++		cpu {
++			sound-dai = <&q6afedai SLIMBUS_0_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&wcd9340 AIF1_PB>;
++		};
++	};
++
++	slimcap-dai-link {
++		link-name = "SLIM Capture 1";
++
++		cpu {
++			sound-dai = <&q6afedai SLIMBUS_0_TX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&wcd9340 AIF1_CAP>;
++		};
++	};
++};
++
+ &wcd9340 {
+ 	reset-gpios = <&tlmm 143 GPIO_ACTIVE_HIGH>;
+ 	vdd-buck-sido-supply = <&vreg_s4a_1p8>;
+diff --git a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+--- a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+@@ -39,6 +39,7 @@ properties:
+           - qcom,sc7180-qdsp6-sndcard
+           - qcom,sc8280xp-sndcard
+           - qcom,sdm845-sndcard
++          - qcom,sm8150-sndcard
+           - qcom,sm8250-sndcard
+           - qcom,sm8450-sndcard
+           - qcom,x1e80100-sndcard
+-- 
+2.50.1

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=24
+pkgrel=25
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -71,6 +71,7 @@ source="
 	0032-arm64-dts-hotdog-complete-stock-reservations.patch
 	0033-arm64-dts-hotdog-enable-adsp.patch
 	0034-arm64-dts-hotdog-enable-wcd9340.patch
+	0035-arm64-dts-hotdog-add-internal-audio-card.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -159,5 +160,6 @@ fd064c997fb59b08cc61698eeb1db70da62f2200b60b776226eed6c000b28de981933985f9a82d58
 1ef90c5b48699d5acde804eb3b44e45bf8d0d1da56919083562785d6a0a47864ccd6fc7a10900e43633b9f2998c52b19fc73d04918775aa23361277754ba3820  0032-arm64-dts-hotdog-complete-stock-reservations.patch
 d390936462c39a7f5048f6b52781c64f1396c1d6eb917c4d7c707a0f6544c9cf7704651bda01fa0ff87a66052b808515bbb919d5de5e97bd18abc06b8833ec25  0033-arm64-dts-hotdog-enable-adsp.patch
 822d609cbb03856c56ac158431daa96bac81d0c51caa500fbdbf303d2b0905a9330f679c7285b801cccc99256d0522b0eb1b9696314945b359e53447efa14115  0034-arm64-dts-hotdog-enable-wcd9340.patch
-caed15507220efc2f692833ac46aeb21a910ab583b5fd6c8251131003535428b62d62d7d752e82ba9fc41fe0982320e714b2a92e3b04ea3cbcf633184bf3a55a  validate-mainline616-build.sh
+e801913fe7c3d6f98e095af3f0a478e8608abff4df9d3fb7a9ddd70d6b4f9f91f0e8315f84625e211cbc503d43da2bec7f8523e1cbfaf1255d187c836ec77db1  0035-arm64-dts-hotdog-add-internal-audio-card.patch
+f2700d1c1008a2ab91d9644a3c9a4708a51b88dc32b9dc9949c84f6b98ea5a188e7e47f6d336ee8450415495ff4c305b2d5074e513f7d24fef4b4d72112da8ce  validate-mainline616-build.sh
 "
