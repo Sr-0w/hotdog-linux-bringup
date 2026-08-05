@@ -2,12 +2,12 @@
 
 ## Purpose
 
-This record closes the host-side reproducibility gate between the validated
-`r22` hardware image and a normal postmarketOS image assembled only from the
-published package directories. The expanded root filesystem has since been
-written to the handset's unused `super` partition with complete SHA-256
-readback verification. Its matching boot image has not yet been booted, so
-this record does not claim a successful clean-image hardware boot.
+This record closes the reproducibility gate between the validated `r22`
+hardware image and a normal postmarketOS image assembled only from the
+published package directories. The expanded root filesystem was written to
+the handset's unused `super` partition with complete SHA-256 readback
+verification. Its matching deterministic AVB boot image was then written to
+`boot_b`, read back, and direct-booted into the clean Plasma Mobile system.
 
 ## Clean input tree
 
@@ -94,11 +94,12 @@ because its status check inspects the device kernel-selection subpackage
 instead of the underlying kernel APKBUILD. This is a metadata/reporting issue,
 not missing nftables code.
 
-The standard raw `boot.img` has not yet been accepted on the OnePlus
-bootloader. Hardware tests so far use a deterministic 96 MiB AVB envelope.
-The clean rootfs is therefore paired with a deterministic AVB-wrapped boot
-image for its first test. The working development image remains intact in
-`userdata` as a separately addressable fallback.
+The standard raw `boot.img` has not been tested without an AVB footer. The
+accepted hardware artifact is its deterministic 96 MiB AVB envelope, SHA256
+`9b58a17e90d783c2780af65e35bc5ae706811bdf830a1c49b6cef475e77b6f79`.
+`avbtool verify_image` accepts both its footer and embedded hash descriptor.
+The working development image remains intact in `userdata` as a separately
+addressable fallback.
 
 ## Verified hardware staging
 
@@ -126,6 +127,39 @@ post-operation kernel scan found no runtime UFS error, block I/O error, panic,
 oops, watchdog reset, or Qualcomm crash transition. The staging data was
 removed only after the full readback passed. No reboot was issued.
 
+## Clean-image first boot
+
+The deterministic AVB image was written only to physical `PARTNAME=boot_b`.
+Its complete 100,663,296-byte readback matched SHA256
+`9b58a17e90d783c2780af65e35bc5ae706811bdf830a1c49b6cef475e77b6f79`.
+A single normal reboot removed USB NCM and exposed the new NCM function again
+about six seconds later. SSH then attested the clean installation:
+
+| Property | Hardware result |
+|---|---|
+| Kernel | `Linux 6.16.0-sm8150 #23-oneplus-hotdog-mainline616` |
+| `pmOS_boot` UUID | `e409622e-17bb-484a-a813-7cb4b01fb56e` |
+| `pmOS_root` UUID | `0531b306-49b7-48ff-ac31-d5773e12f7b1` |
+| Nested GPT backing | `/dev/loop0` backed by physical `super` |
+| Root and boot mounts | `/dev/loop0p2` and `/dev/loop0p1` |
+| Installed packages | 1,523 |
+| Graphical session | `tinydm`, KWin Wayland, and Plasma Shell running |
+| Native scanout | 1440x3120 AR30 KWin buffer at 90 Hz |
+
+The clean system also exposed the Adreno render node, S6SY761 touchscreen,
+Power and both volume-key inputs, a dual-band WCN3990 Wi-Fi scan, a powered
+Bluetooth controller, running modem remoteproc, and battery/charger supplies.
+NetworkManager, SSH, Bluetooth, nftables, elogind, and the no-suspend policy
+were active. A first-boot kernel scan contained no runtime UFS error, block I/O
+error, GPU fault, SMMU fault, DWC3 failure, panic, oops, or Qualcomm crash
+transition. Sensor and telephony userspace services remain outside this image
+acceptance result.
+
+A 300-second persistent runtime observation then completed all 151 planned
+samples without a USB transition. Every sample retained the UFS disk, root
+loop, configured USB gadget, charger, and Bluetooth controller. UFS runtime
+power management alternated normally between active and suspended states.
+
 ## Hardware continuity
 
 The already accepted source-package `r22` system remained booted while this
@@ -133,3 +167,5 @@ image was assembled. A physical 0 A.D. 0.28.0 session launched, accepted
 input, and rendered gameplay smoothly. A post-session kernel scan contained
 no UFS, ext4, Adreno, panic, oops, or Qualcomm-transition failure. The later
 verified `super` staging operation preserved that same healthy source boot.
+The subsequent direct boot proves that the same public package directories
+also produce the installed rootfs and boot pair used on hardware.

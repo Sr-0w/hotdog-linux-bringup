@@ -15,9 +15,10 @@ reproducible large buffered-import crash by completing the stock HD1913 memory
 reservation union. The exact source-built `r22` kernel, DTB, modules, and
 standard `boot-deploy` image also direct-booted and passed a synchronized 6 GiB
 buffered-write soak. A fresh image assembled only from the public pmaports tree
-is now installed in unused `super` with complete SHA-256 readback. Booting its
-matching deterministic AVB image is the next reproducibility gate. Revision
-`r20` remains the binary control.
+is installed in `super` with complete SHA-256 readback, and its matching
+deterministic AVB image direct-boots from `boot_b` into Plasma Mobile. Repeated
+boots and removal of the remaining packaging workarounds are the next
+reproducibility gates. Revision `r20` remains the binary control.
 
 ## Priority 0: reproducible mainline boot
 
@@ -58,8 +59,8 @@ matching deterministic AVB image is the next reproducibility gate. Revision
 
 - preserve the working native display clocks, DSI, DSC, Samsung panel, and
   persistent framebuffer console while the userspace package is finalized
-- direct-boot the staged clean Plasma Mobile image, attest its package and
-  filesystem identities, then run repeated graphical boots
+- repeat graphical boots of the accepted clean Plasma Mobile image and retain
+  package, filesystem, display, input, radio, and USB attestations
 - retain the validated fixed 90 Hz mode, then implement panel-aware dynamic
   60/90 Hz switching and validate frame pacing, blank/unblank, and suspend/resume
 - validate S6SY761 suspend/resume and touch wake after the successful Weston
