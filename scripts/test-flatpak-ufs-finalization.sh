@@ -27,9 +27,9 @@ Separate Flatpak's storage-heavy installation into two observable phases:
   deploy  Deploy only objects already present in the local Flatpak repository.
 
 The test keeps UFS runtime power active, streams kernel messages, syscall
-metadata, and high-rate storage state to the host, and performs a bounded
-read-only ramoops capture if Qualcomm 05c6:900e appears. It never resets or
-flashes the phone.
+metadata, and high-rate storage state to the host, and performs a read-only
+Sahara region-table listing plus a bounded ramoops capture if Qualcomm
+05c6:900e appears. It never resets or flashes the phone.
 
 Environment:
   APP_ID                  Flatpak application ID (default: com.play0ad.zeroad)
@@ -282,9 +282,8 @@ case "$transition" in
 		printf 'result=qualcomm-900e phase=%s command_status=%s\n' "$PHASE" "$test_status" |
 			tee "$OUT/result.txt"
 		phone_lock_release
-		EDL_PYTHON_BIN="${EDL_PYTHON_BIN:-/home/srobin/dev/hotdog/tools/venvs/edl/bin/python}" \
-		EDL_SOURCE="${EDL_SOURCE:-/home/srobin/dev/hotdog/src/qualcomm/edl}" \
-			"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect --extract-ramoops || true
+		"$HOTDOG_ROOT/scripts/qualcomm-900e-autorescue.sh" inspect \
+			--list-memory-regions --extract-ramoops || true
 		exit 10
 		;;
 	fastboot)

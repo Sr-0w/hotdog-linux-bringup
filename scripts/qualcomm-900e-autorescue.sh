@@ -17,6 +17,7 @@ usage() {
 	cat <<'USAGE'
 Usage: qualcomm-900e-autorescue.sh inspect [--early-breadcrumb-address ADDRESS]
        [--read-memory ADDRESS LENGTH] [--extract-ramoops]
+       [--list-memory-regions]
        qualcomm-900e-autorescue.sh recover
        qualcomm-900e-autorescue.sh state-reset
        qualcomm-900e-autorescue.sh reset
@@ -31,6 +32,8 @@ of these actions reads or writes phone storage. ADDRESS accepts decimal or a
 record. --read-memory stores one bounded physical-memory range (maximum 16
 MiB) in the new run directory without resetting the target. --extract-ramoops
 reads and decodes the pinned 4 MiB hotdog ramoops reservation.
+--list-memory-regions reads and prints the Sahara crashdump table without
+dumping regions or resetting the target.
 USAGE
 }
 
@@ -67,6 +70,7 @@ early_breadcrumb_address="${HOTDOG_EARLY_BREADCRUMB_PHYS:-}"
 memory_address=""
 memory_length=""
 extract_ramoops=0
+list_memory_regions=0
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--early-breadcrumb-address)
@@ -85,6 +89,11 @@ while [ "$#" -gt 0 ]; do
 		--extract-ramoops)
 			[ "$action" = inspect ] || die "Ramoops extraction requires inspect" 2
 			extract_ramoops=1
+			shift
+			;;
+		--list-memory-regions)
+			[ "$action" = inspect ] || die "Memory-region listing requires inspect" 2
+			list_memory_regions=1
 			shift
 			;;
 		*)
@@ -139,6 +148,10 @@ if [ "$action" = inspect ] && [ -n "$memory_address" ]; then
 		--memory-output "$memory_output"
 	)
 	log "Bounded physical read: $memory_address + $memory_length -> $memory_output"
+fi
+if [ "$action" = inspect ] && [ "$list_memory_regions" -eq 1 ]; then
+	helper_args+=(--list-memory-regions)
+	log "Sahara memory-region table: read-only listing"
 fi
 
 "$PYTHON_BIN" -u "$HELPER" "${helper_args[@]}"

@@ -144,6 +144,19 @@ scripts/qualcomm-900e-autorescue.sh inspect \
   --early-breadcrumb-address 0x81c0f800
 ```
 
+The first fresh Sahara session can also enumerate the firmware-provided memory
+debug table and extract the bounded ramoops reservation in one read-only
+connection:
+
+```bash
+scripts/qualcomm-900e-autorescue.sh inspect \
+  --list-memory-regions --extract-ramoops
+```
+
+This prints region names and physical ranges but does not dump those regions.
+Combining the operations matters because a completed inspection can consume
+the initial memory-debug response until the next physical boot cycle.
+
 The same wrapper can issue a protocol-level SoC reset with the `reset` action.
 On the tested HD1913 this reset is accepted, but a persistently failing boot
 candidate may return to `900e`; it does not alter slots or restore partitions.

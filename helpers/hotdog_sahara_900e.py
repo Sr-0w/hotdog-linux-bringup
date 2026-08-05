@@ -107,6 +107,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--memory-address", type=physical_address)
     parser.add_argument("--memory-length", type=bounded_memory_length)
     parser.add_argument("--memory-output", type=Path)
+    parser.add_argument(
+        "--list-memory-regions",
+        action="store_true",
+        help="read and print the Sahara memory-debug table without dumping it",
+    )
     args = parser.parse_args()
 
     memory_options = (
@@ -123,7 +128,46 @@ def parse_args() -> argparse.Namespace:
         )
     if args.action != "inspect" and args.memory_address is not None:
         parser.error("physical memory reads require the inspect action")
+    if args.action != "inspect" and args.list_memory_regions:
+        parser.error("memory-region listing requires the inspect action")
     return args
+
+
+def print_memory_regions(protocol, response) -> bool:
+    """Read and print the crashdump region table without resetting the target."""
+
+    memory_table_addr = response["data"].memory_table_addr
+    memory_table_length = response["data"].memory_table_length
+    packet_size = 64 if protocol.bit64 else 52
+
+    print(f"memory_table_address=0x{memory_table_addr:016x}")
+    print(f"memory_table_length=0x{memory_table_length:x}")
+    print(f"memory_table_entry_size={packet_size}")
+    if memory_table_length == 0 or memory_table_length % packet_size:
+        print("error=invalid-memory-table-length", file=sys.stderr)
+        return False
+
+    table = protocol.read_memory(memory_table_addr, memory_table_length)
+    if table is None or len(table) != memory_table_length:
+        print("error=short-memory-table-read", file=sys.stderr)
+        return False
+
+    print(f"memory_region_count={len(table) // packet_size}")
+    for index in range(0, len(table), packet_size):
+        entry_data = table[index : index + packet_size]
+        if protocol.bit64:
+            entry = protocol.ch.parttbl_64bit(entry_data)
+        else:
+            entry = protocol.ch.parttbl(entry_data)
+        filename = entry.filename.rstrip(b"\x00").decode("utf-8", "replace")
+        description = entry.desc.rstrip(b"\x00").decode("utf-8", "replace")
+        print(
+            "memory_region="
+            f"{index // packet_size}\t{filename}\t{description}\t"
+            f"0x{entry.mem_base:016x}\t0x{entry.length:x}\t"
+            f"0x{entry.save_pref:x}"
+        )
+    return True
 
 
 def main() -> int:
@@ -221,6 +265,9 @@ def main() -> int:
         ):
             print("error=memory-debug-transfer-unavailable", file=sys.stderr)
             return 8
+
+        if args.list_memory_regions and not print_memory_regions(protocol, response):
+            return 14
 
         breadcrumb = protocol.read_memory(0xA9BFF000, 0x40)
         restart_reason = protocol.read_memory(0x146BF65C, 0x04)
