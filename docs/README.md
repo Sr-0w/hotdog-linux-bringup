@@ -40,8 +40,9 @@ credentials, proprietary dumps, or workstation-specific paths.
   boot-image hashes.
 - [evidence/2026-08-05-mainline616-public-image.md](evidence/2026-08-05-mainline616-public-image.md):
   clean public-package rebuild and a complete Plasma Mobile image, including
-  filesystem validation, application inventory, verified `super`/`boot_b`
-  staging, and the first direct hardware boot of the clean image.
+  filesystem validation, application inventory, automatic deterministic AVB
+  generation, verified `super`/`boot_b` staging, direct hardware boot, and
+  smooth 0 A.D. gameplay on the clean image.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.

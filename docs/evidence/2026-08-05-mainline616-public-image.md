@@ -101,6 +101,40 @@ accepted hardware artifact is its deterministic 96 MiB AVB envelope, SHA256
 The working development image remains intact in `userdata` as a separately
 addressable fallback.
 
+### Automatic AVB generation
+
+Device package `3-r7` installs a hotdog-specific `boot-deploy` postprocess hook
+and depends on `android-tools-avbtool`. The hook receives the normal header-v2
+image after `mkbootimg`, derives its salt from the raw-image SHA256, appends a
+hash footer for partition `boot` with algorithm `NONE`, and requires a final
+size of exactly 100,663,296 bytes. It then verifies the partition name,
+algorithm, salt, original image size, and AVB structure before returning the
+image to `boot-deploy`.
+
+A strict package build produced `device-oneplus-hotdog-3-r7.apk`. A subsequent
+clean pmbootstrap install assembled 1,524 packages and invoked the hook in both
+the initial and final UUID-aware `mkinitfs` passes. The final offline image has
+these identities:
+
+| Property | Result |
+|---|---|
+| `pmOS_boot` UUID | `b66e886a-cf8e-48e3-9066-193f6bc73179` |
+| `pmOS_root` UUID | `4397ec91-e28e-4d19-ae00-008043fd0e73` |
+| Raw image size | 37,203,968 bytes |
+| Raw image SHA256 and AVB salt | `ce21ffee7a89ba6fbafc9f85be4aab60b746add3ff0f172bdd9988f061adf1ff` |
+| Final AVB image size | 100,663,296 bytes |
+| Final AVB image SHA256 | `2f90de75cdaa2041d63a143f02864d3e473b3877e04520edd9c93eedadf8766b` |
+| AVB release string | `avbtool 1.4.0` |
+
+`avbtool verify_image` accepts the result. Reconstructing the envelope from the
+raw prefix with the image's target-side avbtool produced identical bytes, and
+rerunning the complete final `mkinitfs` path produced the same AVB SHA256.
+Determinism is therefore established for the resolved package set; the AVB
+release string means byte identity across different avbtool versions is not
+claimed. This `3-r7` image has not been written to hardware. It preserves the
+same footer contract already accepted on the phone and removes the manual
+wrapper from normal future builds.
+
 ## Verified hardware staging
 
 The clean expanded image was staged from the running source-package `r22`
@@ -167,5 +201,10 @@ image was assembled. A physical 0 A.D. 0.28.0 session launched, accepted
 input, and rendered gameplay smoothly. A post-session kernel scan contained
 no UFS, ext4, Adreno, panic, oops, or Qualcomm-transition failure. The later
 verified `super` staging operation preserved that same healthy source boot.
-The subsequent direct boot proves that the same public package directories
-also produce the installed rootfs and boot pair used on hardware.
+
+After the clean public image direct-booted from `boot_b` and `super`, Discover
+installed 0 A.D. on that clean installation as well. The game launches and
+runs smooth interactive gameplay. This closes the continuity inference: the
+publication-shaped rootfs itself now has direct application-level evidence for
+Flatpak deployment, large UFS-backed content, accelerated graphics, input, and
+runtime stability.

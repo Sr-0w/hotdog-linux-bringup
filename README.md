@@ -48,8 +48,10 @@ Its 14,002,683,904-byte expanded image was written to the otherwise unused
 the accepted `userdata` system stayed online. The matching 96 MiB AVB image was
 then fully read back from `boot_b` and direct-booted. Fresh SSH attested the
 clean filesystem UUIDs, `super` loop backing, 1,523-package installation,
-Plasma session, native 90 Hz KMS scanout, radios, inputs, and power supplies;
-see the [public-image evidence](docs/evidence/2026-08-05-mainline616-public-image.md).
+Plasma session, native 90 Hz KMS scanout, radios, inputs, and power supplies.
+0 A.D. 0.28.0 subsequently launched from Discover and ran smooth interactive
+gameplay on that same clean installation. See the
+[public-image evidence](docs/evidence/2026-08-05-mainline616-public-image.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
 corrected the MSM DSI command-mode packetization for the panel's two 720-pixel
@@ -210,15 +212,20 @@ unlocking restored correct scanout. The remaining display issue is therefore
 blank/unblank robustness, not mode availability. See the
 [dynamic refresh evidence](docs/evidence/2026-08-05-mainline616-dynamic-refresh.md).
 
-Device package revision `3-r5` also makes the tested Plasma Mobile application
-set reproducible. Its install-if subpackage selects Discover and its Flatpak
+Device package revision `3-r7` retains the reproducible Plasma Mobile
+application set introduced in `3-r5`. Its install-if subpackage selects
+Discover and its Flatpak
 backend, a mobile browser, terminal, file manager, messaging and phone tools,
 utilities, and `polkit-elogind` so the active local session can manage
 NetworkManager. It installs conservative PowerDevil defaults that keep USB and
 SSH available by avoiding automatic system suspend. Two strict builds produced
 identical normalized metadata and the same installed configuration payload;
-their APK archives differ only in generated timestamps and signatures. A fresh
-full image remains to be assembled and hardware-tested.
+their APK archives differ only in generated timestamps and signatures. Revision
+`3-r7` additionally makes `boot-deploy` wrap every generated hotdog boot image
+in the validated 96 MiB AVB contract. A fresh 1,524-package image completed the
+full install path and two final `mkinitfs` runs reproduced the same AVB image.
+That packaging-only revision remains to be hardware-tested; the active clean
+installation uses the otherwise equivalent `3-r6` device package.
 
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
@@ -239,10 +246,10 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Component | Status | Notes |
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Clean public-tree image direct-boots | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. A clean rebuild of only the published package directories produces the kernel, DTB, initramfs, 1,523-package Plasma rootfs, and deterministic AVB image now running directly from `boot_b` plus `super`. Both physical writes passed complete readback verification. |
-| UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, and application launch without a UFS error or Qualcomm transition. |
+| Mainline 6.16 pmaports image | Clean public-tree image direct-boots | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. A clean rebuild of only the published package directories produces the kernel, DTB, initramfs, 1,523-package Plasma rootfs, and deterministic AVB image now running directly from `boot_b` plus `super`. Both physical writes passed complete readback verification. Device package `3-r7` also completes a fresh 1,524-package offline install with AVB generated automatically by `boot-deploy`. |
+| UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, installation, and smooth interactive 0 A.D. gameplay without a UFS error or Qualcomm transition. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
-| Plasma Mobile | Working in the clean public-tree image | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output at 90 Hz, and keeps USB SSH available. The same public package tree installs the complete mobile application set, Discover/Flatpak, and the temporary no-suspend policy. |
+| Plasma Mobile | Working in the clean public-tree image | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output at 90 Hz, and keeps USB SSH available. The same public package tree installs the complete mobile application set, Discover/Flatpak, and the temporary no-suspend policy; 0 A.D. launches and runs smoothly on this clean installation. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
 | SSH | Working directly | Revision `r17` returns OpenSSH over USB and reports `Linux hotdog 6.16.0-sm8150 #18-oneplus-hotdog-mainline616`. |
 | USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
@@ -473,14 +480,21 @@ git -C src/postmarketos/pmaports checkout \
   --target-pmaports "$PWD/src/postmarketos/pmaports"
 HOTDOG_PMAPORTS_SM8150="$PWD/src/postmarketos/pmaports" \
 HOTDOG_PMBOOTSTRAP_WORK="$PWD/pmbootstrap-work-current" \
-./scripts/pmbootstrap-hotdog.sh -j 32 install --split --no-sparse
+./scripts/pmbootstrap-hotdog.sh -j 32 install --split --no-sparse \
+  --add polkit-elogind
 ```
 
-The exact package and filesystem identities from the validated build are in
-[the 2026-08-03 pmaports evidence](docs/evidence/2026-08-03-mainline616-pmaports.md).
+Device package `3-r7` installs a `boot-deploy` postprocess hook, so the normal
+install command above emits the final 100,663,296-byte, header-v2 AVB image
+without a separate wrapping step. The hook derives its salt from the raw image,
+uses the `boot` partition name and `NONE` algorithm, then verifies the final
+size, footer, descriptor, salt, and original image size. The exact package and
+filesystem identities from the validated builds are in the
+[2026-08-03 pmaports evidence](docs/evidence/2026-08-03-mainline616-pmaports.md)
+and [clean public-image evidence](docs/evidence/2026-08-05-mainline616-public-image.md).
 
-Wrap the generated header-v2 image in the exact OnePlus boot-partition AVB
-contract without modifying the raw input:
+The standalone wrapper remains available for validating or converting older
+raw artifacts without modifying the input:
 
 ```bash
 ./scripts/wrap-pmaports-boot-avb.sh \
@@ -488,8 +502,9 @@ contract without modifying the raw input:
   --outdir build/pmaports-mainline616-avb
 ```
 
-The wrapper rejects incompatible headers, load addresses, command lines, and
-partition sizes, then verifies the AVB footer and records component hashes.
+It rejects incompatible headers, load addresses, command lines, and partition
+sizes, then verifies the AVB footer and records component hashes. It is not
+required for images generated by device package `3-r7` or later.
 
 Assemble the matching split filesystems into the deterministic nested GPT used
 for the first hardware validation:

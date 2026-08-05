@@ -17,8 +17,13 @@ standard `boot-deploy` image also direct-booted and passed a synchronized 6 GiB
 buffered-write soak. A fresh image assembled only from the public pmaports tree
 is installed in `super` with complete SHA-256 readback, and its matching
 deterministic AVB image direct-boots from `boot_b` into Plasma Mobile. Repeated
-boots and removal of the remaining packaging workarounds are the next
-reproducibility gates. Revision `r20` remains the binary control.
+boots have kept the clean image healthy, including a successful Discover
+installation and smooth interactive 0 A.D. gameplay. Device package `3-r7`
+closes the separate manual AVB-wrapping step: a full clean 1,524-package build
+generated the verified fixed-size image twice with identical bytes. Automatic
+`polkit-elogind` provider selection and eventual generic `boot-deploy` support
+for the hotdog footer contract are the remaining packaging gates. Revision
+`r20` remains the binary control.
 
 ## Priority 0: reproducible mainline boot
 
