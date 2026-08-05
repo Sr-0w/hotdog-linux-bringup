@@ -396,6 +396,45 @@ validate_hotdog_plasma_apps_contract() {
 		die "automatic suspend must be disabled for all three PowerDevil profiles"
 }
 
+validate_hotdog_avb_contract() {
+	local aport_dir="aports/device/testing/device-oneplus-hotdog"
+	local apkbuild="$aport_dir/APKBUILD"
+	local deviceinfo="$aport_dir/deviceinfo"
+	local hook="$aport_dir/postprocess-boot-avb.sh"
+	local expected
+
+	log "hotdog deterministic AVB boot-image contract"
+	[ -x "$hook" ] || die "missing executable hotdog AVB postprocess hook"
+	sh -n "$hook"
+	shellcheck --severity=warning --shell=sh -- "$hook"
+
+	grep -Fqx \
+		'deviceinfo_mkinitfs_postprocess="/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"' \
+		"$deviceinfo" || die "deviceinfo does not select the hotdog AVB hook"
+	grep -q '^[[:space:]]*android-tools-avbtool$' "$apkbuild" ||
+		die "device package does not depend on android-tools-avbtool"
+	grep -q '^[[:space:]]*postprocess-boot-avb[.]sh$' "$apkbuild" ||
+		die "device package does not source the hotdog AVB hook"
+	grep -Fq '"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"' \
+		"$apkbuild" || die "device package does not install the hotdog AVB hook"
+
+	expected="$(awk '$2 == "postprocess-boot-avb.sh" { print $1 }' "$apkbuild")"
+	[[ "$expected" =~ ^[0-9a-f]{128}$ ]] ||
+		die "device package has no unique SHA512 for the hotdog AVB hook"
+	verify_sha512 "$expected" "$hook"
+
+	grep -Fq 'partition_size=100663296' "$hook" ||
+		die "hotdog AVB hook does not pin the 96 MiB boot partition"
+	grep -Fq -- '--partition_name boot' "$hook" ||
+		die "hotdog AVB hook does not target the boot partition"
+	grep -Fq -- '--algorithm NONE' "$hook" ||
+		die "hotdog AVB hook does not use the accepted algorithm"
+	grep -Fq -- '--salt "$raw_sha"' "$hook" ||
+		die "hotdog AVB hook salt is not derived from the raw image digest"
+	grep -Fq 'avbtool verify_image --image "$boot_image"' "$hook" ||
+		die "hotdog AVB hook does not verify its result"
+}
+
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
@@ -593,6 +632,7 @@ main() {
 	validate_mainline616_aport_inputs
 	validate_hotdog_wifi_package_contract
 	validate_hotdog_plasma_apps_contract
+	validate_hotdog_avb_contract
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
 	validate_disabled_r6_ufs_probe
