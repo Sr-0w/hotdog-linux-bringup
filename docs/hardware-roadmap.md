@@ -26,26 +26,32 @@ For every experiment below:
 **Proven current state.** Direct boot receives the bootloader's complete
 multi-gigabyte memory map. A full `r20` DDR capture found that the page
 allocator treated `0x85e40000-0x85f00000` as RAM even though the HD1913 stock
-DT includes it in `xbl_aop_mem`. Two Flatpak page-cache folios occupied that
-entire interval immediately before Qualcomm crashdump. Revision `r21` adds the
-missing `no-map` reservation. The historical K1 path remains deliberately
-limited to the low bank and separately reserves `0x89d00000-0x8b700000`.
+DT includes it in `xbl_aop_mem`. Revision `r21` excluded that interval, but a
+second full dump found the active Flatpak staging inode occupying
+`0x99518000-0x99580000`, inside another stock-owned gap. A complete union
+comparison found two intervals left: `0x89b00000-0x89d00000` from
+`removed_regions` and `0x99517000-0x99600000` from `cdsp_regions`. Revision
+`r22` reserves both. The historical K1 path remains deliberately limited to
+the low bank.
 
-**Current experiment.** Boot the exact `r20` kernel and userspace with only the
-missing XBL/AOP reservation added, then repeat the 3.5 GB Flatpak import that
-reliably entered `900e`.
+**Current experiment.** Boot the exact `r20` kernel and userspace with all
+three proven stock-owned gaps reserved, then repeat the 3.5 GB Flatpak import
+that reliably entered `900e`. The verified 96 MiB A/B image is
+`a54ed347dbb897a402f941301c5a8763bb0bd286e141eeff3a2d47094de1f45b`;
+two strict source builds also produced the same `r22` pmaports package.
 
-**Single-variable experiment.** Add only `0x85e40000/0xc0000` as `no-map`.
-Keep the exact `r20` kernel, initramfs, command line, UFS SMMU stream, DMA32
-aperture, and every other DT property unchanged.
+**Single-variable experiment.** Relative to `r21`, add only
+`0x89b00000/0x200000` and `0x99517000/0xe9000` as `no-map`. Keep the exact
+`r20` kernel, initramfs, command line, UFS SMMU stream, DMA32 aperture, and
+every other DT property unchanged.
 
 **Success criteria.** The direct kernel reaches the same postmarketOS root,
 reports the reservation, and completes the previously failing import. UFS,
 USB SSH, display, touch, GPU, Wi-Fi, and Bluetooth must remain available.
 
-**Risks and fallback.** The candidate removes only 768 KiB that stock already
-withholds, so the expected regression risk is low. Retain the exact `r20`
-image as the binary control and capture another full dump if `900e` remains.
+**Risks and fallback.** The candidate removes only memory that the stock tree
+already withholds. Retain the exact `r20` image as the binary control and
+capture another full dump if `900e` remains.
 
 ## 2. Apps SMMU
 

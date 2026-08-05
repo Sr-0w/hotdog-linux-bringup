@@ -266,6 +266,8 @@ expect_config 'CONFIG_QRTR_SMD=m'
 memory=/memory@80000000
 reserved=/reserved-memory
 xbl_aop_gap=$reserved/memory@85e40000
+stock_removed_gap=$reserved/memory@89b00000
+stock_cdsp_gap=$reserved/memory@99517000
 soc=/soc@0
 ufs=$soc/ufshc@1d84000
 qup=$soc/geniqup@ac0000
@@ -307,6 +309,14 @@ expect_value xbl-aop-gap '0 85e40000 0 c0000' \
 	fdtget -tx "$dtb" "$xbl_aop_gap" reg
 fdtget -p "$dtb" "$xbl_aop_gap" | grep -qx no-map ||
 	die "XBL/AOP gap reservation is missing no-map"
+expect_value stock-removed-gap '0 89b00000 0 200000' \
+	fdtget -tx "$dtb" "$stock_removed_gap" reg
+fdtget -p "$dtb" "$stock_removed_gap" | grep -qx no-map ||
+	die "stock removed_regions gap is missing no-map"
+expect_value stock-cdsp-gap '0 99517000 0 e9000' \
+	fdtget -tx "$dtb" "$stock_cdsp_gap" reg
+fdtget -p "$dtb" "$stock_cdsp_gap" | grep -qx no-map ||
+	die "stock CDSP gap is missing no-map"
 expect_value ramoops '0 a9800000 0 400000' \
 	fdtget -tx "$dtb" "$reserved/ramoops@a9800000" reg
 expect_value ramoops-record 40000 \

@@ -275,6 +275,72 @@ The source-built kernel and DTB are respectively
 `64d1bb44387944f8eb12c02615e9aa9a985f91037e582f90d6fa7d3063e7e8dd`
 and `ba362ef010f34473f602c39c85f99c69bc5b2befaa01a2cf1e0aa401c0d13d34`.
 
+## R21 hardware result and second DDR analysis
+
+The isolated `r21` image direct-booted, returned USB SSH, and reported the new
+`0x85e40000-0x85f00000` `no-map` reservation through both the live device tree
+and `/proc/iomem`. The same pull-only Flatpak test nevertheless entered
+`05c6:900e` after allocating the 3,508,827,314-byte object. The reservation
+therefore removed the exact `r20` collision but did not complete the handset
+memory ownership map.
+
+QDL captured another complete 8 GiB DDR snapshot without resetting the phone.
+Qualcomm's parser recovered a coherent `#21-oneplus-hotdog-mainline616` state:
+
+- firmware recorded an FIQ, while Linux recorded no panic or oops;
+- the Flatpak worker remained current on CPU 7;
+- UFS and ext4 emitted no failure before firmware stopped the AP;
+- staging inode 533228 had address space `0xffffff8084ff32a0`;
+- source inode 300798 had address space `0xffffff80aab62120`.
+
+Walking both XArrays shows that the source inode does not overlap any omitted
+stock interval. The target inode has these folios in the stock CDSP range:
+
+| File page index | Physical extent | Order |
+|---:|---:|---:|
+| 445272 | `0x99518000-0x99520000` | 3 |
+| 445552 | `0x99520000-0x99530000` | 4 |
+| 445584 | `0x99530000-0x99540000` | 4 |
+| 446080 | `0x99540000-0x99550000` | 4 |
+| 446216 | `0x99550000-0x99558000` | 3 |
+| 446472 | `0x99558000-0x99560000` | 3 |
+| 446112 | `0x99560000-0x99580000` | 5 |
+
+The HD1913 stock tree reserves `0x98900000-0x99d00000` as `cdsp_regions`.
+Firmware relocation in the mainline tree reserves through `0x99517000` and
+resumes at `0x99600000`, exposing the exact interval occupied above. A union
+comparison of every enabled stock reservation against `r21` found only two
+remaining differences:
+
+| Stock owner | Missing mainline interval | Size |
+|---|---:|---:|
+| `removed_regions` | `0x89b00000-0x89d00000` | 2 MiB |
+| `cdsp_regions` | `0x99517000-0x99600000` | 932 KiB |
+
+Revision `r22` reserves both intervals as `no-map`. It keeps the exact `r20`
+kernel, initramfs, command line, UFS configuration, and userspace for the next
+hardware A/B.
+
+The A/B image was assembled and independently unpacked with byte-identical
+kernel, initramfs, and DTB payloads. Its normalized DT differs from `r21` only
+by the two reservations above:
+
+| Hardware-test output | Size | SHA256 |
+|---|---:|---|
+| Kernel | 27,572,232 bytes | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+| Initramfs | 9,478,673 bytes | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| DTB | 140,789 bytes | `c1de794a1a02af2e621542be2e2f5924860003fcd0f158201ff7c9a1dfa74b19` |
+| AVB boot image | 100,663,296 bytes | `a54ed347dbb897a402f941301c5a8763bb0bd286e141eeff3a2d47094de1f45b` |
+
+The source path is also reproducible: two strict pmbootstrap builds produced
+the same 25,537,630-byte `r22` APK, SHA256
+`07dbc0cee10809f51775c8669bbaaf2540a4225f3add0fa171d92c6d4e426f33`.
+Its 27,572,232-byte kernel is
+`2adc3b38891da479b7e14ee71d33e45564e76639b222cc6c78ed423c33c086b7`,
+and its 141,026-byte DTB is
+`984d54b14ff0acaf47619e78451800db23eb3edaf98938290f5bbfbcc327b5ca`.
+The hardware test remains pending.
+
 ## Safety
 
 `test-flatpak-ufs-finalization.sh` never flashes or resets the phone. It splits

@@ -33,7 +33,11 @@ aperture with or without the SMMU attachment. Revision `r20` restores legacy
 UFS completion handling to hardirq context. A complete DDR capture then showed
 that neither UFS mode was the crash trigger: Linux had allocated two Flatpak
 page-cache folios across a 768 KiB firmware reservation missing from the
-mainline hotdog DT. Revision `r21` reserves that stock XBL/AOP range.
+mainline hotdog DT. Revision `r21` reserves that stock XBL/AOP range. Its
+hardware A/B excluded the original collision but entered crashdump again; the
+second DDR snapshot found the staging inode in the next stock-owned interval.
+Revision `r22` completes the two remaining gaps in the HD1913 stock reservation
+union.
 
 ## Source contract
 
@@ -49,6 +53,9 @@ mainline hotdog DT. Revision `r21` reserves that stock XBL/AOP range.
   reserving `0x85e40000-0x85f00000` as `no-map`. Together with the adjacent
   generic SM8150 reservations, firmware memory is excluded continuously from
   `0x85d00000` through `0x85f40000`.
+- Revision `r22` also reserves `0x89b00000-0x89d00000` from stock
+  `removed_regions` and `0x99517000-0x99600000` from stock `cdsp_regions`.
+  The stock reservation union has no remaining bytes exposed to Linux.
 - The native Samsung DSC panel, TE signal, and 16x32 framebuffer console are
   built in.
 - QUPv3 wrapper 2, GPI DMA 2, I2C17, and the schema-complete S6SY761 node are
@@ -146,7 +153,7 @@ The `r19` image reproduced the crash. Revision `r20` then reproduced it with
 legacy hardirq completions, ruling out that interrupt-context change as the
 sole cause.
 
-## Prepared r21 XBL/AOP reservation candidate
+## r21 result and r22 reservation completion
 
 The complete `r20` DDR capture found the Flatpak staging file open in a
 `write(2)` call with no UFS command outstanding. Its page cache owned an
@@ -164,9 +171,40 @@ command line. Its normalized DT differs by one `no-map` node:
 | DTB | `2908d19fa222a07a71d12abf98f9178ee77e372fb6a107bd61bef8d597444e35` |
 | AVB boot image | `1dc2d7708af97d1a07be517a7927eb60e499b63754c2f7d28d6ca90618859a61` |
 
-The package source and validator carry the same reservation. Hardware
-validation must confirm that the previous 3.5 GB buffered import completes
-without entering Qualcomm crashdump.
+The package source and validator carry the same reservation. On hardware,
+`r21` booted normally and `/proc/device-tree` plus `/proc/iomem` confirmed the
+new exclusion. The same 3.5 GB buffered import still entered Qualcomm
+crashdump, so the XBL/AOP collision was real but not the only missing range.
+
+The second full DDR snapshot contains no Linux panic or UFS/ext4 error. The
+active Flatpak staging inode instead owns folios spanning
+`0x99518000-0x99580000`. Stock `cdsp_regions` owns that memory, while `r21`
+leaves `0x99517000-0x99600000` available. A complete union comparison found
+only that interval and `0x89b00000-0x89d00000` from stock `removed_regions`
+still missing. Revision `r22` reserves both as `no-map`.
+
+The isolated `r22` hardware candidate changes only those two nodes relative
+to `r21`; its normalized DT contains no other difference. It keeps the exact
+`r20` kernel, initramfs, and command line:
+
+| Hardware-test output | Size | SHA256 |
+|---|---:|---|
+| Kernel | 27,572,232 bytes | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+| Initramfs | 9,478,673 bytes | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| DTB | 140,789 bytes | `c1de794a1a02af2e621542be2e2f5924860003fcd0f158201ff7c9a1dfa74b19` |
+| AVB boot image | 100,663,296 bytes | `a54ed347dbb897a402f941301c5a8763bb0bd286e141eeff3a2d47094de1f45b` |
+
+Two independent strict `r22` builds also produced a byte-identical pmaports
+package and ran the complete DT contract before and after module
+installation:
+
+| Source-built output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r22.apk` | 25,537,630 bytes | `07dbc0cee10809f51775c8669bbaaf2540a4225f3add0fa171d92c6d4e426f33` |
+| `boot/vmlinuz` | 27,572,232 bytes | `2adc3b38891da479b7e14ee71d33e45564e76639b222cc6c78ed423c33c086b7` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 141,026 bytes | `984d54b14ff0acaf47619e78451800db23eb3edaf98938290f5bbfbcc327b5ca` |
+
+Hardware validation of `r22` remains pending.
 
 Two independent strict `r21` builds produced byte-identical packages and ran
 the updated DT contract before and after module installation:

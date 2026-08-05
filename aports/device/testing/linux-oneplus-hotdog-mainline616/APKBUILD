@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=21
+pkgrel=22
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -68,6 +68,7 @@ source="
 	0029-arm64-dts-hotdog-restore-ufs-smmu.patch
 	0030-ufs-core-restore-legacy-hardirq-completions.patch
 	0031-arm64-dts-hotdog-reserve-xbl-aop-gap.patch
+	0032-arm64-dts-hotdog-complete-stock-reservations.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -153,5 +154,6 @@ ac4c3bb5a1ecf2da526b142b9fb03301d60f307858a79758189c3f46704e59354e5ac35f7448b17f
 fd064c997fb59b08cc61698eeb1db70da62f2200b60b776226eed6c000b28de981933985f9a82d5802e059bdadfd58e17cb74a40711fcce6a822b05920e94819  0029-arm64-dts-hotdog-restore-ufs-smmu.patch
 0a89338ea21109c43883535faeca8ecfdefcbe64a8fa64a01ee41c38ea2ab0c58608587e72e01b470747c271f1131dafc3086d4e90416a80e2c98e6e249b938f  0030-ufs-core-restore-legacy-hardirq-completions.patch
 859f1f5e906c4962efb76490efed737a3173b29a1cc7bb3633ccb584b67979f84ef2ca0619a23d8387bdde64ae8e630e284a7dc7867b121f0b625beac446f2cd  0031-arm64-dts-hotdog-reserve-xbl-aop-gap.patch
-05a205504e5b643358d7b8392b1da111442c9f2cefc1c876f4e6eba45bd1fe4791eac15edbc3eee650e7343e982a2587cad80439f4d32d0e16fc5043feadd9b9  validate-mainline616-build.sh
+1ef90c5b48699d5acde804eb3b44e45bf8d0d1da56919083562785d6a0a47864ccd6fc7a10900e43633b9f2998c52b19fc73d04918775aa23361277754ba3820  0032-arm64-dts-hotdog-complete-stock-reservations.patch
+ee2bcff4b1e0609f046e3870a7297f788328f17aca3093e7c56554dd4eefa518efa7fcb2048de3102d8ad47675b6231b7f915e79a0d38732e1fe8845bf8ee94a  validate-mainline616-build.sh
 "
