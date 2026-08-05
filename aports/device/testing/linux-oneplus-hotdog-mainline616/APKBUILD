@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=27
+pkgrel=28
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -74,6 +74,7 @@ source="
 	0035-arm64-dts-hotdog-add-internal-audio-card.patch
 	0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
 	0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
+	0038-asoc-tfa9874-add-read-only-silicon-probe.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -127,7 +128,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-dc887240f058fb3cec90bb65207e813838d7284f20533b5edef0c42e9c53a4eeef1297d31003d289f7b3b19a7f6193a88f4cd5bca3d36ec1121c21f1094283cb  config-oneplus-hotdog-mainline616.aarch64
+a5bcd1566a41a2af9a062e35e6b66fdc9680bb8b763898d362ef9d079f7aa986bd2aa4dec5822cd561e3a76bb4878523812d5f21a0eb6b5e8a43eb8eb3bd2f11  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -165,5 +166,6 @@ d390936462c39a7f5048f6b52781c64f1396c1d6eb917c4d7c707a0f6544c9cf7704651bda01fa0f
 e801913fe7c3d6f98e095af3f0a478e8608abff4df9d3fb7a9ddd70d6b4f9f91f0e8315f84625e211cbc503d43da2bec7f8523e1cbfaf1255d187c836ec77db1  0035-arm64-dts-hotdog-add-internal-audio-card.patch
 6717661469b798ffc7697779c04c9a08e22e1febc05b85d41357b01562075954214bcf7c316d24ff0978e7adcb10463f51e3ae84ec977c4e44c7b17426523316  0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
 673ffb44a96b150c2f038488b29bb5553b598f105a3de645fa2077f062e355698e3919622bbbd7a686d3f49804119993fd281bfe0a2959ede8d023894fc3d5e4  0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
-49d091c76ccf2922e89347a3ddc09ab1d4ccabafe1556a775b2c6c098921957e4680920f09174b2ab9d8a2869785d3d44fe4b7ca017e35be620d9fd0ca1756b8  validate-mainline616-build.sh
+25f819d18c607d3b57e764f4cd2af6c3f9789916887bb6e5f1cc504e790dedb9a36f490f60acdd08e0e59bf7a5b317ea57e86565a194978f25966d883dcffd58  0038-asoc-tfa9874-add-read-only-silicon-probe.patch
+6ba8878f3a5d654b611e597b27df22b35b0d00f4390afaa3d2b07efdc53f27251a70c41a7a26731e2df69d10720c79d09a3a0cbb2bd39e6249c4e084821c8e71  validate-mainline616-build.sh
 "

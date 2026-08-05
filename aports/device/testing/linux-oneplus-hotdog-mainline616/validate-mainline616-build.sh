@@ -47,6 +47,8 @@ panel_source=drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
 [ -s "$panel_source" ] || die "missing OnePlus panel source: $panel_source"
 ufs_source=drivers/ufs/host/ufs-qcom.c
 [ -s "$ufs_source" ] || die "missing Qualcomm UFS source: $ufs_source"
+tfa9874_source=sound/soc/codecs/tfa9874.c
+[ -s "$tfa9874_source" ] || die "missing TFA9874 source: $tfa9874_source"
 
 python3 - "$smbx_source" <<'PY'
 import pathlib
@@ -178,6 +180,50 @@ if sm8150_branch.count("DMA_BIT_MASK(32)") != 1:
     raise SystemExit("SM8150 UFS branch must contain exactly one DMA32 selection")
 PY
 
+python3 - "$tfa9874_source" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+
+required = (
+    "#define TFA9874_REVISION_REG\t0x03",
+    "#define TFA9874_REVISION_0C74\t0x0c74",
+    ".val_format_endian = REGMAP_ENDIAN_BIG,",
+    ".max_register = TFA9874_REVISION_REG,",
+    ".writeable_reg = tfa9874_writeable_reg,",
+    ".cache_type = REGCACHE_NONE,",
+    "return reg == TFA9874_REVISION_REG;",
+    "regmap_read(regmap, TFA9874_REVISION_REG, &revision)",
+    "revision != TFA9874_REVISION_0C74",
+    "amplifier remains disabled",
+    "&tfa9874_component_driver,",
+    "NULL, 0);",
+)
+for value in required:
+    if value not in source:
+        raise SystemExit(f"missing read-only TFA9874 contract: {value!r}")
+
+if source.count("regmap_read(") != 1:
+    raise SystemExit("TFA9874 probe must perform exactly one register read")
+if source.count("return false;") != 1:
+    raise SystemExit("TFA9874 writeability guard is not unambiguous")
+
+for forbidden in (
+    "regmap_write(",
+    "regmap_bulk_write(",
+    "regmap_update_bits(",
+    "regmap_set_bits(",
+    "regmap_clear_bits(",
+    "gpiod_",
+    "reset_control_",
+    "snd_soc_dai_driver",
+    "snd_soc_dapm_",
+):
+    if forbidden in source:
+        raise SystemExit(f"unsafe operation in read-only TFA9874 probe: {forbidden}")
+PY
+
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	find "$modules_dir" -type f -name '*.ko' -print -quit | grep -q . ||
@@ -290,6 +336,7 @@ expect_config 'CONFIG_SND_SOC_QDSP6_AFE_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ASM_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ROUTING=m'
 expect_config 'CONFIG_SND_SOC_SM8150=m'
+expect_config 'CONFIG_SND_SOC_TFA9874=y'
 expect_config 'CONFIG_I2C_QCOM_GENI=y'
 expect_config 'CONFIG_TYPEC=y'
 expect_config 'CONFIG_TYPEC_MUX_FSA4480=y'
@@ -309,6 +356,8 @@ gpi2=$soc/dma-controller@c00000
 i2c4=$qup0/i2c@890000
 fsa4480=$i2c4/typec-mux@42
 fsa4480_endpoint=$fsa4480/port/endpoint
+tfa9874_top=$i2c4/audio-codec@34
+tfa9874_bottom=$i2c4/audio-codec@35
 i2c17=$qup2/i2c@c80000
 touch=$i2c17/touchscreen@48
 gpu=$soc/gpu@2c00000
@@ -433,9 +482,16 @@ expect_value fsa4480-pinctrl "$fsa_usbc_ana_en_phandle" \
 	fdtget -tx "$dtb" "$fsa4480" pinctrl-0
 expect_value pm8150b-typec-status disabled \
 	fdtget -ts "$dtb" "$pm8150b_typec" status
-if fdtget -l "$dtb" "$i2c4" | grep -Eq 'audio-codec|tfa98'; then
-	die "unsupported TFA9894 speaker amplifiers must remain absent"
-fi
+for amplifier in "$tfa9874_top" "$tfa9874_bottom"; do
+	expect_value "$amplifier-compatible" nxp,tfa9874 \
+		fdtget -ts "$dtb" "$amplifier" compatible
+	expect_value "$amplifier-dai-cells" 0 \
+		fdtget -tx "$dtb" "$amplifier" '#sound-dai-cells'
+	expect_absent "$amplifier-reset" fdtget "$dtb" "$amplifier" reset-gpios
+	expect_absent "$amplifier-pinctrl" fdtget "$dtb" "$amplifier" pinctrl-0
+done
+expect_value tfa9874-top-address 34 fdtget -tx "$dtb" "$tfa9874_top" reg
+expect_value tfa9874-bottom-address 35 fdtget -tx "$dtb" "$tfa9874_bottom" reg
 
 expect_value mpss-status okay fdtget -ts "$dtb" "$remoteproc_mpss" status
 expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \

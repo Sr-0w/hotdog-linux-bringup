@@ -45,6 +45,11 @@ ALSA card with `MultiMedia1` playback and capture. Revision `r26` selects the
 stock-derived Hotdog headphone backend, connecting Q6AFE `SLIMBUS_6_RX` to
 WCD9340 `AIF4_PB` while retaining `SLIMBUS_0_TX` for capture. A silent 48 kHz
 stereo S24_LE stream opens on hardware without a DSP or transport error.
+Revision `r27` discovers the FSA4480 USB-C analogue switch while preserving
+the proven audio card. Revision `r28` adds a separate, read-only TFA9874
+driver and describes both internal speaker amplifiers. It reads only the exact
+silicon revision and deliberately registers no output DAI, reset control or
+speaker route.
 
 ## Source contract
 
@@ -90,8 +95,10 @@ stereo S24_LE stream opens on hardware without a DSP or transport error.
 - ADSP, Qualcomm NGD SLIMbus, WCD9340, SoundWire, and the SM8150 machine card
   are enabled. Playback uses the hardware-validated Hotdog
   `SLIMBUS_6_RX`/`AIF4_PB` digital path; capture remains on
-  `SLIMBUS_0_TX`/`AIF1_CAP`. External speaker amplifiers are deliberately
-  excluded.
+  `SLIMBUS_0_TX`/`AIF1_CAP`.
+- The two TFA9874 speaker amplifiers are present as read-only I2C/ASoC
+  components. Their shared reset, quaternary MI2S route, ADSP protection
+  profile and output stages remain deliberately inactive.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
