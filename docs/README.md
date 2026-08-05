@@ -47,6 +47,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   strict `r23` package and AVB hashes, complete `boot_b` readback, and direct
   hardware validation of the ADSP firmware, remoteproc state, and APR audio
   services before codec or sound-card enablement.
+- [evidence/2026-08-05-mainline616-wcd9340.md](evidence/2026-08-05-mainline616-wcd9340.md):
+  strict `r24` package and AVB hashes, complete `boot_b` readback, and direct
+  hardware validation of SLIMbus enumeration plus WCD9340 codec, GPIO, and
+  SoundWire binding before machine-card enablement.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.

@@ -266,7 +266,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Wi-Fi | Association and Internet reachability working | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, and scans both bands. Revision `r15` associates through NetworkManager and reaches both the local gateway and an external IPv4 endpoint without packet loss. Stable factory MAC handling, throughput, power management, and suspend remain open. |
 | Bluetooth | Scanning and HID connections working; suspend open | Revision `r15` loads the packaged revision-21 firmware by its native names, exposes a powered BlueZ controller, scans, and sustains real HID connections. One run entered `900e` without a panic; later blocked, active-controller, and 900-second post-disconnect windows completed cleanly. Repeated stability and suspend/resume remain open. |
 | Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
-| Audio DSP | ADSP and APR working; codec/card pending | Revision `r23` direct-boots with the packaged hotdog ADSP firmware, reports the remote processor as `running`, and registers APR audio services. The intentionally absent DAI topology leaves ALSA without a card; SLIMbus, WCD9340, machine routing, and the external speaker amplifiers remain separate gates. |
+| Audio | ADSP, APR, SLIMbus, and WCD9340 transport working; card pending | Revision `r24` preserves the running ADSP and APR services, registers the Qualcomm SLIMbus controller, identifies the physical WCD9340 as `0x108.1`, and binds its MFD, GPIO, codec, and SoundWire drivers. The intentionally absent machine topology leaves ALSA without a card; internal routing and the external speaker amplifiers remain separate gates. |
 | RAM | Direct map and stock ownership union working | Direct boot exposes the bootloader-provided multi-gigabyte map. Revision `r22` reserves every enabled stock HD1913 interval and passes the exact workload that collided with two formerly omitted regions. The historical kexec bridge intentionally constrains its payload to the low bank. |
 | Remaining peripherals | Bring-up required | Battery reporting, touchscreen, dynamic 60/90 Hz display modes, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi association, MPSS startup, Bluetooth scanning, and HID connections work. Telephony, audio, cameras, sensors, display blank/unblank reliability, extended charging policy, physical key validation, stable radio addresses, and suspend remain open. |
 
@@ -291,6 +291,7 @@ flowchart LR
     M --> N["WCN3990 and wlan0"]
     B --> O["WCN3990 Bluetooth UART and BlueZ"]
     B --> P["ADSP firmware and APR audio services"]
+    P --> Q["SLIMbus and WCD9340 codec transport"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge
