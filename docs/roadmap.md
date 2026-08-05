@@ -5,12 +5,15 @@ conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md
 The packaging and submission gates are tracked separately in the
 [pmaports upstreaming plan](pmaports-upstreaming.md).
 
-The current hardware candidate is the reproducible 6.16 `r16` package. Its
-exact source-built kernel and DTB direct-boot with writable rootfs, USB SSH,
-S6SY761 multitouch, an Adreno 640 render node that completes Turnip Vulkan
-workloads, corrected conservative SMB5 limits, registered Power plus volume-key
-inputs, a fixed stock 90 Hz KMS mode, Wi-Fi association, Bluetooth HID, and a
-usable Plasma Mobile session. Revision `r15` remains the fixed-60-Hz fallback.
+The current hardware candidate is the reproducible 6.16 `r22` package. The
+accepted 6.16 stack direct-boots with writable rootfs, USB SSH, S6SY761
+multitouch, an Adreno 640 render node that completes Turnip Vulkan workloads,
+corrected conservative SMB5 limits, registered Power plus volume-key inputs,
+dynamic stock 60/90 Hz KMS modes, Wi-Fi association, Bluetooth HID, and a
+usable Plasma Mobile session. The isolated `r22` DT hardware test fixes the
+reproducible large buffered-import crash by completing the stock HD1913 memory
+reservation union. Booting the exact source-built `r22` kernel and DTB is the
+next integration check. Revision `r20` remains the binary control.
 
 ## Priority 0: reproducible mainline boot
 

@@ -31,10 +31,12 @@ second full dump found the active Flatpak staging inode occupying
 `0x99518000-0x99580000`, inside another stock-owned gap. A complete union
 comparison found two intervals left: `0x89b00000-0x89d00000` from
 `removed_regions` and `0x99517000-0x99600000` from `cdsp_regions`. Revision
-`r22` reserves both. The historical K1 path remains deliberately limited to
-the low bank.
+`r22` reserves both. It direct-booted, passed a complete partition readback,
+completed the formerly failing 3.7 GB Flatpak pull and deploy, and ran the
+installed application without a Qualcomm transition. The historical K1 path
+remains deliberately limited to the low bank.
 
-**Current experiment.** Boot the exact `r20` kernel and userspace with all
+**Accepted experiment.** Boot the exact `r20` kernel and userspace with all
 three proven stock-owned gaps reserved, then repeat the 3.5 GB Flatpak import
 that reliably entered `900e`. The verified 96 MiB A/B image is
 `a54ed347dbb897a402f941301c5a8763bb0bd286e141eeff3a2d47094de1f45b`;
@@ -45,13 +47,12 @@ two strict source builds also produced the same `r22` pmaports package.
 `r20` kernel, initramfs, command line, UFS SMMU stream, DMA32 aperture, and
 every other DT property unchanged.
 
-**Success criteria.** The direct kernel reaches the same postmarketOS root,
-reports the reservation, and completes the previously failing import. UFS,
-USB SSH, display, touch, GPU, Wi-Fi, and Bluetooth must remain available.
+**Result.** The direct kernel reached the same postmarketOS root, reported the
+reservations, and completed both pull and deployment. USB SSH, display, touch,
+GPU, and Wi-Fi remained available; the installed game launched and ran.
 
-**Risks and fallback.** The candidate removes only memory that the stock tree
-already withholds. Retain the exact `r20` image as the binary control and
-capture another full dump if `900e` remains.
+**Follow-up.** Boot the source-built `r22` package payload, repeat a bounded
+storage soak, and keep the exact `r20` image as the binary control.
 
 ## 2. Apps SMMU
 

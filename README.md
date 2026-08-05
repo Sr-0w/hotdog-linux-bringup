@@ -30,12 +30,12 @@ component unchanged, the phone enumerated `/dev/sda`, discovered the nested
 `pmOS_boot` and `pmOS_root`, and entered the real rootfs. See the
 [direct mainline rootfs evidence](docs/evidence/2026-08-03-direct-mainline-rootfs.md).
 Large buffered Flatpak imports later exposed an abrupt `900e` boundary that is
-not reproduced by direct-I/O stress. Revisions `r18` and `r19` reproduce that
-boundary with translated DMA64 and DMA32 respectively, ruling out the UFS Apps
-SMMU attachment and DMA aperture as sole causes. Revision `r20` also
-reproduces the failure after restoring legacy UFS completions to hardirq
-context, ruling out completion threading as the sole cause. The next A/B keeps
-the exact `r20` image and limits UFS requests to 128 KiB at runtime; see the
+not reproduced by direct-I/O stress. Full DDR captures showed that Linux had
+allocated Flatpak page-cache folios inside stock-owned memory omitted from the
+mainline DT. Revision `r22` completes all three missing HD1913 reservations.
+Its exact-image hardware test direct-booted, passed a complete `boot_b`
+readback, completed the formerly failing 3.7 GB pull and deployment, and ran
+0 A.D. without a UFS error, Linux panic, or Qualcomm transition. See the
 [Flatpak/UFS evidence](docs/evidence/2026-08-05-mainline616-flatpak-ufs.md).
 
 Native display bring-up reached a second major boundary on 2026-08-03. V29
@@ -227,7 +227,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 |---|---|---|
 | Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
 | Mainline 6.16 pmaports image | Direct hardware boot working | Revision `r17` preserves the accepted hardware stack and exposes both stock 60 Hz and 90 Hz modes. Its hardware-tested AVB image is `d93ec3b84cc2cb726cbfbdd932d1d40a5b2e2e3574a0a7c4615c9a4c125d43f0`. |
-| UFS storage | Direct boot working; buffered-import stability under investigation | Direct-I/O stress passes, but a pull-only Flatpak import reproducibly enters `900e` with translated DMA64 (`r18`), translated DMA32 (`r19`), and legacy hardirq completions (`r20`). The next exact-image A/B limits block requests to 128 KiB. Fresh crashes are collected as a full 8 GiB Sahara RAM dump before any secondary read. |
+| UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, and application launch without a UFS error or Qualcomm transition. |
 | postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
 | Plasma Mobile | Working on the direct-mainline system | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output, remains smooth under physical use, and keeps USB SSH available. The live rootfs installation must still be reproduced in a freshly assembled pmaports image. |
 | USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
@@ -246,7 +246,7 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Wi-Fi | Association and Internet reachability working | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, and scans both bands. Revision `r15` associates through NetworkManager and reaches both the local gateway and an external IPv4 endpoint without packet loss. Stable factory MAC handling, throughput, power management, and suspend remain open. |
 | Bluetooth | Scanning and HID connections working; suspend open | Revision `r15` loads the packaged revision-21 firmware by its native names, exposes a powered BlueZ controller, scans, and sustains real HID connections. One run entered `900e` without a panic; later blocked, active-controller, and 900-second post-disconnect windows completed cleanly. Repeated stability and suspend/resume remain open. |
 | Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
-| RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
+| RAM | Direct map and stock ownership union working | Direct boot exposes the bootloader-provided multi-gigabyte map. Revision `r22` reserves every enabled stock HD1913 interval and passes the exact workload that collided with two formerly omitted regions. The historical kexec bridge intentionally constrains its payload to the low bank. |
 | Remaining peripherals | Bring-up required | Battery reporting, touchscreen, dynamic 60/90 Hz display modes, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi association, MPSS startup, Bluetooth scanning, and HID connections work. Telephony, audio, cameras, sensors, display blank/unblank reliability, extended charging policy, physical key validation, stable radio addresses, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.

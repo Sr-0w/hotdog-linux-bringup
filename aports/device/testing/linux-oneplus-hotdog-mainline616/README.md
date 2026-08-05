@@ -204,7 +204,16 @@ installation:
 | `boot/vmlinuz` | 27,572,232 bytes | `2adc3b38891da479b7e14ee71d33e45564e76639b222cc6c78ed423c33c086b7` |
 | `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 141,026 bytes | `984d54b14ff0acaf47619e78451800db23eb3edaf98938290f5bbfbcc327b5ca` |
 
-Hardware validation of `r22` remains pending.
+The isolated `r22` image direct-booted, returned USB networking and SSH, and
+exposed all three exact `no-map` reservations in the live DT. A complete
+96 MiB `boot_b` readback matched the candidate hash above. The previously
+failing pull-only 0 A.D. workload then completed in 100.94 seconds while
+writing 5,512,437,760 bytes at the block layer, with 581,796 KiB of dirty
+memory at peak. Mainline remained reachable and no UFS, ext4, panic, or oops
+event appeared. The separate deployment phase also completed, Flatpak
+reported the 3.7 GB application as installed, and a physical launch confirmed
+that the game starts and runs. This hardware result accepts the `r22`
+reservation fix.
 
 Two independent strict `r21` builds produced byte-identical packages and ran
 the updated DT contract before and after module installation:

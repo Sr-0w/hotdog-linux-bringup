@@ -339,7 +339,40 @@ Its 27,572,232-byte kernel is
 `2adc3b38891da479b7e14ee71d33e45564e76639b222cc6c78ed423c33c086b7`,
 and its 141,026-byte DTB is
 `984d54b14ff0acaf47619e78451800db23eb3edaf98938290f5bbfbcc327b5ca`.
-The hardware test remains pending.
+## R22 hardware result
+
+The isolated `r22` image was written only to `boot_b`. Fastboot accepted the
+complete 96 MiB image, direct boot returned USB networking and SSH, and a
+device-side readback of the whole partition matched
+`a54ed347dbb897a402f941301c5a8763bb0bd286e141eeff3a2d47094de1f45b`.
+The live device tree reported all three exclusions:
+
+| Stock-owned interval | Live result |
+|---|---|
+| `0x85e40000-0x85f00000` | 768 KiB `no-map` |
+| `0x89b00000-0x89d00000` | 2 MiB `no-map` |
+| `0x99517000-0x99600000` | 932 KiB `no-map` |
+
+The same pull-only 0 A.D. operation that repeatedly stopped `r20` and `r21`
+then completed with status zero while mainline remained reachable:
+
+| Metric | Result |
+|---|---:|
+| Monitored duration | 100.94 seconds |
+| Samples at 200 ms cadence | 462 |
+| Peak dirty memory | 581,796 KiB |
+| Peak writeback memory | 131,072 KiB |
+| Block-layer bytes written | 5,512,437,760 |
+
+The separate no-pull deployment completed in 11.79 seconds with status zero.
+Flatpak registered `com.play0ad.zeroad` version 0.28.0 as a 3.7 GB system
+installation. The kernel log contained no UFS error, abort, reset, recovery,
+I/O error, ext4 error, oops, or panic. A physical launch confirmed that the
+game starts and runs normally. No Qualcomm USB transition occurred during
+either phase.
+
+This result accepts the complete stock reservation union as the fix for the
+reproducible buffered-import crash.
 
 ## Safety
 
