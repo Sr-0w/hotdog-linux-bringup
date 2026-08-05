@@ -1,0 +1,701 @@
+From 76a4cfb55749d0c14fdc49865b0cce471b4420d5 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 20:39:21 +0200
+Subject: [PATCH] ASoC: hotdog: enable bounded TFA9874 speaker output
+
+Add the QUATERNARY_MI2S_RX backend used by the stock design and a conservative TFA9874 codec path for revision 0x0c74. Keep both amplifiers powered down until an active stream has stable clocks, expose read-only diagnostics, and route the first hardware test through the bottom speaker only.
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  49 ++
+ sound/soc/codecs/tfa9874.c                    | 484 +++++++++++++++++-
+ sound/soc/qcom/sm8150.c                       |  15 +-
+ 3 files changed, 523 insertions(+), 25 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index f7be67b9e00a..b3440e13bd38 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -13,6 +13,7 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
+ #include <dt-bindings/sound/qcom,wcd934x.h>
+ #include "sm8150-oneplus-common.dtsi"
+@@ -240,6 +241,28 @@ ts_int_default: ts-int-default-state {
+ 		bias-disable;
+ 	};
+ 
++	quat_mi2s_active: quat-mi2s-active-state {
++		pins = "gpio137", "gpio138";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++		output-high;
++	};
++
++	quat_mi2s_sd0_active: quat-mi2s-sd0-active-state {
++		pins = "gpio139";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
++	quat_mi2s_sd1_active: quat-mi2s-sd1-active-state {
++		pins = "gpio140";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
+ 	qup_uart13_sleep: qup-uart13-sleep-state {
+ 		pinmux {
+ 			pins = "gpio43", "gpio44", "gpio45", "gpio46";
+@@ -346,6 +369,13 @@ &remoteproc_mpss {
+ 	status = "okay";
+ };
+ 
++&q6afedai {
++	dai@22 {
++		reg = <QUATERNARY_MI2S_RX>;
++		qcom,sd-lines = <1>;
++	};
++};
++
+ &q6asmdai {
+ 	dai@0 {
+ 		reg = <MSM_FRONTEND_DAI_MULTIMEDIA1>;
+@@ -355,6 +385,9 @@ dai@0 {
+ &sound {
+ 	compatible = "qcom,sm8150-sndcard";
+ 	model = "OnePlus 7T Pro";
++	pinctrl-0 = <&quat_mi2s_active &quat_mi2s_sd0_active
++		     &quat_mi2s_sd1_active>;
++	pinctrl-names = "default";
+ 	status = "okay";
+ 
+ 	audio-routing = "RX_BIAS", "MCLK";
+@@ -367,6 +400,22 @@ cpu {
+ 		};
+ 	};
+ 
++	speaker-dai-link {
++		link-name = "Speaker Playback";
++
++		cpu {
++			sound-dai = <&q6afedai QUATERNARY_MI2S_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&speaker_bottom>;
++		};
++	};
++
+ 	slim-dai-link {
+ 		link-name = "SLIM Playback 6";
+ 
+diff --git a/sound/soc/codecs/tfa9874.c b/sound/soc/codecs/tfa9874.c
+index d525a4e6b16d..90ffdb3b90ab 100644
+--- a/sound/soc/codecs/tfa9874.c
++++ b/sound/soc/codecs/tfa9874.c
+@@ -1,72 +1,508 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * Read-only identification support for the NXP TFA9874 amplifier.
++ * Minimal NXP TFA9874 codec support for the OnePlus 7T Pro.
+  *
+- * Output control remains deliberately absent until the external protection
+- * profile and shared reset-line handling are implemented.
++ * The device has no internal audio DSP.  These settings reproduce the
++ * hardware and speaker profile from the OxygenOS tfa98xx container, while
++ * external Qualcomm ADSP speaker protection remains a separate concern.
+  */
+ 
++#include <linux/bitops.h>
++#include <linux/delay.h>
+ #include <linux/i2c.h>
++#include <linux/iopoll.h>
+ #include <linux/module.h>
++#include <linux/mutex.h>
+ #include <linux/regmap.h>
+ #include <sound/soc.h>
+ 
+-#define TFA9874_REVISION_REG	0x03
+-#define TFA9874_REVISION_0C74	0x0c74
++#define TFA9874_SYSTEM_CONTROL		0x00
++#define TFA9874_MANAGER_CONTROL		0x01
++#define TFA9874_AUDIO_CONTROL		0x02
++#define TFA9874_REVISION_REG		0x03
++#define TFA9874_STATUS_FLAGS0		0x10
++#define TFA9874_STATUS_FLAGS1		0x11
++#define TFA9874_STATUS_FLAGS3		0x13
++#define TFA9874_BATTERY_VOLTAGE		0x15
++#define TFA9874_TEMPERATURE		0x16
++#define TFA9874_VDDP_VOLTAGE		0x17
++#define TFA9874_TDM_CONFIG0		0x20
++#define TFA9874_REVISION_0C74		0x0c74
+ 
+-static bool tfa9874_readable_reg(struct device *dev, unsigned int reg)
++#define TFA9874_PWDN			BIT(0)
++#define TFA9874_AMPE			BIT(3)
++#define TFA9874_DCA			BIT(4)
++#define TFA9874_MANSCONF			BIT(2)
++#define TFA9874_TDME			BIT(4)
++#define TFA9874_PLLS			BIT(6)
++#define TFA9874_CLKS			BIT(7)
++
++/* Field encoding used by the NXP container: register, shift, width - 1. */
++#define TFA9874_FIELD(reg, shift, width)	(((reg) << 8) | ((shift) << 4) | ((width) - 1))
++
++struct tfa9874_field_value {
++	u16 field;
++	u16 value;
++};
++
++struct tfa9874_reg_value {
++	u8 reg;
++	u16 value;
++};
++
++struct tfa9874 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct mutex lock;
++	u8 slot;
++	bool configured;
++	bool active;
++};
++
++static const struct tfa9874_reg_value tfa9874_0c74_optimal[] = {
++	{ 0x02, 0x22c8 },
++	{ 0x52, 0x57dc },
++	{ 0x53, 0x003e },
++	{ 0x56, 0x0400 },
++	{ 0x61, 0x0110 },
++	{ 0x6f, 0x00a5 },
++	{ 0x70, 0x07f8 },
++	{ 0x73, 0x0047 },
++	{ 0x74, 0x5098 },
++	{ 0x75, 0x8d28 },
++	{ 0x80, 0x0000 },
++	{ 0x83, 0x0799 },
++	{ 0x84, 0x0081 },
++};
++
++/* Device-common values from OxygenOS tfa98xx.cnt. */
++static const struct tfa9874_field_value tfa9874_device_fields[] = {
++	{ TFA9874_FIELD(0x20, 12, 4), 0x2 },	/* TDMNBCK */
++	{ TFA9874_FIELD(0x21, 4, 5), 0x1f },	/* TDMSLLN */
++	{ TFA9874_FIELD(0x22, 2, 5), 0x1f },	/* TDMSSIZE */
++	{ TFA9874_FIELD(0x23, 3, 1), 0x1 },	/* TDMCSE */
++	{ TFA9874_FIELD(0x23, 4, 1), 0x0 },	/* TDMVSE */
++	{ TFA9874_FIELD(0x68, 0, 3), 0x3 },	/* TDMSRCMAP */
++	{ TFA9874_FIELD(0x04, 0, 2), 0x1 },	/* REFCKEXT */
++	{ TFA9874_FIELD(0x23, 1, 1), 0x1 },	/* TDMDCE */
++	{ TFA9874_FIELD(0x61, 6, 4), 0x4 },	/* TDMSPKG */
++	{ TFA9874_FIELD(0x61, 2, 4), 0xf },	/* TDMDCG */
++	{ TFA9874_FIELD(0x68, 3, 2), 0x1 },	/* TDMSRCAS */
++	{ TFA9874_FIELD(0x68, 5, 2), 0x2 },	/* TDMSRCBS */
++	{ TFA9874_FIELD(0x02, 5, 6), 0x16 },	/* FRACTDEL */
++	{ TFA9874_FIELD(0x52, 5, 8), 0xbe },	/* AMPGAIN */
++	{ TFA9874_FIELD(0x53, 5, 1), 0x1 },
++	{ TFA9874_FIELD(0x64, 14, 2), 0x2 },	/* LPM1MODE */
++	{ TFA9874_FIELD(0x56, 9, 1), 0x0 },
++	{ TFA9874_FIELD(0x6f, 0, 3), 0x5 },	/* DELCURCOMP */
++	{ TFA9874_FIELD(0x6f, 7, 3), 0x1 },	/* LVLCLPPWM */
++	{ TFA9874_FIELD(0x70, 7, 2), 0x3 },	/* DCCV */
++	{ TFA9874_FIELD(0x74, 3, 1), 0x1 },	/* DCTRACK */
++	{ TFA9874_FIELD(0x74, 9, 5), 0x8 },	/* DCHOLD */
++	{ TFA9874_FIELD(0x75, 15, 1), 0x1 },	/* DCTRIPHYSTE */
++	{ TFA9874_FIELD(0x74, 15, 1), 0x0 },
++	{ TFA9874_FIELD(0x80, 0, 2), 0x0 },
++	{ TFA9874_FIELD(0x83, 0, 6), 0x19 },
++	{ TFA9874_FIELD(0x83, 6, 5), 0x1e },
++	{ TFA9874_FIELD(0x84, 5, 4), 0x4 },
++	{ TFA9874_FIELD(0x51, 5, 1), 0x0 },	/* HPFBYP */
++	{ TFA9874_FIELD(0x58, 4, 5), 0x1 },
++	{ TFA9874_FIELD(0x6f, 5, 1), 0x1 },	/* ENCURCOMP */
++	{ TFA9874_FIELD(0x85, 1, 1), 0x1 },
++	{ TFA9874_FIELD(0x85, 3, 1), 0x0 },
++	{ TFA9874_FIELD(0x85, 4, 1), 0x0 },
++	{ TFA9874_FIELD(0x88, 0, 2), 0x2 },
++	{ TFA9874_FIELD(0x84, 4, 1), 0x0 },
++	{ TFA9874_FIELD(0xc4, 13, 1), 0x0 },
++	{ TFA9874_FIELD(0xb0, 5, 1), 0x0 },
++	{ TFA9874_FIELD(0x74, 4, 5), 0xa },	/* DCTRIP */
++	{ TFA9874_FIELD(0x75, 3, 5), 0x5 },	/* DCTRIP2 */
++	{ TFA9874_FIELD(0x75, 8, 5), 0x10 },	/* DCTRIPT */
++	{ TFA9874_FIELD(0x76, 3, 6), 0x1e },	/* DCVOF */
++	{ TFA9874_FIELD(0x76, 9, 6), 0x3f },	/* DCVOS */
++	{ TFA9874_FIELD(0x02, 0, 4), 0x8 },	/* AUDFS: 48 kHz */
++	{ TFA9874_FIELD(0x02, 4, 1), 0x0 },	/* INPLEV */
++	{ TFA9874_FIELD(0x62, 14, 2), 0x0 },	/* LNMODE */
++};
++
++static bool tfa9874_writeable_reg(struct device *dev, unsigned int reg)
+ {
+-	return reg == TFA9874_REVISION_REG;
++	switch (reg) {
++	case 0x00 ... 0x02:
++	case 0x04:
++	case 0x0f:
++	case 0x20 ... 0x23:
++	case 0x26 ... 0x27:
++	case 0x51 ... 0x53:
++	case 0x56:
++	case 0x58:
++	case 0x61 ... 0x62:
++	case 0x64:
++	case 0x68:
++	case 0x6f ... 0x70:
++	case 0x73 ... 0x76:
++	case 0x80:
++	case 0x83 ... 0x85:
++	case 0x88:
++	case 0xa0 ... 0xa1:
++	case 0xb0:
++	case 0xc4:
++		return true;
++	default:
++		return false;
++	}
+ }
+ 
+-static bool tfa9874_writeable_reg(struct device *dev, unsigned int reg)
++static bool tfa9874_readable_reg(struct device *dev, unsigned int reg)
+ {
+-	return false;
++	if (tfa9874_writeable_reg(dev, reg))
++		return true;
++
++	switch (reg) {
++	case TFA9874_REVISION_REG:
++	case TFA9874_STATUS_FLAGS0 ... TFA9874_STATUS_FLAGS1:
++	case TFA9874_STATUS_FLAGS3:
++	case TFA9874_BATTERY_VOLTAGE ... TFA9874_VDDP_VOLTAGE:
++	case 0xfb:
++		return true;
++	default:
++		return false;
++	}
+ }
+ 
+ static const struct regmap_config tfa9874_regmap_config = {
+ 	.reg_bits = 8,
+ 	.val_bits = 16,
+ 	.val_format_endian = REGMAP_ENDIAN_BIG,
+-	.max_register = TFA9874_REVISION_REG,
++	.max_register = 0xfb,
+ 	.readable_reg = tfa9874_readable_reg,
+ 	.writeable_reg = tfa9874_writeable_reg,
+ 	.cache_type = REGCACHE_NONE,
+ };
+ 
++static int tfa9874_update_field(struct tfa9874 *tfa, u16 field, u16 value)
++{
++	u8 reg = field >> 8;
++	u8 shift = (field >> 4) & 0xf;
++	u8 width = (field & 0xf) + 1;
++	u16 mask = GENMASK(shift + width - 1, shift);
++
++	return regmap_update_bits(tfa->regmap, reg, mask, value << shift);
++}
++
++static int tfa9874_safe_off(struct tfa9874 *tfa)
++{
++	int ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_AMPE | TFA9874_DCA, 0);
++	if (ret)
++		return ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_PWDN, TFA9874_PWDN);
++	if (!ret)
++		tfa->active = false;
++
++	return ret;
++}
++
++static int tfa9874_configure(struct tfa9874 *tfa)
++{
++	unsigned int hidden_key;
++	unsigned int i;
++	int ret;
++
++	if (tfa->configured)
++		return 0;
++
++	ret = tfa9874_safe_off(tfa);
++	if (ret)
++		return ret;
++
++	/* Exact 0x0c74 unlock and optimal-settings sequence from OxygenOS. */
++	ret = regmap_write(tfa->regmap, 0x0f, 0x5a6b);
++	if (ret)
++		return ret;
++	ret = regmap_read(tfa->regmap, 0xfb, &hidden_key);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa0, hidden_key ^ 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa1, 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0x0f, 0x0000);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < ARRAY_SIZE(tfa9874_0c74_optimal); i++) {
++		ret = regmap_write(tfa->regmap, tfa9874_0c74_optimal[i].reg,
++				   tfa9874_0c74_optimal[i].value);
++		if (ret)
++			return ret;
++	}
++
++	/* The production container repeats these three key writes. */
++	ret = regmap_write(tfa->regmap, 0x0f, 0x5a6b);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa1, 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa0, 0x005a);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < ARRAY_SIZE(tfa9874_device_fields); i++) {
++		ret = tfa9874_update_field(tfa, tfa9874_device_fields[i].field,
++					   tfa9874_device_fields[i].value);
++		if (ret)
++			return ret;
++	}
++
++	/* Stereo slot and current-limit values differ between the two chips. */
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 0, 4), tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 4, 4),
++				    !tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 12, 4),
++				    tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x27, 0, 4),
++				    !tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x70, 3, 4),
++				    tfa->slot ? 0xa : 0xb);
++	if (ret)
++		return ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_TDM_CONFIG0,
++				 TFA9874_TDME, TFA9874_TDME);
++	if (ret)
++		return ret;
++
++	ret = tfa9874_safe_off(tfa);
++	if (ret)
++		return ret;
++
++	tfa->configured = true;
++	dev_info(tfa->dev, "OxygenOS speaker profile prepared on TDM slot %u; output muted\n",
++		 tfa->slot);
++
++	return 0;
++}
++
++static void tfa9874_log_status(struct tfa9874 *tfa, const char *stage)
++{
++	unsigned int status0, status1, status3, temp;
++	int ret;
++
++	ret = regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS0, &status0);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS1, &status1);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS3, &status3);
++	ret |= regmap_read(tfa->regmap, TFA9874_TEMPERATURE, &temp);
++	if (ret)
++		dev_warn(tfa->dev, "%s status read failed: %d\n", stage, ret);
++	else
++		dev_info(tfa->dev,
++			 "%s status0=%04x status1=%04x status3=%04x temp=%04x\n",
++			 stage, status0, status1, status3, temp);
++}
++
++static int tfa9874_startup(struct snd_pcm_substream *substream,
++			   struct snd_soc_dai *dai)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++	int ret;
++
++	mutex_lock(&tfa->lock);
++	ret = tfa9874_configure(tfa);
++	mutex_unlock(&tfa->lock);
++
++	return ret;
++}
++
++static int tfa9874_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++	unsigned int status;
++	int ret = 0;
++
++	if (stream != SNDRV_PCM_STREAM_PLAYBACK)
++		return 0;
++
++	mutex_lock(&tfa->lock);
++	if (mute) {
++		if (tfa->active)
++			tfa9874_log_status(tfa, "pre-mute");
++		ret = tfa9874_safe_off(tfa);
++		goto out;
++	}
++
++	ret = tfa9874_configure(tfa);
++	if (ret)
++		goto out;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_MANAGER_CONTROL,
++				 TFA9874_MANSCONF, TFA9874_MANSCONF);
++	if (ret)
++		goto fail_off;
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_PWDN | TFA9874_DCA | TFA9874_AMPE,
++				 TFA9874_DCA);
++	if (ret)
++		goto fail_off;
++
++	ret = regmap_read_poll_timeout(tfa->regmap, TFA9874_STATUS_FLAGS1,
++				       status, (status & (TFA9874_PLLS | TFA9874_CLKS)) ==
++				       (TFA9874_PLLS | TFA9874_CLKS), 500, 20000);
++	if (ret) {
++		dev_err(tfa->dev, "audio clocks did not become stable (status1=%04x)\n",
++			status);
++		goto fail_off;
++	}
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_AMPE, TFA9874_AMPE);
++	if (ret)
++		goto fail_off;
++
++	usleep_range(1000, 1500);
++	tfa->active = true;
++	tfa9874_log_status(tfa, "unmuted");
++	goto out;
++
++fail_off:
++	tfa9874_safe_off(tfa);
++out:
++	mutex_unlock(&tfa->lock);
++	return ret;
++}
++
++static void tfa9874_shutdown(struct snd_pcm_substream *substream,
++			     struct snd_soc_dai *dai)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++
++	mutex_lock(&tfa->lock);
++	tfa9874_safe_off(tfa);
++	mutex_unlock(&tfa->lock);
++}
++
++static const struct snd_soc_dai_ops tfa9874_dai_ops = {
++	.startup = tfa9874_startup,
++	.shutdown = tfa9874_shutdown,
++	.mute_stream = tfa9874_mute_stream,
++	.no_capture_mute = 1,
++};
++
++static struct snd_soc_dai_driver tfa9874_dai = {
++	.name = "tfa9874-aif",
++	.playback = {
++		.stream_name = "Speaker Playback",
++		.channels_min = 2,
++		.channels_max = 2,
++		.rates = SNDRV_PCM_RATE_48000,
++		.formats = SNDRV_PCM_FMTBIT_S16_LE,
++	},
++	.ops = &tfa9874_dai_ops,
++};
++
++static int tfa9874_component_probe(struct snd_soc_component *component)
++{
++	snd_soc_component_set_drvdata(component, dev_get_drvdata(component->dev));
++	return 0;
++}
++
+ static const struct snd_soc_component_driver tfa9874_component_driver = {
+ 	.name = "tfa9874",
++	.probe = tfa9874_component_probe,
++	.endianness = 1,
++};
++
++static ssize_t diagnostics_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct tfa9874 *tfa = dev_get_drvdata(dev);
++	unsigned int system, status0, status1, status3, battery, temp, vddp;
++	int ret;
++
++	mutex_lock(&tfa->lock);
++	ret = regmap_read(tfa->regmap, TFA9874_SYSTEM_CONTROL, &system);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS0, &status0);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS1, &status1);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS3, &status3);
++	ret |= regmap_read(tfa->regmap, TFA9874_BATTERY_VOLTAGE, &battery);
++	ret |= regmap_read(tfa->regmap, TFA9874_TEMPERATURE, &temp);
++	ret |= regmap_read(tfa->regmap, TFA9874_VDDP_VOLTAGE, &vddp);
++	mutex_unlock(&tfa->lock);
++	if (ret)
++		return ret;
++
++	return sysfs_emit(buf,
++		"slot=%u configured=%u active=%u system=%04x status0=%04x status1=%04x status3=%04x battery=%04x temp=%04x vddp=%04x\n",
++		tfa->slot, tfa->configured, tfa->active, system, status0,
++		status1, status3, battery, temp, vddp);
++}
++static DEVICE_ATTR_RO(diagnostics);
++
++static struct attribute *tfa9874_attrs[] = {
++	&dev_attr_diagnostics.attr,
++	NULL,
++};
++static const struct attribute_group tfa9874_group = {
++	.attrs = tfa9874_attrs,
+ };
+ 
+ static int tfa9874_i2c_probe(struct i2c_client *client)
+ {
+-	struct regmap *regmap;
++	struct tfa9874 *tfa;
+ 	unsigned int revision;
+ 	int ret;
+ 
+-	regmap = devm_regmap_init_i2c(client, &tfa9874_regmap_config);
+-	if (IS_ERR(regmap))
+-		return dev_err_probe(&client->dev, PTR_ERR(regmap),
++	if (client->addr != 0x34 && client->addr != 0x35)
++		return dev_err_probe(&client->dev, -EINVAL,
++				     "unsupported I2C address 0x%02x\n", client->addr);
++
++	tfa = devm_kzalloc(&client->dev, sizeof(*tfa), GFP_KERNEL);
++	if (!tfa)
++		return -ENOMEM;
++
++	tfa->dev = &client->dev;
++	tfa->slot = client->addr == 0x35;
++	mutex_init(&tfa->lock);
++	tfa->regmap = devm_regmap_init_i2c(client, &tfa9874_regmap_config);
++	if (IS_ERR(tfa->regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(tfa->regmap),
+ 				     "failed to allocate register map\n");
+ 
+-	ret = regmap_read(regmap, TFA9874_REVISION_REG, &revision);
++	ret = regmap_read(tfa->regmap, TFA9874_REVISION_REG, &revision);
+ 	if (ret)
+ 		return dev_err_probe(&client->dev, ret,
+ 				     "failed to read silicon revision\n");
++	if (revision != TFA9874_REVISION_0C74)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unsupported silicon revision 0x%04x\n", revision);
+ 
+-	if (revision != TFA9874_REVISION_0C74) {
+-		dev_err(&client->dev, "unsupported silicon revision 0x%04x\n",
+-			revision);
+-		return -ENODEV;
+-	}
++	i2c_set_clientdata(client, tfa);
++	ret = devm_device_add_group(&client->dev, &tfa9874_group);
++	if (ret)
++		return ret;
+ 
+ 	dev_info(&client->dev,
+-		 "TFA9874 revision 0x%04x detected; amplifier remains disabled\n",
+-		 revision);
++		 "TFA9874 revision 0x%04x detected on TDM slot %u; amplifier remains disabled\n",
++		 revision, tfa->slot);
+ 
+ 	return devm_snd_soc_register_component(&client->dev,
+ 					       &tfa9874_component_driver,
+-					       NULL, 0);
++					       &tfa9874_dai, 1);
+ }
+ 
+ static const struct of_device_id tfa9874_of_match[] = {
+@@ -91,6 +527,6 @@ static struct i2c_driver tfa9874_i2c_driver = {
+ };
+ module_i2c_driver(tfa9874_i2c_driver);
+ 
+-MODULE_DESCRIPTION("Read-only NXP TFA9874 amplifier identification driver");
++MODULE_DESCRIPTION("NXP TFA9874 amplifier codec driver");
+ MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
+ MODULE_LICENSE("GPL");
+diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
+index 8ad61345bb73..7451713b86fa 100644
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -22,6 +22,7 @@
+ #define SLIM_MAX_TX_PORTS 16
+ #define SLIM_MAX_RX_PORTS 13
+ #define WCD934X_DEFAULT_MCLK_RATE	9600000
++#define MI2S_BCLK_RATE		1536000
+ 
+ struct sm8150_snd_data {
+ 	struct snd_soc_jack jack;
+@@ -47,6 +48,7 @@ static const struct {
+ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 				     struct snd_pcm_hw_params *params)
+ {
++	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
+ 	struct snd_interval *rate = hw_param_interval(params,
+ 					SNDRV_PCM_HW_PARAM_RATE);
+ 	struct snd_interval *channels = hw_param_interval(params,
+@@ -56,7 +58,10 @@ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 	rate->min = rate->max = 48000;
+ 	channels->min = channels->max = 2;
+ 	snd_mask_none(fmt);
+-	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
++	if (cpu_dai->id == QUATERNARY_MI2S_RX)
++		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
++	else
++		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
+ 
+ 	return 0;
+ }
+@@ -200,6 +205,8 @@ static int sm8150_snd_hw_params(struct snd_pcm_substream *substream,
+ 	int ret = 0;
+ 
+ 	switch (cpu_dai->id) {
++	case QUATERNARY_MI2S_RX:
++		break;
+ 	case QUATERNARY_TDM_RX_0:
+ 	case QUATERNARY_TDM_TX_0:
+ 		ret = sm8150_tdm_snd_hw_params(substream, params);
+@@ -306,6 +313,12 @@ static int sm8150_snd_startup(struct snd_pcm_substream *substream)
+ 	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
+ 
+ 	switch (cpu_dai->id) {
++	case QUATERNARY_MI2S_RX:
++		snd_soc_dai_set_sysclk(cpu_dai,
++			Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT,
++			MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK);
++		snd_soc_dai_set_fmt(cpu_dai, fmt);
++		break;
+ 	case QUATERNARY_TDM_RX_0:
+ 		codec_dai_fmt |= SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_DSP_A;
+ 		if (++(data->quat_tdm_clk_count) == 1) {
+-- 
+2.54.0
+

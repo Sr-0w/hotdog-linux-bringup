@@ -49,6 +49,9 @@ ufs_source=drivers/ufs/host/ufs-qcom.c
 [ -s "$ufs_source" ] || die "missing Qualcomm UFS source: $ufs_source"
 tfa9874_source=sound/soc/codecs/tfa9874.c
 [ -s "$tfa9874_source" ] || die "missing TFA9874 source: $tfa9874_source"
+sm8150_audio_source=sound/soc/qcom/sm8150.c
+[ -s "$sm8150_audio_source" ] ||
+	die "missing SM8150 audio source: $sm8150_audio_source"
 
 python3 - "$smbx_source" <<'PY'
 import pathlib
@@ -180,48 +183,85 @@ if sm8150_branch.count("DMA_BIT_MASK(32)") != 1:
     raise SystemExit("SM8150 UFS branch must contain exactly one DMA32 selection")
 PY
 
-python3 - "$tfa9874_source" <<'PY'
+python3 - "$tfa9874_source" "$sm8150_audio_source" <<'PY'
 import pathlib
 import sys
 
-source = pathlib.Path(sys.argv[1]).read_text()
+tfa_source = pathlib.Path(sys.argv[1]).read_text()
+machine_source = pathlib.Path(sys.argv[2]).read_text()
 
 required = (
-    "#define TFA9874_REVISION_REG\t0x03",
-    "#define TFA9874_REVISION_0C74\t0x0c74",
+    "#define TFA9874_SYSTEM_CONTROL\t\t0x00",
+    "#define TFA9874_STATUS_FLAGS1\t\t0x11",
+    "#define TFA9874_REVISION_REG\t\t0x03",
+    "#define TFA9874_REVISION_0C74\t\t0x0c74",
     ".val_format_endian = REGMAP_ENDIAN_BIG,",
-    ".max_register = TFA9874_REVISION_REG,",
+    ".max_register = 0xfb,",
+    ".readable_reg = tfa9874_readable_reg,",
     ".writeable_reg = tfa9874_writeable_reg,",
     ".cache_type = REGCACHE_NONE,",
-    "return reg == TFA9874_REVISION_REG;",
-    "regmap_read(regmap, TFA9874_REVISION_REG, &revision)",
+    "client->addr != 0x34 && client->addr != 0x35",
+    "regmap_read(tfa->regmap, TFA9874_REVISION_REG, &revision)",
     "revision != TFA9874_REVISION_0C74",
-    "amplifier remains disabled",
+    "static int tfa9874_safe_off(struct tfa9874 *tfa)",
+    "static int tfa9874_configure(struct tfa9874 *tfa)",
+    "regmap_read_poll_timeout(tfa->regmap, TFA9874_STATUS_FLAGS1",
+    "TFA9874_PLLS | TFA9874_CLKS",
+    "static DEVICE_ATTR_RO(diagnostics);",
+    "static struct snd_soc_dai_driver tfa9874_dai",
+    ".channels_min = 2,",
+    ".channels_max = 2,",
+    ".rates = SNDRV_PCM_RATE_48000,",
+    ".formats = SNDRV_PCM_FMTBIT_S16_LE,",
+    "OxygenOS speaker profile prepared on TDM slot %u; output muted",
     "&tfa9874_component_driver,",
-    "NULL, 0);",
+    "&tfa9874_dai, 1);",
 )
 for value in required:
-    if value not in source:
-        raise SystemExit(f"missing read-only TFA9874 contract: {value!r}")
+    if value not in tfa_source:
+        raise SystemExit(f"missing bounded TFA9874 output contract: {value!r}")
 
-if source.count("regmap_read(") != 1:
-    raise SystemExit("TFA9874 probe must perform exactly one register read")
-if source.count("return false;") != 1:
-    raise SystemExit("TFA9874 writeability guard is not unambiguous")
-
-for forbidden in (
-    "regmap_write(",
-    "regmap_bulk_write(",
-    "regmap_update_bits(",
-    "regmap_set_bits(",
-    "regmap_clear_bits(",
-    "gpiod_",
-    "reset_control_",
-    "snd_soc_dai_driver",
-    "snd_soc_dapm_",
+safe_off = tfa_source[
+    tfa_source.index("static int tfa9874_safe_off"):
+    tfa_source.index("static int tfa9874_configure")
+]
+for value in (
+    "TFA9874_AMPE | TFA9874_DCA, 0",
+    "TFA9874_PWDN, TFA9874_PWDN",
 ):
-    if forbidden in source:
-        raise SystemExit(f"unsafe operation in read-only TFA9874 probe: {forbidden}")
+    if value not in safe_off:
+        raise SystemExit(f"TFA9874 safe-off contract is incomplete: {value!r}")
+
+mute = tfa_source[
+    tfa_source.index("static int tfa9874_mute_stream"):
+    tfa_source.index("static void tfa9874_shutdown")
+]
+clock_poll = mute.index("regmap_read_poll_timeout")
+amplifier_enable = mute.index("TFA9874_AMPE, TFA9874_AMPE")
+if amplifier_enable < clock_poll:
+    raise SystemExit("TFA9874 amplifier is enabled before its clocks are stable")
+if "500, 20000" not in mute:
+    raise SystemExit("TFA9874 clock-stability wait is not bounded to 20 ms")
+if "goto fail_off" not in mute or "tfa9874_safe_off(tfa);" not in mute:
+    raise SystemExit("TFA9874 unmute failures do not return to the safe-off state")
+
+for forbidden in ("gpiod_", "reset_control_"):
+    if forbidden in tfa_source:
+        raise SystemExit(f"physical amplifier reset must remain untouched: {forbidden}")
+
+machine_required = (
+    "#define MI2S_BCLK_RATE\t\t1536000",
+    "cpu_dai->id == QUATERNARY_MI2S_RX",
+    "snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);",
+    "Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT",
+    "MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK",
+    "snd_soc_dai_set_fmt(cpu_dai, fmt);",
+)
+for value in machine_required:
+    if value not in machine_source:
+        raise SystemExit(f"missing SM8150 QUAT MI2S contract: {value!r}")
+if machine_source.count("case QUATERNARY_MI2S_RX:") < 3:
+    raise SystemExit("SM8150 machine driver does not cover QUAT MI2S lifecycle")
 PY
 
 if [ -n "$modules_dir" ]; then
@@ -386,6 +426,7 @@ sound=/sound
 q6asmdai=$remoteproc_adsp/glink-edge/apr/apr-service@7/dais
 q6asm_mm1=$q6asmdai/dai@0
 sound_mm1=$sound/mm1-dai-link
+sound_speaker=$sound/speaker-dai-link
 sound_slim=$sound/slim-dai-link
 sound_slimcap=$sound/slimcap-dai-link
 wifi=$soc/wifi@18800000
@@ -403,6 +444,9 @@ ts_int=$soc/pinctrl@3100000/ts-int-default-state
 uart13_sleep=$soc/pinctrl@3100000/qup-uart13-sleep-state
 wcd_intr=$soc/pinctrl@3100000/wcd-intr-default-state
 fsa_usbc_ana_en=$soc/pinctrl@3100000/fsa-usbc-ana-en-state
+quat_mi2s=$soc/pinctrl@3100000/quat-mi2s-active-state
+quat_mi2s_sd0=$soc/pinctrl@3100000/quat-mi2s-sd0-active-state
+quat_mi2s_sd1=$soc/pinctrl@3100000/quat-mi2s-sd1-active-state
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -492,6 +536,22 @@ for amplifier in "$tfa9874_top" "$tfa9874_bottom"; do
 done
 expect_value tfa9874-top-address 34 fdtget -tx "$dtb" "$tfa9874_top" reg
 expect_value tfa9874-bottom-address 35 fdtget -tx "$dtb" "$tfa9874_bottom" reg
+expect_value quat-mi2s-clock-pins 'gpio137 gpio138' \
+	fdtget -ts "$dtb" "$quat_mi2s" pins
+expect_value quat-mi2s-clock-function qua_mi2s \
+	fdtget -ts "$dtb" "$quat_mi2s" function
+expect_value quat-mi2s-clock-drive 8 \
+	fdtget -tx "$dtb" "$quat_mi2s" drive-strength
+fdtget "$dtb" "$quat_mi2s" output-high >/dev/null ||
+	die "QUAT MI2S clock state must drive its idle level"
+expect_value quat-mi2s-sd0-pin gpio139 \
+	fdtget -ts "$dtb" "$quat_mi2s_sd0" pins
+expect_value quat-mi2s-sd0-function qua_mi2s \
+	fdtget -ts "$dtb" "$quat_mi2s_sd0" function
+expect_value quat-mi2s-sd1-pin gpio140 \
+	fdtget -ts "$dtb" "$quat_mi2s_sd1" pins
+expect_value quat-mi2s-sd1-function qua_mi2s \
+	fdtget -ts "$dtb" "$quat_mi2s_sd1" function
 
 expect_value mpss-status okay fdtget -ts "$dtb" "$remoteproc_mpss" status
 expect_value mpss-firmware qcom/sm8150/oneplus/hotdog/modem.mbn \
@@ -563,6 +623,11 @@ q6afedai_path=$(fdtget -ts "$dtb" /__symbols__ q6afedai) ||
 	die "missing Q6AFE DAI symbol"
 q6afedai_phandle=$(fdtget -tx "$dtb" "$q6afedai_path" phandle) ||
 	die "missing Q6AFE DAI phandle"
+q6afe_quat=$q6afedai_path/dai@22
+expect_value q6afe-quat-mi2s-address 16 \
+	fdtget -tx "$dtb" "$q6afe_quat" reg
+expect_value q6afe-quat-mi2s-sd-line 1 \
+	fdtget -tx "$dtb" "$q6afe_quat" qcom,sd-lines
 q6routing_path=$(fdtget -ts "$dtb" /__symbols__ q6routing) ||
 	die "missing Q6 routing symbol"
 q6routing_phandle=$(fdtget -tx "$dtb" "$q6routing_path" phandle) ||
@@ -571,10 +636,31 @@ wcd9340_path=$(fdtget -ts "$dtb" /__symbols__ wcd9340) ||
 	die "missing WCD9340 symbol"
 wcd9340_phandle=$(fdtget -tx "$dtb" "$wcd9340_path" phandle) ||
 	die "missing WCD9340 phandle"
+speaker_bottom_path=$(fdtget -ts "$dtb" /__symbols__ speaker_bottom) ||
+	die "missing bottom-speaker symbol"
+speaker_bottom_phandle=$(fdtget -tx "$dtb" "$speaker_bottom_path" phandle) ||
+	die "missing bottom-speaker phandle"
+quat_mi2s_phandle=$(fdtget -tx "$dtb" "$quat_mi2s" phandle) ||
+	die "missing QUAT MI2S clock-state phandle"
+quat_mi2s_sd0_phandle=$(fdtget -tx "$dtb" "$quat_mi2s_sd0" phandle) ||
+	die "missing QUAT MI2S SD0-state phandle"
+quat_mi2s_sd1_phandle=$(fdtget -tx "$dtb" "$quat_mi2s_sd1" phandle) ||
+	die "missing QUAT MI2S SD1-state phandle"
+expect_value sound-pinctrl \
+	"$quat_mi2s_phandle $quat_mi2s_sd0_phandle $quat_mi2s_sd1_phandle" \
+	fdtget -tx "$dtb" "$sound" pinctrl-0
 expect_value sound-mm1-name MultiMedia1 \
 	fdtget -ts "$dtb" "$sound_mm1" link-name
 expect_value sound-mm1-cpu "$q6asmdai_phandle 0" \
 	fdtget -tx "$dtb" "$sound_mm1/cpu" sound-dai
+expect_value sound-speaker-name 'Speaker Playback' \
+	fdtget -ts "$dtb" "$sound_speaker" link-name
+expect_value sound-speaker-cpu "$q6afedai_phandle 16" \
+	fdtget -tx "$dtb" "$sound_speaker/cpu" sound-dai
+expect_value sound-speaker-platform "$q6routing_phandle" \
+	fdtget -tx "$dtb" "$sound_speaker/platform" sound-dai
+expect_value sound-speaker-codec "$speaker_bottom_phandle" \
+	fdtget -tx "$dtb" "$sound_speaker/codec" sound-dai
 expect_value sound-slim-name 'SLIM Playback 6' \
 	fdtget -ts "$dtb" "$sound_slim" link-name
 expect_value sound-slim-cpu "$q6afedai_phandle e" \
@@ -592,9 +678,6 @@ expect_value sound-slimcap-platform "$q6routing_phandle" \
 expect_value sound-slimcap-codec "$wcd9340_phandle 1" \
 	fdtget -tx "$dtb" "$sound_slimcap/codec" sound-dai
 expect_absent sound-aux-devices fdtget "$dtb" "$sound" aux-devs
-if fdtget -l "$dtb" "$sound" | grep -Eq 'speaker|tfa'; then
-	die "external speaker amplifier link must remain absent"
-fi
 expect_value rmtfs-hotdog-address '0 fc201000 0 200000' \
 	fdtget -tx "$dtb" "$rmtfs_mem" reg
 expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs_mem" qcom,client-id
