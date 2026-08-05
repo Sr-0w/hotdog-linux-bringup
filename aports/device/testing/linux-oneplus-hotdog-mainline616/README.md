@@ -29,7 +29,11 @@ after a pull-only Flatpak workload reproduced an abrupt Qualcomm crashdump in
 the temporary no-IOMMU configuration. That translated-domain candidate booted
 but reproduced the same failure under sustained buffered writeback. Revision
 `r19` preserves the restored stream and constrains SM8150 UFS to a 32-bit DMA
-aperture with or without the SMMU attachment.
+aperture with or without the SMMU attachment. Revision `r20` restores legacy
+UFS completion handling to hardirq context. A complete DDR capture then showed
+that neither UFS mode was the crash trigger: Linux had allocated two Flatpak
+page-cache folios across a 768 KiB firmware reservation missing from the
+mainline hotdog DT. Revision `r21` reserves that stock XBL/AOP range.
 
 ## Source contract
 
@@ -41,6 +45,10 @@ aperture with or without the SMMU attachment.
 - Revision `r19` keeps the upstream UFS Apps SMMU stream `0x300`, leaves the
   currently failing ICE dependency disabled, and selects a 32-bit DMA aperture
   for SM8150 independently of the SMMU attachment.
+- Revision `r21` mirrors the stock HD1913 XBL/AOP ownership contract by
+  reserving `0x85e40000-0x85f00000` as `no-map`. Together with the adjacent
+  generic SM8150 reservations, firmware memory is excluded continuously from
+  `0x85d00000` through `0x85f40000`.
 - The native Samsung DSC panel, TE signal, and 16x32 framebuffer console are
   built in.
 - QUPv3 wrapper 2, GPI DMA 2, I2C17, and the schema-complete S6SY761 node are
@@ -93,7 +101,7 @@ The image was written to `boot_b`, read back, and direct-booted. Both stock
 refresh modes were selected through KScreen and Plasma Settings while the
 touchscreen, compositor, USB networking, and SSH remained available.
 
-## Hardware-tested r18 and prepared r19 UFS candidate
+## Hardware-tested r18-r20 UFS isolation
 
 Revision `r18` changes only the UFS device-tree attachment from the temporary
 no-IOMMU path to Apps SMMU stream `0x300`; UFS ICE remains disabled. A DTB-only
@@ -134,7 +142,31 @@ produced byte-identical packages:
 The hardware-test image keeps the exact `r18` initramfs, serialized DTB, and
 command line; only the kernel changes. Its AVB-valid 96 MiB `boot.img` SHA256
 is `d32eedcd5f9fcaa0df975b92c1b8ff2bc5cce53afb9bb5848e45a335e8e57eb9`.
-Hardware validation is pending.
+The `r19` image reproduced the crash. Revision `r20` then reproduced it with
+legacy hardirq completions, ruling out that interrupt-context change as the
+sole cause.
+
+## Prepared r21 XBL/AOP reservation candidate
+
+The complete `r20` DDR capture found the Flatpak staging file open in a
+`write(2)` call with no UFS command outstanding. Its page cache owned an
+order-6 folio at `0x85e40000` and an order-7 folio at `0x85e80000`, together
+covering `0x85e40000-0x85f00000`. The stock HD1913 DT reserves that entire
+range inside `xbl_aop_mem`; the `r20` mainline DT did not.
+
+The isolated `r21` hardware image keeps the exact `r20` kernel, initramfs, and
+command line. Its normalized DT differs by one `no-map` node:
+
+| Output | SHA256 |
+|---|---|
+| Kernel | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+| Initramfs | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| DTB | `2908d19fa222a07a71d12abf98f9178ee77e372fb6a107bd61bef8d597444e35` |
+| AVB boot image | `1dc2d7708af97d1a07be517a7927eb60e499b63754c2f7d28d6ca90618859a61` |
+
+The package source and validator carry the same reservation. Hardware
+validation must confirm that the previous 3.5 GB buffered import completes
+without entering Qualcomm crashdump.
 
 ## Earlier fixed-90-Hz evidence
 

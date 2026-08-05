@@ -265,6 +265,7 @@ expect_config 'CONFIG_QRTR_SMD=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
+xbl_aop_gap=$reserved/memory@85e40000
 soc=/soc@0
 ufs=$soc/ufshc@1d84000
 qup=$soc/geniqup@ac0000
@@ -302,6 +303,10 @@ uart13_sleep=$soc/pinctrl@3100000/qup-uart13-sleep-state
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
 	fdtget -tx "$dtb" "$reserved/hotdog-removed-gap@89d00000" reg
+expect_value xbl-aop-gap '0 85e40000 0 c0000' \
+	fdtget -tx "$dtb" "$xbl_aop_gap" reg
+fdtget -p "$dtb" "$xbl_aop_gap" | grep -qx no-map ||
+	die "XBL/AOP gap reservation is missing no-map"
 expect_value ramoops '0 a9800000 0 400000' \
 	fdtget -tx "$dtb" "$reserved/ramoops@a9800000" reg
 expect_value ramoops-record 40000 \

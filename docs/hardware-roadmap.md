@@ -23,31 +23,29 @@ For every experiment below:
 
 ## 1. Complete RAM map
 
-**Proven current state.** The K1 bring-up DTB limits `memory@80000000` to the
-low bank at `0x80000000 + 0x3bb00000`. After reserved regions, approximately
-448 MiB is available. The validated DTB also reserves the firmware-owned
-`0x89d00000-0x8b700000` gap. The low-bank transform and exact hashes are
-traceable through [mainline bring-up](mainline-bringup.md#1-kexec-low-bank-ram-window)
-and the [DTB reproduction record](evidence/k1-dtb-source.md#transform-chain).
+**Proven current state.** Direct boot receives the bootloader's complete
+multi-gigabyte memory map. A full `r20` DDR capture found that the page
+allocator treated `0x85e40000-0x85f00000` as RAM even though the HD1913 stock
+DT includes it in `xbl_aop_mem`. Two Flatpak page-cache folios occupied that
+entire interval immediately before Qualcomm crashdump. Revision `r21` adds the
+missing `no-map` reservation. The historical K1 path remains deliberately
+limited to the low bank and separately reserves `0x89d00000-0x8b700000`.
 
-**Hypothesis.** The low-bank limit is a kexec handoff constraint rather than a
-hardware limit. Direct boot can expose the complete downstream-observed memory
-layout while retaining every `reserved-memory` exclusion.
+**Current experiment.** Boot the exact `r20` kernel and userspace with only the
+missing XBL/AOP reservation added, then repeat the 3.5 GB Flatpak import that
+reliably entered `900e`.
 
-**Single-variable experiment.** Change only the root memory `reg` property to
-the observed three-bank map: low bank `0x80000000/0x3bb00000`, high bank
-`0x180000000/0x100000000`, and bank `0xc0000000/0xc0000000`. Keep the firmware
-gap, all other reserved regions, SMMU bypass, ICE removal, and kernel command
-line unchanged.
+**Single-variable experiment.** Add only `0x85e40000/0xc0000` as `no-map`.
+Keep the exact `r20` kernel, initramfs, command line, UFS SMMU stream, DMA32
+aperture, and every other DT property unchanged.
 
-**Success criteria.** The direct kernel reaches the same postmarketOS root;
-reported RAM matches the physical map minus reservations; UFS and USB SSH stay
-stable; and no early memory overlap, DMA, ramoops, or remoteproc fault appears.
+**Success criteria.** The direct kernel reaches the same postmarketOS root,
+reports the reservation, and completes the previously failing import. UFS,
+USB SSH, display, touch, GPU, Wi-Fi, and Bluetooth must remain available.
 
-**Risks and fallback.** An incomplete reserved-memory map can allow Linux to
-overwrite firmware-owned memory before USB appears. On any early reset,
-corruption warning, or unexplained device loss, restore the accepted low-bank
-DTB. Do not investigate later subsystems on a partially trusted RAM map.
+**Risks and fallback.** The candidate removes only 768 KiB that stock already
+withholds, so the expected regression risk is low. Retain the exact `r20`
+image as the binary control and capture another full dump if `900e` remains.
 
 ## 2. Apps SMMU
 

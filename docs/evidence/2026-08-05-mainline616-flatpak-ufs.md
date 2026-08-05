@@ -196,22 +196,79 @@ completion handling as sole causes. All failures remain clustered during a
 large buffered OSTree import after roughly 6.2-6.4 million sectors have been
 written.
 
-## Request-size A/B and full RAM capture
+## Request-size A/B result
 
-The mainline UFS host advertises a 1 MiB maximum request, a 256 KiB maximum
-segment, and an unrestricted scatter-gather table. The next runtime A/B keeps
-the exact `r20` image and temporarily sets
-`/sys/block/sda/queue/max_sectors_kb` to 128 before repeating the pull. This
-isolates request size and scatter-gather pressure without another kernel
-change; the harness records all original and effective queue limits.
+The exact `r20` image reproduced the failure after setting
+`/sys/block/sda/queue/max_sectors_kb` to 128. It entered `900e` at about 114.4
+seconds with 6,398,424 sectors written through both `sda` and the root loop
+device. Limiting request size therefore did not move the failure away from the
+same 3,508,827,314-byte buffered object.
 
-Crash collection now uses a pinned `linux-msm/qdl` build as the first reader
-of a fresh `900e` Sahara session. A small public patch adds
-`qdl ramdump --skip-reset`, allowing all offered regions, including the full 8
-GiB DDR image, to be downloaded without resetting the phone. Ramoops is then
-extracted from the DDR image. If the firmware offers kernel ELF metadata, QDL
-also assembles `minidump.elf`; otherwise the raw DDR ranges are retained for
-analysis with the exact unstripped kernel.
+## Full DDR analysis
+
+A pinned `linux-msm/qdl` build captured all four 2 GiB DDR regions without
+resetting the phone. Qualcomm's ramdump parser used the exact unstripped `r20`
+kernel and recovered a coherent live Linux state:
+
+- CPU 7 was executing `write(2)` for the Flatpak worker, writing 833 bytes to
+  file descriptor 23;
+- the descriptor referenced unnamed staging inode 532471 at file position
+  1,834,004,485;
+- the 3,508,827,314-byte file was fully preallocated and had 447,757 pages in
+  its address-space mapping;
+- UFS was operational but clock-gated in Hibern8, with no outstanding command,
+  task, saved error, UIC error, reset, or recovery in progress;
+- the dump contains no Linux panic, oops, ext4 error, UFS error, or IOMMU
+  fault.
+
+The memory snapshot explains why this workload alone reached the fault. The
+Normal zone had only 44 MiB free, exactly its low watermark, while it held
+about 3.8 GiB of inactive file cache and 534 MiB of pending writes. The DMA
+zone still had about 1.4 GiB free, so new file-cache folios fell back into the
+low physical bank.
+
+Walking inode 532471's XArray found two such folios inside a device-specific
+reservation missing from the mainline DT:
+
+| File page index | Physical base | Order | Physical extent |
+|---:|---:|---:|---:|
+| 445632 | `0x85e40000` | 6 | `0x85e40000-0x85e80000` |
+| 446592 | `0x85e80000` | 7 | `0x85e80000-0x85f00000` |
+
+Together they cover every byte of `0x85e40000-0x85f00000`. The HD1913 stock
+DT reserves `0x85e00000-0x85f40000` as `xbl_aop_mem`. In contrast, the `r20`
+DT reserves `0x85d00000-0x85e40000`, `0x85f00000-0x85f20000`, and
+`0x85f20000-0x85f40000`, leaving the exact 768 KiB interval above available
+to Linux. Qualcomm's crashdump table also identifies PMIC reset history, DDR
+training data, and debug structures inside that interval.
+
+The evidence rules out a UFS command failure at the crash instant and shows a
+direct Linux/firmware ownership collision. The remaining hardware test is to
+exclude this stock-owned interval from the page allocator.
+
+## R21 XBL/AOP reservation candidate
+
+The `r21` A/B image adds only this node to the exact serialized `r20` DTB:
+
+```dts
+memory@85e40000 {
+    reg = <0 0x85e40000 0 0xc0000>;
+    no-map;
+};
+```
+
+Kernel, initramfs, and command line are byte-identical to the failing `r20`
+image. A normalized tree comparison contains no other change:
+
+| Hardware-test component | SHA256 |
+|---|---|
+| Kernel | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+| Initramfs | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| DTB | `2908d19fa222a07a71d12abf98f9178ee77e372fb6a107bd61bef8d597444e35` |
+| AVB boot image | `1dc2d7708af97d1a07be517a7927eb60e499b63754c2f7d28d6ca90618859a61` |
+
+The same reservation is source-built as pmaports revision `r21`, and the
+package validator requires both the exact range and `no-map` property.
 
 ## Safety
 
