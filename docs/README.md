@@ -63,6 +63,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   hash-only OxygenOS hardware inventory policy, stock firmware/module map, and
   reproducible DTB/DTBO reconstruction plus the recovered two-amplifier
   TFA9874/ADSP contract.
+- [evidence/2026-08-05-mainline616-tfa9874-probe.md](evidence/2026-08-05-mainline616-tfa9874-probe.md):
+  strict `r28` package and AVB hashes, complete `boot_b` readback, and direct
+  hardware validation of both TFA9874 revisions with a read-only driver that
+  leaves reset lines, routes, protection, and output stages untouched.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.
