@@ -192,6 +192,20 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing Qualcomm Bluetooth module"
 	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_pas.ko' \
 		-print -quit | grep -q . || die "missing Qualcomm PAS remoteproc module"
+	find "$modules_dir" -type f -path '*/drivers/base/regmap/regmap-slimbus.ko' \
+		-print -quit | grep -q . || die "missing SLIMbus regmap module"
+	find "$modules_dir" -type f -path '*/drivers/slimbus/slim-qcom-ngd-ctrl.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm NGD SLIMbus module"
+	find "$modules_dir" -type f -path '*/drivers/mfd/wcd934x.ko' \
+		-print -quit | grep -q . || die "missing WCD9340 MFD module"
+	find "$modules_dir" -type f -path '*/drivers/gpio/gpio-wcd934x.ko' \
+		-print -quit | grep -q . || die "missing WCD9340 GPIO module"
+	find "$modules_dir" -type f -path '*/sound/soc/codecs/snd-soc-wcd934x.ko' \
+		-print -quit | grep -q . || die "missing WCD9340 codec module"
+	find "$modules_dir" -type f -path '*/drivers/soundwire/soundwire-bus.ko' \
+		-print -quit | grep -q . || die "missing SoundWire bus module"
+	find "$modules_dir" -type f -path '*/drivers/soundwire/soundwire-qcom.ko' \
+		-print -quit | grep -q . || die "missing Qualcomm SoundWire module"
 fi
 
 python3 - "$image" <<'PY'
@@ -292,6 +306,13 @@ pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
 remoteproc_mpss=$soc/remoteproc@4080000
 remoteproc_adsp=$soc/remoteproc@17300000
+slim=$soc/slim-ngd@171c0000
+slim_ngd=$slim/slim@1
+wcd9340_ifd=$slim_ngd/ifd@0,0
+wcd9340=$slim_ngd/codec@1,0
+wcd9340_gpio=$wcd9340/gpio-controller@42
+wcd9340_swm=$wcd9340/soundwire@c85
+sound=/sound
 wifi=$soc/wifi@18800000
 uart13=$qup2/serial@c8c000
 bluetooth=$uart13/bluetooth
@@ -305,6 +326,7 @@ te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
 uart13_sleep=$soc/pinctrl@3100000/qup-uart13-sleep-state
+wcd_intr=$soc/pinctrl@3100000/wcd-intr-default-state
 
 expect_value memory '0 80000000 0 3bb00000' fdtget -tx "$dtb" "$memory" reg
 expect_value firmware-gap '0 89d00000 0 1a00000' \
@@ -366,6 +388,48 @@ adsp_mem_phandle=$(fdtget -tx "$dtb" "$adsp_mem" phandle) ||
 	die "missing ADSP memory phandle"
 expect_value adsp-memory "$adsp_mem_phandle" \
 	fdtget -tx "$dtb" "$remoteproc_adsp" memory-region
+expect_value slim-status okay fdtget -ts "$dtb" "$slim" status
+expect_value slim-ngd-address 1 fdtget -tx "$dtb" "$slim_ngd" reg
+expect_value wcd9340-ifd-compatible slim217,250 \
+	fdtget -ts "$dtb" "$wcd9340_ifd" compatible
+expect_value wcd9340-ifd-address '0 0' \
+	fdtget -tx "$dtb" "$wcd9340_ifd" reg
+expect_value wcd9340-compatible slim217,250 \
+	fdtget -ts "$dtb" "$wcd9340" compatible
+expect_value wcd9340-address '1 0' fdtget -tx "$dtb" "$wcd9340" reg
+expect_value wcd9340-clock-frequency 927c00 \
+	fdtget -tx "$dtb" "$wcd9340" clock-frequency
+expect_value wcd9340-interrupt-pin gpio123 \
+	fdtget -ts "$dtb" "$wcd_intr" pins
+tlmm_path=$(fdtget -ts "$dtb" /__symbols__ tlmm) ||
+	die "missing TLMM symbol"
+tlmm_phandle=$(fdtget -tx "$dtb" "$tlmm_path" phandle) ||
+	die "missing TLMM phandle"
+expect_value wcd9340-reset "$tlmm_phandle 8f 0" \
+	fdtget -tx "$dtb" "$wcd9340" reset-gpios
+expect_value wcd9340-interrupt "$tlmm_phandle 7b 4" \
+	fdtget -tx "$dtb" "$wcd9340" interrupts-extended
+vreg_s4a_path=$(fdtget -ts "$dtb" /__symbols__ vreg_s4a_1p8) ||
+	die "missing vreg_s4a_1p8 symbol"
+vreg_s4a_phandle=$(fdtget -tx "$dtb" "$vreg_s4a_path" phandle) ||
+	die "missing vreg_s4a_1p8 phandle"
+for supply_name in vdd-buck-sido vdd-buck vdd-tx vdd-rx vdd-io; do
+	expect_value "wcd9340-$supply_name-supply" "$vreg_s4a_phandle" \
+		fdtget -tx "$dtb" "$wcd9340" "$supply_name-supply"
+done
+for micbias in 1 2 3 4; do
+	expect_value "wcd9340-micbias$micbias" 1b7740 \
+		fdtget -tx "$dtb" "$wcd9340" "qcom,micbias$micbias-microvolt"
+done
+expect_value wcd9340-gpio-compatible qcom,wcd9340-gpio \
+	fdtget -ts "$dtb" "$wcd9340_gpio" compatible
+expect_value wcd9340-gpio-range '42 2' \
+	fdtget -tx "$dtb" "$wcd9340_gpio" reg
+expect_value wcd9340-soundwire-compatible qcom,soundwire-v1.3.0 \
+	fdtget -ts "$dtb" "$wcd9340_swm" compatible
+expect_value wcd9340-soundwire-range 'c85 40' \
+	fdtget -tx "$dtb" "$wcd9340_swm" reg
+expect_absent sound-compatible fdtget "$dtb" "$sound" compatible
 expect_value rmtfs-hotdog-address '0 fc201000 0 200000' \
 	fdtget -tx "$dtb" "$rmtfs_mem" reg
 expect_value rmtfs-client 1 fdtget -tx "$dtb" "$rmtfs_mem" qcom,client-id
