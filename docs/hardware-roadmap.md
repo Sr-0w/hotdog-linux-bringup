@@ -235,7 +235,31 @@ yet localized to Bluetooth, Wi-Fi, UFS, USB, or a shared power domain. Retain
 `r15` as the fixed-60-Hz radio fallback and do not reset a phone exposed as
 Qualcomm `900e` or `9008` from software.
 
-## 9. USB host mode
+## 9. Audio
+
+**Proven current state.** Revisions `r23` through `r25` start the ADSP, bind
+WCD9340 over SLIMbus and SoundWire, and register the SM8150 ALSA card with a
+`MultiMedia1` playback/capture PCM. Revision `r26` selects the stock-derived
+Hotdog `SLIMBUS_6_RX` to `AIF4_PB` playback backend. A silent 48 kHz stereo
+S24_LE stream opens without a DSP or transport error while ADSP and MPSS remain
+running. See the [r26 audio evidence](evidence/2026-08-05-mainline616-headphone-backend.md).
+
+**Next experiment.** Package a minimal UCM2 profile and the stock-derived
+WCD9340 wired-headphone controls. Keep the TFA98xx speaker amplifiers absent,
+start with silence, and raise only the headphone path to a conservative level.
+
+**Success criteria.** Plasma and ALSA select the same UCM profile, a short test
+is audible through wired headphones without clipping or codec/DSP errors, and
+route teardown returns every control and PCM to an idle state. Headset detect,
+buttons, microphones, earpiece, and each external speaker amplifier require
+separate follow-up tests.
+
+**Risks and fallback.** Codec mixers can expose unsafe gain or connect an
+unintended physical endpoint. Do not copy the complete Android mixer state.
+Enable the minimum internal-headphone controls only, retain the silent r26
+test as the control, and keep all external amplifier links disabled.
+
+## 10. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

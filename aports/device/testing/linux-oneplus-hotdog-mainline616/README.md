@@ -39,6 +39,13 @@ second DDR snapshot found the staging inode in the next stock-owned interval.
 Revision `r22` completes the two remaining gaps in the HD1913 stock reservation
 union.
 
+Revisions `r23` through `r25` then start the ADSP, bind the physical WCD9340
+over Qualcomm NGD SLIMbus and SoundWire, and register the `OnePlus 7T Pro`
+ALSA card with `MultiMedia1` playback and capture. Revision `r26` selects the
+stock-derived Hotdog headphone backend, connecting Q6AFE `SLIMBUS_6_RX` to
+WCD9340 `AIF4_PB` while retaining `SLIMBUS_0_TX` for capture. A silent 48 kHz
+stereo S24_LE stream opens on hardware without a DSP or transport error.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -80,6 +87,11 @@ union.
   timings. Revision `r17` keeps the validated 90 Hz path preferred and selects
   control-display value `0x20` or `0x30` from the committed DRM mode during
   panel preparation.
+- ADSP, Qualcomm NGD SLIMbus, WCD9340, SoundWire, and the SM8150 machine card
+  are enabled. Playback uses the hardware-validated Hotdog
+  `SLIMBUS_6_RX`/`AIF4_PB` digital path; capture remains on
+  `SLIMBUS_0_TX`/`AIF1_CAP`. External speaker amplifiers are deliberately
+  excluded.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -87,6 +99,24 @@ union.
 invariant that was present during the successful hardware run, and the exact
 dual-mode panel contract. The package build fails if one of those invariants
 changes.
+
+## Hardware-tested r26 audio-backend evidence
+
+The strict `r26` build produced a 25,539,545-byte APK with SHA256
+`87f5a97fcad44b89b9e0bd6a0ff4a80f2101c85f4452c930472c38b4e0ccfa89`.
+Its 27,572,232-byte kernel and 143,443-byte DTB have SHA256
+`0f96582804d8328bff74022f4c25632b63db2f01844650cf72ab02e88be25076`
+and `3b2cb24d22cf4eb8e79845eecfeca4d619a93c749b3350ff0857390277a521cd`.
+The verified 96 MiB AVB image has SHA256
+`077a88988427eab0df14d486f10084b99d8ed0dfdfea7bffcee6cfd9a2836fdf`.
+
+A complete `boot_b` readback matched that image. It direct-booted as
+`#27-oneplus-hotdog-mainline616`, returned USB SSH, kept ADSP and MPSS running,
+and exposed `SLIMBUS_6_RX Audio Mixer MultiMedia1` plus the two WCD9340
+`AIF4_PB` muxes. A controlled silent stream opened for three seconds at
+48 kHz, stereo, S24_LE without a Q6ASM, Q6AFE, APR, SLIMbus, or remoteproc
+error. All temporary mixer controls were disabled afterward. See the
+[complete r26 evidence](../../../../docs/evidence/2026-08-05-mainline616-headphone-backend.md).
 
 ## Hardware-tested r17 build evidence
 

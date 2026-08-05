@@ -55,6 +55,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   strict `r25` package and AVB hashes, complete `boot_b` readback, and direct
   hardware validation of the SM8150 ALSA card plus `MultiMedia1` playback and
   capture PCM devices before physical audio routing.
+- [evidence/2026-08-05-mainline616-headphone-backend.md](evidence/2026-08-05-mainline616-headphone-backend.md):
+  strict `r26` package and AVB hashes, complete `boot_b` readback, and direct
+  hardware validation of silent 48 kHz stereo playback through the Hotdog
+  `SLIMBUS_6_RX` to WCD9340 `AIF4_PB` digital headphone backend.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.
