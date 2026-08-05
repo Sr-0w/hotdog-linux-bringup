@@ -51,6 +51,16 @@ driver and describes both internal speaker amplifiers. It reads only the exact
 silicon revision and deliberately registers no output DAI, reset control or
 speaker route.
 
+Revisions `r29` through `r31` add a bounded speaker path derived from the
+OxygenOS TFA container and QUAT MI2S mixer contract. The amplifier is enabled
+only after BCLK and frame sync are stable, and every close or error returns it
+to power-down. Revision `r31` matches the stock S24_LE format and 3.072 MHz
+bit clock. A controlled 1 kHz test is audible from the lower speaker and is
+independently present in a synchronized webcam-microphone recording. Separate
+channel tests identify the lower amplifier as TDM slot 1, fed by the right PCM
+channel. Revision `r32` adds the upper slot-0 amplifier to the same ASoC link;
+its strict build passes, but its hardware result is not claimed yet.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -96,9 +106,11 @@ speaker route.
   are enabled. Playback uses the hardware-validated Hotdog
   `SLIMBUS_6_RX`/`AIF4_PB` digital path; capture remains on
   `SLIMBUS_0_TX`/`AIF1_CAP`.
-- The two TFA9874 speaker amplifiers are present as read-only I2C/ASoC
-  components. Their shared reset, quaternary MI2S route, ADSP protection
-  profile and output stages remain deliberately inactive.
+- Both TFA9874 amplifiers use their stock slot mapping and conservative
+  container-derived hardware profile on QUAT MI2S. Output stays powered down
+  outside an active stream, clock lock is required before amplifier enable,
+  and the shared physical reset remains untouched. The lower slot-1 speaker is
+  hardware-validated; the upper slot-0 speaker is pending r32 hardware proof.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -106,6 +118,30 @@ speaker route.
 invariant that was present during the successful hardware run, and the exact
 dual-mode panel contract. The package build fails if one of those invariants
 changes.
+
+## Hardware-tested r31 speaker evidence
+
+The strict `r31` build produced a 25,542,845-byte APK with SHA256
+`7faf2116f6b0cd74140a62002210f29119cd217f4ed55f39b0a4e8e5c8f5fa5f`.
+Its verified 96 MiB AVB image has SHA256
+`226dd8bb0bcd21cf4d544d7f9042994a4d0e00f6e9aa93f94e267287124552c3`.
+The complete `boot_b` readback matched before reboot.
+
+The direct boot reports `#32-oneplus-hotdog-mainline616`. The lower TFA9874
+at `1-0035` locks its clocks and unmutes with `status0=0016`,
+`status1=e2c0`, and `status3=850f`. A one-second 1 kHz S24_LE stream at
+-60 dBFS produces a stable approximately -43 dBFS 1 kHz component in the
+synchronized webcam-microphone capture, against an approximately -85 dBFS
+local baseline. Independent channel streams show no 1 kHz component on the
+left and the same approximately -43 dBFS component on the right. Stream close
+returns the amplifier to `active=0`, `system=0001`, and the ALSA route is
+disabled after each test.
+
+Revision `r32` links both slot-specific codecs. Its strict build passed the
+source, configuration, module, and final-DTB contract and produced a
+25,542,848-byte APK with SHA256
+`997dfeaa1327a868f2901b5125f6b66542056202cd291118ded9063529295c7d`.
+See the [complete internal-speaker evidence](../../../../docs/evidence/2026-08-05-mainline616-internal-speakers.md).
 
 ## Hardware-tested r26 audio-backend evidence
 

@@ -203,6 +203,7 @@ required = (
     "client->addr != 0x34 && client->addr != 0x35",
     "regmap_read(tfa->regmap, TFA9874_REVISION_REG, &revision)",
     "revision != TFA9874_REVISION_0C74",
+    "tfa->slot = client->addr == 0x35;",
     "static int tfa9874_safe_off(struct tfa9874 *tfa)",
     "static int tfa9874_configure(struct tfa9874 *tfa)",
     "regmap_read_poll_timeout(tfa->regmap, TFA9874_STATUS_FLAGS1",
@@ -647,6 +648,10 @@ wcd9340_path=$(fdtget -ts "$dtb" /__symbols__ wcd9340) ||
 	die "missing WCD9340 symbol"
 wcd9340_phandle=$(fdtget -tx "$dtb" "$wcd9340_path" phandle) ||
 	die "missing WCD9340 phandle"
+speaker_top_path=$(fdtget -ts "$dtb" /__symbols__ speaker_top) ||
+	die "missing top-speaker symbol"
+speaker_top_phandle=$(fdtget -tx "$dtb" "$speaker_top_path" phandle) ||
+	die "missing top-speaker phandle"
 speaker_bottom_path=$(fdtget -ts "$dtb" /__symbols__ speaker_bottom) ||
 	die "missing bottom-speaker symbol"
 speaker_bottom_phandle=$(fdtget -tx "$dtb" "$speaker_bottom_path" phandle) ||
@@ -670,7 +675,7 @@ expect_value sound-speaker-cpu "$q6afedai_phandle 16" \
 	fdtget -tx "$dtb" "$sound_speaker/cpu" sound-dai
 expect_value sound-speaker-platform "$q6routing_phandle" \
 	fdtget -tx "$dtb" "$sound_speaker/platform" sound-dai
-expect_value sound-speaker-codec "$speaker_bottom_phandle" \
+expect_value sound-speaker-codecs "$speaker_top_phandle $speaker_bottom_phandle" \
 	fdtget -tx "$dtb" "$sound_speaker/codec" sound-dai
 expect_value sound-slim-name 'SLIM Playback 6' \
 	fdtget -ts "$dtb" "$sound_slim" link-name
