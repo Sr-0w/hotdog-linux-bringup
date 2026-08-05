@@ -212,7 +212,7 @@ required = (
     ".channels_min = 2,",
     ".channels_max = 2,",
     ".rates = SNDRV_PCM_RATE_48000,",
-    ".formats = SNDRV_PCM_FMTBIT_S16_LE,",
+    ".formats = SNDRV_PCM_FMTBIT_S24_LE,",
     "OxygenOS speaker profile prepared on TDM slot %u; output muted",
     "&tfa9874_component_driver,",
     "&tfa9874_dai, 1);",
@@ -250,11 +250,10 @@ for forbidden in ("gpiod_", "reset_control_"):
         raise SystemExit(f"physical amplifier reset must remain untouched: {forbidden}")
 
 machine_required = (
-    "#define MI2S_BCLK_RATE\t\t1536000",
-    "cpu_dai->id == QUATERNARY_MI2S_RX",
-    "snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);",
+    "#define QUAT_MI2S_BCLK_RATE\t3072000",
+    "snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);",
     "Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT",
-    "MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK",
+    "QUAT_MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK",
     "snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_BP_FP);",
     "snd_soc_dai_set_fmt(cpu_dai, fmt);",
 )
