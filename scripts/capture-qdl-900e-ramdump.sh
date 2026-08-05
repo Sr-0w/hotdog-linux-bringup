@@ -63,7 +63,7 @@ command -v sha256sum >/dev/null 2>&1 || die "missing command: sha256sum" 127
 [ -r "$RAMOOPS_EXTRACTOR" ] || die "missing ramoops extractor: $RAMOOPS_EXTRACTOR" 127
 
 usb_serial="$(lsusb -v -d 05c6:900e 2>/dev/null |
-	awk '$2 == "iSerial" { print $3; exit }')"
+	awk '$1 == "iSerial" { print $3; exit }')"
 [ "$usb_serial" = "$HOTDOG_TARGET_SERIAL" ] ||
 	die "900e USB iSerial ${usb_serial:-<missing>} does not match target $HOTDOG_TARGET_SERIAL" 3
 
