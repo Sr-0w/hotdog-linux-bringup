@@ -118,13 +118,65 @@ only its kernel differs. The 96 MiB image passes AVB verification:
 | Exact R18 DTB | `018006a67c60bf309a14fa70f224f0172d2aa718443a4deb4e0e6b5af2ad44be` |
 | AVB boot image | `d32eedcd5f9fcaa0df975b92c1b8ff2bc5cce53afb9bb5848e45a335e8e57eb9` |
 
+## R19 hardware result
+
+Revision `r19` booted directly as `#20-oneplus-hotdog-mainline616`, mounted the
+root filesystem read-write, restored USB networking and SSH, and kept the UFS
+controller alone in translated IOMMU group 4. The kernel also confirmed that
+the SM8150 UFS DMA mask was constrained to 32 bits.
+
+The controlled Flatpak pull still entered `05c6:900e` after about 171.8
+seconds while importing the same 3,508,827,314-byte object
+`b4293a3d44299c42058f876346f805e4602d509c0dadd93767ea7e284ee85430.file`.
+The final samples reported roughly 494 MiB dirty, 44 MiB under writeback, and
+6,291,800 sectors written through the root loop device.
+
+Revisions `r17`, `r18`, and `r19` therefore fail in the same narrow buffered
+write range despite testing UFS without translation plus DMA32, translated
+DMA64, and translated DMA32 respectively. Neither the missing Apps SMMU
+attachment nor the DMA aperture is sufficient to explain the crash.
+
+The first Sahara session exposed 48 firmware memory regions and yielded the
+bounded 4 MiB ramoops reservation, again without a Linux panic. It also listed
+a 256 KiB `KMSG.txt` region, but the previous capture helper could not request
+that second range before the one-shot memory-debug session was consumed. The
+capture path now retrieves both regions in the same connection.
+
+## R20 legacy hardirq candidate
+
+Linux commit `3c7ac40d7322` moved legacy UFS completion processing from the
+hard interrupt handler into an `IRQF_ONESHOT` thread. Later upstream discussion
+reported severe completion-latency regressions on UFSHC revisions older than
+4.0. The HD1913 uses the legacy path, and an earlier visible failure included
+`ufshcd_abort: cmd was completed, but without a notifying intr` immediately
+before UFS recovery failed.
+
+Revision `r20` restores only the pre-`3c7ac40d7322` hardirq completion path.
+It retains the translated Apps SMMU stream and 32-bit DMA aperture proven by
+`r19`. A strict pmbootstrap build produced:
+
+| Output | SHA256 |
+|---|---|
+| APK | `b416b26d9bb08cb46c4f4ff2972258c09b9bc0a5c3d909dcf44b235805d49f2a` |
+| Kernel | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+
+The AVB image changes only that kernel relative to the `r19` hardware image;
+its ramdisk, serialized DTB, and command line are byte-identical:
+
+| Hardware-test component | SHA256 |
+|---|---|
+| Kernel | `496aa00a24c3ccdf9daad375d048c9ef253cabcbd6844c0b506dc8ca69212924` |
+| Initramfs | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| Exact R18/R19 DTB | `018006a67c60bf309a14fa70f224f0172d2aa718443a4deb4e0e6b5af2ad44be` |
+| AVB boot image | `9de1c7fcb58dea7ba6b0f73b8a2585f73f4211eee763b002cf65c82fe2d9fc38` |
+
 Hardware validation remains pending.
 
 ## Safety
 
 `test-flatpak-ufs-finalization.sh` never flashes or resets the phone. It splits
 the operation into `pull` and `deploy`, streams the kernel and storage state to
-the host, and performs only a read-only Sahara region-table listing plus the
-bounded ramoops capture after `900e`. Both reads share the first crashdump
-session. A manual return to fastboot remains required from Qualcomm crashdump
-mode.
+the host, and performs only a read-only Sahara region-table listing plus bounded
+ramoops and firmware `KMSG.txt` captures after `900e`. All reads share the
+first crashdump session. A manual return to fastboot remains required from
+Qualcomm crashdump mode.
