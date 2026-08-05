@@ -168,6 +168,15 @@ The package source and validator carry the same reservation. Hardware
 validation must confirm that the previous 3.5 GB buffered import completes
 without entering Qualcomm crashdump.
 
+Two independent strict `r21` builds produced byte-identical packages and ran
+the updated DT contract before and after module installation:
+
+| Source-built output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r21.apk` | 25,537,607 bytes | `bacb97d9c97dfa08b8e87d5499103ab58880ac1f90cabc4e321f86fb920775e7` |
+| `boot/vmlinuz` | 27,572,232 bytes | `64d1bb44387944f8eb12c02615e9aa9a985f91037e582f90d6fa7d3063e7e8dd` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 140,737 bytes | `ba362ef010f34473f602c39c85f99c69bc5b2befaa01a2cf1e0aa401c0d13d34` |
+
 ## Earlier fixed-90-Hz evidence
 
 Two independent strict `r16` pmbootstrap builds completed on 2026-08-04 and

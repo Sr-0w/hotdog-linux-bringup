@@ -269,6 +269,11 @@ image. A normalized tree comparison contains no other change:
 
 The same reservation is source-built as pmaports revision `r21`, and the
 package validator requires both the exact range and `no-map` property.
+Two independent strict builds produced the same 25,537,607-byte APK, SHA256
+`bacb97d9c97dfa08b8e87d5499103ab58880ac1f90cabc4e321f86fb920775e7`.
+The source-built kernel and DTB are respectively
+`64d1bb44387944f8eb12c02615e9aa9a985f91037e582f90d6fa7d3063e7e8dd`
+and `ba362ef010f34473f602c39c85f99c69bc5b2befaa01a2cf1e0aa401c0d13d34`.
 
 ## Safety
 
