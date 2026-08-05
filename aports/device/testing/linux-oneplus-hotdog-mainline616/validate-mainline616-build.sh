@@ -255,6 +255,7 @@ machine_required = (
     "snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);",
     "Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT",
     "MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK",
+    "snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_BP_FP);",
     "snd_soc_dai_set_fmt(cpu_dai, fmt);",
 )
 for value in machine_required:
@@ -262,6 +263,17 @@ for value in machine_required:
         raise SystemExit(f"missing SM8150 QUAT MI2S contract: {value!r}")
 if machine_source.count("case QUATERNARY_MI2S_RX:") < 3:
     raise SystemExit("SM8150 machine driver does not cover QUAT MI2S lifecycle")
+
+startup = machine_source[
+    machine_source.index("static int sm8150_snd_startup"):
+    machine_source.index("static void sm8150_snd_shutdown")
+]
+quat_start = startup.index("case QUATERNARY_MI2S_RX:")
+quat_startup = startup[quat_start:startup.index("break;", quat_start)]
+if "SND_SOC_DAIFMT_BP_FP" not in quat_startup:
+    raise SystemExit("SM8150 QUAT MI2S CPU must provide BCLK and frame sync")
+if "snd_soc_dai_set_fmt(cpu_dai, fmt);" in quat_startup:
+    raise SystemExit("SM8150 QUAT MI2S CPU remains configured as a clock consumer")
 PY
 
 if [ -n "$modules_dir" ]; then
