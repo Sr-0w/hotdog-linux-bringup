@@ -75,9 +75,56 @@ their binary DTB hashes differ because the two tools serialize it differently.
 The generated captures remain outside the public repository. They may include
 local network identifiers and are not needed to reproduce the test boundary.
 
+## R18 hardware result
+
+The DTB-only `r18` image booted directly, mounted the postmarketOS root,
+restored USB networking and SSH, and placed `1d84000.ufshc` alone in IOMMU
+group 4. The kernel reported a translated strict IOMMU domain and no Apps SMMU
+fault.
+
+The same pull-only Flatpak workload nevertheless entered `05c6:900e` at about
+129 seconds. Immediately before transport disappeared, roughly 506 MiB was
+dirty and 94 MiB was under writeback. The bounded 4 MiB ramoops capture again
+contained no panic, oops, UFS error, ext4 error, or SMMU fault.
+
+Restoring `iommus` also made the existing UFS workaround stop selecting a
+32-bit DMA mask. Its condition applied only when the device-tree property was
+absent, so this hardware run tested translated SMMU plus DMA64. It did not test
+translated SMMU plus the previously successful 32-bit aperture.
+
+## R19 SMMU plus DMA32 candidate
+
+Revision `r19` keeps the exact UFS stream `0x300` attachment from `r18` and
+changes only the SM8150 UFS DMA-mask selection. The host now requests a 32-bit
+DMA aperture whether the controller is translated through the Apps SMMU or is
+temporarily bypassing it. The package validator rejects any future source in
+which that decision depends on the presence of `iommus`.
+
+Two independent strict builds produced an identical 25,537,570-byte APK:
+
+| Output | SHA256 |
+|---|---|
+| APK | `4b63e29866a9d11ceb024b68c213e999eed051eee578f2488208cb455e3d6e15` |
+| Kernel | `ad44e6b0b4e8bd3b941dc2f5d2cfe9fdce4863444a2827a63a1b9546391ab069` |
+| Source DTB | `5df7f6adc14d92f47379da0bfb13e814f00c52b8934840d78e7fed4306174f17` |
+
+The hardware image uses the exact tested `r18` ramdisk, DTB, and command line;
+only its kernel differs. The 96 MiB image passes AVB verification:
+
+| Hardware-test component | SHA256 |
+|---|---|
+| Kernel | `ad44e6b0b4e8bd3b941dc2f5d2cfe9fdce4863444a2827a63a1b9546391ab069` |
+| Initramfs | `347365a8e008a4f1d8b6788a6e933945a1eb940faa6af53b4057ba92d938c0bd` |
+| Exact R18 DTB | `018006a67c60bf309a14fa70f224f0172d2aa718443a4deb4e0e6b5af2ad44be` |
+| AVB boot image | `d32eedcd5f9fcaa0df975b92c1b8ff2bc5cce53afb9bb5848e45a335e8e57eb9` |
+
+Hardware validation remains pending.
+
 ## Safety
 
 `test-flatpak-ufs-finalization.sh` never flashes or resets the phone. It splits
 the operation into `pull` and `deploy`, streams the kernel and storage state to
-the host, and performs only a bounded read-only ramoops capture after `900e`.
-A manual return to fastboot remains required from Qualcomm crashdump mode.
+the host, and performs only a read-only Sahara region-table listing plus the
+bounded ramoops capture after `900e`. Both reads share the first crashdump
+session. A manual return to fastboot remains required from Qualcomm crashdump
+mode.

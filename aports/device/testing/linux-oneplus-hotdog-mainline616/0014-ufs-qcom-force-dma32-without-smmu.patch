@@ -1,19 +1,19 @@
 From 0000000000000000000000000000000000000014 Mon Sep 17 00:00:00 2001
 From: Sr-0w <Sr-0w@users.noreply.github.com>
 Date: Mon, 3 Aug 2026 18:25:00 +0200
-Subject: [PATCH] ufs: qcom: constrain SM8150 bypass DMA to 32 bits
+Subject: [PATCH] ufs: qcom: constrain SM8150 DMA to 32 bits
 
-The temporary hotdog bring-up DT removes the UFS iommus property while the
-Apps SMMU description is being repaired. Direct boot exposes memory above
-4 GiB, where the UFS controller consumed the doorbell but left OCS at 0xf and
-never wrote a response UPIU. Keep coherent request lists in the 32-bit physical
-aperture only for the SM8150 host using that explicit bypass configuration.
+Direct boot exposes memory above 4 GiB, where the SM8150 UFS controller has
+consumed a doorbell but left OCS at 0xf and never written a response UPIU.
+Keep its coherent request lists in a 32-bit DMA aperture both with an Apps
+SMMU translated domain and with the temporary bypass configuration.
 
-This is a bring-up workaround, not a replacement for restoring the SMMU link.
+This is a targeted bring-up workaround while the lost-completion failure is
+being isolated. It does not replace the restored SMMU link.
 
 ---
- drivers/ufs/host/ufs-qcom.c | 25 +++++++++++++++++++++++++
- 1 file changed, 25 insertions(+)
+ drivers/ufs/host/ufs-qcom.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
 diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
 index 18a978452001..785bd2c4ee51 100644
@@ -27,23 +27,19 @@ index 18a978452001..785bd2c4ee51 100644
  #include <linux/gpio/consumer.h>
  #include <linux/interconnect.h>
  #include <linux/module.h>
-@@ -2191,6 +2192,29 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
+@@ -2191,6 +2192,25 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
  	return min_t(u32, gear, hba->max_pwr_info.info.gear_rx);
  }
  
 +static int ufs_qcom_set_dma_mask(struct ufs_hba *hba)
 +{
-+	struct device_node *np = hba->dev->of_node;
-+
 +	/*
-+	 * The temporary SM8150 bring-up DT runs UFS without the Apps SMMU.
-+	 * Keep its coherent request lists in the 32-bit physical aperture until
-+	 * the SMMU provider is ready to replace this bypass configuration.
++	 * Keep SM8150 request lists in the known-good 32-bit DMA aperture even
++	 * when the host is attached to an Apps SMMU translated domain.
 +	 */
-+	if (of_device_is_compatible(np, "qcom,sm8150-ufshc") &&
-+	    !of_find_property(np, "iommus", NULL)) {
++	if (of_device_is_compatible(hba->dev->of_node, "qcom,sm8150-ufshc")) {
 +		dev_info(hba->dev,
-+			 "V33 UFS DMA mask forced to 32-bit (SM8150 SMMU bypass)\n");
++			 "SM8150 UFS DMA mask constrained to 32-bit\n");
 +		return dma_set_mask_and_coherent(hba->dev, DMA_BIT_MASK(32));
 +	}
 +
@@ -57,7 +53,7 @@ index 18a978452001..785bd2c4ee51 100644
  /*
   * struct ufs_hba_qcom_vops - UFS QCOM specific variant operations
   *
-@@ -2199,6 +2223,7 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
+@@ -2199,6 +2219,7 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
   */
  static const struct ufs_hba_variant_ops ufs_hba_qcom_vops = {
  	.name                   = "qcom",

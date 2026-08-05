@@ -45,6 +45,8 @@ smbx_source=drivers/power/supply/qcom_smbx.c
 [ -s "$smbx_source" ] || die "missing SMB charger source: $smbx_source"
 panel_source=drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
 [ -s "$panel_source" ] || die "missing OnePlus panel source: $panel_source"
+ufs_source=drivers/ufs/host/ufs-qcom.c
+[ -s "$ufs_source" ] || die "missing Qualcomm UFS source: $ufs_source"
 
 python3 - "$smbx_source" <<'PY'
 import pathlib
@@ -144,6 +146,36 @@ if mode_list.index("&samsung_oneplus_dsc_90hz_mode") > mode_list.index(
 
 if "drm_connector_helper_get_modes_fixed" in source:
     raise SystemExit("fixed single-mode panel helper remains")
+PY
+
+python3 - "$ufs_source" <<'PY'
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+try:
+    contract = source[
+        source.index("static int ufs_qcom_set_dma_mask") :
+        source.index("static const struct ufs_hba_variant_ops", source.index("static int ufs_qcom_set_dma_mask"))
+    ]
+except ValueError as exc:
+    raise SystemExit(f"missing Qualcomm UFS DMA-mask contract: {exc}") from exc
+
+required = (
+    'of_device_is_compatible(hba->dev->of_node, "qcom,sm8150-ufshc")',
+    '"SM8150 UFS DMA mask constrained to 32-bit\\n"',
+    "dma_set_mask_and_coherent(hba->dev, DMA_BIT_MASK(32))",
+)
+for value in required:
+    if value not in contract:
+        raise SystemExit(f"missing SM8150 UFS DMA32 contract: {value!r}")
+
+if "of_find_property" in contract or '"iommus"' in contract:
+    raise SystemExit("SM8150 DMA32 must not depend on the presence of iommus")
+
+sm8150_branch = contract[: contract.index("if (hba->capabilities")]
+if sm8150_branch.count("DMA_BIT_MASK(32)") != 1:
+    raise SystemExit("SM8150 UFS branch must contain exactly one DMA32 selection")
 PY
 
 if [ -n "$modules_dir" ]; then

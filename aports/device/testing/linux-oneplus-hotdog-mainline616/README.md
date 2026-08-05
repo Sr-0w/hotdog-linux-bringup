@@ -26,7 +26,10 @@ direct-boots into Plasma Mobile with the DRM CRTC running at 1440x3120 and
 selects the matching panel command during each full modeset; both modes are
 hardware-validated. Revision `r18` restores only UFS Apps SMMU stream `0x300`
 after a pull-only Flatpak workload reproduced an abrupt Qualcomm crashdump in
-the temporary no-IOMMU configuration.
+the temporary no-IOMMU configuration. That translated-domain candidate booted
+but reproduced the same failure under sustained buffered writeback. Revision
+`r19` preserves the restored stream and constrains SM8150 UFS to a 32-bit DMA
+aperture with or without the SMMU attachment.
 
 ## Source contract
 
@@ -35,8 +38,9 @@ the temporary no-IOMMU configuration.
 - Generic DWC3, USB gadget, and IOMMU drivers remain unchanged from that base.
 - The DWC3 stream keeps the upstream Apps SMMU binding and boots with a
   translated domain (`iommu.passthrough=0`).
-- Revision `r18` restores the upstream UFS Apps SMMU stream `0x300` while
-  leaving the currently failing ICE dependency disabled.
+- Revision `r19` keeps the upstream UFS Apps SMMU stream `0x300`, leaves the
+  currently failing ICE dependency disabled, and selects a 32-bit DMA aperture
+  for SM8150 independently of the SMMU attachment.
 - The native Samsung DSC panel, TE signal, and 16x32 framebuffer console are
   built in.
 - QUPv3 wrapper 2, GPI DMA 2, I2C17, and the schema-complete S6SY761 node are
@@ -89,7 +93,7 @@ The image was written to `boot_b`, read back, and direct-booted. Both stock
 refresh modes were selected through KScreen and Plasma Settings while the
 touchscreen, compositor, USB networking, and SSH remained available.
 
-## Prepared r18 UFS SMMU candidate
+## Hardware-tested r18 and prepared r19 UFS candidate
 
 Revision `r18` changes only the UFS device-tree attachment from the temporary
 no-IOMMU path to Apps SMMU stream `0x300`; UFS ICE remains disabled. A DTB-only
@@ -111,6 +115,25 @@ the AVB-valid boot image SHA256 is
 `45bdebbd239b06bc15ea4f724a91321f897841c767822ab8f199a5be0ae2688c`.
 Its normalized tree is identical to the source-built DTB. The binary hashes
 differ only because `fdtput` and `dtc` serialize the added property differently.
+The image direct-booted, mounted the root filesystem, restored USB SSH, and
+attached UFS alone to IOMMU group 4. It still entered Qualcomm `05c6:900e`
+during the same Flatpak import. Because the previous DMA32 workaround was
+conditional on `iommus` being absent, this run combined SMMU translation with
+DMA64.
+
+Revision `r19` removes that accidental condition and preserves the 32-bit UFS
+DMA aperture behind the translated SMMU. Two independent strict builds
+produced byte-identical packages:
+
+| Output | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline616-6.16.0-r19.apk` | 25,537,570 bytes | `4b63e29866a9d11ceb024b68c213e999eed051eee578f2488208cb455e3d6e15` |
+| `boot/vmlinuz` | 27,572,232 bytes | `ad44e6b0b4e8bd3b941dc2f5d2cfe9fdce4863444a2827a63a1b9546391ab069` |
+| `boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb` | 140,597 bytes | `5df7f6adc14d92f47379da0bfb13e814f00c52b8934840d78e7fed4306174f17` |
+
+The hardware-test image keeps the exact `r18` initramfs, serialized DTB, and
+command line; only the kernel changes. Its AVB-valid 96 MiB `boot.img` SHA256
+is `d32eedcd5f9fcaa0df975b92c1b8ff2bc5cce53afb9bb5848e45a335e8e57eb9`.
 Hardware validation is pending.
 
 ## Earlier fixed-90-Hz evidence
