@@ -61,7 +61,8 @@ credentials, proprietary dumps, or workstation-specific paths.
   `SLIMBUS_6_RX` to WCD9340 `AIF4_PB` digital headphone backend.
 - [evidence/2026-08-05-oxygenos-hardware-reference.md](evidence/2026-08-05-oxygenos-hardware-reference.md):
   hash-only OxygenOS hardware inventory policy, stock firmware/module map, and
-  the recovered two-amplifier TFA9874/ADSP contract.
+  reproducible DTB/DTBO reconstruction plus the recovered two-amplifier
+  TFA9874/ADSP contract.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.

@@ -70,13 +70,23 @@ itself is not reusable on Linux 6.16.
 
 ## Internal audio
 
-The stock HD1913 DT and live read-only I2C identification agree on two NXP
-TFA9874 smart amplifiers:
+The production HD1913 tree was reconstructed by selecting the SM8150 v2 base
+DTB whose root has `oplus,dtsi_no = <19801>`, then applying the Android DT table
+entry whose model is `MTP 19801 MP 14 15`. This merged stock tree and live
+read-only I2C identification agree on two NXP TFA9874 smart amplifiers:
 
 | Function | I2C address | Reset GPIO | Stock profile |
 | --- | ---: | ---: | --- |
 | Top speaker / earpiece | `0x34` | `37` | `receiver`, `speaker`, `calibrate.cal` |
 | Bottom speaker | `0x35` | `100` | `speaker`, `calibrate.cal` |
+
+GPIO 100 is deliberately shared in the production tree with the active-low
+enable of the FSA4480 USB-C analogue switch. The stock amplifier driver briefly
+pulses the reset line high and leaves it low. On the live `r27` system GPIO 100
+is already configured output-low by the FSA4480 pinctrl state, while neither
+amplifier needs a reset transition to answer at its I2C address. The first
+mainline TFA9874 probe must therefore preserve the bootloader state and must not
+request or toggle either reset line.
 
 The stock container is `vendor/firmware/tfa98xx.cnt`, 3,591 bytes, SHA256
 `6326d29289dc17694313e3969e90f311cb71f08321702ac962a46df7eb2cd1f3`.
@@ -85,9 +95,11 @@ device-specific TDM slots, current limits, receiver tuning and three embedded
 calibration messages. The speaker ACDB has SHA256
 `4315910bfc831d249e9f3e023f624326c620892559649b333c79ad7755e0ba4a`.
 
-TFA9874 has no internal audio DSP. The stock GPL driver marks it as a ProBus
-device and sends container messages to the Qualcomm ADSP through quaternary
-MI2S RX/TX. The exact stock AFE identifiers are:
+TFA9874 has no internal audio DSP. The shipped module declares GPL, while its
+matching vendor source contains mixed licence headers, so that source is
+behavioral evidence rather than code to copy wholesale. It marks TFA9874 as a
+ProBus device and sends container messages to the Qualcomm ADSP through
+quaternary MI2S RX/TX. The exact stock AFE identifiers are:
 
 ```text
 RX module  0x1000b911    TX module  0x1000b912
@@ -103,6 +115,22 @@ loading and conservative gain; writing an arbitrary profile can damage the
 speakers.
 
 ## Reproduction
+
+Inspect and extract an Android DT table without modifying the source image:
+
+```sh
+./scripts/inspect-android-dt-table.py --inspect-fdt --format tsv \
+  --extract-dir /tmp/hotdog-dtbo /path/to/dtbo.img
+```
+
+Select the overlay by its identifying properties, not by a hard-coded table
+index. Apply it to the matching base DTB with `fdtoverlay`:
+
+```sh
+fdtoverlay -i /tmp/hotdog-19801-v2.dtb \
+  -o /tmp/hotdog-19801-mp-merged.dtb \
+  /tmp/hotdog-dtbo/07.dtb
+```
 
 After mounting extracted partitions read-only, create a local JSON inventory:
 
