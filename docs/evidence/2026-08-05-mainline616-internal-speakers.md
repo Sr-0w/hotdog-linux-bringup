@@ -4,10 +4,10 @@ Date: 2026-08-05
 
 Device: OnePlus 7T Pro (`hotdog`), HD1913
 
-Result: revision `r31` direct-boots and produces objectively measured audio
-from the lower internal speaker. Revision `r32` adds the upper amplifier to the
-same ASoC backend and passes the strict package and DTB contract; the upper
-speaker result remains pending hardware validation.
+Result: revision `r32` direct-boots and produces independently measured audio
+from both internal speakers. Slot-isolated S24_LE stimuli map the upper slot-0
+amplifier to the left PCM channel and the lower slot-1 amplifier to the right
+PCM channel. Both amplifiers return to power-down after every stream.
 
 ## Stock-derived contract
 
@@ -35,9 +35,10 @@ The shared physical reset GPIO is not requested or toggled.
 | Kernel APK `6.16.0-r31` | 25,542,845 bytes | `7faf2116f6b0cd74140a62002210f29119cd217f4ed55f39b0a4e8e5c8f5fa5f` |
 | Partition-sized r31 AVB image | 100,663,296 bytes | `226dd8bb0bcd21cf4d544d7f9042994a4d0e00f6e9aa93f94e267287124552c3` |
 | Kernel APK `6.16.0-r32` | 25,542,848 bytes | `997dfeaa1327a868f2901b5125f6b66542056202cd291118ded9063529295c7d` |
+| Partition-sized r32 AVB image | 100,663,296 bytes | `d2be86069bdda8e4293d43e17d07ce56b483f5561aa0ee1f8959e53fda39c0b9` |
 
-The r31 image passed AVB verification and a full `boot_b` readback before the
-hardware run. The r32 strict build reports `hotdog mainline 6.16 build
+Both images passed AVB verification and a full `boot_b` readback before their
+hardware runs. The r32 strict build reports `hotdog mainline 6.16 build
 contract: PASS`; its final DTB contains both speaker phandles in slot order.
 
 ## Lower-speaker hardware result
@@ -90,10 +91,41 @@ of the amplifier status registers.
 The WAV files are retained as local laboratory artifacts rather than committed
 to the source repository.
 
+## Stereo hardware result
+
+The r32 direct boot reports kernel build `#33-oneplus-hotdog-mainline616` and
+boot ID `233dcadb-088f-4a62-8817-8eecfc42eb25`. Both TFA9874 devices bind to
+the same speaker DAI: `1-0034` uses slot 0 and `1-0035` uses slot 1.
+
+During either isolated stream, both codecs report locked clocks and an active
+output stage:
+
+```text
+slot=0 configured=1 active=1 system=0018 status0=0016 status1=e2c0 status3=850f
+slot=1 configured=1 active=1 system=0018 status0=0016 status1=e2c0 status3=850f
+```
+
+Fresh, separate ten-second webcam-microphone captures were made for each
+channel. Each capture contains a one-second 1 kHz S24_LE stimulus at -48 dBFS.
+
+| Stimulus | Local baseline | Stable 1 kHz component | Physical result |
+|---|---:|---:|---|
+| Left PCM channel | approximately -82 dBFS | approximately -58.9 dBFS | Upper slot-0 speaker emits audio |
+| Right PCM channel | approximately -88.5 dBFS | approximately -43.0 dBFS | Lower slot-1 speaker emits audio |
+
+The difference in captured level reflects the physical speaker and webcam
+geometry; it is not used as a gain calibration. After each capture, the PCM is
+closed, the mixer route is off, and both codecs report `active=0`,
+`system=0001`, and `status1=0000`.
+
+| Evidence file | SHA256 |
+|---|---|
+| `webcam-mic-s24-minus48dbfs-left-r32.wav` | `b1637a35b84b55abb819c529fca398e77dc98090880e69908512803ec449a5cf` |
+| `webcam-mic-s24-minus48dbfs-right-r32.wav` | `9aeb2736bdd2b2a5c981574fa975f5ea98dfd1fcf99b9ad92e525c60b3500d05` |
+
 ## Next gate
 
-Install and direct-boot r32, verify both amplifiers bind to the speaker DAI,
-then repeat the same low-level left/right acoustic capture. Only after both
-channels pass should the route be exposed through UCM and normal Plasma volume
-controls. Headphones, the earpiece, microphones, headset detection, and longer
-thermal/protection validation remain separate gates.
+Expose the validated stereo route through ALSA UCM and normal Plasma volume
+controls, then verify playback from a regular desktop application. Headphones,
+the earpiece, microphones, headset detection, calibrated gain policy, and
+longer thermal/protection validation remain separate gates.

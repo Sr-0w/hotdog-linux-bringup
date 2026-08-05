@@ -67,6 +67,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   strict `r28` package and AVB hashes, complete `boot_b` readback, and direct
   hardware validation of both TFA9874 revisions with a read-only driver that
   leaves reset lines, routes, protection, and output stages untouched.
+- [evidence/2026-08-05-mainline616-internal-speakers.md](evidence/2026-08-05-mainline616-internal-speakers.md):
+  stock-derived S24_LE and TDM-slot contract, bounded amplifier sequencing,
+  and independent webcam-microphone validation of both internal speakers on
+  the direct-booted `r32` kernel.
 - [evidence/2026-08-04-mainline616-touchscreen.md](evidence/2026-08-04-mainline616-touchscreen.md):
   exact `r4` APK kernel/DTB direct boot and hardware validation of the Samsung
   S6SY761 controller, IRQ, coordinates, pressure, and multitouch slots.

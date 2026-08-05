@@ -58,8 +58,9 @@ to power-down. Revision `r31` matches the stock S24_LE format and 3.072 MHz
 bit clock. A controlled 1 kHz test is audible from the lower speaker and is
 independently present in a synchronized webcam-microphone recording. Separate
 channel tests identify the lower amplifier as TDM slot 1, fed by the right PCM
-channel. Revision `r32` adds the upper slot-0 amplifier to the same ASoC link;
-its strict build passes, but its hardware result is not claimed yet.
+channel. Revision `r32` adds the upper slot-0 amplifier to the same ASoC link.
+Separate synchronized webcam-microphone captures validate the upper speaker on
+the left PCM channel and the lower speaker on the right PCM channel.
 
 ## Source contract
 
@@ -109,8 +110,8 @@ its strict build passes, but its hardware result is not claimed yet.
 - Both TFA9874 amplifiers use their stock slot mapping and conservative
   container-derived hardware profile on QUAT MI2S. Output stays powered down
   outside an active stream, clock lock is required before amplifier enable,
-  and the shared physical reset remains untouched. The lower slot-1 speaker is
-  hardware-validated; the upper slot-0 speaker is pending r32 hardware proof.
+  and the shared physical reset remains untouched. Both slot-specific speakers
+  are hardware-validated with independent acoustic captures on revision `r32`.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -119,7 +120,7 @@ invariant that was present during the successful hardware run, and the exact
 dual-mode panel contract. The package build fails if one of those invariants
 changes.
 
-## Hardware-tested r31 speaker evidence
+## Hardware-tested r31/r32 speaker evidence
 
 The strict `r31` build produced a 25,542,845-byte APK with SHA256
 `7faf2116f6b0cd74140a62002210f29119cd217f4ed55f39b0a4e8e5c8f5fa5f`.
@@ -141,6 +142,10 @@ Revision `r32` links both slot-specific codecs. Its strict build passed the
 source, configuration, module, and final-DTB contract and produced a
 25,542,848-byte APK with SHA256
 `997dfeaa1327a868f2901b5125f6b66542056202cd291118ded9063529295c7d`.
+Its direct boot reports `#33-oneplus-hotdog-mainline616`. Independent left and
+right -48 dBFS captures measure stable 1 kHz components at approximately
+-58.9 dBFS from the upper slot-0 speaker and -43.0 dBFS from the lower slot-1
+speaker. Both amplifiers return to power-down after each stream.
 See the [complete internal-speaker evidence](../../../../docs/evidence/2026-08-05-mainline616-internal-speakers.md).
 
 ## Hardware-tested r26 audio-backend evidence
