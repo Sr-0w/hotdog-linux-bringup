@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=52
+pkgrel=53
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -94,6 +94,7 @@ source="
 	0055-media-camss-add-sm8150-support.patch
 	0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
 	0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
+	0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -147,7 +148,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-cce54b0233dc09dd6835ba941b24cf32dee30458d7bfdc746d1cf533d3393f281a4d1d692920bfdc172df75658a5cb9c2d73252fc7ba51ad69822ecd3df16ad4  config-oneplus-hotdog-mainline616.aarch64
+dd559825be535a04e69ed4fd609f5ce4fc234650c014b035c8fd1ed9f248e7e77a09cee73f1df11fb6474f3ad99e04bb182dddad94aa44d0fcec0df2e25c41bc  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -205,5 +206,6 @@ b79c4e065cf8eedb729d8376a07837b576806c87f61a8ca4fc04d8b0922948c3f67b5f614f3916bd
 c904058669ca4deedfcf6ed324fc71e2a2ed1123a76afd70863e64e4d83857cad66f46c0ff7d7dac718b0c723e730a80a030d1e90e8d5a5cc0f71f37ebc6904c  0055-media-camss-add-sm8150-support.patch
 32f9003c57564da1ba7e54fba63af2e11f4bb4b81778244c01afb7115e619db8423b1447f51449afc48a34446d2b7f79e622a25c5a0cb5686d5582ef56cfb299  0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
 986f22880c735833860fdbe6e373673632f9686676b5fb35e9224a80baf29036ec89ce5669f80a80ae485702bb63575cd9da164c2d896d8dd64a742396a339b9  0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
+ce63d59300ef51e4a1bb1b33ef778683c0917ff9991281f44ac7531be00a0c710e1f425623d365a8e982b545180d098cbc5dcd082832b6931299a2c0f55bbd10  0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
