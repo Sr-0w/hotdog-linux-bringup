@@ -23,6 +23,67 @@ telephony. Neither half is subordinate to the other. See the
 [roadmap](docs/roadmap.md) and the
 [pmaports upstreaming plan](docs/pmaports-upstreaming.md).
 
+## Hardware support at a glance
+
+This table describes the tested HD1913 handset, not every `hotdog` variant.
+States are deliberately evidence-based: **🟢** means the function has been
+validated on the physical handset, **🟡** means some of the path works but the
+feature is incomplete or insufficiently tested, **⚪** means not yet
+hardware-validated (including prepared/offline-only candidates), and **🔴**
+means a hardware test demonstrated that the function is currently broken.
+Prepared code or a successful offline build alone never counts as hardware
+support. See [docs/status.md](docs/status.md) for the detailed evidence and
+limitations.
+
+| Subsystem | Function | State | Current result |
+|---|---|:---:|---|
+| Boot | Direct boot from OnePlus bootloader | 🟢 | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`. |
+| Boot | Persistent postmarketOS rootfs / OpenRC / SSH | 🟢 | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
+| Boot | Reboot to bootloader / recovery integration | 🟡 | Bootloader restart reason works from the validated kexec path; direct recovery-mode integration remains incomplete. |
+| Storage | UFS | 🟢 | Direct boot, raw I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
+| Storage | UFS ICE | 🔴 | ICE probe fails; the working UFS path currently runs without ICE. |
+| Memory | RAM map and firmware reservations | 🟢 | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
+| Display | Internal panel 1440x3120 at 60 Hz | 🟢 | Native DPU/DSI/DSC KMS scanout is stable in graphical userspace. |
+| Display | Internal panel 90 Hz / dynamic 60↔90 selection | 🟡 | 90 Hz and runtime mode switching work, but wake/blank-unblank reliability is not yet acceptable. |
+| GPU | Adreno 640 / GMU / Turnip | 🟢 | Vulkan workloads, `kmscube`, Weston and Plasma Mobile use accelerated rendering without observed GPU/GMU/IOMMU faults. |
+| Input | S6SY761 touchscreen | 🟢 | Touch, drag, pressure, multitouch and graphical orientation are hardware-validated. |
+| Input | Power key | 🟢 | PM8150 PON power-key input is present and physical power-button interaction has been observed on hardware. |
+| Input | Volume Down | 🟢 | The original RESIN mapping was invalidated; the corrected PM8150 GPIO7 mapping is physically tested and functional. |
+| Input | Volume Up | 🟡 | PM8150 GPIO6 / `KEY_VOLUMEUP` is registered; physical press/release validation remains open. |
+| USB | USB gadget / NCM networking | 🟢 | Stable host ping and SSH at `172.16.42.1` through the translated DWC3 SMMU path. |
+| USB | USB ACM serial | 🟡 | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
+| USB-C | Type-C dual role and USB-PD detection | 🟢 | Type-C partner/PD state is exposed and device/sink negotiation works. |
+| USB-C | Host mode through powered dock | 🟢 | xHCI, a hub and attached devices enumerate while the handset remains a power sink. |
+| USB-C | Source VBUS for an unpowered peripheral | ⚪ | Not yet hardware-tested. |
+| USB-C | USB 3 SuperSpeed | 🟢 | Dock hub and RTL8153 enumerate at 5 Gbit/s. |
+| USB-C | USB mass storage | 🟢 | A SanDisk device enumerates, mounts and reads through the dock. |
+| USB-C | USB Ethernet | 🟡 | RTL8153 enumerates, `r8152` binds and creates `eth0`; link/data were not tested because no Ethernet cable was attached. |
+| DisplayPort | External video at 2560x1440@60 | 🟢 | Plasma reaches the external monitor with correct image while the internal panel remains active. |
+| DisplayPort | 2560x1440@120 on two-lane HBR2 | 🔴 | Hardware output is persistently corrupt; msm DP currently accepts a mode that exceeds the available link budget. |
+| DisplayPort | Audio | 🔴 | Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
+| Audio | Internal stereo speakers | 🟢 | Both TFA9874 speaker channels are independently hardware-validated and work through the packaged UCM/PulseAudio path. |
+| Audio | Handset microphone | 🟢 | AMIC4 with MIC BIAS1 is acoustically validated from the packaged profile and confirmed by listening. |
+| Audio | Earpiece | ⚪ | Not yet brought up/validated. |
+| Audio | Headset / other headphone paths and detection | ⚪ | Remaining headset routing/detection paths are not hardware-validated. |
+| Audio | Other analogue/digital microphones, EC/NR | ⚪ | Other live pads, digital microphones, echo cancellation and noise-reduction policy remain open. |
+| Wi-Fi | WCN3990 association and IPv4 connectivity | 🟢 | Both bands scan, NetworkManager associates and basic external IPv4 reachability is validated. |
+| Wi-Fi | Power management / suspend / stable factory identity | 🟡 | Basic data works; sustained PM/suspend and factory-address handling remain insufficiently tested. |
+| Bluetooth | Scan and HID connectivity | 🟡 | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
+| Modem | MPSS remote processor / QRTR services | 🟢 | MPSS reaches `running`; RMTFS, QRTR, PD mapper and related services are present. |
+| Cellular | WWAN data / calls / SMS / SIM handling | ⚪ | Telephony stack is not yet hardware-validated. |
+| GNSS | Location | ⚪ | Not yet hardware-validated. |
+| Power | SMB5 charging basic limits | 🟡 | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
+| Power | Fuel gauge / battery level / temperature / current / capacity | 🟢 | The gauge uses the bq27421 register layout; `ti,bq27411` reports coherent SoC, voltage, temperature, current and 3856/4040 mAh capacity on hardware. |
+| Power | System suspend / s2idle | 🔴 | Freezer passes, but `pm_test=devices` fails on S6SY761 resume; usable system suspend is currently broken. |
+| Cameras | Rear main / ultra-wide / telephoto / front | ⚪ | No camera is hardware-operational yet. CAMSS SM8150 and three missing Sony sensor drivers still need implementation; S5K3M5 has an upstream template/driver path only. |
+| Sensors | Motion / rotation / proximity | ⚪ | Mainline integration remains to be implemented and hardware-tested. |
+| NFC | NFC / secure-element path | ⚪ | Not yet hardware-validated. |
+| Haptics | AW8697 | ⚪ | No mainline driver/integration is validated yet. |
+| Hall sensors | MXM1120 | ⚪ | Driver/integration work remains. |
+| Range sensor | STMVL53L1 laser rangefinder | ⚪ | Driver/integration work remains. |
+| Fingerprint | Fingerprint reader | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
+| Fast charging | OnePlus Warp charge | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
+
 ## Project status
 
 The complete Linux 6.16 image generated by the current pmaports device flow now
@@ -131,13 +192,15 @@ directly from a fully read-back AVB image, exposed `/dev/dri/renderD128`, and
 completed two Turnip Vulkan workloads without a GPU, GMU, or IOMMU fault. See
 the [GPU evidence](docs/evidence/2026-08-04-mainline616-gpu.md).
 
-Revision `r6` enables the two missing volume-key paths. Two strict builds
-produced the same APK byte-for-byte. Its exact kernel and DTB booted directly
-from fully read-back AVB image
-`33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e`
-and registered Power, Volume Down, Volume Up, and the S6SY761 touchscreen as
-separate input devices. Physical volume-key events remain to be captured; see
-the [hardware-key evidence](docs/evidence/2026-08-04-mainline616-volume-keys.md).
+Revision `r6` was the first package to register both volume-key input devices,
+but its original Volume Down path used PM8150 PON `RESIN`. Later physical
+checks invalidated that mapping: pressing Volume Down changed neither the
+real-time RESIN state nor its interrupt count. The current device tree maps
+Volume Down to PM8150 GPIO7 and Volume Up to GPIO6. Physical Volume Down
+press/release is now hardware-validated and functional; Volume Up physical
+validation remains open. The original
+[hardware-key evidence](docs/evidence/2026-08-04-mainline616-volume-keys.md)
+is retained as historical `r6` evidence rather than proof of the final mapping.
 
 Revision `r7` is rebuilt directly from the accepted `r6` source and adds only
 the PM8150B battery and charger device-tree description. Its package-generated
@@ -256,34 +319,7 @@ that controlled path while proving the HS-G3 runtime guard executed. D13 then
 proved that the missing revision-2 lane values alone do not establish the link,
 and D14 ruled out its attempted reset-order change as sufficient.
 
-| Component | Status | Notes |
-|---|---|---|
-| Mainline kernel entry | Working | Linux `6.17.0-sm8150` starts through kexec; V43's clean-source ClearStaff 6.16 kernel starts directly from the OnePlus bootloader. |
-| Mainline 6.16 pmaports image | Clean public-tree image direct-boots | Revision `r22` packages the accepted hardware stack and complete stock memory reservation union. A clean rebuild of only the published package directories produces the kernel, DTB, initramfs, 1,523-package Plasma rootfs, and deterministic AVB image now running directly from `boot_b` plus `super`. Both physical writes passed complete readback verification. Device package `3-r7` also completes a fresh 1,524-package offline install with AVB generated automatically by `boot-deploy`; kernel revision `r26` retains that userspace and validates the Hotdog digital headphone backend. |
-| UFS storage | Direct boot and large buffered imports working | Direct-I/O stress passes. Full DDR analysis traced the Flatpak `900e` failure to omitted stock-owned memory; `r22` completes the reservation union and passes the same 3.7 GB pull, deployment, installation, and smooth interactive 0 A.D. gameplay without a UFS error or Qualcomm transition. |
-| postmarketOS rootfs | Working directly | The pmaports initramfs finds the matching nested GPT, expands `pmOS_root`, mounts `/dev/loop0p2` read-write, and completes `switch_root` without kexec. |
-| Plasma Mobile | Working in the clean public-tree image | Plasma Mobile 6.7.3 starts through the packaged `tinydm` path, fills the native 1440x3120 output at 90 Hz, and keeps USB SSH available. The same public package tree installs the complete mobile application set, Discover/Flatpak, and the temporary no-suspend policy; 0 A.D. launches and runs smoothly on this clean installation. |
-| USB networking | Working directly | The pmaports image exposes the device at `172.16.42.1`; host ping and SSH are stable through the translated DWC3 Apps SMMU path. |
-| SSH | Working directly | Revision `r17` returns OpenSSH over USB and reports `Linux hotdog 6.16.0-sm8150 #18-oneplus-hotdog-mainline616`. |
-| USB serial | Enumerating directly | V43 exposes a CDC ACM interface and creates `ttyGS0`; interactive serial validation remains pending. |
-| Mainline reboot | Working through kexec; direct recovery partial | `RESTART2(bootloader)` works after kexec. Direct failures can enter Qualcomm `900e`, where ramoops is readable, but still require a bootloader opportunity for partition rollback. |
-| K1 package | Current r5 build evidence, package hardware test pending | One strict pmbootstrap build produced a `27,172,103`-byte r5 APK, SHA256 `f3083fd4c6af13be364eb0317873ee3a6f3690c5acb3a9e111c65b26b1746dd6`. Its embedded config keeps `CONFIG_RAID6_PQ=y`, disables `CONFIG_RAID6_PQ_BENCHMARK`, and uses `CONFIG_QCOM_WDT=y`. |
-| Persistent direct mainline | Exact pmaports image working | The package-generated image boots from `boot_b`, enumerates storage, mounts the read-write pmaports rootfs, starts OpenRC, and exposes USB networking plus SSH. |
-| Firmware packaging | Complete, runtime partially validated | The `20241212-r0` split produces eight usrmerged APKs under `/usr/lib/firmware`. GPU, MPSS, WCN3990 Wi-Fi, and revision-21 Bluetooth payloads are runtime-validated; other peripheral firmware remains pending. |
-| Early display output | Working through native DRM/fbcon | V30 initializes `msm`, registers `fb0`, and displays readable kernel plus postmarketOS initramfs output at 180x195 characters. |
-| Mainline panel | Fixed 60 Hz stable; 90 Hz has resume defects | Native DPU, DSI, TE, DSC, and the OnePlus Samsung panel produce correct 1440x3120 KMS scanout under `kmscube`, Weston, and Plasma Mobile. Revision `r17` switches both stock modes from KScreen and Plasma Settings with the matching panel command. A later 90 Hz wake produced DSI status 5 reports and an abnormal scanout that direct observation confirmed was restored by selecting 60 Hz. Keep 60 Hz as the stable default until blank/unblank and resume are corrected. |
-| Touchscreen | Working in graphical userspace | The `r4` DTS enables QUPv3/GPI DMA/I2C17 and the S6SY761 at `0x48`. Hardware tests validate taps, continuous X/Y drags, pressure, and multitouch slots. Weston and Plasma Mobile confirm correct graphical orientation and responsive touch; suspend/resume remains open. |
-| GPU | Working for accelerated display and rendering | The `r5` DTS enables the Adreno 640 and GMU. Turnip Vulkan workloads pass, `kmscube` holds approximately 60 FPS on the physical panel, and Weston plus Plasma Mobile render through Freedreno `FD640` without a GPU/GMU/IOMMU fault. Suspend/resume remains open. |
-| Hardware keys | Registered; physical validation pending | The `r6` DTS exposes Power as `event0`, Volume Down as `event1`, and Volume Up as `event2` with the expected Linux key codes. Physical press/release and wake tests remain open. |
-| Charging/battery | Basic limits corrected and hardware-validated | The `r8` driver programs and directly verifies 4.40 V float voltage, 1.50 A fast-charge current, and a 500 mA USB input limit. A 61-sample guarded trace passed. Cable transitions, charge termination, low state of charge, thermal behavior, suspend, and long-duration stability remain open. |
-| Wi-Fi | Association and Internet reachability working | Revision `r13` starts MPSS, binds WCN3990 through `ath10k_snoc`, and scans both bands. Revision `r15` associates through NetworkManager and reaches both the local gateway and an external IPv4 endpoint without packet loss. Stable factory MAC handling, throughput, power management, and suspend remain open. |
-| Bluetooth | Scanning and HID connections working; suspend open | Revision `r15` loads the packaged revision-21 firmware by its native names, exposes a powered BlueZ controller, scans, and sustains real HID connections. One run entered `900e` without a panic; later blocked, active-controller, and 900-second post-disconnect windows completed cleanly. Repeated stability and suspend/resume remain open. |
-| Modem remote processor | Running; telephony not validated | Revision `r12` establishes the Hotdog-specific RMTFS layout and boots the MPSS firmware. This is a Wi-Fi dependency result; no WWAN interface, calls, SMS, data, GNSS, or SIM path is claimed. |
-| Audio | Internal speakers working through Plasma | Revision `r32` drives QUAT MI2S at the stock S24_LE/3.072 MHz contract and safely enables both TFA9874 amplifiers only after clock lock. Separate synchronized captures validate the upper slot-0 speaker on the left PCM channel and lower slot-1 speaker on the right. Device package `3-r8` adds a minimal UCM profile; normal PulseAudio playback is acoustically validated, Plasma volume uses software attenuation, and sink suspension returns both amplifiers to power-down. Headphones, earpiece, microphones, headset detection, protection telemetry, default volume policy, and longer thermal validation remain open. |
-| RAM | Direct map and stock ownership union working | Direct boot exposes the bootloader-provided multi-gigabyte map. Revision `r22` reserves every enabled stock HD1913 interval and passes the exact workload that collided with two formerly omitted regions. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Battery reporting, touchscreen, dynamic 60/90 Hz display modes, GPU rendering, Plasma Mobile, volume-key registration, Wi-Fi association, MPSS startup, Bluetooth scanning, HID connections, and both internal speakers work. Telephony, remaining audio paths, cameras, sensors, display blank/unblank reliability, extended charging policy, physical key validation, stable radio addresses, and suspend remain open. |
-
-See [docs/status.md](docs/status.md) for the detailed support matrix.
+See [docs/status.md](docs/status.md) for the detailed support matrix and evidence.
 
 ## Validated boot path
 
@@ -298,15 +334,14 @@ flowchart LR
     F --> L["Tinydm and Plasma Mobile 6.7.3"]
     B --> H["S6SY761 touch and multitouch"]
     B --> I["Adreno 640, GMU and Turnip"]
-    B --> J["Power and volume-key inputs"]
-    B --> K["PM8150B battery and corrected SMB5 limits"]
+    B --> J["Power and GPIO volume-key inputs"]
+    B --> K["PM8150B SMB5 charging and fuel gauge"]
     B --> M["MPSS and Hotdog-specific RMTFS"]
     M --> N["WCN3990 and wlan0"]
     B --> O["WCN3990 Bluetooth UART and BlueZ"]
     B --> P["ADSP firmware and APR audio services"]
     P --> Q["SLIMbus and WCD9340 codec transport"]
-    Q --> R["SM8150 ALSA card and MultiMedia1 PCM"]
-    R --> S["Hotdog SLIMBUS_6_RX digital headphone backend"]
+    Q --> R["SM8150 ALSA card, speakers and capture"]
 ```
 
 The normal pmaports path no longer depends on the downstream bridge. The bridge
