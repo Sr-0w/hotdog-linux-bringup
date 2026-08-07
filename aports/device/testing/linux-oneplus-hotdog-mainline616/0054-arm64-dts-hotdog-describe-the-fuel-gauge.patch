@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 20:45:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: describe the fuel gauge
+
+The handset has a TI BQ27541 fuel gauge, which the driver already supports
+under the ti,bq27541 compatible. Nothing described it, so the only battery
+information available came from the charger, leaving charge level, capacity,
+current and temperature unreported.
+
+The stock device tree places it at address 0x55 on the eighth QUP serial
+engine, alongside the fast-charge microcontroller. That engine is i2c8 here
+and was not enabled.
+
+monitored-battery is deliberately omitted. The gauge is factory programmed
+for the cell it ships with, and on chips with writable data memory the
+driver can push devicetree values into it, which is not something a
+description should do to a working battery.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -363,6 +363,16 @@
+ 	status = "okay";
+ };
+ 
++&i2c8 {
++	clock-frequency = <400000>;
++	status = "okay";
++
++	fuel-gauge@55 {
++		compatible = "ti,bq27541";
++		reg = <0x55>;
++	};
++};
++
+ &i2c17 {
+ 	status = "okay";
+ 	clock-frequency = <400000>;
+--
+2.50.1

@@ -421,6 +421,7 @@ panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
 battery=/battery
 gpio_keys=/gpio-keys
 volume_up=$gpio_keys/volume-up
+volume_down=$gpio_keys/volume-down
 pm8150=$soc/spmi@c440000/pmic@0
 pm8150b=$soc/spmi@c440000/pmic@2
 pm8150b_charger=$pm8150b/charger@1000
@@ -451,7 +452,7 @@ adsp_mem=$reserved/memory@8be00000
 rmtfs_mem=$reserved/memory@fc201000
 volume_up_state=$pm8150/gpio@c000/volume-up-state
 pon_pwrkey=$pm8150/pon@800/pwrkey
-pon_resin=$pm8150/pon@800/resin
+volume_down_state=$pm8150/gpio@c000/volume-down-state
 te=$soc/pinctrl@3100000/panel-te-default-state
 ts_reset=$soc/pinctrl@3100000/ts-reset-default-state
 ts_int=$soc/pinctrl@3100000/ts-int-default-state
@@ -844,9 +845,14 @@ pm8150_gpios_phandle=$(fdtget -tx "$dtb" "$pm8150_gpios_path" phandle) ||
 	die "missing PM8150 GPIO phandle"
 expect_value volume-up-gpio "$pm8150_gpios_phandle 6 1" \
 	fdtget -tx "$dtb" "$volume_up" gpios
+expect_value volume-down-gpio "$pm8150_gpios_phandle 7 1" \
+	fdtget -tx "$dtb" "$volume_down" gpios
 volume_up_state_phandle=$(fdtget -tx "$dtb" "$volume_up_state" phandle) ||
 	die "missing Volume Up pinctrl phandle"
-expect_value volume-up-pinctrl "$volume_up_state_phandle" \
+volume_down_state_phandle=$(fdtget -tx "$dtb" "$volume_down_state" phandle) ||
+	die "missing Volume Down pinctrl phandle"
+expect_value volume-key-pinctrl \
+	"$volume_up_state_phandle $volume_down_state_phandle" \
 	fdtget -tx "$dtb" "$gpio_keys" pinctrl-0
 expect_value volume-up-pin gpio6 fdtget -ts "$dtb" "$volume_up_state" pins
 expect_value volume-up-function normal \
@@ -861,8 +867,18 @@ fdtget "$dtb" "$volume_up_state" bias-pull-up >/dev/null ||
 	die "volume-up pin must use a pull-up"
 expect_value power-key-status okay fdtget -ts "$dtb" "$pon_pwrkey" status
 expect_value power-key-code 74 fdtget -tx "$dtb" "$pon_pwrkey" linux,code
-expect_value volume-down-status okay fdtget -ts "$dtb" "$pon_resin" status
-expect_value volume-down-code 72 fdtget -tx "$dtb" "$pon_resin" linux,code
+# Volume down is a PMIC GPIO like volume up. RESIN is not wired to it on this
+# board, so it must stay disabled rather than offering a key it cannot report.
+expect_value volume-down-label volume_down fdtget -ts "$dtb" "$volume_down" label
+expect_value volume-down-code 72 fdtget -tx "$dtb" "$volume_down" linux,code
+expect_value volume-down-input-type 1 \
+	fdtget -tx "$dtb" "$volume_down" linux,input-type
+expect_value volume-down-debounce f \
+	fdtget -tx "$dtb" "$volume_down" debounce-interval
+expect_value volume-down-pin gpio7 \
+	fdtget -ts "$dtb" "$volume_down_state" pins
+expect_value volume-down-resin-disabled disabled \
+	fdtget -ts "$dtb" "$pm8150/pon@800/resin" status
 
 expect_value battery-compatible simple-battery \
 	fdtget -ts "$dtb" "$battery" compatible
