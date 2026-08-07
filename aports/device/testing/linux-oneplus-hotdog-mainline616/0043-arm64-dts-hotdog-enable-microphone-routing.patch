@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 15:05:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable microphone routing
+
+The SLIM Capture 1 back end already links SLIMBUS_0_TX to the WCD9340
+AIF1_CAP port, and the codec node already carries micbias1 through
+micbias4. No DAPM route connects an analogue microphone input to its bias
+supply, so every ADC path stays powered down and the MultiMedia1 capture
+front end has no reachable back end.
+
+Restore the four analogue microphone routes. The bias assignment is the
+one carried by the ClearStaff hotdog device tree this port is based on,
+which pairs each input with the matching supply.
+
+The OxygenOS odm mixer configuration confirms the resulting path is the
+one the stock system uses: "handset-mic" resolves to "amic4", which
+selects ADC4 through AMIC MUX0, routes DEC0 into CDC_IF TX0, and enables
+AIF1_CAP Mixer SLIM TX0 on a single SLIM_0_TX channel. That is exactly
+the back end already described above.
+
+Note that sdm845-oneplus-fajita, the other upstream OnePlus board using
+this codec, uses a different permutation (AMIC4 paired with MIC BIAS1).
+The hotdog-specific tree is preferred here; if capture is silent, this
+mapping is the first thing to re-test.
+
+This change is capture-only. It adds no playback route and does not touch
+the validated speaker path.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -390,7 +390,11 @@
+ 	pinctrl-names = "default";
+ 	status = "okay";
+
+-	audio-routing = "RX_BIAS", "MCLK";
++	audio-routing = "RX_BIAS", "MCLK",
++			"AMIC1", "MIC BIAS1",
++			"AMIC2", "MIC BIAS2",
++			"AMIC3", "MIC BIAS3",
++			"AMIC4", "MIC BIAS4";
+
+ 	mm1-dai-link {
+ 		link-name = "MultiMedia1";
+--
+2.50.1

@@ -107,6 +107,12 @@ the left PCM channel and the lower speaker on the right PCM channel.
   are enabled. Playback uses the hardware-validated Hotdog
   `SLIMBUS_6_RX`/`AIF4_PB` digital path; capture remains on
   `SLIMBUS_0_TX`/`AIF1_CAP`.
+- Revision `r33` completes that capture path. The four analogue microphone
+  inputs are routed to their bias supplies, which is what the ADC paths need
+  before any of them can power up. The bias assignment follows the ClearStaff
+  hotdog device tree. The stock OxygenOS odm mixer configuration resolves
+  `handset-mic` to `amic4`, reaching SLIM TX0 through ADC4, AMIC MUX0, DEC0
+  and CDC_IF TX0, which is the back end already described above.
 - Both TFA9874 amplifiers use their stock slot mapping and conservative
   container-derived hardware profile on QUAT MI2S. Output stays powered down
   outside an active stream, clock lock is required before amplifier enable,

@@ -116,6 +116,8 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:postprocess-boot-avb.sh | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
+		device/testing/device-oneplus-hotdog:hotdog.conf | \
+		device/testing/device-oneplus-hotdog:HiFi.conf | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \

@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 15:35:00 +0200
+Subject: [PATCH] ASoC: sm8150: map the ports of every SLIMbus link
+
+sm8150_dai_init() runs once per DAI link, but for_each_rtd_codec_dais()
+only walks the codec DAIs belonging to the link currently being
+initialised. The slim_port_setup flag, however, is stored per card, so
+the very first SLIMbus back end to be initialised consumes it and every
+later SLIMbus link returns before its codec DAI is ever given a channel
+map.
+
+That is harmless on a board with a single SLIMbus back end, which is why
+it has not been noticed. On hotdog there are two: SLIMBUS_6_RX to
+AIF4_PB for headphone playback, and SLIMBUS_0_TX to AIF1_CAP for
+microphone capture. Whichever is initialised first wins, so AIF1_CAP
+keeps an empty slim_ch_list, wcd934x_get_channel_map() reports zero TX
+channels, no SLIMbus TX port is ever opened, and capture returns a
+perfectly running stream of digital silence.
+
+Map the ports of every SLIMbus link instead. The flag now guards only
+the jack registration, which really is a per-component operation and
+must not be repeated.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ sound/soc/qcom/sm8150.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -264,8 +264,7 @@
+
+ 	switch (cpu_dai->id) {
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+-		/* setting up wcd multiple times for slim port is redundant */
+-		if (pdata->slim_port_setup || !link->no_pcm)
++		if (!link->no_pcm)
+ 			return 0;
+
+ 		for_each_rtd_codec_dais(rtd, i, codec_dai) {
+@@ -281,6 +280,10 @@
+ 					       WCD934X_DEFAULT_MCLK_RATE,
+ 					       SNDRV_PCM_STREAM_PLAYBACK);
+
++			/* the jack belongs to the component, not the link */
++			if (pdata->slim_port_setup)
++				continue;
++
+ 			rval = snd_soc_component_set_jack(codec_dai->component,
+ 							  &pdata->jack, NULL);
+ 			if (rval != 0 && rval != -ENOTSUPP) {
+--
+2.50.1

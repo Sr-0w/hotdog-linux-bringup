@@ -437,7 +437,9 @@ wcd9340_swm=$wcd9340/soundwire@c85
 sound=/sound
 q6asmdai=$remoteproc_adsp/glink-edge/apr/apr-service@7/dais
 q6asm_mm1=$q6asmdai/dai@0
+q6asm_mm2=$q6asmdai/dai@1
 sound_mm1=$sound/mm1-dai-link
+sound_mm2=$sound/mm2-dai-link
 sound_speaker=$sound/speaker-dai-link
 sound_slim=$sound/slim-dai-link
 sound_slimcap=$sound/slimcap-dai-link
@@ -624,9 +626,11 @@ expect_value sound-compatible qcom,sm8150-sndcard \
 	fdtget -ts "$dtb" "$sound" compatible
 expect_value sound-model 'OnePlus 7T Pro' fdtget -ts "$dtb" "$sound" model
 expect_value sound-status okay fdtget -ts "$dtb" "$sound" status
-expect_value sound-routing 'RX_BIAS MCLK' \
+expect_value sound-routing \
+	'RX_BIAS MCLK AMIC1 MIC BIAS1 AMIC2 MIC BIAS2 AMIC3 MIC BIAS3 AMIC4 MIC BIAS4' \
 	fdtget -ts "$dtb" "$sound" audio-routing
 expect_value q6asm-mm1-address 0 fdtget -tx "$dtb" "$q6asm_mm1" reg
+expect_value q6asm-mm2-address 1 fdtget -tx "$dtb" "$q6asm_mm2" reg
 q6asmdai_path=$(fdtget -ts "$dtb" /__symbols__ q6asmdai) ||
 	die "missing Q6ASM DAI symbol"
 q6asmdai_phandle=$(fdtget -tx "$dtb" "$q6asmdai_path" phandle) ||
@@ -669,6 +673,10 @@ expect_value sound-mm1-name MultiMedia1 \
 	fdtget -ts "$dtb" "$sound_mm1" link-name
 expect_value sound-mm1-cpu "$q6asmdai_phandle 0" \
 	fdtget -tx "$dtb" "$sound_mm1/cpu" sound-dai
+expect_value sound-mm2-name MultiMedia2 \
+	fdtget -ts "$dtb" "$sound_mm2" link-name
+expect_value sound-mm2-cpu "$q6asmdai_phandle 1" \
+	fdtget -tx "$dtb" "$sound_mm2/cpu" sound-dai
 expect_value sound-speaker-name 'Speaker Playback' \
 	fdtget -ts "$dtb" "$sound_speaker" link-name
 expect_value sound-speaker-cpu "$q6afedai_phandle 16" \

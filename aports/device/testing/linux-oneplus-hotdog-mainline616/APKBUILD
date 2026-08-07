@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=32
+pkgrel=35
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -79,6 +79,9 @@ source="
 	0040-asoc-sm8150-drive-hotdog-speaker-clocks.patch
 	0041-asoc-hotdog-match-oxygenos-speaker-sample-format.patch
 	0042-arm64-dts-hotdog-enable-stereo-speaker-pair.patch
+	0043-arm64-dts-hotdog-enable-microphone-routing.patch
+	0044-arm64-dts-hotdog-add-capture-front-end.patch
+	0045-asoc-sm8150-map-every-slimbus-link.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -175,5 +178,8 @@ e801913fe7c3d6f98e095af3f0a478e8608abff4df9d3fb7a9ddd70d6b4f9f91f0e8315f84625e21
 de5b407e8a83c64b4971ff3d6700d7da6914140487b7b661db86645b82af808f62d2d42a09c97ffd8e58cbbe40490e6a415e2bb67f3cf54351fd86ed4c333c76  0040-asoc-sm8150-drive-hotdog-speaker-clocks.patch
 72f6a0bc88a0eb0c68b7a1f087cbe61d3ae156ac0e7ce04e85692000672f39f71d29fc2826f0f10ca5775256e745eaef558970a887e18714b3723da875b9e171  0041-asoc-hotdog-match-oxygenos-speaker-sample-format.patch
 efefe6b69b3cb219f434a19a67b58d8169d191f796872bab057292c8894a0e9fc46fc3531c84689158f7d710ac0d6b7520d16b6732ae25283ad0068e2db72ba0  0042-arm64-dts-hotdog-enable-stereo-speaker-pair.patch
-aea97a7fd0f049cd49185c2f9e4e97ffbe9eb96c3aed080e1121d9f918b66dc3d490098c47922944954bd4ec72878c9df37febf166def0a53d023d876a9a5d3b  validate-mainline616-build.sh
+e7166b10e41363813283eff13d59714a5262ff35407176041fbbcbbfb9098e11c1f9e3d380ec94362c879c7bfe110b479947dac3f9de048758da7a99b40a4a31  0043-arm64-dts-hotdog-enable-microphone-routing.patch
+f099d18901f5da758169fb130db9464f25c25e018a63c440679aa2121029aa93feeecf965998e710e4ce5d87e061c20bfed26f4dff577caa35eead277004cb3c  0044-arm64-dts-hotdog-add-capture-front-end.patch
+9edf3c1a6e7c1caed36d352da2dbae4b3d7a9006f0c51470862c6c40f1c941ccfc0f16858e1e30981e11f1ea5e47ef5143e18766f8ab460ad71c2bf563f7318e  0045-asoc-sm8150-map-every-slimbus-link.patch
+a724472d8805c104aaaa7bc819e14b8b37ed2b2f3a2c83ecba19e539e0d1dc605627b446e7be42ba1297ec6b73c53191880316cd92cbcc83813ebcd787d84ed8  validate-mainline616-build.sh
 "
