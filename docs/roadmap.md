@@ -1,9 +1,26 @@
 # Roadmap
 
-The subsystem-by-subsystem experiments, acceptance criteria, and fallback
-conditions are detailed in the [hardware enablement roadmap](hardware-roadmap.md).
-The packaging and submission gates are tracked separately in the
-[pmaports upstreaming plan](pmaports-upstreaming.md).
+## Project goal
+
+The goal is a complete mainline port that can be published in postmarketOS.
+
+That is narrower than "make every peripheral work", and it changes how work is
+ordered. Anything that blocks submission outranks additional hardware, and
+hardware that is already good enough for the device category does not need to
+be perfected first. Concretely, the port is finished when the device can be
+submitted as a normal pmaports device: built from a shared, upstreamable kernel
+package rather than a device-specific fork, without laboratory-only deployment
+steps, with device-tree changes that are correct descriptions rather than
+temporary removals, and with an honest support matrix.
+
+An earlier goal of using the handset as a dockable desktop machine is no longer
+being pursued. Where that shaped the priorities, notably USB host mode and
+external display work, those items stay on the list but lose their precedence.
+
+The submission gates are tracked in the
+[pmaports upstreaming plan](pmaports-upstreaming.md). The subsystem-by-subsystem
+experiments, acceptance criteria, and fallback conditions are detailed in the
+[hardware enablement roadmap](hardware-roadmap.md).
 
 The current hardware candidate is the reproducible 6.16 `r22` package. The
 accepted 6.16 stack direct-boots with writable rootfs, USB SSH, S6SY761
