@@ -67,6 +67,9 @@ credentials, proprietary dumps, or workstation-specific paths.
   strict `r28` package and AVB hashes, complete `boot_b` readback, and direct
   hardware validation of both TFA9874 revisions with a read-only driver that
   leaves reset lines, routes, protection, and output stages untouched.
+- [evidence/2026-08-07-mainline616-suspend.md](evidence/2026-08-07-mainline616-suspend.md):
+  incomplete suspend bring-up. Records the staged `pm_test` instrumentation,
+  the touchscreen resume failure, and the shared regulator rail behind it.
 - [evidence/2026-08-07-mainline616-microphone.md](evidence/2026-08-07-mainline616-microphone.md):
   working handset microphone on AMIC4. Records the three separate defects behind
   it, the stock-overlay bias wiring, the pad sweep that separates live inputs

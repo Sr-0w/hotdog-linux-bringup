@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 16:40:00 +0200
+Subject: [PATCH] Input: s6sy761 - add an optional reset gpio
+
+s6sy761_power_on() confirms the controller came back by reading one event
+and requiring it to be S6SY761_INFO_BOOT_COMPLETE. That only happens if
+the controller actually restarted, and the driver assumes dropping vdd and
+avdd is enough to guarantee it.
+
+On a board that shares one of those supplies the assumption fails. On the
+OnePlus 7T Pro, avdd is the same rail that feeds the WCN3990 Wi-Fi chip, so
+whenever Wi-Fi is up the regulator stays enabled, the controller never
+restarts, no boot-complete event is produced, and system resume fails with
+-ENODEV.
+
+Take an optional reset line and pulse it around the supply change so the
+restart happens regardless of who else holds the rails. Boards that do not
+describe the line keep the previous behaviour exactly.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/input/touchscreen/s6sy761.c | 24 ++++++++++++++++++++++++
+
+--- a/drivers/input/touchscreen/s6sy761.c
++++ b/drivers/input/touchscreen/s6sy761.c
+@@ -6,6 +6,7 @@
+ 
+ #include <linux/unaligned.h>
+ #include <linux/delay.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/input/mt.h>
+ #include <linux/input/touchscreen.h>
+@@ -101,6 +102,7 @@
+ struct s6sy761_data {
+ 	struct i2c_client *client;
+ 	struct regulator_bulk_data regulators[2];
++	struct gpio_desc *reset_gpio;
+ 	struct input_dev *input;
+ 	struct touchscreen_properties prop;
+ 
+@@ -299,6 +301,19 @@
+ 	if (ret)
+ 		return ret;
+ 
++	/*
++	 * The controller only reports a completed boot after it has actually
++	 * restarted. Dropping the supplies is not enough to guarantee that:
++	 * a board may share one of them with another consumer that keeps it
++	 * up. Pulse reset when the board describes the line, so the restart
++	 * happens regardless of who else holds the rails.
++	 */
++	if (sdata->reset_gpio) {
++		gpiod_set_value_cansleep(sdata->reset_gpio, 1);
++		usleep_range(1000, 2000);
++		gpiod_set_value_cansleep(sdata->reset_gpio, 0);
++	}
++
+ 	msleep(140);
+ 
+ 	/* double check whether the touch is functional */
+@@ -382,6 +397,8 @@
+ 	struct s6sy761_data *sdata = data;
+ 
+ 	disable_irq(sdata->client->irq);
++	if (sdata->reset_gpio)
++		gpiod_set_value_cansleep(sdata->reset_gpio, 1);
+ 	regulator_bulk_disable(ARRAY_SIZE(sdata->regulators),
+ 						sdata->regulators);
+ }
+@@ -412,6 +429,12 @@
+ 	if (err)
+ 		return err;
+ 
++	sdata->reset_gpio = devm_gpiod_get_optional(&client->dev, "reset",
++						    GPIOD_OUT_LOW);
++	if (IS_ERR(sdata->reset_gpio))
++		return dev_err_probe(&client->dev, PTR_ERR(sdata->reset_gpio),
++				     "failed to get reset gpio\n");
++
+ 	err = devm_add_action_or_reset(&client->dev, s6sy761_power_off, sdata);
+ 	if (err)
+ 		return err;
+--
+2.50.1

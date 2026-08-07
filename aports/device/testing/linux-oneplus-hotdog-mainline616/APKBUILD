@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=36
+pkgrel=38
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -82,6 +82,8 @@ source="
 	0043-arm64-dts-hotdog-enable-microphone-routing.patch
 	0044-arm64-dts-hotdog-add-capture-front-end.patch
 	0045-asoc-sm8150-map-every-slimbus-link.patch
+	0046-input-s6sy761-add-optional-reset-gpio.patch
+	0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -135,7 +137,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-a5bcd1566a41a2af9a062e35e6b66fdc9680bb8b763898d362ef9d079f7aa986bd2aa4dec5822cd561e3a76bb4878523812d5f21a0eb6b5e8a43eb8eb3bd2f11  config-oneplus-hotdog-mainline616.aarch64
+cce54b0233dc09dd6835ba941b24cf32dee30458d7bfdc746d1cf533d3393f281a4d1d692920bfdc172df75658a5cb9c2d73252fc7ba51ad69822ecd3df16ad4  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -181,5 +183,7 @@ efefe6b69b3cb219f434a19a67b58d8169d191f796872bab057292c8894a0e9fc46fc3531c846891
 5c64d4a09701acef27462b175879fba3252bf763e016a936dfd571832a2a29c5741f97ca700f1a6be558dc7216a1e1dcbedead346fd68525890f085b060986bd  0043-arm64-dts-hotdog-enable-microphone-routing.patch
 f099d18901f5da758169fb130db9464f25c25e018a63c440679aa2121029aa93feeecf965998e710e4ce5d87e061c20bfed26f4dff577caa35eead277004cb3c  0044-arm64-dts-hotdog-add-capture-front-end.patch
 9edf3c1a6e7c1caed36d352da2dbae4b3d7a9006f0c51470862c6c40f1c941ccfc0f16858e1e30981e11f1ea5e47ef5143e18766f8ab460ad71c2bf563f7318e  0045-asoc-sm8150-map-every-slimbus-link.patch
+f4aa59e5cf6578bcb6e1d707d61a9a4f274391d8a500f80163038c6bcd946881f3cbeef6a97337ccdf9ae41a26a583f233b642cd5d1b9039b7d1426fdfd2664f  0046-input-s6sy761-add-optional-reset-gpio.patch
+292ac5d4b47a07855d2e4c2ef1ad5ea50c04792c0d71b208a334a9ea3e99c77a061c4ca1bafdd202ec235ec4149d29199f1991cf32a92ffd998b1e2af62bae62  0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
 4c91561df6bd93ed08b30848083b320b40f5a1ecfdb81102f8fd37102cdab78f0b658bd00729b24ebe2eda2f74cab23cfdde1bfd3f10ab625a9a82f827e31b51  validate-mainline616-build.sh
 "
