@@ -670,10 +670,55 @@ while the payload never becomes pixel data. `RDI_CFG0` reads `0x802bf007`, and
 its decode-format and data-type fields have not been checked against
 `SGRBG10_1X10` yet.
 
+### The CSID decode configuration is correct too
+
+`RDI_CFG0` = `0x802bf007`, decoded against the driver's own field offsets:
+
+| Field | Bits | Value | Meaning |
+| --- | --- | --- | --- |
+| `ENABLE` | 31 | 1 | path on |
+| `PACKING_FORMAT` | 30 | 0 | MIPI packing |
+| `DT_ID` | 27-28 | 0 | |
+| `VIRTUAL_CHANNEL` | 22-26 | 0 | |
+| `DATA_TYPE` | 16-21 | `0x2B` | CSI-2 RAW10 |
+| `DECODE_FORMAT` | 12-15 | `0xF` | payload only, the RDI path |
+| `TIMESTAMP_EN` | 2 | 1 | |
+| `FORMAT_MEASURE_EN` | 1 | 1 | |
+| `BYTE_CNTR_EN` | 0 | 1 | |
+
+`0x2B` is exactly RAW10, which is what an SGRBG10 sensor sends, and payload-only
+decoding is the correct RDI setting. So the CSID is told the right thing here as
+well.
+
+## Everything checkable is correct, and the frames are still black
+
+The state at the end of this work, with nothing left that can be verified
+against the driver's own inputs and found wrong:
+
+| Stage | Verified | How |
+| --- | --- | --- |
+| sensor mode | correct | 4208x3120, 4 lanes, streaming, read over I2C |
+| CSIPHY generation | correct | v1.1 table active, lane reg 0 reads 0x90 |
+| CSIPHY settle count | correct | 0x14, matches the driver's own formula |
+| CSIPHY timer clock | correct | 300 MHz, the only rate above link_freq/4 |
+| CSID receive config | correct | 4 lanes, PHY 0, D-PHY |
+| CSID decode config | correct | RAW10, payload only, enabled |
+| SMMU translation | not faulting | no context faults during capture |
+| frame timing | arriving | capture locks to 30.00 fps, the sensor's rate |
+| pixel data | **absent** | every byte of every buffer is zero |
+
+What is left is the VFE write master, the only stage never inspected, plus the
+per-lane errors that keep accumulating in `RX_IRQ_STATUS`. Both need
+instrumentation rather than register reads from userspace: the write master's
+configuration is not exposed anywhere readable, and the error bits need decoding
+against a header this tree does not carry.
+
 ## Remaining
 
-1. decode CSID `RDI_CFG0` `0x802bf007`, specifically its data type and decode
-   format fields, against what the sensor actually sends
+1. instrument the VFE RDI write master, the one stage never inspected
+2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
+3. confirm the other three slots and write IMX586, IMX481 and IMX471
+4. libcamera, and the pop-up motor the front camera depends on
 2. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
