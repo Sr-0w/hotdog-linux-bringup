@@ -5,6 +5,8 @@ physical test handset is rear-labelled as a European HD1913 with a Qualcomm
 Snapdragon 855+ (SM8150-AC), while its recovery and vendor software identify
 it as HD1911 and expose the `hotdog` project/codename.
 
+<img width="2048" height="1153" alt="signal-2026-08-08-00-09-58-647" src="https://github.com/user-attachments/assets/627448a4-59dc-4e35-b302-51e95d956237" />
+
 > [!WARNING]
 > This is early hardware enablement, not a daily-driver image. An unlocked
 > bootloader and a dedicated test device are strongly recommended. A failed
