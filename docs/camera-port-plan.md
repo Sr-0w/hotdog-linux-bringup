@@ -574,35 +574,41 @@ csiphy->timer_clk_rate)` and feeds the result to `csiphy_gen2_config_lanes`. The
 timer rate does matter, the `r60` fix was on the critical path, and the timer
 now genuinely runs at 300 MHz.
 
-### The settle count does not add up, and is the next thing to check
+### The settle count is correct, checked and cleared
 
-`csiphy_settle_cnt_calc` in the 3ph driver computes, for a 602.5 MHz link and a
-300 MHz timer:
+Worth recording because it looked like a discrepancy and is not. For a 602.5 MHz
+link and the 300 MHz timer:
 
 ```
 ui               = 1e12 / 602500000 = 1659 ps, halved to 829 ps
 t_hs_prepare_max = 85000 + 6 * 829  = 89974 ps
 timer_period     = 1e12 / 300000000 = 3333 ps
-settle_cnt       = 89974 / 3333     ~= 26, or 0x1A
+settle_cnt       = 89974 / 3333 - 6 = 20, or 0x14
 ```
 
-The hardware reads `0x14`, which is 20, at lane offset 0x008. Those do not
-agree, so either the driver is not using the 300 MHz the clock summary reports,
-or it is not using 602.5 MHz as the link frequency, or the tail of the function
-beyond what was read here adjusts the result.
+The final `- 6` is part of the driver's formula and was missed on a first
+reading, which made 0x1A look like the expected value. The hardware reads
+`0x14`, so the settle count is exactly what the driver intends.
 
-This arithmetic was done by hand against a partially read function and has not
-been confirmed against the driver's actual inputs. It is recorded as the lead
-to check first, not as a finding.
+The timer rate selection is consistent too: `csiphy_set_clock_rates` asks for at
+least `link_freq / 4`, which is 150.6 MHz, and the only rate above that the
+SM8150 clock controller offers is 300 MHz.
 
-Settle count is the parameter that decides when the PHY samples each lane after
-the transition out of low-power state. A wrong one produces exactly what is
-observed: activity on the wires, latched per-lane errors, and nothing decodable.
+So the CSIPHY is now configured correctly as far as can be checked from the
+driver's own inputs: right generation, right lane table, right lane enable mask,
+right settle count, right timer rate. And the CSID still latches per-lane
+receive errors.
+
+That moves suspicion to what the sensor actually emits. The upstream S5K3M5
+driver's default mode is 4208x3120 at 602.5 MHz over four lanes; this handset's
+telephoto is an 8 MP module, so whether this module is the variant that driver
+was written for, and whether its start-streaming sequence really applies here,
+is now the open question rather than the receiver.
 
 ## Remaining
 
-1. confirm what `link_freq` and `timer_clk_rate` the driver actually passes to
-   `csiphy_settle_cnt_calc`, and why the result is 0x14 rather than 0x1A
+1. check whether this module matches the variant the upstream S5K3M5 driver
+   targets, and whether its mode registers really take
 2. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
