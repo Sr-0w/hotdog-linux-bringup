@@ -49,7 +49,7 @@ limitations.
 | Input | S6SY761 touchscreen | 🟢 | Touch, drag, pressure, multitouch and graphical orientation are hardware-validated. |
 | Input | Power key | 🟢 | PM8150 PON power-key input is present and physical power-button interaction has been observed on hardware. |
 | Input | Volume Down | 🟢 | The original RESIN mapping was invalidated; the corrected PM8150 GPIO7 mapping is physically tested and functional. |
-| Input | Volume Up | 🟡 | PM8150 GPIO6 / `KEY_VOLUMEUP` is registered; physical press/release validation remains open. |
+| Input | Volume Up | 🟢 | PM8150 GPIO6 / `KEY_VOLUMEUP` is physically tested and functional. |
 | USB | USB gadget / NCM networking | 🟢 | Stable host ping and SSH at `172.16.42.1` through the translated DWC3 SMMU path. |
 | USB | USB ACM serial | 🟡 | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
 | USB-C | Type-C dual role and USB-PD detection | 🟢 | Type-C partner/PD state is exposed and device/sink negotiation works. |
