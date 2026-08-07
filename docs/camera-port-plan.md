@@ -538,10 +538,47 @@ GPL, and which is checked out locally. That is where this answer came from, in
 a few minutes and with no decompilation. The libraries would be the right place
 to look for tuning data and 3A behaviour, not for bring-up.
 
+## v1.1 applied, revision `r61`: the error pattern changes, frames do not
+
+Mainline already carried the v1.1 sequence as `lane_regs_sc8280xp`, matching the
+vendor's v1.1 table entry for entry once its zero padding is discounted. `0064`
+adds a `CAMSS_8150` version that behaves as `CAMSS_845` everywhere except the
+CSIPHY lane table, where it takes the v1.1 one.
+
+Confirmed active by reading the PHY during a capture:
+
+| Register | v1.0 before | v1.1 now |
+| --- | --- | --- |
+| PHY `0x814` lane enable | - | `0xd5` |
+| PHY `0x000` | `0x91` | `0x90` |
+| PHY `0x008` settle count | - | `0x14` |
+| `csi0phytimer` | 269 MHz asked for | 300 MHz actual |
+| CSID `RX_IRQ_STATUS` | `0x0097c0ff` | `0x010000ff` |
+
+`0x90` rather than `0x91` at lane offset 0 is the v1.1 table's own value, so the
+right sequence is being written. The common block is computed rather than
+tabulated in mainline, and it lands on `0xd5` for four data lanes plus clock,
+which is exactly what the vendor table hardcodes.
+
+The receive error pattern changes substantially, from `0x0097c0ff` to
+`0x010000ff`, so the physical layer is behaving differently and better. It is
+still not delivering frames, and the low byte of latched per-lane errors
+persists.
+
+### A correction to an earlier correction
+
+An earlier note claimed the settle count is computed only in `csiphy-2ph-1-0`
+and therefore that the clock rates could not matter. That is wrong:
+`csiphy_lanes_enable` in the 3ph driver calls `csiphy_settle_cnt_calc(link_freq,
+csiphy->timer_clk_rate)` and feeds the result to `csiphy_gen2_config_lanes`. The
+timer rate does matter, the `r60` fix was on the critical path, and the timer
+now genuinely runs at 300 MHz.
+
 ## Remaining
 
-1. add a 3ph v1.1 sequence to CAMSS from the vendor tables and point SM8150 at
-   it, rather than reusing SDM845's v1.0
+1. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`,
+   which is now the only lead, and check the settle count against what the
+   vendor computes for a 602.5 MHz link
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
