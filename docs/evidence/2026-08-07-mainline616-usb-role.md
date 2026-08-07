@@ -176,47 +176,67 @@ selected. Four-lane DisplayPort would raise the ceiling at the cost of dropping
 USB3 to USB2, which is the standard trade-off in the pin assignments and is not
 currently exercised.
 
-## DisplayPort audio: back end registers, ADSP refuses the port
+## DisplayPort audio: everything binds, the DSP refuses the port
 
-Video over the dock works but sound through it does not.
+Video over the dock works. Sound through it does not, and this is not solved.
 
-The DisplayPort controller registers an `hdmi-audio-codec` platform device and
-already carries `#sound-dai-cells`, and the DSP side already knows
-`DISPLAY_PORT_RX`, but the sound card referenced neither, so nothing existed to
-play to. Revision `r44` (`0050`) adds the missing back end, and `r45` (`0051`)
-teaches the machine driver to accept the DAI id, which its three switches did
-not list and which made every open, configure and close log
-`invalid dai id 0x68`.
+Three defects were found and fixed on the way, all real:
 
-That part works: `DISPLAY_PORT_RX Audio Mixer MultiMedia1` through
-`MultiMedia8` now exist and the misleading log messages are gone.
+- `r44` (`0050`) adds the missing back end. The DisplayPort controller
+  registers an `hdmi-audio-codec` and carries `#sound-dai-cells`, and the DSP
+  knows `DISPLAY_PORT_RX`, but the sound card referenced neither.
+- `r45` (`0051`) teaches the machine driver the DAI id, which none of its three
+  switches listed, so every open, configure and close logged
+  `invalid dai id 0x68`.
+- `r46` (`0052`) fixes an upstream bug: `DISPLAY_PORT_RX` is a receive port but
+  was declared `SND_SOC_DAPM_AIF_OUT`, while every other receive port in
+  `q6afe-dai.c` uses `SND_SOC_DAPM_AIF_IN` and only transmit ports use
+  `AIF_OUT`. This one is worth sending upstream on its own merits.
 
-Playback still fails. Routing `MultiMedia1` to the back end and playing gives:
+The Linux side is now complete and verifiable. The card registers the codec as
+a component:
+
+```
+/sys/kernel/debug/asoc/OnePlus 7T Pro/hdmi-audio-codec.0.auto
+```
+
+`CONFIG_SND_SOC_HDMI_CODEC` is built, `hdmi-audio-codec.0.auto` is bound to its
+driver, and the `DISPLAY_PORT_RX` mixer controls exist. Playback still fails at
+the same point:
 
 ```
 qcom-q6afe: AFE enable for port 0x6020 failed -110
 q6afe-dai: ASoC error (-110): at snd_soc_dai_prepare() on DISPLAY_PORT_RX_0
 ```
 
-The ADSP does not answer the request to start the DisplayPort AFE port.
+`-110` is a timeout: the ADSP does not answer the request to start
+`AFE_PORT_ID_HDMI_OVER_DP_RX` at all.
 
-This is not obviously a vendor firmware gap. The stock OxygenOS odm mixer
-configuration has 107 references to display-port audio, including real paths
-such as `deep-buffer-playback display-port`, and the stock platform info
-declares `SND_DEVICE_OUT_SPEAKER_AND_DISPLAY_PORT` on a
-`QUAT_MI2S_RX-and-DISPLAY_PORT` interface. The stock enable path is also no
-more elaborate than ours, being a single mixer set, so no obviously missing
-control explains the timeout.
+### A wrong argument, corrected
 
-Not diagnosed further. Worth trying next: whether the DisplayPort controller
-must publish its audio configuration to the DSP before the port will start,
-whether the ADSP expects an explicit channel or bit-width configuration on this
-port, and comparing against a board where q6afe DisplayPort audio is known to
-work.
+An earlier version of this document argued that the stock configuration proves
+the firmware supports DisplayPort audio, because the OxygenOS odm
+`mixer_paths.xml` has 107 references to display-port paths. That argument does
+not hold. The same file is Qualcomm reference boilerplate shipped unchanged: it
+also contains 217 references to headphone and HPH paths on a handset with no
+3.5 mm jack, and WSA speaker paths on a handset that uses TFA9874 amplifiers.
+Its contents say nothing about what this device's DSP firmware actually
+implements.
+
+### Leading hypothesis
+
+The OnePlus 7T Pro never shipped DisplayPort output, so the ADSP firmware image
+on it plausibly does not provision the HDMI-over-DP AFE port. Video is
+unaffected because it never involves the DSP. That would make this unfixable
+from Linux with the stock firmware.
+
+This is a hypothesis, not a conclusion. What would settle it: comparing against
+an SM8150 device where q6afe DisplayPort audio is known to work, and inspecting
+the ADSP image for the port. Until then the honest statement is that everything
+under our control is correct and the DSP will not start the port.
 
 The back end is left in place because it is correct and inert: nothing selects
-it, the speaker profile is untouched, and the log noise it used to cause is
-fixed.
+it and the speaker profile is untouched.
 
 ## Not yet validated
 

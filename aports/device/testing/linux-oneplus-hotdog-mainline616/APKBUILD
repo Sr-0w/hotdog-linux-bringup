@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=45
+pkgrel=46
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -88,6 +88,7 @@ source="
 	0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
 	0050-arm64-dts-hotdog-add-displayport-audio-link.patch
 	0051-asoc-sm8150-accept-the-displayport-backend.patch
+	0052-asoc-q6afe-dai-make-displayport-a-playback-widget.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -193,5 +194,6 @@ f099d18901f5da758169fb130db9464f25c25e018a63c440679aa2121029aa93feeecf965998e710
 b79c4e065cf8eedb729d8376a07837b576806c87f61a8ca4fc04d8b0922948c3f67b5f614f3916bdf6061ed18457528119fa6647adb291882f329f765e7a4e11  0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
 9f8977967e1da17f409a4fdf671521e488cfd2dc8ba23b850091e4aa82f45837835b5741009ca185473c7b249b5d2f970462ee0c04d298d5ec4e9a4d5edf46e9  0050-arm64-dts-hotdog-add-displayport-audio-link.patch
 64fbc4c3c2c4473cd9b7f486666e638ba4e779f190d74e9c9b58c4dbf991aaf254f9a879f0496007418ccf74a5ec0f0dfb5fdad5261d75f3e6be62fb474f5d14  0051-asoc-sm8150-accept-the-displayport-backend.patch
+6231364da0de476f44c0fb15295a2985ac182bf8d70ba8385b83f9689168a1d989f9a46e347fbacbb54c1e8e204f9b99856b1013de29d875f34bb4f69749e64d  0052-asoc-q6afe-dai-make-displayport-a-playback-widget.patch
 5fc8a8307a2c4246c473f76fa7c3279a205bc0964ab0ad3a3e6203a5f95af7e9490164154ce0a02b49df3f9d1510ab01b8d51da6b664163f5df1f4185e2388b9  validate-mainline616-build.sh
 "
