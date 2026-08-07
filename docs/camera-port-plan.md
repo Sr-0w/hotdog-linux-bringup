@@ -413,9 +413,78 @@ a settle-count or lane configuration this backend is not setting.
 This is the honest state: the port is complete enough to run a capture end to
 end, and the camera does not yet produce an image.
 
+## Why the frames are black, narrowed down
+
+Four measurements, each ruling something out.
+
+**The sensor is powered and transmitting.** Sampled during a long capture
+rather than after it, which an earlier reading got wrong:
+
+```
+t=1s runtime=active   cam1_vana=enabled
+sensor register 0x0100 (mode select) = 0x01
+```
+
+So exposure, gain and power are not the problem. Exposure and analogue gain
+were also already at maximum.
+
+**The sensor's own test pattern does not arrive either.** With
+`test_pattern=2`, colour bars, the frame is still entirely zero. That removes
+the scene, the optics and the sensor's analogue front end from suspicion.
+
+**Interrupts localise the break.** Across a capture:
+
+| Interrupt | Before | After |
+| --- | --- | --- |
+| `camss_msm_vfe0` | 961 | 969 |
+| `camss_msm_csid0` | 3 | 3 |
+| `camss_msm_csiphy0` | 0 | 0 |
+
+VFE0 runs and completes buffers, which is why correctly sized frames come back.
+CSID0 sees nothing at all.
+
+**CSID0 is never configured.** Reading its registers through `/dev/mem`, at
+rest and during streaming, gives byte-identical results:
+
+```
+CSID0: 000=10000000 004=00000000 008=00000000 00c=00000000
+       010=00000000 014=00000000 018=00000000 01c=00000000
+```
+
+`0x10000000` at offset 0 is the hardware version register, so the block is
+mapped and readable. Every other register stays zero while streaming. If
+`csid_configure_stream()` were running against this base, they would not.
+
+So the break is not the CSIPHY failing to lock, and not the sensor. Something
+between the pipeline walk and the CSID's register writes is not happening, or
+is happening against a different address than the one read here. The next thing
+to establish is whether `csid_set_stream` is called at all, and if it is,
+which base it writes to.
+
+### A real bug fixed on the way
+
+The CAMSS resource tables were copied from SDM845 and carried clock rates the
+SM8150 camera clock controller cannot produce. Checked against
+`camcc-sm8150.c`:
+
+| Clock | Table had | SM8150 supports |
+| --- | --- | --- |
+| `csiphyN_timer` | 240 MHz, 269.333 MHz | 19.2 MHz, 300 MHz |
+| `cphy_rx_src` | 384 MHz | 19.2 MHz, 400 MHz |
+| `vfeN` | 100/320/404/480/600 MHz | 400/558/637/847/950 MHz |
+| `vfeN_src` | 320 MHz | 400 MHz |
+| `csiN` | 384 MHz, 538.667 MHz | 400, 480, 600 MHz |
+
+This matters beyond tidiness for the timer clock: the CSIPHY settle count, the
+instant the PHY samples the lanes, is computed from the rate the driver
+believes it set. Revision `r60` uses the rates the hardware actually offers.
+
+It did not by itself make frames arrive, which is consistent with the finding
+above that the CSID is not configured at all.
+
 ## Remaining
 
-1. find why the frames are black
+1. establish whether csid_set_stream runs, and against which base
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
