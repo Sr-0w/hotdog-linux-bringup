@@ -146,7 +146,38 @@ the monitor's EDID is read, and a CRTC is assigned to the connector, so a mode
 is set and the pipeline is scanning out. The internal DSI panel keeps its own
 connector and CRTC at the same time.
 
+## External display: usable at 60 Hz, corrupt at 120 Hz
+
+The desktop reaches the monitor, but KWin initially selected
+`2560x1440@120.00` while the monitor's preferred mode is `2560x1440@59.95`.
+At 120 Hz the picture was recognisable but permanently corrupt, looking like
+fixed tearing. Selecting 60 Hz makes it correct, confirmed by eye.
+
+`dp_debug` explains it. The link trains at HBR2 on two lanes, because the other
+two carry USB3 in the DisplayPort-plus-USB pin assignment:
+
+| Mode | pixel clock | bpp chosen | payload | 2-lane HBR2 budget |
+| --- | --- | --- | --- | --- |
+| 2560x1440@120 | 497,750 kHz | 18 | ~8.96 Gbps | ~8.64 Gbps |
+| 2560x1440@60 | 241,500 kHz | 30 | ~7.25 Gbps | ~8.64 Gbps |
+
+At 60 Hz the driver picks 30 bpp and fits comfortably. At 120 Hz it does not
+reject the mode; it degrades colour depth to 18 bpp to try to make it fit, and
+still exceeds the budget. Six bits per colour would look wrong even if it did
+fit.
+
+This looks like a driver defect rather than a board description problem: mode
+validation should prune modes the trained link cannot carry at a sane depth,
+instead of silently dropping to 18 bpp. It is worth reporting upstream. Nothing
+in this device tree selects the mode, so it is not fixable here.
+
+Practical consequence: the external display is usable, but 60 Hz has to be
+selected. Four-lane DisplayPort would raise the ceiling at the cost of dropping
+USB3 to USB2, which is the standard trade-off in the pin assignments and is not
+currently exercised.
+
 ## Not yet validated
+
 
 
 
