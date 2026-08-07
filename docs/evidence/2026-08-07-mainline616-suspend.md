@@ -72,13 +72,14 @@ boot-complete event, and resume fails.
 This is a driver assumption that does not hold on a shared rail, not a hotdog
 integration mistake.
 
-## Fix attempted
+## Fix attempted, and what it ruled out
 
-Revisions `r38` add:
+Revisions `r38` through `r41` add:
 
-- `0046`: optional `reset-gpios` support in the s6sy761 driver, pulsed inside
-  `s6sy761_power_on()` so the controller restarts regardless of who holds the
-  rails, and asserted in `s6sy761_power_off()`.
+- `0046`: optional `reset-gpios` support in the s6sy761 driver. The reset is
+  driven around the supply change, the boot-complete event is polled for with
+  a bounded timeout instead of sampled once at a fixed delay, and the whole
+  restart is retried three times.
 - `0047`: `reset-gpios = <&tlmm 54 GPIO_ACTIVE_LOW>` on the touchscreen node.
 
 GPIO 54 is confirmed as the touchscreen reset by the stock device tree, whose
@@ -86,20 +87,37 @@ GPIO 54 is confirmed as the touchscreen reset by the stock device tree, whose
 `irq-gpio = <... 0x7a ...>`, matching the interrupt already described here. The
 existing pin state drives GPIO 54 high, so high is the released level.
 
-The driver does acquire the line: requesting it from user space returns
-`Resource busy`, and the touchscreen still probes and registers normally on
-`r38`.
+**Resume still fails with -ENODEV.** The work is kept because the driver
+changes are correct on their own, and because the instrumentation eliminated
+most of the plausible causes. What is now established:
 
-**The fix is not sufficient yet.** Resume still returns `-ENODEV`. The reset
-line is owned and pulsed, so what remains is timing: the pulse holds reset for
-only 1 to 2 ms and the driver then waits the original 140 ms before reading.
-Vendor drivers for this family hold reset materially longer and allow more time
-for the firmware to boot.
+| Checked | Result |
+| --- | --- |
+| Does the driver own the reset line? | Yes. Requesting it from user space returns `Resource busy`. |
+| Does the line actually move? | Yes. It reads back as asserted then released around the pulse. |
+| Is the reset long enough? | It is held 10 ms, and the restart is retried three times over roughly 1.7 s. |
+| Is `vdd` back? | Yes. `ldo1` reads enabled at 1800 mV with the touchscreen as its consumer, during and after the failed resume. |
+| Is the I2C bus down? | No. `geni_i2c_xfer()` takes a runtime PM reference and would return an error; reads succeed and return data. |
+| Is the controller broken afterwards? | No. The input device survives, and an unbind/rebind recovers it immediately. |
+
+The remaining symptom is narrow and reproducible: during resume the controller
+answers every event read with all zeroes for the full retry window, while the
+identical `s6sy761_power_on()` path invoked seconds later through unbind and
+rebind gets a boot-complete event on its very first read, with no retry.
+
+So the controller, its supply, its reset line and its bus are all fine. Only
+the resume context is not, and nothing checked so far explains it.
 
 ## Next steps
 
-1. Widen the reset pulse and the post-reset wait, then repeat `pm_test=devices`.
-2. Once `devices` passes, walk `platform`, `processors` and `core` in order.
-3. Only then attempt a real s2idle with an armed `rtc0/wakealarm`.
-4. Re-check the other suspend-sensitive subsystems afterwards: display
-   blank/unblank, touch wake, Wi-Fi and Bluetooth power management.
+1. Log `S6SY761_BOOT_STATUS` during the failed window to separate "held in
+   bootloader" from "not answering at all".
+2. Compare against a real s2idle with an armed `rtc0/wakealarm`, in case the
+   `pm_test=devices` path itself is what the controller reacts to.
+3. Consider deferring the touchscreen restart to a `.complete()` callback or a
+   work item, so it runs once the whole device tree is back rather than inside
+   the resume phase.
+4. Only once `devices` passes, walk `platform`, `processors` and `core`, then
+   attempt a real suspend.
+5. Re-check display blank/unblank, touch wake, and radio power management
+   afterwards.

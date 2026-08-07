@@ -1,26 +1,36 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Sr-0w <Sr-0w@users.noreply.github.com>
-Date: Fri, 7 Aug 2026 16:40:00 +0200
-Subject: [PATCH] Input: s6sy761 - add an optional reset gpio
+Date: Fri, 7 Aug 2026 16:58:00 +0200
+Subject: [PATCH] Input: s6sy761 - restart the controller reliably on resume
 
-s6sy761_power_on() confirms the controller came back by reading one event
-and requiring it to be S6SY761_INFO_BOOT_COMPLETE. That only happens if
-the controller actually restarted, and the driver assumes dropping vdd and
-avdd is enough to guarantee it.
+s6sy761_power_on() confirms the controller came back by reading exactly one
+event, at a fixed 140 ms after the supplies are re-enabled, and requiring it
+to be S6SY761_INFO_BOOT_COMPLETE. Three assumptions are built into that and
+none of them holds on every board.
 
-On a board that shares one of those supplies the assumption fails. On the
-OnePlus 7T Pro, avdd is the same rail that feeds the WCN3990 Wi-Fi chip, so
-whenever Wi-Fi is up the regulator stays enabled, the controller never
-restarts, no boot-complete event is produced, and system resume fails with
--ENODEV.
+It assumes dropping vdd and avdd restarts the part. On a board that shares
+one of those supplies it does not: on the OnePlus 7T Pro avdd is the rail
+that also feeds the WCN3990 Wi-Fi chip, so while Wi-Fi is up the controller
+keeps its analogue supply and never restarts.
 
-Take an optional reset line and pulse it around the supply change so the
-restart happens regardless of who else holds the rails. Boards that do not
-describe the line keep the previous behaviour exactly.
+It assumes the announcement lands in one sample at a fixed delay. How long a
+restart takes depends on how it was triggered, and an unrelated event may be
+queued ahead of it.
+
+It assumes the supplies are back by the time the first read happens. During
+system resume they may not be, because the regulator they belong to can
+still be resuming itself, and the controller answers reads with zeroes
+rather than failing them while that is true.
+
+Take an optional reset line and drive it, poll for the boot-complete event
+with a bounded timeout, and retry the restart a few times before giving up.
+Boards without a reset line keep the previous power-cycle behaviour and gain
+the more tolerant wait.
 
 Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 ---
- drivers/input/touchscreen/s6sy761.c | 24 ++++++++++++++++++++++++
+ drivers/input/touchscreen/s6sy761.c | 97 ++++++++++++++++++++++++-----
+ 1 file changed, 83 insertions(+), 14 deletions(-)
 
 --- a/drivers/input/touchscreen/s6sy761.c
 +++ b/drivers/input/touchscreen/s6sy761.c
@@ -40,27 +50,103 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
  	struct input_dev *input;
  	struct touchscreen_properties prop;
  
-@@ -299,6 +301,19 @@
+@@ -288,34 +290,80 @@
+ };
+ ATTRIBUTE_GROUPS(s6sy761_sysfs);
+ 
+-static int s6sy761_power_on(struct s6sy761_data *sdata)
++static void s6sy761_reset(struct s6sy761_data *sdata)
+ {
++	if (!sdata->reset_gpio)
++		return;
++
++	gpiod_set_value_cansleep(sdata->reset_gpio, 1);
++	usleep_range(10000, 12000);
++	gpiod_set_value_cansleep(sdata->reset_gpio, 0);
++}
++
++static int s6sy761_wait_boot_complete(struct s6sy761_data *sdata)
++{
++	unsigned long timeout = jiffies + msecs_to_jiffies(400);
+ 	u8 buffer[S6SY761_EVENT_SIZE];
+ 	u8 event;
+ 	int ret;
+ 
++	do {
++		ret = i2c_smbus_read_i2c_block_data(sdata->client,
++						    S6SY761_READ_ONE_EVENT,
++						    S6SY761_EVENT_SIZE,
++						    buffer);
++		if (ret < 0)
++			return ret;
++
++		event = (buffer[0] >> 2) & 0xf;
++
++		if ((event == S6SY761_EVENT_INFO ||
++		     event == S6SY761_EVENT_VENDOR_INFO) &&
++		    buffer[1] == S6SY761_INFO_BOOT_COMPLETE)
++			return 0;
++
++		msleep(20);
++	} while (time_before(jiffies, timeout));
++
++	return -ENODEV;
++}
++
++static int s6sy761_power_on(struct s6sy761_data *sdata)
++{
++	int attempt;
++	int ret;
++
+ 	ret = regulator_bulk_enable(ARRAY_SIZE(sdata->regulators),
+ 				    sdata->regulators);
  	if (ret)
  		return ret;
  
+-	msleep(140);
 +	/*
-+	 * The controller only reports a completed boot after it has actually
-+	 * restarted. Dropping the supplies is not enough to guarantee that:
-+	 * a board may share one of them with another consumer that keeps it
-+	 * up. Pulse reset when the board describes the line, so the restart
-+	 * happens regardless of who else holds the rails.
++	 * A completed boot is only announced after the controller has really
++	 * restarted, and dropping the supplies does not guarantee that: a
++	 * board may share one of them with another consumer that keeps it up.
++	 * Drive reset when the board describes the line.
++	 *
++	 * On resume the supplies may also take a while to actually come back,
++	 * because the regulator they belong to can itself still be resuming.
++	 * Until they do the controller answers reads with zeroes rather than
++	 * failing them, so retry the restart instead of giving up on the
++	 * first silent window.
 +	 */
-+	if (sdata->reset_gpio) {
-+		gpiod_set_value_cansleep(sdata->reset_gpio, 1);
-+		usleep_range(1000, 2000);
-+		gpiod_set_value_cansleep(sdata->reset_gpio, 0);
-+	}
-+
- 	msleep(140);
++	for (attempt = 0; attempt < 3; attempt++) {
++		msleep(20);
++		s6sy761_reset(sdata);
++		msleep(140);
  
- 	/* double check whether the touch is functional */
-@@ -382,6 +397,8 @@
+-	/* double check whether the touch is functional */
+-	ret = i2c_smbus_read_i2c_block_data(sdata->client,
+-					    S6SY761_READ_ONE_EVENT,
+-					    S6SY761_EVENT_SIZE,
+-					    buffer);
+-	if (ret < 0)
+-		return ret;
+-
+-	event = (buffer[0] >> 2) & 0xf;
++		ret = s6sy761_wait_boot_complete(sdata);
++		if (ret != -ENODEV)
++			break;
+ 
+-	if ((event != S6SY761_EVENT_INFO &&
+-	     event != S6SY761_EVENT_VENDOR_INFO) ||
+-	    buffer[1] != S6SY761_INFO_BOOT_COMPLETE) {
+-		return -ENODEV;
++		dev_dbg(&sdata->client->dev,
++			"no boot-complete on attempt %d, retrying\n", attempt);
+ 	}
++	if (ret)
++		return ret;
+ 
+ 	ret = i2c_smbus_read_byte_data(sdata->client, S6SY761_BOOT_STATUS);
+ 	if (ret < 0)
+@@ -382,6 +430,8 @@
  	struct s6sy761_data *sdata = data;
  
  	disable_irq(sdata->client->irq);
@@ -69,7 +155,7 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
  	regulator_bulk_disable(ARRAY_SIZE(sdata->regulators),
  						sdata->regulators);
  }
-@@ -412,6 +429,12 @@
+@@ -412,6 +462,12 @@
  	if (err)
  		return err;
  
