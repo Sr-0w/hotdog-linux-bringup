@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=42
+pkgrel=43
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -85,6 +85,7 @@ source="
 	0046-input-s6sy761-add-optional-reset-gpio.patch
 	0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
 	0048-arm64-dts-hotdog-enable-usb-role-switching.patch
+	0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -187,5 +188,6 @@ f099d18901f5da758169fb130db9464f25c25e018a63c440679aa2121029aa93feeecf965998e710
 08b980429a4cc863bdebecb0c5654828a43850ee1c6a3b738307c37d44d2636807909372dd6b6bb3d54d6ea0380f958d9050d96d80ba5a20f78c693ce68b3e30  0046-input-s6sy761-add-optional-reset-gpio.patch
 292ac5d4b47a07855d2e4c2ef1ad5ea50c04792c0d71b208a334a9ea3e99c77a061c4ca1bafdd202ec235ec4149d29199f1991cf32a92ffd998b1e2af62bae62  0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
 4b06189a34ea41dbdbca5e3b80d578c0d27ecefcfcefb5c4d64ca0ab436cb2e4f644d6136cb52728168ad51bedcf73f1f529467710207f3f5b8eff2698eccfbb  0048-arm64-dts-hotdog-enable-usb-role-switching.patch
-7a6319dce10de0633c641f0058fd10fea54c0fcf56e128b0c4639700ca1d2114909bfedb552070cfa9f356df6799d77b6326cd905b9374ef2ce98c48d2ceee55  validate-mainline616-build.sh
+b79c4e065cf8eedb729d8376a07837b576806c87f61a8ca4fc04d8b0922948c3f67b5f614f3916bdf6061ed18457528119fa6647adb291882f329f765e7a4e11  0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
+5fc8a8307a2c4246c473f76fa7c3279a205bc0964ab0ad3a3e6203a5f95af7e9490164154ce0a02b49df3f9d1510ab01b8d51da6b664163f5df1f4185e2388b9  validate-mainline616-build.sh
 "

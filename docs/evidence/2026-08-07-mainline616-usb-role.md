@@ -2,9 +2,10 @@
 
 ## Result
 
-The Type-C port is managed, dual-role, and host mode works on hardware. A
-powered Type-C dock enumerates through it while the handset simultaneously
-takes power from that dock.
+The Type-C port is managed and dual-role, host mode works, SuperSpeed works,
+and DisplayPort alternate mode drives an external monitor. A powered Type-C
+dock provides USB, gigabit Ethernet, mass storage and video while the handset
+takes power from it.
 
 ## Starting point
 
@@ -109,13 +110,54 @@ The `r8152` driver logs a missing `rtl_nic/rtl8153b-2.fw` firmware patch. That
 is an optional performance/errata patch, not required for the adapter to work,
 and it is a firmware packaging item rather than a device-tree one.
 
+## Mass storage
+
+A SanDisk Cruzer Fit (`0781:5571`) attached through the dock enumerated as
+`usb-storage`, produced `/dev/sdg` with its partition table, mounted read-only,
+and sustained a 64 MiB sequential read at 6.0 MB/s. The rate is the stick's own
+limit rather than the bus.
+
+## SuperSpeed and DisplayPort
+
+Revision `r43` (`0049`) removed the USB 2.0-only description. The results on the
+same dock:
+
+| Device | Speed |
+| --- | --- |
+| `2-1` GenesysLogic USB3.1 Hub | 5000 |
+| `2-1.1` Realtek gigabit adapter | 5000 |
+| `usb2` root hub | 10000 |
+
+So the combo PHY and the SuperSpeed path work.
+
+DisplayPort alternate mode is negotiated and an external monitor is driven:
+
+```
+/sys/class/typec/port0-partner/port0-partner.1   svid=ff01  active=yes
+/sys/class/drm/card0-DP-1                        connected  enabled
+modes: 2560x1440, 1920x1080, ...                 EDID: 384 bytes, MAG 271QPX
+/sys/kernel/debug/dri/0/state
+  connector[36]: DP-1   crtc=crtc-1
+```
+
+The DisplayPort controller binds to the DPU (`bound
+ae90000.displayport-controller`), the `typec_displayport` altmode driver loads,
+the monitor's EDID is read, and a CRTC is assigned to the connector, so a mode
+is set and the pipeline is scanning out. The internal DSI panel keeps its own
+connector and CRTC at the same time.
+
 ## Not yet validated
+
 
 
 The handset has not yet had to source VBUS itself, because the dock supplied
 power. An unpowered peripheral, which forces the port into source, is still
-untested, as is mass storage and HID.
+untested, as is HID.
 
-This change is USB 2.0 only. The QMP PHY stays disabled and the controller
-keeps `maximum-speed = "high-speed"`, so SuperSpeed and DisplayPort alternate
-mode over the dock are untouched and remain future work.
+On the desktop side, only the kernel pipeline is proven. Whether the Plasma
+session places a usable desktop on the external output, how it behaves on
+hotplug, and multi-monitor or rotation handling are all separate userspace
+questions.
+
+The `r8152` driver logs a missing `rtl_nic/rtl8153b-2.fw` patch. It is optional
+and the adapter works without it, but it is worth packaging.

@@ -1,0 +1,99 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 19:15:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable SuperSpeed and DisplayPort
+
+The port was described as USB 2.0 only: the combo PHY was forced off, the
+controller was capped to high speed and given the high-speed PHY alone, and
+the USB block was told to take the UTMI clock as its pipe clock, which is
+what a board without a SuperSpeed PHY does. A dock therefore enumerated at
+high speed and carried no video at all.
+
+The hardware is not USB 2.0 only. usb_1_qmpphy is a combo USB3 and
+DisplayPort PHY and the SoC has a DisplayPort controller, both already
+described and supplied by the shared SM8150 files; only this board turned
+them off.
+
+Stop overriding the PHY off, drop the high-speed cap and the UTMI pipe-clock
+workaround so the controller uses both PHYs, enable the DisplayPort
+controller on two lanes, and give the connector a DisplayPort altmode.
+
+The connector's port numbering follows the binding: port@0 is the data role,
+port@1 is the SuperSpeed and DisplayPort mux on the combo PHY, and port@2 is
+the SBU mux. The FSA4480 moves from port@1 to port@2 accordingly, which is
+where it belongs once a SuperSpeed mux exists.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 38 ++++++++++++++----
+ 1 file changed, 30 insertions(+), 8 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -568,22 +568,30 @@
+ };
+ 
+ &usb_1 {
+-	qcom,select-utmi-as-pipe-clk;
+ 	status = "okay";
+ };
+ 
+ &usb_1_qmpphy {
+-	status = "disabled";
++	orientation-switch;
++};
++
++&usb_1_qmpphy_out {
++	remote-endpoint = <&pm8150b_typec_mux_in>;
+ };
+ 
+ &usb_1_dwc3 {
+ 	dr_mode = "otg";
+-	maximum-speed = "high-speed";
+-	phys = <&usb_1_hsphy>;
+-	phy-names = "usb2-phy";
+ 	usb-role-switch;
+ };
+ 
++&mdss_dp {
++	status = "okay";
++};
++
++&mdss_dp_out {
++	data-lanes = <0 1>;
++};
++
+ &usb_1_dwc3_hs {
+ 	remote-endpoint = <&pm8150b_role_switch_in>;
+ };
+@@ -615,6 +623,13 @@
+ 
+ 		op-sink-microwatt = <10000000>;
+ 
++		altmodes {
++			displayport {
++				svid = /bits/ 16 <0xff01>;
++				vdo = <0x00001c46>;
++			};
++		};
++
+ 		ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
+@@ -630,6 +645,14 @@
+ 			port@1 {
+ 				reg = <1>;
+ 
++				pm8150b_typec_mux_in: endpoint {
++					remote-endpoint = <&usb_1_qmpphy_out>;
++				};
++			};
++
++			port@2 {
++				reg = <2>;
++
+ 				pm8150b_sbu_mux_in: endpoint {
+ 					remote-endpoint = <&fsa4480_sbu_mux>;
+ 				};
+--
+2.50.1

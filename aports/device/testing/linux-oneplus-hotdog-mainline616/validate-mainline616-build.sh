@@ -502,7 +502,11 @@ apps_smmu_phandle=$(fdtget -tx "$dtb" "$apps_smmu_path" phandle) ||
 expect_value dwc3-iommus "$apps_smmu_phandle 140 0" \
 	fdtget -tx "$dtb" "$dwc3" iommus
 expect_value dwc3-role otg fdtget -ts "$dtb" "$dwc3" dr_mode
-expect_value dwc3-speed high-speed fdtget -ts "$dtb" "$dwc3" maximum-speed
+# No speed cap: the controller must keep both PHYs so SuperSpeed and the
+# DisplayPort altmode stay reachable.
+expect_absent dwc3-speed-cap fdtget "$dtb" "$dwc3" maximum-speed
+expect_absent usb-utmi-pipe-clk \
+	fdtget "$dtb" "$soc/usb@a6f8800" qcom,select-utmi-as-pipe-clk
 # Role switching must stay wired end to end: the controller advertises a
 # switch, the Type-C block and its VBUS boost are enabled, and the connector
 # reaches both the controller and the SBU mux. Losing any one of these
@@ -523,7 +527,21 @@ expect_value typec-data-role dual \
 fdtget "$dtb" "$typec/connector/ports/port@0/endpoint" remote-endpoint \
 	>/dev/null 2>&1 || die "Type-C connector must reach the dwc3 data role"
 fdtget "$dtb" "$typec/connector/ports/port@1/endpoint" remote-endpoint \
+	>/dev/null 2>&1 || die "Type-C connector must reach the SuperSpeed mux"
+fdtget "$dtb" "$typec/connector/ports/port@2/endpoint" remote-endpoint \
 	>/dev/null 2>&1 || die "Type-C connector must reach the SBU mux"
+fdtget -p "$dtb" "$typec/connector/altmodes/displayport" >/dev/null 2>&1 ||
+	die "Type-C connector must declare a DisplayPort altmode"
+expect_value typec-dp-vdo 1c46 \
+	fdtget -tx "$dtb" "$typec/connector/altmodes/displayport" vdo
+qmpphy=$(fdtget -ts "$dtb" /__symbols__ usb_1_qmpphy) ||
+	die "missing combo PHY symbol"
+expect_value qmpphy-status okay fdtget -ts "$dtb" "$qmpphy" status
+fdtget "$dtb" "$qmpphy" orientation-switch >/dev/null 2>&1 ||
+	die "combo PHY must advertise orientation-switch"
+dp=$(fdtget -ts "$dtb" /__symbols__ mdss_dp) ||
+	die "missing DisplayPort controller symbol"
+expect_value dp-status okay fdtget -ts "$dtb" "$dp" status
 vbus=$(fdtget -ts "$dtb" /__symbols__ pm8150b_vbus) ||
 	die "missing VBUS regulator symbol"
 expect_value vbus-status okay fdtget -ts "$dtb" "$vbus" status
