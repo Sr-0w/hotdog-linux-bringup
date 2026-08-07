@@ -443,23 +443,37 @@ the scene, the optics and the sensor's analogue front end from suspicion.
 VFE0 runs and completes buffers, which is why correctly sized frames come back.
 CSID0 sees nothing at all.
 
-**CSID0 is never configured.** Reading its registers through `/dev/mem`, at
-rest and during streaming, gives byte-identical results:
+**CSID0 is configured correctly.** An earlier reading of offsets 0x00 to 0x1c
+found them all zero and concluded the CSID was never programmed. That was
+wrong: those offsets are reserved on this generation. The configuration
+registers are at 0x100 and 0x300, and they hold sensible values:
 
-```
-CSID0: 000=10000000 004=00000000 008=00000000 00c=00000000
-       010=00000000 014=00000000 018=00000000 01c=00000000
-```
+| Register | Value | Meaning |
+| --- | --- | --- |
+| `0x100` RX_CFG0 | `0x00032103` | 4 active lanes, DL0..DL3 in order, PHY 0, D-PHY |
+| `0x104` RX_CFG1 | `0x00000041` | |
+| `0x300` RDI_CFG0 | `0x802bf007` | enabled, bit 31 set |
+| `0x308` RDI_CTRL | `0x00000001` | running |
+| `0x020` RX_IRQ_STATUS | `0x0097c0ff` | error bits latched |
 
-`0x10000000` at offset 0 is the hardware version register, so the block is
-mapped and readable. Every other register stays zero while streaming. If
-`csid_configure_stream()` were running against this base, they would not.
+So the CSID is told the right thing: four lanes, mapped in order, taking from
+CSIPHY0 over D-PHY, with its RDI path enabled. That matches the sensor and the
+device tree exactly.
 
-So the break is not the CSIPHY failing to lock, and not the sensor. Something
-between the pipeline walk and the CSID's register writes is not happening, or
-is happening against a different address than the one read here. The next thing
-to establish is whether `csid_set_stream` is called at all, and if it is,
-which base it writes to.
+What remains is that it takes no interrupts and latches error bits in
+`RX_IRQ_STATUS`, which is where a receiver that sees electrical activity it
+cannot decode ends up. That points back at the CSIPHY: the sensor transmits,
+the CSID is correctly told to receive, and nothing decodable arrives between
+them.
+
+### One correction to the clock-rate reasoning
+
+The settle count argument applies to `csiphy-2ph-1-0`, the older PHY, which
+computes it from the timer clock rate. This SoC uses `csiphy-3ph-1-0`, which
+does not. So the corrected clock rates in `r60` are right and worth keeping,
+because asking a clock for a rate it cannot produce is a real defect, but they
+were never a plausible cause of the black frames on their own. Said plainly
+because the earlier note implied otherwise.
 
 ### A real bug fixed on the way
 
@@ -484,7 +498,8 @@ above that the CSID is not configured at all.
 
 ## Remaining
 
-1. establish whether csid_set_stream runs, and against which base
+1. work out why the CSIPHY delivers nothing the CSID can decode, starting
+   from the latched RX_IRQ_STATUS error bits and the 3ph lane configuration
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
