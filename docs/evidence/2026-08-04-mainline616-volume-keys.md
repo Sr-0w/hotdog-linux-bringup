@@ -4,27 +4,35 @@ Date: 2026-08-04
 
 Device: OnePlus 7T Pro HD1913 (`hotdog`)
 
-Result: the reproducible pmaports `r6` package registers Power, Volume Down,
+Result: the reproducible pmaports `r6` package registered Power, Volume Down,
 Volume Up, and the existing S6SY761 touchscreen after a direct boot from the
-OnePlus bootloader. Physical press/release capture for the two volume keys is
-the remaining validation step.
+OnePlus bootloader. At that revision the physical press/release capture for the
+two volume keys was still pending. Later hardware validation corrected the
+Volume Down wiring and completed physical validation of both volume buttons;
+see the final section below.
 
 ## Device-tree fix
 
 The accepted `r5` image exposed only the PM8150 PON Power key. Revision `r6`
-adds the two missing volume-key paths without changing the kernel source,
+added the two missing volume-key paths without changing the kernel source,
 initramfs, command line, or boot-image layout:
 
-- PM8150 PON `resin` is enabled as `KEY_VOLUMEDOWN`;
-- PM8150 GPIO 6 is configured as an active-low, pulled-up input;
-- a `gpio-keys` child maps that GPIO to `KEY_VOLUMEUP` and marks it as a wake
+- PM8150 PON `resin` was enabled as `KEY_VOLUMEDOWN`;
+- PM8150 GPIO 6 was configured as an active-low, pulled-up input;
+- a `gpio-keys` child mapped that GPIO to `KEY_VOLUMEUP` and marked it as a wake
   source;
-- the existing PON Power key is explicitly kept enabled.
+- the existing PON Power key was explicitly kept enabled.
 
 The change is carried by
 `0018-arm64-dts-hotdog-enable-volume-keys.patch`. The package validator rejects
 builds that lose the required input drivers, key codes, GPIO binding, pinctrl
 state, pull-up, or wake-source property.
+
+The `r6` Volume Down mapping is historical rather than the final board
+wiring. A later physical check showed that pressing Volume Down changed neither
+the PM8150 PON `RESIN` real-time state nor its interrupt count. The current
+device tree therefore maps Volume Down to PM8150 GPIO7, while Volume Up remains
+on PM8150 GPIO6.
 
 ## Reproducible package
 
@@ -46,7 +54,7 @@ supervised reboot.
 
 ## Direct-boot attestation
 
-The fresh boot reported:
+The fresh `r6` boot reported:
 
 ```text
 Linux hotdog 6.16.0-sm8150 #7-oneplus-hotdog-mainline616 SMP PREEMPT ...
@@ -54,7 +62,7 @@ boot_b sha256: 33e20fce76b38122fe4b5fb8427eab044e7c594649e105e20ff9284e4e570f2e
 root: /dev/loop0p2 ext4 rw
 ```
 
-The source-built DTB registered four input devices:
+The source-built `r6` DTB registered four input devices:
 
 | Event | Driver | Linux code |
 |---|---|---|
@@ -66,9 +74,26 @@ The source-built DTB registered four input devices:
 The touchscreen module, USB networking, read-write root filesystem, DRM render
 node, Adreno driver, and GMU firmware remained available after the change.
 
+## Later physical validation — 2026-08-07
+
+The `r6` registration result above must not be mistaken for validation of its
+original Volume Down wiring. Subsequent checks on the same physical handset
+established the final input result:
+
+- **Volume Down:** PM8150 GPIO7 / `KEY_VOLUMEDOWN`; physical button operation is
+  hardware-validated and functional.
+- **Volume Up:** PM8150 GPIO6 / `KEY_VOLUMEUP`; physical button operation is
+  hardware-validated and functional.
+- **Old Volume Down path:** PM8150 PON `RESIN`; hardware-invalidated and no
+  longer used for the button.
+
+Both physical volume buttons can therefore be treated as supported for normal
+runtime input. Wake-source behavior, behavior across system suspend/resume, and
+full userspace policy validation remain separate tests and are not implied by
+this result.
+
 ## Remaining validation
 
-- capture physical press and release events for both volume keys;
-- verify key behavior while the display is active and blanked;
+- verify key behavior while the display is blanked;
 - validate key wake behavior and touchscreen operation across suspend/resume;
 - validate userspace key mappings under the selected graphical shell.
