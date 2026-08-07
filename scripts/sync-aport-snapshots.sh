@@ -115,6 +115,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
 		device/testing/device-oneplus-hotdog:postprocess-boot-avb.sh | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
+		device/testing/device-oneplus-hotdog:90-hotdog-single-battery.rules | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
 		device/testing/device-oneplus-hotdog:HiFi.conf | \

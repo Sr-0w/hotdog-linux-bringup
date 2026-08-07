@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=13
+pkgrel=14
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -26,6 +26,7 @@ source="
 	30-initramfs-firmware.files
 	51-qcom-sm8150.lua
 	90-hotdog-bringup-doas.conf
+	90-hotdog-single-battery.rules
 	postprocess-boot-avb.sh
 	powerdevilrc
 "
@@ -50,6 +51,8 @@ package() {
 		"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"
 	install -Dm644 "$srcdir/hotdog.conf" \
 		"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"
+	install -Dm644 "$srcdir/90-hotdog-single-battery.rules" \
+		"$pkgdir/usr/lib/udev/rules.d/90-hotdog-single-battery.rules"
 	install -Dm755 "$srcdir/postprocess-boot-avb.sh" \
 		"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"
 }
@@ -152,6 +155,7 @@ e827bb5e870adbd8ea3c19d85bef975f40c2b863620e80c850bc5fe67a65dba7a88a67d4237f9bc9
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
 7743ff21c39fc4991cec30ba61edf5b261d44d33a0693cd6f3021da7374c430a8c6bf4bd3619bb5ff48fe5fa41fd01eb8c40ad2a162ddc4869ef8d37901779b5  90-hotdog-bringup-doas.conf
+db5da5123383e14d168eb0c80073a98dc8b9b796dc6fdbfca70ed12e82ae96df1090ef643b9e430543514d4340735d7a81350dff446f06efd8da6e3ac5f11bbe  90-hotdog-single-battery.rules
 19335cacba66016775e9cae6905e4f3d2ed5e7795764b2ac8f8886f2aaa36cbe36f761b4c4888bbce18fc870bacd514229cbcfce6a1c307b36a8a4991d688e94  postprocess-boot-avb.sh
 4839584eb202655d6e55695e8e09559514c8d12a8d85db97ca0854c636c89ebdb82e2c671bc52607c07b4601f0284bab3430639a103ae3a8e22c26acd146919f  powerdevilrc
 "
