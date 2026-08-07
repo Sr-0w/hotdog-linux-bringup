@@ -1,0 +1,127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 01:15:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: describe the telephoto camera
+
+Slot 1 answered 0x30d5 on CCI0 master 0 at address 0x10, which is the S5K3M5
+chip id, so describe the sensor properly and connect it to CSIPHY0.
+
+Its analogue supply is the boost converter behind a load switch the slot drives
+itself, which is a fixed regulator here rather than a rail the sensor can
+reference directly. The digital core comes from PM8009 ldo2 and the I/O rail
+from PM8150L ldo1, both shared with the module's EEPROM.
+
+The identification aid is dropped from this slot: a real sensor node replaces
+it. The other three slots keep theirs until their sensors are confirmed the
+same way.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts | 80 +++++++++++++----
+ 1 file changed, 62 insertions(+), 18 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -223,6 +223,13 @@
+ };
+ 
+ &tlmm {
++	cam1_vana_default: cam1-vana-default-state {
++		pins = "gpio148";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	cam_mclk0_default: cam-mclk0-default-state {
+ 		pins = "gpio13";
+ 		function = "cam_mclk";
+@@ -794,6 +801,28 @@
+  * is worse than not offering it at all.
+  */
+ 
++/ {
++	/*
++	 * Slot 1's analogue supply is the boost converter behind a load switch
++	 * the slot owns, so it is a regulator in its own right rather than a
++	 * rail the sensor can simply reference.
++	 */
++	vreg_cam1_vana: regulator-cam1-vana {
++		compatible = "regulator-fixed";
++		regulator-name = "cam1_vana";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++
++		gpio = <&tlmm 148 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++
++		vin-supply = <&vreg_bob>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam1_vana_default>;
++	};
++};
++
+ &cci0 {
+ 	status = "okay";
+ };
+@@ -805,23 +834,32 @@
+  * GPIOs are given. Reset is active low.
+  */
+ &cci0_i2c0 {
+-	camera-scan@7f {
+-		compatible = "oneplus,hotdog-camera-scan";
+-		reg = <0x7f>;
++	/* Telephoto. Confirmed on hardware by its 0x30d5 chip id. */
++	camera@10 {
++		compatible = "samsung,s5k3m5";
++		reg = <0x10>;
+ 
+ 		clocks = <&camcc CAM_CC_MCLK0_CLK>;
+ 		assigned-clocks = <&camcc CAM_CC_MCLK0_CLK>;
+ 		assigned-clock-rates = <24000000>;
+ 
+-		vio-supply = <&vreg_l1c_1p8>;
+-		vana-supply = <&vreg_bob>;
+-		vdig-supply = <&vreg_l2f_1p2>;
++		afvdd-supply = <&vreg_bob>;
++		vdda-supply = <&vreg_cam1_vana>;
++		vddd-supply = <&vreg_l2f_1p2>;
++		vddio-supply = <&vreg_l1c_1p8>;
+ 
+ 		reset-gpios = <&tlmm 28 GPIO_ACTIVE_LOW>;
+-		vana-enable-gpios = <&tlmm 148 GPIO_ACTIVE_HIGH>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk0_default>;
++
++		port {
++			s5k3m5_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				link-frequencies = /bits/ 64 <602500000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -896,6 +934,17 @@
+ 
+ &camss {
+ 	status = "okay";
++
++	ports {
++		port@0 {
++			reg = <0>;
++
++			csiphy0_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&s5k3m5_ep>;
++			};
++		};
++	};
+ };
+ 
+ &mdss_dsi0_phy {
+--
+2.50.1

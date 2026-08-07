@@ -343,3 +343,47 @@ leaves the ultra-wide on slot 2.
 
 Only slot 1 is proven. The rest is inference and must be confirmed the same
 way before any driver is written against it.
+
+## The telephoto probes, revision `r59`
+
+`0063` replaces slot 1's diagnostic node with a real S5K3M5, at the address the
+scan found, and connects its endpoint to CSIPHY0.
+
+Two things had to be right beyond the address. The analogue supply is the boost
+converter behind a load switch the slot drives itself, so it is described as a
+fixed regulator with its own enable GPIO rather than as a rail the sensor
+references directly. And the link frequency has to be one the driver's own menu
+offers: an initial 482 MHz was rejected with `no matching link frequencies
+found`, and 602.5 MHz, the single entry in `s5k3m5_link_freq_menu`, is accepted.
+
+The sensor now binds and registers:
+
+```
+/sys/bus/i2c/devices/4-0010/driver -> s5k3m5
+v4l-subdev14: s5k3m5 4-0010
+```
+
+with no errors logged, alongside the full CAMSS pipeline:
+
+```
+v4l-subdev0..3   msm_csiphy0..3
+v4l-subdev4..5   msm_csid0, msm_csid1
+v4l-subdev6..13  msm_vfe0/msm_vfe1, rdi0..2 and pix
+video0..video7   msm_vfe0/1_video0..3
+/dev/media0
+```
+
+That is a complete media graph from a real image sensor to eight capture nodes.
+Probing is not capturing: the links still have to be enabled, formats matched
+along the chain, and a buffer dequeued before anything can be called working.
+But every piece the port has to supply is now present and bound.
+
+## Remaining
+
+1. configure the media graph and capture a frame from the telephoto
+2. confirm the other three slots the same way the telephoto was confirmed,
+   once the identification aid survives a slot with nothing to answer
+3. write IMX586, IMX481 and IMX471 from the downstream register sequences
+4. libcamera pipeline configuration
+5. the pop-up motor, which the front camera needs before it can see anything
+6. optionally the lite CSID and VFE instances, and a binding YAML

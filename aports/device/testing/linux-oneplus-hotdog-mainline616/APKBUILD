@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=57
+pkgrel=59
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -99,6 +99,7 @@ source="
 	0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
 	0061-media-i2c-add-a-camera-slot-identification-aid.patch
 	0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
+	0063-arm64-dts-hotdog-describe-the-telephoto-camera.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -215,5 +216,6 @@ c2caec0152b5a1a3473daf228fd1d178994099805c4d1a1465fc8d044d83018c22d7b00387497943
 9e40ec84023cf083135b7fa995a3309d9cec694561f0df0f5ed42cb88a20e6f33b10d8df92560b4e054417cdbbe296aafb06705d926740f6a611d0d0c96f105b  0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
 114248101838d2d0b205151c8db31095c75fab0fa84c4ad67778e563a0d0b0b3c721c5380f256ac63ff7a695f6e8bd0814f45c1b35e6c1d0308dfee2abf945a9  0061-media-i2c-add-a-camera-slot-identification-aid.patch
 fed21542cfc0b65ace8b61370989db594000a2ae0236da290091c366bbe9190642cdf2b6facd85f29a1434c44bb3038370aaf92f20f0f1046a9f1555429aa876  0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
+a4ca78e9869a903f792ce5388f330400155315512b3f726a0a65b0241453651f441c8ab31e9be1c9169eb8d774806a5b3d48e1252aa7ee06cae686ff8ae1bf5c  0063-arm64-dts-hotdog-describe-the-telephoto-camera.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
