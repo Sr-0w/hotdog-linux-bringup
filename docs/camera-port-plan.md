@@ -81,18 +81,41 @@ rates, which is knowledge reuse, exactly as this project's
 [OxygenOS reuse policy](evidence/2026-08-05-oxygenos-hardware-reference.md)
 already sets out for published OnePlus kernel source.
 
-## Order of work
+## Progress
 
-1. add `qcom,sm8150-camss` to `camss.c`: CSIPHY, CSID and VFE resource tables
-   plus interconnect paths, modelled on `sm6150` and widened to four CSIPHYs
-2. add the binding YAML
-3. add the `camss` node to `sm8150.dtsi` using the map above
-4. wire the hotdog device tree: CCI buses, CSIPHY assignment, sensor
-   regulators and their power sequences from the downstream tree
-5. take `s5k3m5` from upstream and confirm the telephoto path end to end first,
+**Done, revision `r51`.** The SoC side is written and builds.
+
+`0055` adds `qcom,sm8150-camss` to `camss.c`: four CSIPHYs, two CSIDs and two
+VFEs. The template is SDM845 rather than SM6150, because the 6.16 tree this
+port builds from predates the SM6150 backend and already carries SDM845, which
+is the same Titan generation and uses the same `csiphy_ops_3ph_1_0`,
+`csid_ops_gen2` and `vfe_ops_170`. Its clock names, rates and power domains
+carry over unchanged. The version reuses `CAMSS_845`, as SDM670 already does.
+
+`0056` adds the `camss` node to `sm8150.dtsi` with the register bases,
+interrupts, 31 clocks, IFE and Titan-top power domains, and the eight SMMU
+streams from the map above. One substitution was needed: SDM845's `soc_ahb`
+maps to `CAM_CC_CORE_AHB_CLK` here, because SM8150's camera clock controller
+has no `CAM_CC_SOC_AHB_CLK`.
+
+The node is left `disabled`, since it is only useful on a board that also
+describes sensors. Verified in the built package: `qcom-camss.ko` is produced,
+and the device tree carries the node with all eight register names, the three
+power-domain names and 31 clocks.
+
+The lite CSID and VFE instances the SoC also has are deliberately left out.
+The full instances are what a sensor needs to stream.
+
+## Remaining
+
+1. wire the hotdog device tree: enable `camss`, describe the two CCI buses,
+   assign CSIPHYs, and add sensor regulators and their power sequences from
+   the downstream tree
+2. take `s5k3m5` from upstream and confirm the telephoto path end to end first,
    because it is the only sensor that needs no new driver
-6. write IMX586, IMX481 and IMX471 using the downstream register sequences
-7. libcamera pipeline configuration
+3. write IMX586, IMX481 and IMX471 using the downstream register sequences
+4. libcamera pipeline configuration
+5. optionally add the lite instances, and a binding YAML before submission
 
-Step 5 is the useful milestone: it proves the CAMSS port with a sensor driver
+Step 2 is the useful milestone: it proves the CAMSS port with a sensor driver
 that already exists, before any new sensor driver is written.
