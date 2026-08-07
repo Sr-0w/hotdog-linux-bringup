@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=55
+pkgrel=57
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -97,6 +97,8 @@ source="
 	0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
 	0059-arm64-dts-hotdog-add-the-camera-pmic-digital-rails.patch
 	0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
+	0061-media-i2c-add-a-camera-slot-identification-aid.patch
+	0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -150,7 +152,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-fdcb0bc52de9fc2e3716520c82f47c6031ffb3dfaf46b82f6818b38049e4df56c17d7cdcaeec58433caa3f553cb9b5b6e675fbabf5da5cbe42fdc5ac3057eeb6  config-oneplus-hotdog-mainline616.aarch64
+3a2c9cf653b20112000c8ac567bd67ba96104e718f6ae5f72405ed8973a0f73c267216e195a83070aa157076a7e97ed5c9aeb7d20bb1e5c873811255bb3ee457  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -209,7 +211,9 @@ c904058669ca4deedfcf6ed324fc71e2a2ed1123a76afd70863e64e4d83857cad66f46c0ff7d7dac
 32f9003c57564da1ba7e54fba63af2e11f4bb4b81778244c01afb7115e619db8423b1447f51449afc48a34446d2b7f79e622a25c5a0cb5686d5582ef56cfb299  0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
 986f22880c735833860fdbe6e373673632f9686676b5fb35e9224a80baf29036ec89ce5669f80a80ae485702bb63575cd9da164c2d896d8dd64a742396a339b9  0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
 ce63d59300ef51e4a1bb1b33ef778683c0917ff9991281f44ac7531be00a0c710e1f425623d365a8e982b545180d098cbc5dcd082832b6931299a2c0f55bbd10  0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
-a34801571ae3611561a21a779257f1887d383209380acb03a4c39a75f1e937395bf92ed1034dd990a171c05529bdea6cfe951a6d24d85e8f57e9731202a09217  0059-arm64-dts-hotdog-add-the-camera-pmic-digital-rails.patch
+c2caec0152b5a1a3473daf228fd1d178994099805c4d1a1465fc8d044d83018c22d7b00387497943d809b46df6a63ee08c7271494c4d9a1a11e238551b6c1b20  0059-arm64-dts-hotdog-add-the-camera-pmic-digital-rails.patch
 9e40ec84023cf083135b7fa995a3309d9cec694561f0df0f5ed42cb88a20e6f33b10d8df92560b4e054417cdbbe296aafb06705d926740f6a611d0d0c96f105b  0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
+114248101838d2d0b205151c8db31095c75fab0fa84c4ad67778e563a0d0b0b3c721c5380f256ac63ff7a695f6e8bd0814f45c1b35e6c1d0308dfee2abf945a9  0061-media-i2c-add-a-camera-slot-identification-aid.patch
+fed21542cfc0b65ace8b61370989db594000a2ae0236da290091c366bbe9190642cdf2b6facd85f29a1434c44bb3038370aaf92f20f0f1046a9f1555429aa876  0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

@@ -270,3 +270,76 @@ What this proves independently of any sensor work: the register bases, the
 interrupts, the 31 clocks, the power domains, the SMMU streams and the CCI pin
 configuration are all correct, and the bus physically reaches the camera
 modules.
+
+## The first sensor is identified, revision `r56`
+
+The board says nothing about which sensor sits in which slot, and a sensor
+answers nothing until it is powered, clocked and out of reset. `0061` adds a
+small diagnostic that powers a slot exactly as a sensor driver would and then
+reads register 0x0000, where both Sony and Samsung report their model.
+
+On the handset:
+
+```
+hotdog-cam-scan 4-007f: slot powered, MCLK at 24000000 Hz, scanning bus
+hotdog-cam-scan 4-007f: address 0x10 answers, register 0x0000 = 0x30d5
+```
+
+`0x30d5` is `S5K3M5_CHIP_ID` in the upstream driver. So the telephoto is on
+**slot 1**, at **address 0x10**, reached through CCI0 master 0, wired to
+CSIPHY0 and clocked by MCLK0.
+
+This settles several open questions at once. The slot-to-bus mapping derived
+from the stock `cci-device` and `cci-master` pairs is right. The PM8009 rails
+and the GPIO-switched analogue supply are right, because the sensor would not
+answer otherwise. And the 19.2 versus 24 MHz question is answered in favour of
+24 MHz: the sensor replies at the rate the upstream driver requires, so the
+stock figure belongs to the vendor's own register sequences, not to the board.
+
+### The slot map, now anchored to hardware
+
+| Slot | CCI bus | CSIPHY | MCLK | reset | analogue enable | digital rail |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | i2c-4? no: CCI0 m1 | 1 | MCLK1 | tlmm 30 | tlmm 11, tlmm 29, pm8150l gpio1 | pm8009 ldo1, 1.104 V |
+| 1 | CCI0 master 0 | 0 | MCLK0 | tlmm 28 | tlmm 148 | pm8009 ldo2, 1.2 V |
+| 2 | CCI1 master 0 | 2 | MCLK2 | tlmm 12 | pm8150l gpio12 | pm8009 ldo3, 1.056 V |
+| 3 | CCI1 master 1 | 3 | MCLK3 | tlmm 23 | pm8150l gpio2 | pm8009 ldo4, 1.056 V |
+
+Slot 1 is confirmed by hardware. The other three are described but not yet
+confirmed, because the scan does not survive them, see below.
+
+### The diagnostic is not yet safe on the other three slots
+
+In `r56` the driver ran during boot. It identified slot 1 and then took a null
+dereference, which left the handset without networking and required a fastboot
+recovery. `r57` makes it inert unless loaded with `scan=1`, serialises the
+slots because the two masters of a CCI block share an interrupt, and tries only
+the addresses these sensors actually use.
+
+That was enough to make boot safe, and the handset now boots normally with the
+module present. It was not enough to make the scan itself survive: running it
+by hand still resets the handset partway through. Since it only ever powers
+hardware and reads, the fault is in how a slot with no answering device is
+handled, not in the slots themselves.
+
+This is a diagnostic, not a deliverable. Slot 1 is confirmed and that is the
+one needed to bring a real sensor up, so the next step is to describe the
+S5K3M5 properly rather than to keep debugging the aid.
+
+### What the vendor modules say about the other three
+
+The stock per-sensor modules name four sensors, and slot 0 is the only slot
+carrying an actuator, an OIS block, a second analogue rail and `CAM_PVDD`,
+which is the signature of the stabilised main camera. Slot 3 is the only one
+with a different orientation, 270 degrees of roll, which is the pop-up. That
+leaves the ultra-wide on slot 2.
+
+| Slot | Sensor | Basis |
+| --- | --- | --- |
+| 0 | Sony IMX586, main | actuator, OIS, extra rails |
+| 1 | Samsung S5K3M5, telephoto | confirmed by chip ID |
+| 2 | Sony IMX481, ultra-wide | elimination |
+| 3 | Sony IMX471, pop-up front | orientation |
+
+Only slot 1 is proven. The rest is inference and must be confirmed the same
+way before any driver is written against it.

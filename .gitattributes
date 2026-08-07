@@ -12,3 +12,4 @@
 
 # Existing Git blob; do not require Git LFS smudge/filter support for clones.
 aports/device/testing/linux-oneplus-hotdog-lineage414/stock-hotdog-dtbpack.dtb -filter -diff -merge -text
+aports/**/*.patch -text
