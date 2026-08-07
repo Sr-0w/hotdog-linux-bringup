@@ -49,7 +49,7 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Reboot | Historical module result; r5 built-in path untested | Under the historical module configuration, the exact 6.17 `qcom-wdt.ko` created `/dev/watchdog*` and produced a physical reboot. The r5 package has no watchdog module member because `CONFIG_QCOM_WDT=y`; built-in watchdog behavior is not hardware-validated. |
 | Suspend | Freezing works, device suspend blocked on the touchscreen | Revision `r37` enables `CONFIG_PM_DEBUG` and `CONFIG_DPM_WATCHDOG`, so `/sys/power/pm_test` can exercise suspend one stage at a time with an automatic five-second resume and no risk of failing to wake. Only `s2idle` is offered; there is no `deep` state. `pm_test=freezer` passes. `pm_test=devices` fails because `s6sy761_resume` returns `-ENODEV`: the driver requires a boot-complete event that only appears after a real restart, but `avdd` shares `ldo10` with the WCN3990 Wi-Fi chip and stays enabled, so the controller never power-cycles. Revisions `r38` to `r41` add optional `reset-gpios` support, a bounded wait for the boot-complete event and a retried restart, and describe GPIO 54, confirmed as the reset line by the stock device tree. Resume still fails. The driver owns the line, the line moves, `ldo1` reads enabled throughout, the bus returns data rather than errors, and an unbind/rebind seconds later succeeds on its first read; during resume the controller answers only zeroes for the full 1.7 s retry window. The cause is not yet identified. Levels above `devices`, a real s2idle, touch wake, and display blank/unblank remain untested. |
 | Reboot mode | Bootloader mode hardware-validated through kexec | A mainline 6.17 kexec boot probed PM8150 PON with `mode-bootloader = <2>` and `RESTART2(bootloader)` returned directly to fastboot. Recovery-mode selection and early direct-boot integration remain unvalidated. |
-| Touch and keys | Touchscreen and Volume Down hardware-validated; Volume Up registration only | The S6SY761 touchscreen is hardware-validated for taps, drags, pressure, continuous X/Y coordinates, multitouch, correct Weston/Plasma orientation, and responsive graphical input. The original `r6` Volume Down mapping through PM8150 PON `RESIN` was later hardware-invalidated: physical presses changed neither the real-time RESIN state nor its interrupt count. The corrected device-tree mapping uses PM8150 GPIO7 for `KEY_VOLUMEDOWN` and GPIO6 for `KEY_VOLUMEUP`. Physical Volume Down press/release is now hardware-validated and functional. Volume Up physical validation plus key wake and suspend/resume behavior remain open. |
+| Touch and keys | Touchscreen and both volume buttons hardware-validated | The S6SY761 touchscreen is hardware-validated for taps, drags, pressure, continuous X/Y coordinates, multitouch, correct Weston/Plasma orientation, and responsive graphical input. The original `r6` Volume Down mapping through PM8150 PON `RESIN` was later hardware-invalidated: physical presses changed neither the real-time RESIN state nor its interrupt count. The corrected device-tree mapping uses PM8150 GPIO7 for `KEY_VOLUMEDOWN` and GPIO6 for `KEY_VOLUMEUP`. Physical press/release operation of both Volume Down and Volume Up is hardware-validated and functional. Key wake and suspend/resume behavior remain open. |
 | Firmware packages | Packaging complete, GPU, radio, and ADSP runtime validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads under `/usr/lib/firmware`. The A630 SQE, A640 GMU, handset ZAP, MPSS, ADSP, WCN3990 Wi-Fi, and revision-21 Bluetooth payloads are now runtime-validated. Other payloads and redistribution approval remain separate requirements. |
 | Wi-Fi | Association and basic Internet reachability working | Revision `r13` boots MPSS, binds `ath10k_snoc` to WCN3990, exposes `wlan0`, and scans both bands. Revision `r15` associates through NetworkManager and reaches the local gateway plus an external IPv4 endpoint without packet loss while Bluetooth is active. Sustained throughput, factory MAC recovery, power management, and suspend remain open. |
 | Bluetooth | Scanning and HID connections working; suspend open | Revision `r15` directly loads `crbtfw21.tlv` and `crnv21.bin`, exposes BlueZ, scans, and sustains real HID connections. One run entered `900e` at 275 seconds without a panic or system-suspend entry. Later clean windows completed for 600 seconds with Bluetooth blocked, 600 seconds with the controller active and connected, and 900 seconds after the controller was powered off. Repeated stability, audio profiles, power management, and suspend/resume remain open. |
@@ -85,14 +85,14 @@ followed eventually by moving the hotdog footer contract into generic
 `boot-deploy` support. Hardware work can proceed in parallel:
 the S6SY761 touchscreen, Adreno 640 render path, native dynamic 60/90 Hz scanout, Plasma
 Mobile session, MPSS startup, WCN3990 association, Bluetooth HID connections,
-validated Volume Down key, internal speakers, handset microphone, fuel gauge,
-and powered-dock USB host/SuperSpeed/DisplayPort video paths are complete at
-basic runtime level. The remaining queue includes stable Wi-Fi and Bluetooth
-addressing, radio power management, extended charging policy, Volume Up physical
-validation, display blank/unblank reliability, telephony, remaining audio paths,
-sensors, cameras, and suspend. Temporary DMA and bootloader-overlay workarounds,
-the laboratory `userdata` deployment, and the device-specific kernel package
-must be replaced with upstreamable integration before submission.
+both hardware-validated volume buttons, internal speakers, handset microphone,
+fuel gauge, and powered-dock USB host/SuperSpeed/DisplayPort video paths are
+complete at basic runtime level. The remaining queue includes stable Wi-Fi and
+Bluetooth addressing, radio power management, extended charging policy, key
+wake behavior, display blank/unblank reliability, telephony, remaining audio
+paths, sensors, cameras, and suspend. Temporary DMA and bootloader-overlay
+workarounds, the laboratory `userdata` deployment, and the device-specific
+kernel package must be replaced with upstreamable integration before submission.
 
 ## Current validation queue
 
