@@ -704,7 +704,7 @@ against the driver's own inputs and found wrong:
 | CSID receive config | correct | 4 lanes, PHY 0, D-PHY |
 | CSID decode config | correct | RAW10, payload only, enabled |
 | SMMU translation | not faulting | no context faults during capture |
-| frame timing | arriving | capture locks to 30.00 fps, the sensor's rate |
+| frame timing | **unproven** | 30.00 fps, but see the RDI1 result below |
 | pixel data | **absent** | every byte of every buffer is zero |
 
 What is left is the VFE write master, the only stage never inspected, plus the
@@ -713,9 +713,31 @@ instrumentation rather than register reads from userspace: the write master's
 configuration is not exposed anywhere readable, and the error bits need decoding
 against a header this tree does not carry.
 
+### A second write master behaves differently, and it undercuts the 30 fps claim
+
+Routing the same stream to `msm_vfe0_rdi1` and capturing from `/dev/video1`
+does not return buffers at all: the capture blocks until killed, where RDI0
+returns them at 30.00 fps.
+
+That difference matters more for what it says about RDI0 than about RDI1. The
+earlier reasoning here was that 30.00 fps, exactly the sensor's rate, proves
+frame timing reaches the capture node. If a second write master fed from the
+same CSID blocks entirely, that inference is no longer safe: RDI0's steady
+30 fps may be the VFE completing buffers on its own cadence rather than on the
+sensor's, and the coincidence with 30 fps may be the configured frame rate
+rather than evidence of received timing.
+
+This has not been pinned down. RDI1 may equally be blocking because its link
+and pad formats were set up incorrectly in this one experiment. Recorded as an
+observation that weakens a previous conclusion, not as a finding that replaces
+it, and the "frame timing arrives" row of the table above should be treated as
+unproven until it is settled.
+
 ## Remaining
 
-1. instrument the VFE RDI write master, the one stage never inspected
+1. settle whether frame timing genuinely reaches the VFE, since the 30 fps
+   evidence for it is now in doubt
+2. instrument the VFE RDI write master, the one stage never inspected
 2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
