@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=51
+pkgrel=52
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -93,6 +93,7 @@ source="
 	0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
 	0055-media-camss-add-sm8150-support.patch
 	0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
+	0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -203,5 +204,6 @@ b79c4e065cf8eedb729d8376a07837b576806c87f61a8ca4fc04d8b0922948c3f67b5f614f3916bd
 4f1de819d6921636844f4260df7132ec7edc3d0f55ed62a5860e7927e9b4f98d86419f85743e0db1d5e918240b0de97c78452836fdde1814f5111d70b8d0bd37  0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
 c904058669ca4deedfcf6ed324fc71e2a2ed1123a76afd70863e64e4d83857cad66f46c0ff7d7dac718b0c723e730a80a030d1e90e8d5a5cc0f71f37ebc6904c  0055-media-camss-add-sm8150-support.patch
 32f9003c57564da1ba7e54fba63af2e11f4bb4b81778244c01afb7115e619db8423b1447f51449afc48a34446d2b7f79e622a25c5a0cb5686d5582ef56cfb299  0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
+986f22880c735833860fdbe6e373673632f9686676b5fb35e9224a80baf29036ec89ce5669f80a80ae485702bb63575cd9da164c2d896d8dd64a742396a339b9  0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

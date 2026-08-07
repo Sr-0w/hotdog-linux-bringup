@@ -106,6 +106,33 @@ power-domain names and 31 clocks.
 The lite CSID and VFE instances the SoC also has are deliberately left out.
 The full instances are what a sensor needs to stream.
 
+**Also done, revision `r52`.** `0057` adds the two CCI blocks, which is how
+sensors are reached at all: nothing can talk to them over a QUP bus. SM8150 has
+two blocks of two buses each, unlike SDM845's one. Both are described with
+their register bases, interrupts, per-block clocks and pin states, and left
+disabled. The CCI driver has no SM8150 entry but the block is the SDM845 one,
+so the compatible falls back to it.
+
+## The board layout, recovered
+
+The stock overlay carries two sensor layouts, because the vendor image is
+shared. `fragment@47` has seven sensors and targets the generic Qualcomm
+reference; `fragment@80` has four, each with its own `CAM_VANA` rail, which
+matches this handset's three rear sensors plus the pop-up:
+
+| Slot | CSIPHY | CCI master |
+| --- | --- | --- |
+| 0 | 1 | 1 |
+| 1 | 0 | 0 |
+| 2 | 2 | 0 |
+| 3 | 3 | 1 |
+
+Which physical sensor sits in which slot is not stated anywhere in the device
+tree, and should be read from the hardware by its chip ID rather than assumed.
+
+CCI pins are GPIO 17/18 and 19/20 for the first block, 31/32 and 33/34 for the
+second. MCLK0 is GPIO 13.
+
 ## Remaining
 
 1. wire the hotdog device tree: enable `camss`, describe the two CCI buses,
