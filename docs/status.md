@@ -51,7 +51,8 @@ identity is HD1911 even though the physical handset is labelled HD1913.
 | Firmware packages | Packaging complete, GPU runtime validated | `firmware-oneplus-hotdog` `20241212-r0` produces eight APKs and 16 payloads under `/usr/lib/firmware`. The A630 SQE, A640 GMU, and handset ZAP payloads are now runtime-validated. Other payloads and redistribution approval remain separate requirements. |
 | Wi-Fi/Bluetooth | Not enabled | The usrmerged firmware packages exist, but the accepted pmaports boot exposes neither a WLAN interface nor `/dev/rfkill`. The staged `r11` MPSS test deliberately keeps WCN3990 disabled; runtime loading and connectivity remain pending. |
 | ADSP remoteproc | Reproducible candidate; hardware validation pending | The unflashed `r12` candidate enables only the SM8150 ADSP PAS remote processor with the exact hotdog firmware and existing 30 MiB reserve. Two strict builds and two AVB assemblies are byte-for-byte identical. ADSP firmware boot, GLINK/APR discovery, and 60-second stability remain unproven. |
-| Audio | Not enabled | The exact accepted pmaports boot reports no ALSA sound cards. Revision `r12` deliberately leaves CDSP, SLIMbus, the external speaker-codec bus, and the sound-card topology disabled, so it makes no speaker, earpiece, microphone, headphone, or Bluetooth-audio claim. |
+| SLIMbus/WCD9340 | Reproducible candidate; hardware validation pending | The unflashed `r13` candidate enables the SM8150 NGD transport and internal WCD9340 MFD, GPIO, codec, and SoundWire nodes. Two strict builds and two AVB assemblies are byte-for-byte identical; runtime enumeration and binding remain unproven. |
+| Audio | No sound card | The exact accepted pmaports boot reports no ALSA cards. Revision `r13` still omits the machine card and external TFA98xx amplifiers, so it makes no speaker, earpiece, microphone, headphone, or Bluetooth-audio claim. |
 | MPSS/RMTFS | Reproducible candidate; hardware validation pending | The unflashed `r11` candidate enables MPSS with the hotdog modem firmware, restores the 2 MiB RMTFS region at `0xf2901000`, installs the OpenRC service with storage writes disabled, and keeps WCN3990 off. Two strict builds and two AVB assemblies are byte-for-byte identical. Runtime MPSS, QRTR, and remoteproc stability remain unproven. |
 | Modem services | Not validated | The `r11` gate covers only MPSS, read-only RMTFS, and QRTR transport availability. QMI, ModemManager, SIM, radio, data, calls, SMS, and emergency behavior remain open. |
 | Cameras | Not validated | Camera pipeline support is not started. |
@@ -78,8 +79,9 @@ fresh SSH proved the new kernel and filesystem UUIDs. Hardware enablement can
 therefore proceed over the package-built system:
 the S6SY761 touchscreen and Adreno 640 render path are complete at basic
 runtime level, and both volume-key devices now register. The remaining queue
-is battery and charging, then isolated MPSS/RMTFS, isolated ADSP, physical key
-validation, Wi-Fi/Bluetooth, audio transports and codecs, modem services,
+is battery and charging, then isolated MPSS/RMTFS, isolated ADSP, isolated
+SLIMbus/WCD9340, physical key validation, Wi-Fi/Bluetooth, the audio card and
+routes, modem services,
 sensors, cameras, and suspend. Temporary DMA and
 bootloader-overlay workarounds, the laboratory `userdata` deployment, and the
 device-specific kernel package must be replaced with upstreamable integration

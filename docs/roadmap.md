@@ -69,8 +69,10 @@ workloads, and registered Power plus volume-key inputs.
 
 - hardware-validate the isolated `r12` ADSP remoteproc candidate before
   enabling an audio transport or sound card
-- enable LPASS/SLIMbus and construct a codec topology without misrepresenting
-  the unsupported TFA9894 external speaker amplifier
+- hardware-validate the isolated `r13` SLIMbus/WCD9340 transport candidate
+  before constructing a machine sound card
+- construct the SM8150 codec topology without misrepresenting the unsupported
+  external TFA98xx speaker amplifiers
 - validate earpiece, microphone, headphone, and speaker routing separately
 - suspend, resume, and idle power
 - camera sensors and ISP integration

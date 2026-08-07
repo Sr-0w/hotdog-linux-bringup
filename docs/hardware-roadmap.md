@@ -256,7 +256,31 @@ stability as its own dependency gate. The handset uses an external TFA9894
 speaker amplifier that is not represented by the current mainline binding;
 do not describe it as TFA9895 merely to make a later sound card probe.
 
-## 10. Wi-Fi
+## 10. SLIMbus and WCD9340
+
+**Proven current state.** Revision `r13` is a reproducible preflight candidate
+that enables the SM8150 SLIMbus NGD topology and internal WCD9340 transport on
+top of `r12`. Its GPIO 143 reset, GPIO 123 interrupt, five 1.8 V supplies,
+9.6 MHz clock, GPIO child, and SoundWire master are statically validated. The
+machine card and external speaker amplifiers remain absent. See the
+[WCD9340 preflight](evidence/2026-08-04-mainline616-wcd9340-preflight.md).
+
+**Next experiment.** Only after the isolated `r12` ADSP gate passes, preserve
+the accepted `r6` fallback, write and read back `r13`, attest its exact image,
+then run `collect-mainline616-wcd9340.sh --require-ready`. Do not add a sound
+card, load modules manually, or change mixer state during this run.
+
+**Success criteria.** ADSP remains running; the NGD controller and both
+`217:250` devices enumerate; WCD9340 MFD, codec, GPIO, and SoundWire children
+bind for at least 60 seconds; and no SLIM timeout/NACK, reset/regulator error,
+or accepted-subsystem regression appears. No ALSA card is expected yet.
+
+**Risks and fallback.** The NGD controller depends on ADSP/QMI readiness and a
+bad reset or supply contract can leave the codec silent or repeatedly defer.
+Treat any remoteproc restart, logical-address failure, or WCD9340 bring-up
+error as a failed transport gate and restore the accepted fallback.
+
+## 11. Wi-Fi
 
 **Proven current state.** Firmware packaging exists, but runtime Wi-Fi is not
 validated. The K1 DTS deliberately disables the WCN3990 Wi-Fi node, and the
@@ -283,7 +307,7 @@ crash the WLAN subsystem or fault the Apps SMMU. Disable Wi-Fi and retain USB
 networking as the fallback. Do not combine first Wi-Fi validation with
 Bluetooth or modem enablement.
 
-## 11. USB host mode
+## 12. USB host mode
 
 **Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
 and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,

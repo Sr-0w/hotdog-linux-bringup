@@ -125,6 +125,15 @@ and firmware properties. This is an unflashed dependency candidate, not an
 audio-support claim; see the
 [ADSP preflight](docs/evidence/2026-08-04-mainline616-adsp-preflight.md).
 
+Revision `r13` adds only the next audio dependency layer: the SM8150 SLIMbus
+transport and internal WCD9340 codec topology. The reset GPIO, interrupt, and
+1.8 V rails are tied to the HD1913 stock contract and established upstream
+SM8150 descriptions. Two strict builds, including one without `ccache`, and
+two AVB assemblies are byte-for-byte reproducible. The sound card and external
+speaker amplifiers remain disabled, so this is still an unflashed transport
+candidate rather than an audio-support claim; see the
+[WCD9340 preflight](docs/evidence/2026-08-04-mainline616-wcd9340-preflight.md).
+
 An attempted live register comparison against R6 was stopped permanently after
 the downstream `ufshcd_hold()` path timed out leaving hibern8 and entered a
 broken vendor recovery path. The helper now fails closed. D16 instead uses the
@@ -162,8 +171,9 @@ and D14 ruled out its attempted reset-order change as sufficient.
 | Battery and charging | Reproducible candidate; hardware validation pending | The `r10` DTB enables the PM8150B fuel gauge and charger with conservative limits. The package and AVB image pass reproducibility and static safety gates, but neither has been accepted on the phone yet. |
 | MPSS and RMTFS | Reproducible candidate; hardware validation pending | The unflashed `r11` image enables MPSS, restores the modem-expected RMTFS region at `0xf2901000`, and starts RMTFS read-only. WCN3990 remains disabled so the first runtime test measures only this dependency layer. |
 | ADSP remoteproc | Reproducible candidate; hardware validation pending | The unflashed `r12` image enables only the SM8150 ADSP PAS remote processor with the packaged hotdog firmware. Sound, SLIMbus, CDSP, and the unsupported TFA9894 speaker path remain disabled for an isolated runtime gate. |
+| SLIMbus/WCD9340 | Reproducible candidate; hardware validation pending | The unflashed `r13` image enables the internal codec transport, WCD9340 MFD/GPIO/codec, and SoundWire master while still omitting every machine-card and external-amplifier node. |
 | RAM | Direct map working; bridge map constrained | Direct boot exposes the bootloader-provided multi-gigabyte map. The historical kexec bridge intentionally constrains its payload to the low bank. |
-| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. The accepted `r6` image still exposes no sound card, Wi-Fi/rfkill device, battery class, MPSS, or ADSP. Unflashed `r10` power, `r11` MPSS/RMTFS, and `r12` ADSP candidates are ready for separate validation. Audio transports/codecs, Bluetooth, modem services, cameras, sensors, physical key validation, and suspend remain open. |
+| Remaining peripherals | Bring-up required | Power, touchscreen, display, GPU rendering, and volume-key registration work. The accepted `r6` image still exposes no sound card, Wi-Fi/rfkill device, battery class, MPSS, or ADSP. Unflashed `r10` power, `r11` MPSS/RMTFS, `r12` ADSP, and `r13` WCD9340 candidates are ready for separate validation. The audio card/routes, Wi-Fi/Bluetooth, modem services, cameras, sensors, physical key validation, and suspend remain open. |
 
 See [docs/status.md](docs/status.md) for the detailed support matrix.
 

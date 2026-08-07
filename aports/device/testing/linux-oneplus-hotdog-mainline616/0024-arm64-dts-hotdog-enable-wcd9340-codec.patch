@@ -1,0 +1,44 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 14:00:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable WCD9340 codec transport
+
+Enable the SM8150 SLIMbus topology and provide the WCD9340 supplies and reset
+line used by the OnePlus 7T Pro. The reset GPIO and 1.8 V rail match both the
+stock HD1913 device tree and the upstream SM8150 WCD9340 integration.
+
+Keep the machine sound card and external speaker amplifiers disabled. This
+stage is intentionally limited to probing the SLIMbus interface, WCD9340 MFD,
+GPIO controller, and SoundWire master after the ADSP remoteproc gate.
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -14,6 +14,7 @@
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+ #include "sm8150-oneplus-common.dtsi"
++#include "sm8150-wcd9340.dtsi"
+ 
+ / {
+ 	model = "OnePlus 7T Pro";
+@@ -238,6 +239,15 @@
+ 	status = "okay";
+ };
+ 
++&wcd9340 {
++	reset-gpios = <&tlmm 143 GPIO_ACTIVE_HIGH>;
++	vdd-buck-sido-supply = <&vreg_s4a_1p8>;
++	vdd-buck-supply = <&vreg_s4a_1p8>;
++	vdd-tx-supply = <&vreg_s4a_1p8>;
++	vdd-rx-supply = <&vreg_s4a_1p8>;
++	vdd-io-supply = <&vreg_s4a_1p8>;
++};
++
+ &wifi {
+ 	status = "disabled";
+ };
+-- 
+2.50.1

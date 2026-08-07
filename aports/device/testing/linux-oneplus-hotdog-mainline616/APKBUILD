@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=12
+pkgrel=13
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -20,11 +20,14 @@ makedepends="
 	bison
 	clang
 	dtc
+	elfutils-dev
 	findutils
 	flex
 	lld
+	linux-headers
 	llvm
 	openssl-dev
+	pahole
 	perl
 	python3
 	zstd
@@ -60,6 +63,7 @@ source="
 	0021-arm64-hotdog-use-linked-image-size.patch
 	0022-arm64-dts-hotdog-enable-mpss-rmtfs.patch
 	0023-arm64-dts-hotdog-enable-adsp-remoteproc.patch
+	0024-arm64-dts-hotdog-enable-wcd9340-codec.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -123,7 +127,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-dc887240f058fb3cec90bb65207e813838d7284f20533b5edef0c42e9c53a4eeef1297d31003d289f7b3b19a7f6193a88f4cd5bca3d36ec1121c21f1094283cb  config-oneplus-hotdog-mainline616.aarch64
+a03110112af405e79a14cd1c89a9d25cfac40573b8e182e048734b9f5433ff70ee51e42a96b01491d326289124784e60c4db7688f8563449260e2ff4b8a635d3  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -147,5 +151,6 @@ af1aa78238bb70d4cb90be8037357682841b71c1dabf95fa7bf4a77b20b8d1872b616de92fb1fbec
 87bcf53f4dcf919df98cde77a612f786e332a08a20053fc66787b4a4d1875aa8c4dc08fd310620a7eb8dc09c56634293a283366075e47218ca68d354e2406ff0  0021-arm64-hotdog-use-linked-image-size.patch
 e118d7f57b69301d67617ad419366103981945546274f9c6a59cbd396b6d105ed5a4244c94fb78af6adf5b98c4efd9fa3e6b113fc41faeaf943baeddd3f45a1e  0022-arm64-dts-hotdog-enable-mpss-rmtfs.patch
 eb0a00bc1fc2dbc814b98ee7fb42a62900a636a8f90742ef7b847582b3525d1eab05001e5cfb5aa16eb0554ee3530606bf63a56799b2f6d371666fe025cd4cc9  0023-arm64-dts-hotdog-enable-adsp-remoteproc.patch
-fc12bb25bd3bc408d7809c0463b6294273026cca887b8c7d08b1d12b5fc9474831da86e654e83eab9c955db4b488cad1d81022a00cf648c4e5997f73741769da  validate-mainline616-build.sh
+0a9c2a38e3a716c44227ea24e54c279f91dce4e0c58d4f541255b76362c3d03bfbdb9c4b0076206862bfa3bf3fac7edf683b1f5f80013508ae9d0d27f75ff780  0024-arm64-dts-hotdog-enable-wcd9340-codec.patch
+81da10b84a383c85958f83a8bd2d92ea9b5ae7eec4af03b21b1277857952b5854c895c117d092ff159dfbf8456b3a6f86ba2f5be1c56c173eff9042b796bee70  validate-mainline616-build.sh
 "

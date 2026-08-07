@@ -31,6 +31,12 @@ reserve while keeping CDSP, SLIMbus, the speaker-codec bus, and the sound-card
 topology disabled. It is reproducibly built but remains a preflight candidate
 until the `r10` and `r11` gates pass and ADSP stability is tested on hardware.
 
+Revision `r13` stages the next layer independently from the machine card. It
+enables the SM8150 SLIMbus NGD topology and internal WCD9340 MFD, codec, GPIO,
+and SoundWire nodes using the stock-derived GPIO 143 reset and PM8150 S4 1.8 V
+supplies. The external speaker-amplifier bus and `/sound` remain disabled, so
+this revision is a transport preflight candidate rather than audio support.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -49,9 +55,10 @@ until the `r10` and `r11` gates pass and ADSP stability is tested on hardware.
   active-low, pulled-up Volume Up input through `gpio-keys`.
 - MPSS uses the handset-specific modem firmware and the downstream-compatible
   high RMTFS address. WiFi remains disabled for the isolated MPSS gate.
-- ADSP uses the handset-specific firmware and existing reserved memory. CDSP,
-  SLIMbus, the TFA9894 speaker path, and the sound card remain disabled for the
-  isolated ADSP gate.
+- ADSP uses the handset-specific firmware and existing reserved memory. CDSP
+  remains disabled for the isolated dependency sequence.
+- SLIMbus and WCD9340 use the upstream SM8150 topology plus the HD1913 reset
+  and supply contract. The external TFA98xx path and sound card remain absent.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -104,6 +111,18 @@ Two deterministic AVB assemblies produced SHA256
 `390c16cefad408322672cc4c4a94a691af1e79dacd6aba2c0869eadc4d8ca80d`.
 These hashes are static preflight evidence only; `r12` has not been accepted on
 hardware and does not claim a working sound card.
+
+The current `r13` preflight build is reproducible across a normal strict build
+and a strict `--no-ccache` build. Both produced the same 25,502,739-byte APK
+with SHA256
+`0644c117b1a8e7719b9980fc1781a57f5e6fdf02429847a6b09f24f33ed9a47d`.
+Its kernel and DTB hashes are respectively
+`a6d9a418f5e632185016f50edc12ed5dc055478e9040b73947d77422c4b1340c`
+and `92254c10063f091c49ecd32a8080b1712010cbd6a52b1e925327ca6c9b378e95`.
+Two deterministic AVB assemblies produced SHA256
+`8908fb343b2a8477fbb48697a85413fef372d8f3877550d1f2fcfd0709861adc`.
+These hashes are static preflight evidence only; `r13` has not been accepted on
+hardware and still contains no machine sound card.
 
 ## Temporary bring-up constraints
 

@@ -74,6 +74,17 @@ It deliberately leaves every sound-card and external-codec path disabled and
 does not change the `r6` submission evidence baseline. See the
 [ADSP preflight](evidence/2026-08-04-mainline616-adsp-preflight.md).
 
+Revision `r13` adds the SM8150 SLIMbus transport and internal WCD9340 codec
+description without a machine card or external speaker amplifier. Its normal
+and `--no-ccache` builds produced a byte-identical `25,502,739`-byte APK with
+SHA256
+`0644c117b1a8e7719b9980fc1781a57f5e6fdf02429847a6b09f24f33ed9a47d`;
+two deterministic AVB assemblies produced image SHA256
+`8908fb343b2a8477fbb48697a85413fef372d8f3877550d1f2fcfd0709861adc`.
+It remains unflashed and does not change the `r6` submission evidence
+baseline. See the
+[WCD9340 preflight](evidence/2026-08-04-mainline616-wcd9340-preflight.md).
+
 Relevant pmaports policy references are:
 
 - *Device Categorization*, sections "Testing" and "Community";

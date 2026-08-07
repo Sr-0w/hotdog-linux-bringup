@@ -35,8 +35,9 @@ Options:
   --out DIR             Output directory.
   -h, --help            Show this help.
 
-The script performs no remote writes. Debugfs register data is collected only
-when debugfs is already mounted and readable through passwordless sudo.
+The script performs no remote writes. It uses passwordless sudo when available
+for optional debugfs data and otherwise validates the public sysfs interface as
+the SSH user.
 USAGE
 }
 
@@ -148,8 +149,13 @@ if [ -n "$TARGET_SERIAL" ] && [[ "$cmdline" != *"androidboot.serialno=$TARGET_SE
 	die "running target serial does not match the configured serial"
 fi
 
+remote_monitor="sh -s -- '$DURATION_SEC' '$INTERVAL_SEC' '$MAX_BATTERY_UV'"
+if ssh_base 'sudo -n true' >/dev/null 2>&1; then
+	remote_monitor="sudo -n $remote_monitor"
+fi
+
 set +e
-ssh_base "sudo -n sh -s -- '$DURATION_SEC' '$INTERVAL_SEC' '$MAX_BATTERY_UV'" \
+ssh_base "$remote_monitor" \
 	> >(tee "$OUT/monitor.txt") 2> >(tee "$OUT/monitor.stderr" >&2) <<'REMOTE'
 set -eu
 

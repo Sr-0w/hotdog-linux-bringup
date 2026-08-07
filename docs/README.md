@@ -58,6 +58,9 @@ credentials, proprietary dumps, or workstation-specific paths.
   reproducible `r12` ADSP remoteproc candidate, exact firmware and reserved
   memory contract, deliberate audio-topology exclusions, and isolated runtime
   acceptance gate.
+- [evidence/2026-08-04-mainline616-wcd9340-preflight.md](evidence/2026-08-04-mainline616-wcd9340-preflight.md):
+  reproducible `r13` SLIMbus/WCD9340 transport candidate, stock-derived reset
+  and supply contract, deterministic artifacts, and read-only runtime gate.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.

@@ -57,26 +57,43 @@ expect_source_order() {
 		die "charger source ordering violation: '$1' must precede '$2'"
 }
 
+expect_module() {
+	module=$1
+	label=$2
+	find "$modules_dir" -type f \( \
+		-path "*/$module" -o \
+		-path "*/$module.gz" -o \
+		-path "*/$module.xz" -o \
+		-path "*/$module.zst" \
+	\) -print -quit | grep -q . || die "missing $label module"
+}
+
 [ -s "$image" ] || die "missing Image: $image"
 [ -s "$config" ] || die "missing config: $config"
 [ -s "$dtb" ] || die "missing DTB: $dtb"
 
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
-	find "$modules_dir" -type f -name '*.ko' -print -quit | grep -q . ||
+	find "$modules_dir" -type f \( \
+		-name '*.ko' -o \
+		-name '*.ko.gz' -o \
+		-name '*.ko.xz' -o \
+		-name '*.ko.zst' \
+	\) -print -quit | grep -q . ||
 		die "no kernel modules under: $modules_dir"
-	find "$modules_dir" -type f -path '*/drivers/input/touchscreen/s6sy761.ko' \
-		-print -quit | grep -q . || die "missing S6SY761 touchscreen module"
-	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_mss.ko' \
-		-print -quit | grep -q . || die "missing Qualcomm MPSS module"
-	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_q6v5_pas.ko' \
-		-print -quit | grep -q . || die "missing Qualcomm PAS remoteproc module"
-	find "$modules_dir" -type f -path '*/drivers/remoteproc/qcom_sysmon.ko' \
-		-print -quit | grep -q . || die "missing Qualcomm sysmon module"
-	find "$modules_dir" -type f -path '*/drivers/rpmsg/qcom_glink_smem.ko' \
-		-print -quit | grep -q . || die "missing Qualcomm GLINK SMEM module"
-	find "$modules_dir" -type f -path '*/net/qrtr/qrtr.ko' \
-		-print -quit | grep -q . || die "missing QRTR module"
+	expect_module 'drivers/input/touchscreen/s6sy761.ko' 'S6SY761 touchscreen'
+	expect_module 'drivers/remoteproc/qcom_q6v5_mss.ko' 'Qualcomm MPSS'
+	expect_module 'drivers/remoteproc/qcom_q6v5_pas.ko' 'Qualcomm PAS remoteproc'
+	expect_module 'drivers/remoteproc/qcom_sysmon.ko' 'Qualcomm sysmon'
+	expect_module 'drivers/rpmsg/qcom_glink_smem.ko' 'Qualcomm GLINK SMEM'
+	expect_module 'net/qrtr/qrtr.ko' 'QRTR'
+	expect_module 'drivers/base/regmap/regmap-slimbus.ko' 'SLIMbus regmap'
+	expect_module 'drivers/slimbus/slim-qcom-ngd-ctrl.ko' 'Qualcomm SLIMbus NGD'
+	expect_module 'drivers/mfd/wcd934x.ko' 'WCD934x MFD'
+	expect_module 'drivers/gpio/gpio-wcd934x.ko' 'WCD934x GPIO'
+	expect_module 'sound/soc/codecs/snd-soc-wcd934x.ko' 'WCD934x codec'
+	expect_module 'drivers/soundwire/soundwire-bus.ko' 'SoundWire bus'
+	expect_module 'drivers/soundwire/soundwire-qcom.ko' 'Qualcomm SoundWire'
 fi
 
 if [ -n "$charger_source" ]; then
@@ -132,37 +149,37 @@ import sys
 image = pathlib.Path(sys.argv[1]).read_bytes()
 vmlinux = sys.argv[2]
 if len(image) < 64:
-    raise SystemExit("arm64 Image header is truncated")
+	raise SystemExit("arm64 Image header is truncated")
 
 load_offset, image_size = struct.unpack_from("<QQ", image, 8)
 magic = struct.unpack_from("<I", image, 56)[0]
 if load_offset != 0x80000:
-    raise SystemExit(f"unexpected arm64 load offset: {load_offset:#x}")
+	raise SystemExit(f"unexpected arm64 load offset: {load_offset:#x}")
 if image_size == 0 or image_size & 0xFFFF:
-    raise SystemExit(f"invalid 64 KiB-aligned image window: {image_size:#x}")
+	raise SystemExit(f"invalid 64 KiB-aligned image window: {image_size:#x}")
 if len(image) > image_size:
-    raise SystemExit(f"Image exceeds direct-entry window: {len(image):#x}")
+	raise SystemExit(f"Image exceeds direct-entry window: {len(image):#x}")
 if magic != 0x644D5241:
-    raise SystemExit(f"invalid arm64 Image magic: {magic:#x}")
+	raise SystemExit(f"invalid arm64 Image magic: {magic:#x}")
 
 if vmlinux:
-    nm = shutil.which("llvm-nm") or shutil.which("nm")
-    if not nm:
-        raise SystemExit("neither llvm-nm nor nm is available")
-    output = subprocess.check_output([nm, "-n", vmlinux], text=True)
-    symbols = {}
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) >= 3 and parts[-1] in {"_text", "_end"}:
-            symbols[parts[-1]] = int(parts[0], 16)
-    if set(symbols) != {"_text", "_end"}:
-        raise SystemExit("vmlinux is missing _text or _end")
-    linked_size = symbols["_end"] - symbols["_text"]
-    if image_size != linked_size:
-        raise SystemExit(
-            f"Image header window {image_size:#x} does not match "
-            f"linked kernel size {linked_size:#x}"
-        )
+	nm = shutil.which("llvm-nm") or shutil.which("nm")
+	if not nm:
+		raise SystemExit("neither llvm-nm nor nm is available")
+	output = subprocess.check_output([nm, "-n", vmlinux], text=True)
+	symbols = {}
+	for line in output.splitlines():
+		parts = line.split()
+		if len(parts) >= 3 and parts[-1] in {"_text", "_end"}:
+			symbols[parts[-1]] = int(parts[0], 16)
+	if set(symbols) != {"_text", "_end"}:
+		raise SystemExit("vmlinux is missing _text or _end")
+	linked_size = symbols["_end"] - symbols["_text"]
+	if image_size != linked_size:
+		raise SystemExit(
+			f"Image header window {image_size:#x} does not match "
+			f"linked kernel size {linked_size:#x}"
+		)
 PY
 
 expect_config 'CONFIG_DRM_MSM=y'
@@ -182,6 +199,20 @@ expect_config 'CONFIG_SCSI_UFS_QCOM=y'
 expect_config 'CONFIG_QCOM_WDT=y'
 expect_config 'CONFIG_EXT4_FS=y'
 expect_config 'CONFIG_FONT_TER16x32=y'
+expect_config 'CONFIG_NLS_ASCII=y'
+expect_config 'CONFIG_NULL_TTY=m'
+expect_config 'CONFIG_MODULE_COMPRESS=y'
+expect_config 'CONFIG_MODULE_COMPRESS_ZSTD=y'
+expect_config 'CONFIG_MODULE_DECOMPRESS=y'
+expect_config 'CONFIG_BPF_LSM=y'
+expect_config 'CONFIG_KPROBES=y'
+expect_config 'CONFIG_KPROBE_EVENTS=y'
+expect_config 'CONFIG_SECURITYFS=y'
+expect_config 'CONFIG_SECURITY_PATH=y'
+expect_config 'CONFIG_DEBUG_INFO_BTF=y'
+expect_config 'CONFIG_DEBUG_INFO_BTF_MODULES=y'
+expect_config 'CONFIG_DEBUG_INFO_DWARF5=y'
+expect_config '# CONFIG_DEBUG_INFO_REDUCED is not set'
 expect_config 'CONFIG_QCOM_GENI_SE=y'
 expect_config 'CONFIG_QCOM_GPI_DMA=y'
 expect_config 'CONFIG_I2C_QCOM_GENI=y'
@@ -203,6 +234,15 @@ expect_config 'CONFIG_QCOM_APR=y'
 expect_config 'CONFIG_QCOM_RMTFS_MEM=y'
 expect_config 'CONFIG_QRTR=m'
 expect_config 'CONFIG_QRTR_SMD=m'
+expect_config 'CONFIG_REGMAP_SLIMBUS=m'
+expect_config 'CONFIG_SLIMBUS=y'
+expect_config 'CONFIG_SLIM_QCOM_CTRL=y'
+expect_config 'CONFIG_SLIM_QCOM_NGD_CTRL=m'
+expect_config 'CONFIG_MFD_WCD934X=m'
+expect_config 'CONFIG_GPIO_WCD934X=m'
+expect_config 'CONFIG_SND_SOC_WCD934X=m'
+expect_config 'CONFIG_SOUNDWIRE=m'
+expect_config 'CONFIG_SOUNDWIRE_QCOM=m'
 
 memory=/memory@80000000
 reserved=/reserved-memory
@@ -239,6 +279,10 @@ wifi=$soc/wifi@18800000
 rmtfs=$reserved/memory@f2901000
 adsp_mem=$reserved/memory@8be00000
 slim=$soc/slim-ngd@171c0000
+slim_ifd=$slim/slim@1/ifd@0,0
+wcd9340=$slim/slim@1/codec@1,0
+wcdgpio=$wcd9340/gpio-controller@42
+swm=$wcd9340/swm@c85
 i2c4=$soc/geniqup@8c0000/i2c@890000
 sound=/sound
 
@@ -280,7 +324,45 @@ expect_value adsp-memory-region "$adsp_mem_phandle" \
 	fdtget -tx "$dtb" "$adsp" memory-region
 expect_value cdsp-staged-disabled disabled fdtget -ts "$dtb" "$cdsp" status
 expect_absent cdsp-firmware fdtget "$dtb" "$cdsp" firmware-name
-expect_value slim-staged-disabled disabled fdtget -ts "$dtb" "$slim" status
+expect_value slim-codec-transport okay fdtget -ts "$dtb" "$slim" status
+expect_value slim-interface-compatible slim217,250 \
+	fdtget -ts "$dtb" "$slim_ifd" compatible
+expect_value slim-interface-address '0 0' fdtget -tx "$dtb" "$slim_ifd" reg
+expect_value wcd9340-compatible slim217,250 \
+	fdtget -ts "$dtb" "$wcd9340" compatible
+expect_value wcd9340-address '1 0' fdtget -tx "$dtb" "$wcd9340" reg
+slim_ifd_phandle=$(fdtget -tx "$dtb" "$slim_ifd" phandle) ||
+	die "missing WCD9340 SLIM interface phandle"
+expect_value wcd9340-slim-interface "$slim_ifd_phandle" \
+	fdtget -tx "$dtb" "$wcd9340" slim-ifc-dev
+tlmm_path=$(fdtget -ts "$dtb" /__symbols__ tlmm) ||
+	die "missing TLMM symbol"
+tlmm_phandle=$(fdtget -tx "$dtb" "$tlmm_path" phandle) ||
+	die "missing TLMM phandle"
+expect_value wcd9340-reset "$tlmm_phandle 8f 0" \
+	fdtget -tx "$dtb" "$wcd9340" reset-gpios
+expect_value wcd9340-interrupt "$tlmm_phandle 7b 4" \
+	fdtget -tx "$dtb" "$wcd9340" interrupts-extended
+expect_value wcd9340-clock-frequency 927c00 \
+	fdtget -tx "$dtb" "$wcd9340" clock-frequency
+for micbias in 1 2 3 4; do
+	expect_value "wcd9340-micbias$micbias" 1b7740 \
+		fdtget -tx "$dtb" "$wcd9340" "qcom,micbias$micbias-microvolt"
+done
+vreg_s4a_path=$(fdtget -ts "$dtb" /__symbols__ vreg_s4a_1p8) ||
+	die "missing vreg_s4a_1p8 symbol"
+vreg_s4a_phandle=$(fdtget -tx "$dtb" "$vreg_s4a_path" phandle) ||
+	die "missing vreg_s4a_1p8 phandle"
+for supply in vdd-buck-sido vdd-buck vdd-tx vdd-rx vdd-io; do
+	expect_value "wcd9340-$supply" "$vreg_s4a_phandle" \
+		fdtget -tx "$dtb" "$wcd9340" "$supply-supply"
+done
+expect_value wcd9340-gpio-compatible qcom,wcd9340-gpio \
+	fdtget -ts "$dtb" "$wcdgpio" compatible
+expect_value wcd9340-gpio-registers '42 2' fdtget -tx "$dtb" "$wcdgpio" reg
+expect_value wcd9340-soundwire-compatible qcom,soundwire-v1.3.0 \
+	fdtget -ts "$dtb" "$swm" compatible
+expect_value wcd9340-soundwire-registers 'c85 40' fdtget -tx "$dtb" "$swm" reg
 expect_value speaker-i2c-staged-disabled disabled fdtget -ts "$dtb" "$i2c4" status
 expect_absent speaker-codec fdtget -p "$dtb" "$i2c4/audio-codec@34"
 expect_absent sound-card-compatible fdtget "$dtb" "$sound" compatible
