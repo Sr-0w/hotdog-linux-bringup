@@ -378,9 +378,44 @@ Probing is not capturing: the links still have to be enabled, formats matched
 along the chain, and a buffer dequeued before anything can be called working.
 But every piece the port has to supply is now present and bound.
 
+## The pipeline streams, the pixels are black
+
+The media graph was configured by hand and a buffer was dequeued:
+
+```
+media-ctl -V '"msm_csiphy0":0 [fmt:SGRBG10_1X10/4208x3120]'   (and :1)
+media-ctl -V '"msm_csid0":0   [fmt:SGRBG10_1X10/4208x3120]'   (and :1)
+media-ctl -V '"msm_vfe0_rdi0":0 [fmt:SGRBG10_1X10/4208x3120]'
+v4l2-ctl -d /dev/video0 --set-fmt-video=width=4208,height=3120,pixelformat=pgAA
+v4l2-ctl -d /dev/video0 --stream-mmap --stream-count=1 --stream-to=frame.raw
+```
+
+`STREAMON` succeeds, one frame is dequeued, and the file is 16,423,680 bytes,
+which is exactly 4208x3120 in packed 10-bit Bayer at a 5264-byte line stride.
+Nothing is logged by the kernel. The default links, sensor to CSIPHY0 to CSID0
+to VFE0 RDI0 to video0, were already enabled.
+
+The pixel format had to match the sensor's Bayer order: the node defaults to
+`pGAA`, GBGB/RGRG, and the sensor is SGRBG, so `STREAMON` first failed with
+`EPIPE` until it was set to `pgAA`.
+
+**Every byte of the frame is zero.** That is not a dark scene; a sensor in
+darkness still returns its black-level pedestal, around 64. So the DMA path
+works and delivers a correctly shaped buffer, while no pixel data reaches it.
+
+What that narrows it to: the sensor is not actually emitting on the CSI-2 bus,
+or the receiver is not locking onto what it emits. Candidates, in the order
+worth checking: whether `s5k3m5_start_streaming` really runs and its register
+writes land, whether exposure and gain defaults leave the sensor blanked,
+whether four data lanes is right for this module, and whether the CSIPHY needs
+a settle-count or lane configuration this backend is not setting.
+
+This is the honest state: the port is complete enough to run a capture end to
+end, and the camera does not yet produce an image.
+
 ## Remaining
 
-1. configure the media graph and capture a frame from the telephoto
+1. find why the frames are black
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
