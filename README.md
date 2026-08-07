@@ -78,7 +78,7 @@ Support status for the tested HD1913 handset.
 | Fingerprint | Fingerprint reader | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
 | Fast charging | OnePlus Warp charge | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
 
-**Legend:** 🟢 supported · 🟡 partial · 🔴 broken · ⚪ to do · ⚫ impossible
+**Legend:** 🟢 supported · 🟡 partial or untested · 🔴 broken · ⚪ to do · ⚫ impossible
 
 Detailed evidence and limitations: [docs/status.md](docs/status.md).
 
