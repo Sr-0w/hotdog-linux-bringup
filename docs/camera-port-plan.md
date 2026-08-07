@@ -160,6 +160,20 @@ supported rate and its register sequences checked against it, or the 19.2 MHz
 figure belongs to a different variant in the shared image. This has to be
 settled before concluding anything from a failed probe.
 
+### The PM8009 rails are partly missing
+
+PM8009, the dedicated camera PMIC, is already described in
+`sm8150-oneplus-common.dtsi`, which removes one worry. But only three of its
+LDOs are declared: `vreg_l2f_1p2` at 1.2 V, `vreg_l5f_2p85` at 2.85 V and
+`vreg_l6f_2p85` at 2.856 V.
+
+The stock overlay drives `cam_vdig` from `pm8009_l1`, `pm8009_l3` and
+`pm8009_l4`, none of which exist here, and asks for 1.056 V and 1.104 V rather
+than 1.2 V. So before any sensor can be described, the missing LDOs have to be
+added to the PM8009 block with the voltages the sensors actually want.
+
+That is the next concrete edit, and it is small and well defined.
+
 ## Progress on the sensor
 
 **Done, revision `r53`.** `0058` backports the S5K3M5 driver from linux-next.
@@ -178,13 +192,15 @@ question above is settled first.
 
 ## Remaining
 
-1. settle the 19.2 versus 24 MHz MCLK question
-2. wire the hotdog device tree: enable `camss` and the CCI buses, describe the
+1. add the missing PM8009 LDOs, `l1`, `l3` and `l4`, at the voltages the
+   sensors ask for
+2. settle the 19.2 versus 24 MHz MCLK question
+3. wire the hotdog device tree: enable `camss` and the CCI buses, describe the
    PM8009 rails and the VANA switches, and add the sensor nodes
-3. confirm the telephoto path end to end
-4. write IMX586, IMX481 and IMX471 using the downstream register sequences
-5. libcamera pipeline configuration
-6. optionally add the lite instances, and a binding YAML before submission
+4. confirm the telephoto path end to end
+5. write IMX586, IMX481 and IMX471 using the downstream register sequences
+6. libcamera pipeline configuration
+7. optionally add the lite instances, and a binding YAML before submission
 
 Step 2 is the useful milestone: it proves the CAMSS port with a sensor driver
 that already exists, before any new sensor driver is written.
