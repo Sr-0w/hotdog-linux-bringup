@@ -117,11 +117,13 @@ Revision `r6` was the first package to register both volume-key input devices,
 but its original Volume Down path used PM8150 PON `RESIN`. Later physical
 checks invalidated that mapping: pressing Volume Down changed neither the
 real-time RESIN state nor its interrupt count. The current device tree maps
-Volume Down to PM8150 GPIO7 and Volume Up to GPIO6. Physical Volume Down
-press/release is now hardware-validated and functional; Volume Up physical
-validation remains open. The original
+Volume Down to PM8150 GPIO7 and Volume Up to GPIO6. Both physical Volume Down
+and Volume Up button operation are now hardware-validated and functional. The
+original
 [hardware-key evidence](evidence/2026-08-04-mainline616-volume-keys.md)
-is retained as historical `r6` evidence rather than proof of the final mapping.
+is retained as historical `r6` evidence and now also records the later final
+GPIO mapping and physical validation. Key wake behavior and suspend/resume
+remain separate open tests.
 
 Revision `r7` is rebuilt directly from the accepted `r6` source and adds only
 the PM8150B battery and charger device-tree description. Its package-generated
