@@ -501,8 +501,32 @@ apps_smmu_phandle=$(fdtget -tx "$dtb" "$apps_smmu_path" phandle) ||
 	die "missing Apps SMMU phandle"
 expect_value dwc3-iommus "$apps_smmu_phandle 140 0" \
 	fdtget -tx "$dtb" "$dwc3" iommus
-expect_value dwc3-role peripheral fdtget -ts "$dtb" "$dwc3" dr_mode
+expect_value dwc3-role otg fdtget -ts "$dtb" "$dwc3" dr_mode
 expect_value dwc3-speed high-speed fdtget -ts "$dtb" "$dwc3" maximum-speed
+# Role switching must stay wired end to end: the controller advertises a
+# switch, the Type-C block and its VBUS boost are enabled, and the connector
+# reaches both the controller and the SBU mux. Losing any one of these
+# silently drops the port back to peripheral-only.
+fdtget "$dtb" "$dwc3" usb-role-switch >/dev/null 2>&1 ||
+	die "dwc3 must advertise usb-role-switch"
+fdtget "$dtb" "$dwc3/ports/port@0/endpoint" remote-endpoint >/dev/null 2>&1 ||
+	die "dwc3 high-speed endpoint must reach the Type-C connector"
+typec=$(fdtget -ts "$dtb" /__symbols__ pm8150b_typec) ||
+	die "missing Type-C symbol"
+expect_value typec-status okay fdtget -ts "$dtb" "$typec" status
+expect_value typec-connector usb-c-connector \
+	fdtget -ts "$dtb" "$typec/connector" compatible
+expect_value typec-power-role dual \
+	fdtget -ts "$dtb" "$typec/connector" power-role
+expect_value typec-data-role dual \
+	fdtget -ts "$dtb" "$typec/connector" data-role
+fdtget "$dtb" "$typec/connector/ports/port@0/endpoint" remote-endpoint \
+	>/dev/null 2>&1 || die "Type-C connector must reach the dwc3 data role"
+fdtget "$dtb" "$typec/connector/ports/port@1/endpoint" remote-endpoint \
+	>/dev/null 2>&1 || die "Type-C connector must reach the SBU mux"
+vbus=$(fdtget -ts "$dtb" /__symbols__ pm8150b_vbus) ||
+	die "missing VBUS regulator symbol"
+expect_value vbus-status okay fdtget -ts "$dtb" "$vbus" status
 expect_value ufs-iommus "$apps_smmu_phandle 300 0" \
 	fdtget -tx "$dtb" "$ufs" iommus
 expect_absent ufs-ice fdtget "$dtb" "$ufs" qcom,ice
@@ -524,8 +548,8 @@ fdtget "$dtb" "$fsa4480" orientation-switch >/dev/null ||
 	die "FSA4480 orientation-switch capability is missing"
 fdtget -p "$dtb" "$fsa4480_endpoint" >/dev/null ||
 	die "FSA4480 future Type-C endpoint is missing"
-expect_absent fsa4480-remote-endpoint \
-	fdtget "$dtb" "$fsa4480_endpoint" remote-endpoint
+fdtget "$dtb" "$fsa4480_endpoint" remote-endpoint >/dev/null 2>&1 ||
+	die "fsa4480 endpoint must reach the Type-C connector"
 expect_value fsa4480-enable-pin gpio100 \
 	fdtget -ts "$dtb" "$fsa_usbc_ana_en" pins
 expect_value fsa4480-enable-function gpio \
@@ -538,8 +562,6 @@ fsa_usbc_ana_en_phandle=$(fdtget -tx "$dtb" "$fsa_usbc_ana_en" phandle) ||
 	die "missing FSA4480 enable-state phandle"
 expect_value fsa4480-pinctrl "$fsa_usbc_ana_en_phandle" \
 	fdtget -tx "$dtb" "$fsa4480" pinctrl-0
-expect_value pm8150b-typec-status disabled \
-	fdtget -ts "$dtb" "$pm8150b_typec" status
 for amplifier in "$tfa9874_top" "$tfa9874_bottom"; do
 	expect_value "$amplifier-compatible" nxp,tfa9874 \
 		fdtget -ts "$dtb" "$amplifier" compatible
