@@ -496,10 +496,52 @@ believes it set. Revision `r60` uses the rates the hardware actually offers.
 It did not by itself make frames arrive, which is consistent with the finding
 above that the CSID is not configured at all.
 
+## The cause: this is a CSIPHY v1.1, programmed as a v1.0
+
+The published OnePlus kernel settles it in one line. Its `sm8150-camera.dtsi`
+declares every CSIPHY as:
+
+```
+compatible = "qcom,csiphy-v1.1", "qcom,csiphy";
+```
+
+Version **1.1**. The mainline backend written here uses `csiphy_ops_3ph_1_0`,
+inherited from the SDM845 template, and SDM845 is `qcom,csiphy-v1.0`. So the
+PHY is being initialised with the wrong generation's register sequence.
+
+The vendor's own tables give the size of the gap. Comparing
+`cam_csiphy_1_0_hwreg.h` with `cam_csiphy_1_1_hwreg.h`:
+
+| | v1.0 | v1.1 |
+| --- | --- | --- |
+| register writes | 272 | 440 |
+| common block `0x0814` | `0x00` | `0xd5` |
+| common block `0x081C` | absent | `0x72` |
+| lane `0x0000` | `0x91` | `0x90` |
+| lane `0x0008` | `0x00` | `0x0E` |
+| lane `0x0708` | `0x14` | `0x0E` |
+
+Different from the first register onwards, and sixty percent more of them.
+
+This explains every observation exactly: the sensor transmits, the CSID is
+correctly told to take four lanes from CSIPHY0 over D-PHY, `RX_IRQ_STATUS`
+latches error bits, and no decodable data ever arrives. A physical layer set up
+for the wrong generation produces electrical activity the receiver cannot
+frame.
+
+### On decompiling the OxygenOS libraries
+
+Worth stating, since it was asked. The `.so` files are the userspace HAL: they
+issue requests to `cam_req_mgr` and never touch a CSIPHY register. Everything
+about the physical layer lives in the kernel, which OnePlus publishes under the
+GPL, and which is checked out locally. That is where this answer came from, in
+a few minutes and with no decompilation. The libraries would be the right place
+to look for tuning data and 3A behaviour, not for bring-up.
+
 ## Remaining
 
-1. work out why the CSIPHY delivers nothing the CSID can decode, starting
-   from the latched RX_IRQ_STATUS error bits and the 3ph lane configuration
+1. add a 3ph v1.1 sequence to CAMSS from the vendor tables and point SM8150 at
+   it, rather than reusing SDM845's v1.0
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
