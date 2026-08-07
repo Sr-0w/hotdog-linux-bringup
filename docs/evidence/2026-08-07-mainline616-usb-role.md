@@ -2,8 +2,9 @@
 
 ## Result
 
-The Type-C port is now managed and dual-role capable. Host mode is reachable in
-software; enumerating a device through it is not yet validated on hardware.
+The Type-C port is managed, dual-role, and host mode works on hardware. A
+powered Type-C dock enumerates through it while the handset simultaneously
+takes power from that dock.
 
 ## Starting point
 
@@ -66,11 +67,54 @@ usb_vbus   0 users   2000mA
 `qcom,pmic-typec` reports PD signalling activity in the log, so the TCPM stack
 is live rather than merely probed.
 
+## Host mode on hardware
+
+Attached to a powered Type-C dock, the port switched itself to host while
+staying a power sink, which is the interesting combination: the dock supplies
+the handset and the handset drives the bus.
+
+```
+/sys/class/typec/port0
+  power_role  source [sink]
+  data_role   [host] device
+```
+
+The host stack came up and the dock enumerated:
+
+| Device | ID | Detail |
+| --- | --- | --- |
+| `usb1` / `usb2` | `1d6b:0002` / `1d6b:0003` | xHCI root hubs |
+| `1-1` | `05e3:0610` | GenesysLogic USB2.1 Hub, 4 ports |
+| `1-1.1` | `0bda:8153` | Realtek USB 10/100/1000 LAN, high speed |
+
+The Ethernet adapter bound to `r8152 v1.12.13` and created `eth0`. No link was
+established because no cable was attached to the dock; `ethtool` reports
+`Link detected: no`, and NetworkManager declines the device for want of a
+carrier. Enumeration and driver binding are the parts this change is
+responsible for, and both work.
+
+Power delivery negotiated with the dock at the same time:
+
+```
+pm8150b-charger                                 online=1  status=Full
+tcpm-source-psy-...typec@1500                   online=1
+usb_vbus                                        0 users
+```
+
+The VBUS boost correctly stays off, because the handset is sinking rather than
+sourcing. USB networking over the previous peripheral path is unregressed when
+attached to a plain host PC.
+
+The `r8152` driver logs a missing `rtl_nic/rtl8153b-2.fw` firmware patch. That
+is an optional performance/errata patch, not required for the adapter to work,
+and it is a firmware packaging item rather than a device-tree one.
+
 ## Not yet validated
 
-Nothing has been attached with the handset acting as host. What remains is to
-attach a peripheral or a dock and confirm the port switches to source and host,
-that VBUS actually comes up, and that a device enumerates through xhci.
+
+The handset has not yet had to source VBUS itself, because the dock supplied
+power. An unpowered peripheral, which forces the port into source, is still
+untested, as is mass storage and HID.
 
 This change is USB 2.0 only. The QMP PHY stays disabled and the controller
 keeps `maximum-speed = "high-speed"`, so SuperSpeed and DisplayPort alternate
