@@ -53,6 +53,42 @@ and registered the expected Power, Volume Down, Volume Up, and touchscreen
 input devices; see the
 [hardware-key evidence](evidence/2026-08-04-mainline616-volume-keys.md).
 
+Revision `r10` is a reproducible battery/charger preflight candidate with
+conservative PM8150B limits and an uncompleted hardware safety gate. Revision
+`r11` then stages MPSS and read-only RMTFS independently from WCN3990. Its two
+strict builds produced a byte-identical `25,502,518`-byte APK with SHA256
+`b499a6b3cf488e15d743e66a0965a74e30771e0cea6941040327498af154be6c`;
+two deterministic AVB assemblies produced image SHA256
+`4a4bffb60ce744f5fd5fc4070808699fb573a9350f24e60a5d59535aef5dc849`.
+Neither preflight revision is hardware-accepted, and neither changes the `r6`
+submission evidence baseline. See the
+[battery/charger preflight](evidence/2026-08-04-mainline616-battery-charger-preflight.md)
+and [MPSS/RMTFS preflight](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md).
+
+Revision `r12` adds only the ADSP PAS remote processor and exact handset
+firmware selection. Its two strict builds produced a byte-identical
+`25,502,535`-byte APK with SHA256
+`4753bcfd5494a3d97c8c84a78bd57c58360bff55a4cb986c560d86e48fc37ebd`;
+two deterministic AVB assemblies produced image SHA256
+`390c16cefad408322672cc4c4a94a691af1e79dacd6aba2c0869eadc4d8ca80d`.
+It deliberately leaves every sound-card and external-codec path disabled and
+does not change the `r6` submission evidence baseline. See the
+[ADSP preflight](evidence/2026-08-04-mainline616-adsp-preflight.md).
+
+Revision `r13` adds the SM8150 SLIMbus transport and internal WCD9340 codec
+description without a machine card or external speaker amplifier. Its normal
+and `--no-ccache` builds produced a byte-identical `25,502,739`-byte APK with
+SHA256
+`0644c117b1a8e7719b9980fc1781a57f5e6fdf02429847a6b09f24f33ed9a47d`;
+two deterministic AVB assemblies produced image SHA256
+`8908fb343b2a8477fbb48697a85413fef372d8f3877550d1f2fcfd0709861adc`.
+It remains unflashed and does not change the `r6` submission evidence
+baseline. See the
+[WCD9340 preflight](evidence/2026-08-04-mainline616-wcd9340-preflight.md).
+
+These preflight records predate the accepted results above and are retained as
+build-reproducibility history only.
+
 Relevant pmaports policy references are:
 
 - *Device Categorization*, sections "Testing" and "Community";

@@ -92,6 +92,19 @@ credentials, proprietary dumps, or workstation-specific paths.
 - [evidence/2026-08-04-mainline616-display-90hz.md](evidence/2026-08-04-mainline616-display-90hz.md):
   stock-DTBO timing derivation, reproducible `r16` package and boot image, and
   direct hardware proof of an active 1440x3120 90 Hz DRM mode.
+- [evidence/2026-08-04-mainline616-battery-charger-preflight.md](evidence/2026-08-04-mainline616-battery-charger-preflight.md):
+  `r10` build-reproducibility record for the conservative PM8150B limits, with
+  its hardware safety gate left uncompleted. Superseded by the accepted
+  battery/charger and SMB5 results above.
+- [evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md](evidence/2026-08-04-mainline616-mpss-rmtfs-preflight.md):
+  `r11` build-reproducibility record for staging MPSS and read-only RMTFS
+  independently from WCN3990. Superseded by the accepted Wi-Fi/MPSS result.
+- [evidence/2026-08-04-mainline616-adsp-preflight.md](evidence/2026-08-04-mainline616-adsp-preflight.md):
+  `r12` build-reproducibility record for the ADSP PAS remote processor with
+  every sound-card path left disabled. Superseded by the accepted ADSP result.
+- [evidence/2026-08-04-mainline616-wcd9340-preflight.md](evidence/2026-08-04-mainline616-wcd9340-preflight.md):
+  `r13` build-reproducibility record for the SLIMbus transport and WCD9340
+  codec description, never flashed. Superseded by the accepted WCD9340 result.
 - [evidence/2026-07-12-packaging.md](evidence/2026-07-12-packaging.md): public
   evidence for the device kernel split, initramfs cleanup, firmware usrmerge,
   and the validated `20241212-r0` APK set.
