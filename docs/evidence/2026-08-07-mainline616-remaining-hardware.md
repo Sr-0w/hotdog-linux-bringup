@@ -10,37 +10,42 @@ amount of device-tree work reaches.
 Each row below was checked against the kernel tree actually used by this port,
 not from memory.
 
-## Cameras: blocked at the foundation
+## Cameras: large, but not blocked
 
-Three independent blockers, all of which must be solved before a single frame
-can be captured.
+An earlier version of this document called cameras blocked at the foundation.
+That was measured against the 6.16 tree this port builds from, and it was wrong
+in two ways once current sources are consulted.
 
-**No SM8150 CAMSS backend exists.** The mainline camss driver carries
-compatibles for msm8916, msm8953, msm8996, sc7280, sc8280xp, sdm660, sdm670,
-sdm845, sm8250, sm8550 and x1e80100. SM8150 sits between sdm845 and sm8250 and
-is absent from both the driver and the bindings. Adding it means a new
-CSIPHY/CSID/VFE description with this SoC's register offsets, clocks, power
-domains and interconnect paths.
+**A close relative is now supported.** There is still no `qcom,sm8150-camss`,
+but linux-next carries `qcom,sm6150-camss`. SM6150 is the same Titan
+generation as SM8150, which makes it a far better template than sdm845, the
+nearest supported part at 6.16.
 
-**None of the four sensors has a mainline driver.** The stock vendor partition
-identifies them unambiguously through its per-sensor modules:
+**One of the four sensors is already upstream.** linux-next has
+`drivers/media/i2c/s5k3m5.c`. The stock vendor modules identify the four
+sensors unambiguously:
 
-| Role | Sensor | Mainline driver |
+| Role | Sensor | Upstream driver |
 | --- | --- | --- |
 | Main 48 MP | Sony IMX586 | absent |
 | Ultra-wide | Sony IMX481 | absent |
-| Telephoto | Samsung S5K3M5 | absent |
+| Telephoto | Samsung S5K3M5 | present in linux-next |
 | Front, pop-up | Sony IMX471 | absent |
 
-Mainline has imx208, imx214, imx219, imx258, imx274, imx283, imx290, imx296,
-imx319, imx334, imx335, imx355, imx412 and imx415, and for Samsung only
-s5k5baf and s5k6a3. Sensor drivers need register initialisation sequences that
-in practice only exist in vendor code.
+**The register sequences exist and are GPL.** The OnePlus downstream kernel is
+checked out locally and carries the full camera stack under
+`drivers/media/platform/msm/camera/cam_sensor_module`. That is where sensor
+initialisation, clock trees and power sequences live.
 
-**libcamera** then needs a pipeline handler for whatever the first two produce.
+What cannot be reused is the OxygenOS userspace: `camera.qcom.so` and the
+per-sensor `com.qti.sensor.*.so` modules are proprietary binaries, and the
+downstream `cam_req_mgr` architecture has nothing in common with mainline
+CAMSS. The work is to extract knowledge, not to port code, which is what this
+project's reuse policy already says about published OnePlus kernel source.
 
-Cameras are therefore the worst available starting point: maximum effort, and
-gated on a kernel subsystem port that does not exist yet.
+So cameras remain the largest item by a wide margin, and still need a CAMSS
+port plus three sensor drivers plus libcamera integration, but they are
+tractable rather than gated on something that does not exist.
 
 ## The rest, ordered by what the tree actually supports
 
@@ -105,4 +110,6 @@ first is the clean way.
 3. telephony
 4. NFC
 5. haptics, hall sensors, laser: each a driver to write
-6. cameras last, and only after an SM8150 CAMSS port exists
+6. cameras last: port CAMSS from the sm6150 backend in linux-next, take
+   S5K3M5 from upstream, and write IMX586, IMX481 and IMX471 using the
+   downstream GPL sources for their register sequences

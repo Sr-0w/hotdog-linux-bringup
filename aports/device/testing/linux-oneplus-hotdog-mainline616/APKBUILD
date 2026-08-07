@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=48
+pkgrel=50
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -198,6 +198,6 @@ b79c4e065cf8eedb729d8376a07837b576806c87f61a8ca4fc04d8b0922948c3f67b5f614f3916bd
 64fbc4c3c2c4473cd9b7f486666e638ba4e779f190d74e9c9b58c4dbf991aaf254f9a879f0496007418ccf74a5ec0f0dfb5fdad5261d75f3e6be62fb474f5d14  0051-asoc-sm8150-accept-the-displayport-backend.patch
 6231364da0de476f44c0fb15295a2985ac182bf8d70ba8385b83f9689168a1d989f9a46e347fbacbb54c1e8e204f9b99856b1013de29d875f34bb4f69749e64d  0052-asoc-q6afe-dai-make-displayport-a-playback-widget.patch
 09fd44d1be2df0477a2b487fc82ee739e49e4a9d2d6b3895cb1916420cf56fa3e7033f460740f5c62f1fdb61e7e45ec617e1de4eea2eab0842f52a3feca4d417  0053-arm64-dts-hotdog-put-volume-down-on-its-real-pin.patch
-deaee8ccc2a6358e0f175dd9bd2f5358e9cafaa73043918f85e80f94378e0965232ef950a48ed042983a591f5ce7c2b75ebc7825062f98bb1ac26733fdafc57c  0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
+4f1de819d6921636844f4260df7132ec7edc3d0f55ed62a5860e7927e9b4f98d86419f85743e0db1d5e918240b0de97c78452836fdde1814f5111d70b8d0bd37  0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
