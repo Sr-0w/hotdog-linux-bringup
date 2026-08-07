@@ -605,10 +605,61 @@ telephoto is an 8 MP module, so whether this module is the variant that driver
 was written for, and whether its start-streaming sequence really applies here,
 is now the open question rather than the receiver.
 
+## The sensor is fully correct, and frames arrive at its own rate
+
+Two things had made earlier readings unreliable and are worth recording.
+
+**The I2C bus numbering is not stable across boots.** The sensor was `4-0010`
+on one boot and `6-0010` on the next, because CCI registers its four buses
+dynamically. Every register readback done with `-f 4` on the later boot was
+addressing the wrong bus and returned NACKs that looked like a dead sensor. The
+device-tree slot mapping is unaffected, since it is by node rather than by
+number, but any by-hand `i2ctransfer` must read the bus number from
+`/sys/class/video4linux/*/name` first.
+
+**Stale capture processes hold the device.** A backgrounded `v4l2-ctl` that is
+not reaped makes the next `REQBUFS` fail with `EBUSY`, which is easy to misread
+as a pipeline fault.
+
+Read on the right bus while streaming, the sensor is entirely correct:
+
+| Register | Value | Meaning |
+| --- | --- | --- |
+| `0x0100` | `0x01` | streaming |
+| `0x034C` | `0x1070` | output width 4208 |
+| `0x034E` | `0x0C30` | output height 3120 |
+| `0x0114` | `0x03` | four data lanes |
+| `0x0340` | `0x0CF2` | frame length 3314 |
+
+So the upstream driver's mode registers do take, and this module is the variant
+it targets. That closes the question the previous section opened.
+
+### Frames arrive at exactly 30.00 fps
+
+This is the observation that reframes everything. `v4l2-ctl` reports
+`30.00 fps`, exactly the sensor's frame rate. A VFE receiving nothing would
+return buffers at an arbitrary rate, not one locked to the sensor. The capture
+is therefore synchronised to the incoming CSI-2 stream: frame timing is getting
+through.
+
+And the buffers are still entirely zero.
+
+That moves the problem again, and this time away from the sensor, the CSIPHY and
+the CSID alike. Frame boundaries reach the VFE while pixel data does not reach
+memory, which is the signature of the write path rather than the receive path:
+the RDI write master's configuration, or the SMMU translation for the stream IDs
+declared in `0056`. Those eight stream IDs were derived from the downstream
+device tree and have never been verified against a real transfer.
+
+`RX_IRQ_STATUS` keeps accumulating per-lane error bits, `0x01d7c0ff` after
+several captures, so the link is not clean either. But error bits on a link that
+nonetheless delivers frame timing are a different problem from a link that
+delivers nothing.
+
 ## Remaining
 
-1. check whether this module matches the variant the upstream S5K3M5 driver
-   targets, and whether its mode registers really take
+1. check the VFE RDI write master and the SMMU stream IDs, which is where pixel
+   data is being lost between a synchronised receiver and memory
 2. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
