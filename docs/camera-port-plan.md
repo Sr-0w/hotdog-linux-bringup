@@ -133,16 +133,58 @@ tree, and should be read from the hardware by its chip ID rather than assumed.
 CCI pins are GPIO 17/18 and 19/20 for the first block, 31/32 and 33/34 for the
 second. MCLK0 is GPIO 13.
 
+## Per-slot wiring, recovered from `fragment@80`
+
+| Slot | CSIPHY | CCI | MCLK GPIO | RESET GPIO | VANA control | vdig min |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 1 | 1 | 14 | 30 | GPIO 11 and 29, plus PMIC GPIO 1 | 1.104 V |
+| 1 | 0 | 0 | 13 | 28 | GPIO 148 | 1.056 V |
+| 2 | 2 | 0 | 15 | 12 | PMIC GPIO 12 | 1.056 V |
+| 3 | 3 | 1 | 16 | 23 | PMIC GPIO 2 | 1.056 V |
+
+All four declare `cam_vio`, `cam_vana`, `cam_vdig` and `cam_clk`, with
+`cam_vana` at 3.3 V. The digital rails come from PM8009, the dedicated camera
+PMIC: the fixups tie `pm8009_l1`, `pm8009_l3` and `pm8009_l4` to `cam_vdig` on
+this fragment. `cam_vana` is switched by the per-slot GPIOs above rather than
+being a plain regulator, so each sensor needs both a supply and a switch.
+
+MCLK maps by index onto `CAM_CC_MCLK0_CLK` through `CAM_CC_MCLK3_CLK`.
+
+### One conflict to resolve before wiring
+
+`fragment@80` sets `clock-rates = <19200000>` for every slot, while
+`fragment@47`, the generic Qualcomm layout, uses 24 MHz. The upstream S5K3M5
+driver accepts only 24 MHz and rejects anything else at probe. Either the
+telephoto really runs at 19.2 MHz here, in which case the driver needs a second
+supported rate and its register sequences checked against it, or the 19.2 MHz
+figure belongs to a different variant in the shared image. This has to be
+settled before concluding anything from a failed probe.
+
+## Progress on the sensor
+
+**Done, revision `r53`.** `0058` backports the S5K3M5 driver from linux-next.
+Almost everything it needs is already here; the exception is
+`devm_v4l2_sensor_clk_get()`, a newer helper that falls back to a fixed-rate
+clock when no phandle is present. The clock is described on this board, so
+plain `devm_clk_get()` is equivalent. It builds as a module. Nothing describes
+the sensor yet, so it does not probe.
+
+### Suggested discovery method
+
+Which physical sensor occupies which slot is stated nowhere. The driver checks
+the chip ID at probe, so describing the S5K3M5 on several slots and seeing
+which one probes identifies the telephoto empirically, provided the MCLK
+question above is settled first.
+
 ## Remaining
 
-1. wire the hotdog device tree: enable `camss`, describe the two CCI buses,
-   assign CSIPHYs, and add sensor regulators and their power sequences from
-   the downstream tree
-2. take `s5k3m5` from upstream and confirm the telephoto path end to end first,
-   because it is the only sensor that needs no new driver
-3. write IMX586, IMX481 and IMX471 using the downstream register sequences
-4. libcamera pipeline configuration
-5. optionally add the lite instances, and a binding YAML before submission
+1. settle the 19.2 versus 24 MHz MCLK question
+2. wire the hotdog device tree: enable `camss` and the CCI buses, describe the
+   PM8009 rails and the VANA switches, and add the sensor nodes
+3. confirm the telephoto path end to end
+4. write IMX586, IMX481 and IMX471 using the downstream register sequences
+5. libcamera pipeline configuration
+6. optionally add the lite instances, and a binding YAML before submission
 
 Step 2 is the useful milestone: it proves the CAMSS port with a sensor driver
 that already exists, before any new sensor driver is written.
