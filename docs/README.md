@@ -21,6 +21,8 @@ single developer workstation or a live debugging session.
   direct boot is validated
 - [pmaports-upstreaming.md](pmaports-upstreaming.md): package architecture,
   validation gates, and submission scope
+- [camera-port-plan.md](camera-port-plan.md): extracted SM8150 CAMSS hardware
+  map, sensor identities, and the order the camera port has to be done in
 - [repository-layout.md](repository-layout.md): tracked versus local-only state
 - [android-reference.md](android-reference.md): Android-side facts worth capturing
 
