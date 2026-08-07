@@ -627,7 +627,7 @@ expect_value sound-compatible qcom,sm8150-sndcard \
 expect_value sound-model 'OnePlus 7T Pro' fdtget -ts "$dtb" "$sound" model
 expect_value sound-status okay fdtget -ts "$dtb" "$sound" status
 expect_value sound-routing \
-	'RX_BIAS MCLK AMIC1 MIC BIAS1 AMIC2 MIC BIAS2 AMIC3 MIC BIAS3 AMIC4 MIC BIAS4' \
+	'RX_BIAS MCLK AMIC1 MIC BIAS1 AMIC2 MIC BIAS2 AMIC3 MIC BIAS4 AMIC4 MIC BIAS1 AMIC5 MIC BIAS1' \
 	fdtget -ts "$dtb" "$sound" audio-routing
 expect_value q6asm-mm1-address 0 fdtget -tx "$dtb" "$q6asm_mm1" reg
 expect_value q6asm-mm2-address 1 fdtget -tx "$dtb" "$q6asm_mm2" reg

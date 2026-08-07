@@ -68,9 +68,10 @@ credentials, proprietary dumps, or workstation-specific paths.
   hardware validation of both TFA9874 revisions with a read-only driver that
   leaves reset lines, routes, protection, and output stages untouched.
 - [evidence/2026-08-07-mainline616-microphone.md](evidence/2026-08-07-mainline616-microphone.md):
-  partial microphone result. Records why capture needs its own `MultiMedia2`
-  front end, the SLIMbus port-mapping fix that ended exact digital silence,
-  and the measurements showing the path is not yet acoustically validated.
+  working handset microphone. Records the three separate defects behind it, the
+  stock-overlay evidence identifying the handset input as AMIC5 on MIC BIAS1,
+  the gain-tracking and three-tone discrimination measurements, and the
+  packaged-profile result.
 - [evidence/2026-08-05-mainline616-internal-speakers.md](evidence/2026-08-05-mainline616-internal-speakers.md):
   stock-derived S24_LE and TDM-slot contract, bounded amplifier sequencing,
   independent webcam-microphone validation of both internal speakers on the
