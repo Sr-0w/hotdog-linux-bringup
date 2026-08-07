@@ -204,3 +204,69 @@ question above is settled first.
 
 Step 2 is the useful milestone: it proves the CAMSS port with a sensor driver
 that already exists, before any new sensor driver is written.
+
+## First hardware result, revision `r55`
+
+CAMSS runs on the handset. This is the first time anything camera-related has
+worked on this port rather than merely compiled.
+
+### One missing config symbol was the whole blocker
+
+Revision `r54` enabled `camss` and both CCI blocks and the driver matched, but
+probe failed:
+
+```
+qcom-camss acb3000.camss: deferred probe timeout, ignoring dependency
+qcom-camss acb3000.camss: Failed to configure power domains: -110
+platform ac4a000.cci: deferred probe pending: (reason unknown)
+```
+
+The camera clock controller supplies both the clocks and the IFE and Titan-top
+power domains, and `CONFIG_SM_CAMCC_8150` was not set. The module list
+confirmed it: `camcc-sdm845.ko`, `camcc-sc7280.ko` and four others were built,
+but no `camcc-sm8150.ko`. Nothing in the device tree was wrong; the provider
+simply did not exist.
+
+`r55` sets `CONFIG_SM_CAMCC_8150=m`.
+
+### What the handset shows now
+
+```
+/sys/bus/platform/devices/ad00000.clock-controller/driver -> camcc-sm8150
+/dev/media0
+/dev/v4l-subdev0 .. /dev/v4l-subdev13
+```
+
+CAMSS probes cleanly, registers its media device and fourteen subdevices, and
+the deferred-probe list no longer mentions any camera block. The only log lines
+left are dummy-regulator notices for `vdda-phy` and `vdda-pll`, which is normal
+where the PHY supplies are not separately described.
+
+Both CCI blocks probe and present their four buses:
+
+```
+i2c-4  Qualcomm-CCI      i2c-5  Qualcomm-CCI
+i2c-6  Qualcomm-CCI      i2c-7  Qualcomm-CCI
+```
+
+### The camera modules answer
+
+Scanning the four buses finds devices already responding, with no power
+sequencing of any kind performed yet:
+
+| Bus | Addresses |
+| --- | --- |
+| i2c-4 | none |
+| i2c-5 | `0x51` |
+| i2c-6 | `0x54` |
+| i2c-7 | `0x50`, `0x58` |
+
+The `0x50`-`0x54` range is where camera-module calibration EEPROMs sit, so
+these are the modules' EEPROMs rather than the image sensors. The sensors
+themselves stay silent until MCLK and their supplies are up, which is expected
+and is exactly what a sensor node will do.
+
+What this proves independently of any sensor work: the register bases, the
+interrupts, the 31 clocks, the power domains, the SMMU streams and the CCI pin
+configuration are all correct, and the bus physically reaches the camera
+modules.
