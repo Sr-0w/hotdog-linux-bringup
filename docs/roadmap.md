@@ -2,20 +2,22 @@
 
 ## Project goal
 
-The goal is a complete mainline port that can be published in postmarketOS.
+The goal has two halves, and both are required.
 
-That is narrower than "make every peripheral work", and it changes how work is
-ordered. Anything that blocks submission outranks additional hardware, and
-hardware that is already good enough for the device category does not need to
-be perfected first. Concretely, the port is finished when the device can be
-submitted as a normal pmaports device: built from a shared, upstreamable kernel
-package rather than a device-specific fork, without laboratory-only deployment
-steps, with device-tree changes that are correct descriptions rather than
-temporary removals, and with an honest support matrix.
+**Publishable in postmarketOS.** The device must be submittable as a normal
+pmaports device: built from a shared, upstreamable kernel package rather than
+the device-specific fork used during bring-up, without laboratory-only
+deployment steps, with device-tree changes that are correct descriptions rather
+than temporary removals, and with an honest support matrix.
 
-An earlier goal of using the handset as a dockable desktop machine is no longer
-being pursued. Where that shaped the priorities, notably USB host mode and
-external display work, those items stay on the list but lose their precedence.
+**Complete hardware support.** Every peripheral the handset has should work,
+not merely enough of them to clear a device category. USB host mode, external
+display over the Type-C dock, cameras, sensors and telephony are all in scope.
+
+Neither half is subordinate to the other. Submission gates are not an excuse to
+stop enabling hardware, and hardware work is not an excuse to leave the packages
+unsubmittable. An earlier framing of this project as a dockable Gentoo desktop
+is dropped, but the dock hardware itself remains a real target.
 
 The submission gates are tracked in the
 [pmaports upstreaming plan](pmaports-upstreaming.md). The subsystem-by-subsystem

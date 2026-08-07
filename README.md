@@ -12,12 +12,14 @@ it as HD1911 and expose the `hotdog` project/codename.
 
 ## Goal
 
-A complete mainline port that can be published in postmarketOS. The port is
-finished when the device can be submitted as a normal pmaports device: built
-from a shared, upstreamable kernel package rather than the device-specific fork
-used during bring-up, without laboratory-only deployment steps, with device-tree
-changes that are correct descriptions rather than temporary removals, and with
-an honest support matrix. Submission gates outrank additional hardware. See the
+Two halves, both required. **Publishable in postmarketOS**: the device must be
+submittable as a normal pmaports device, built from a shared, upstreamable
+kernel package rather than the device-specific fork used during bring-up,
+without laboratory-only deployment steps, with device-tree changes that are
+correct descriptions rather than temporary removals, and with an honest support
+matrix. **Complete hardware support**: every peripheral the handset has should
+work, including USB host mode and the Type-C dock, cameras, sensors and
+telephony. Neither half is subordinate to the other. See the
 [roadmap](docs/roadmap.md) and the
 [pmaports upstreaming plan](docs/pmaports-upstreaming.md).
 
