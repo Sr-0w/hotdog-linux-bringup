@@ -656,10 +656,24 @@ several captures, so the link is not clean either. But error bits on a link that
 nonetheless delivers frame timing are a different problem from a link that
 delivers nothing.
 
+### The SMMU is not the culprit
+
+Checked directly: a capture produces no `arm-smmu` context faults, no IOMMU
+messages, and nothing from CAMSS, the VFE or the CSID in the log at all. The
+`acb3000.camss` device sits alone in IOMMU group 7 as expected. So the eight
+stream IDs are not silently faulting; translation is not what loses the pixels.
+
+That leaves the write master itself, or the CSID's decode configuration. A CSID
+told to decode a format that does not match what the sensor sends can still pass
+frame boundaries downstream, which would explain frame timing arriving intact
+while the payload never becomes pixel data. `RDI_CFG0` reads `0x802bf007`, and
+its decode-format and data-type fields have not been checked against
+`SGRBG10_1X10` yet.
+
 ## Remaining
 
-1. check the VFE RDI write master and the SMMU stream IDs, which is where pixel
-   data is being lost between a synchronised receiver and memory
+1. decode CSID `RDI_CFG0` `0x802bf007`, specifically its data type and decode
+   format fields, against what the sensor actually sends
 2. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
