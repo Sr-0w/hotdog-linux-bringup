@@ -176,7 +176,50 @@ selected. Four-lane DisplayPort would raise the ceiling at the cost of dropping
 USB3 to USB2, which is the standard trade-off in the pin assignments and is not
 currently exercised.
 
+## DisplayPort audio: back end registers, ADSP refuses the port
+
+Video over the dock works but sound through it does not.
+
+The DisplayPort controller registers an `hdmi-audio-codec` platform device and
+already carries `#sound-dai-cells`, and the DSP side already knows
+`DISPLAY_PORT_RX`, but the sound card referenced neither, so nothing existed to
+play to. Revision `r44` (`0050`) adds the missing back end, and `r45` (`0051`)
+teaches the machine driver to accept the DAI id, which its three switches did
+not list and which made every open, configure and close log
+`invalid dai id 0x68`.
+
+That part works: `DISPLAY_PORT_RX Audio Mixer MultiMedia1` through
+`MultiMedia8` now exist and the misleading log messages are gone.
+
+Playback still fails. Routing `MultiMedia1` to the back end and playing gives:
+
+```
+qcom-q6afe: AFE enable for port 0x6020 failed -110
+q6afe-dai: ASoC error (-110): at snd_soc_dai_prepare() on DISPLAY_PORT_RX_0
+```
+
+The ADSP does not answer the request to start the DisplayPort AFE port.
+
+This is not obviously a vendor firmware gap. The stock OxygenOS odm mixer
+configuration has 107 references to display-port audio, including real paths
+such as `deep-buffer-playback display-port`, and the stock platform info
+declares `SND_DEVICE_OUT_SPEAKER_AND_DISPLAY_PORT` on a
+`QUAT_MI2S_RX-and-DISPLAY_PORT` interface. The stock enable path is also no
+more elaborate than ours, being a single mixer set, so no obviously missing
+control explains the timeout.
+
+Not diagnosed further. Worth trying next: whether the DisplayPort controller
+must publish its audio configuration to the DSP before the port will start,
+whether the ADSP expects an explicit channel or bit-width configuration on this
+port, and comparing against a board where q6afe DisplayPort audio is known to
+work.
+
+The back end is left in place because it is correct and inert: nothing selects
+it, the speaker profile is untouched, and the log noise it used to cause is
+fixed.
+
 ## Not yet validated
+
 
 
 
