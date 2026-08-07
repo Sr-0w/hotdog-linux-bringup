@@ -27,18 +27,7 @@ telephony. Neither half is subordinate to the other. See the
 
 ## Hardware support at a glance
 
-This table describes the tested HD1913 handset, not every `hotdog` variant.
-States are deliberately evidence-based: **🟢** means the function has been
-validated on the physical handset, **🟡** means some of the path works but the
-feature is incomplete or insufficiently tested, **🔴** means a hardware test
-demonstrated that the function is currently broken, **⚪** means not yet
-hardware-validated (including prepared/offline-only candidates), and **⚫**
-means the function is known to be impossible to support within the project's
-technical constraints. Prepared code or a successful offline build alone never
-counts as hardware support. Rows are sorted by state in the order 🟢, 🟡, 🔴,
-⚪, ⚫. No current item is classified ⚫; vendor-dependent features remain ⚪
-unless impossibility is actually established. See [docs/status.md](docs/status.md)
-for the detailed evidence and limitations.
+Support status for the tested HD1913 handset.
 
 | Subsystem | Function | State | Current result |
 |---|---|:---:|---|
@@ -88,6 +77,10 @@ for the detailed evidence and limitations.
 | Range sensor | STMVL53L1 laser rangefinder | ⚪ | Driver/integration work remains. |
 | Fingerprint | Fingerprint reader | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
 | Fast charging | OnePlus Warp charge | ⚪ | Vendor-dependent path; no mainline hardware support is validated. |
+
+**Legend:** 🟢 supported · 🟡 partial · 🔴 broken · ⚪ to do · ⚫ impossible
+
+Detailed evidence and limitations: [docs/status.md](docs/status.md).
 
 ## Current state
 
