@@ -1641,3 +1641,25 @@ The full table, all eighteen registers across six ports, is in
 Next is to program these from the driver at the right point in the sequence,
 rather than by hand into a running system, and to write the urgency and UBWC
 entries alongside them rather than the priority LUTs alone.
+
+## Session end state: the handset is in Qualcomm crashdump mode
+
+After roughly a dozen PMIC-level resets from the Sony slot experiments, the
+handset stopped booting and came up as `05c6:900e`, Qualcomm crashdump and
+memory-debug mode. It is not bricked: `900e` retains DRAM after a failed boot
+and a long power press normally returns it to a normal boot.
+
+Worth knowing for anyone in the same position:
+
+- `restore-boot-b-from-edl-firehose.sh` refuses to run in `900e` by design; it
+  requires `05c6:9008`, the Firehose mode, and refuses crashdump mode
+  explicitly.
+- `capture-qdl-900e-ramdump.sh preflight` passes in this state, so a read-only
+  memory capture is available. That is potentially the one instrument that
+  would show why enabling a PM8009 camera rail resets the SoC, since `pstore`
+  never survives it.
+- `r80` was booting normally before this, and `r81`, carrying the CAMNOC
+  quality-of-service patch, is built and waiting.
+
+The Sony slot scan is intrusive enough to leave the handset unbootable after
+repeated use. It should be run sparingly, and the handset checked between runs.

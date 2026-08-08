@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 19:00:00 +0200
+Subject: [PATCH] media: camss: program the sm8150 CAMNOC quality of service
+
+The vendor stack programs per-port priority, danger and safe tables in the
+CAMNOC at CPAS start. Mainline models no CPAS and writes none of them.
+
+Read on hardware, with a capture configured and running, every IFE entry is
+zero, and the write master completes a transfer per frame while issuing no
+memory write at all: buffers queued pre-filled with a pattern come back
+untouched while the CSID byte counter shows a full frame handed over each time.
+
+Writing the vendor's values for the two IFE ports by hand changes that
+behaviour, which nothing else tried in this port has done. Program them from the
+driver, at write-master start, with the values from cpastop_v175_101.h for this
+SoC revision.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../media/platform/qcom/camss/camss-vfe-17x.c | 50 +++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+
+--- a/drivers/media/platform/qcom/camss/camss-vfe-17x.c
++++ b/drivers/media/platform/qcom/camss/camss-vfe-17x.c
+@@ -204,10 +204,61 @@
+ 	writel_relaxed(reset_bits, vfe->base + VFE_GLOBAL_RESET_CMD);
+ }
+ 
++/*
++ * SM8150 CAMNOC quality-of-service.
++ *
++ * The vendor stack programs per-port priority, danger and safe tables at CPAS
++ * start; mainline models no CPAS and writes none of them. Read on hardware,
++ * every IFE entry is zero, and the write master completes transfers without
++ * issuing a single memory write. These are the values the vendor writes for
++ * this SoC revision, from cpastop_v175_101.h.
++ */
++#define CAMNOC_BASE			0x0ac42000
++#define CAMNOC_SIZE			0x5000
++
++static const struct {
++	u32 offset;
++	u32 value;
++} camnoc_qos_8150[] = {
++	{ 0x0430, 0x66666543 },	/* IFE02 priority LUT low */
++	{ 0x0434, 0x66666666 },	/* IFE02 priority LUT high */
++	{ 0x0440, 0xffffff00 },	/* IFE02 danger LUT low */
++	{ 0x0448, 0x00000001 },	/* IFE02 safe LUT low */
++	{ 0x0830, 0x66666543 },	/* IFE13 priority LUT low */
++	{ 0x0834, 0x66666666 },	/* IFE13 priority LUT high */
++	{ 0x0840, 0xffffff00 },	/* IFE13 danger LUT low */
++	{ 0x0848, 0x00000001 },	/* IFE13 safe LUT low */
++};
++
++static void vfe_camnoc_qos_init(struct vfe_device *vfe)
++{
++	void __iomem *camnoc;
++	unsigned int i;
++
++	camnoc = ioremap(CAMNOC_BASE, CAMNOC_SIZE);
++	if (!camnoc) {
++		dev_warn(vfe->camss->dev, "cannot map CAMNOC\n");
++		return;
++	}
++
++	for (i = 0; i < ARRAY_SIZE(camnoc_qos_8150); i++)
++		writel_relaxed(camnoc_qos_8150[i].value,
++			       camnoc + camnoc_qos_8150[i].offset);
++
++	/* Ordering against the write master configuration that follows. */
++	wmb();
++	iounmap(camnoc);
++
++	dev_info(vfe->camss->dev, "CAMNOC quality-of-service programmed\n");
++}
++
+ static void vfe_wm_start(struct vfe_device *vfe, u8 wm, struct vfe_line *line)
+ {
+ 	u32 val;
+ 
++	if (vfe->camss->res->version == CAMSS_8150)
++		vfe_camnoc_qos_init(vfe);
++
+ 	/*Set Debug Registers*/
+ 	val = DEBUG_STATUS_CFG_STATUS0(1) |
+ 	      DEBUG_STATUS_CFG_STATUS0(7);
+--
+2.50.1
