@@ -806,10 +806,46 @@ either the write master is addressing somewhere other than the queued buffer, or
 it is enabled but not fed from the RDI. Nothing upstream of it remains
 suspect, which is a much smaller search than at any earlier point.
 
+## The write master is running with a null image address
+
+Read straight from the VFE bus registers through `/dev/mem`, at rest and during
+a capture:
+
+```
+au repos      WM0 status0=00000000 cfg=00000000 img_addr=00000000
+pendant       WM0 status0=fe000000 cfg=00000003 img_addr=00000000
+```
+
+So write master 0 is configured and active while streaming, `cfg` bits 0 and 1
+set, status showing activity, and its `VFE_BUS_WM_IMAGE_ADDR` register reads
+zero throughout. Write masters 1 to 3 stay untouched, which is right for a
+single RDI0 capture.
+
+A write master enabled and clocked but pointed at address zero explains the
+symptom exactly and completely: every stage upstream works, the bus completes a
+transfer per frame, no SMMU fault occurs because nothing valid is ever
+translated, and the queued buffer is never written, so it keeps the zeroes the
+allocator gave it.
+
+### The caveat, which matters
+
+Qualcomm bus address registers are frequently write-only shadows that latch on a
+register-update command, in which case reading zero proves nothing about what
+was programmed. Before treating this as the fault, that has to be settled: check
+whether `vfe_wm_update` writes `VFE_BUS_WM_IMAGE_ADDR` at all on this path, and
+whether the register-update command that latches the shadow reaches the bus.
+
+The `stride` and buffer-width reads both returned `0x0000ff01`, which is
+implausible for a 5264-byte stride and suggests the offsets used for those two
+were wrong, so they say nothing either way. Only the address read is at an
+offset taken directly from the driver's own macro.
+
 ## Remaining
 
-1. the VFE RDI write master's addressing and its input selection, now the only
-   stage not either verified or eliminated
+1. settle whether `VFE_BUS_WM_IMAGE_ADDR` is readable, and if it is, why it is
+   zero while the write master runs
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
