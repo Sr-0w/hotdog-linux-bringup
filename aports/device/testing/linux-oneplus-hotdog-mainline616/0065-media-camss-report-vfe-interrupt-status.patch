@@ -23,7 +23,30 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 
 --- a/drivers/media/platform/qcom/camss/camss-vfe-17x.c
 +++ b/drivers/media/platform/qcom/camss/camss-vfe-17x.c
-@@ -348,6 +348,27 @@
+@@ -260,6 +260,22 @@
+ 		&line->video_out.active_fmt.fmt.pix_mp;
+ 	u32 stride = pix->plane_fmt[0].bytesperline;
+ 
++	/*
++	 * Bring-up instrumentation. The write master runs while its image
++	 * address register reads back zero, and the address written here is
++	 * the only thing that sets it, so report what is actually programmed.
++	 */
++	{
++		static int reported;
++
++		if (reported < 6) {
++			reported++;
++			dev_info(vfe->camss->dev,
++				 "vfe%d wm%u: addr=%08x stride=%u height=%u\n",
++				 vfe->id, wm, addr, stride, pix->height);
++		}
++	}
++
+ 	writel_relaxed(addr, vfe->base + VFE_BUS_WM_IMAGE_ADDR(wm));
+ 	writel_relaxed(stride * pix->height, vfe->base + VFE_BUS_WM_FRAME_INC(wm));
+ }
+@@ -348,6 +364,27 @@
  	writel_relaxed(CMD_GLOBAL_CLEAR, vfe->base + VFE_IRQ_CMD);
  	writel_relaxed(1, vfe->base + VFE_BUS_IRQ_CLEAR_GLOBAL);
  

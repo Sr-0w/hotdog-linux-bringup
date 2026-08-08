@@ -840,10 +840,49 @@ implausible for a 5264-byte stride and suggests the offsets used for those two
 were wrong, so they say nothing either way. Only the address read is at an
 offset taken directly from the driver's own macro.
 
+### Settled: the address register is write-only and the addressing is correct
+
+The caveat flagged above was the right one. Instrumenting `vfe_wm_update` shows
+the driver programming valid addresses every frame:
+
+```
+vfe0 wm0: addr=ff000000 stride=5264 height=3120
+vfe0 wm0: addr=fe000000 stride=5264 height=3120
+vfe0 wm0: addr=fd000000 stride=5264 height=3120
+vfe0 wm0: addr=fc000000 stride=5264 height=3120
+```
+
+Four IOVAs cycling through the queued buffers, no truncation, and the stride and
+height exactly as configured. So `VFE_BUS_WM_IMAGE_ADDR` reads zero because it is
+write-only, not because nothing was written, and the write master's addressing
+is correct.
+
+## Where this leaves the port
+
+Every stage is now either verified correct or eliminated:
+
+| Stage | State |
+| --- | --- |
+| sensor mode and streaming | correct, read over I2C |
+| CSI-2 link | zero errors latched |
+| frame timing | one VFE interrupt per frame at 30 Hz |
+| CSID receive and decode | correct, RAW10 payload-only from PHY 0 |
+| SMMU | no faults |
+| write master enable and status | active every frame |
+| write master addressing | correct IOVA, stride and height |
+| memory | still zero |
+
+Nothing in the configured path is wrong. The remaining possibility is that the
+write master is enabled and addressed but never actually fed by the RDI, which
+would be an input-selection or bus-client-mapping question inside the VFE rather
+than anything the board description controls. That is the one place left to
+look, and it needs the VFE bus client configuration compared against what the
+vendor driver programs for the same path.
+
 ## Remaining
 
-1. settle whether `VFE_BUS_WM_IMAGE_ADDR` is readable, and if it is, why it is
-   zero while the write master runs
+1. compare the VFE bus client and RDI input selection against the vendor driver,
+   the only unexplored possibility left
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
