@@ -1379,9 +1379,19 @@ node's `rgltr-min-voltage` rather than from the regulator's own description. The
 same applies to ldo3 and ldo4 at 1.056 V.
 
 Pinning an RPMh regulator to a voltage its own description does not offer is a
-plausible way to have the request fail or land somewhere unintended on enable.
-Whether that is enough to reset the handset is not established, but it is a real
-error in `0059` regardless, and it is the first thing to correct.
+real error regardless, and `0071` corrects it in `r78`: ldo1 gets 1.100 to
+1.304 V, ldo3 and ldo4 get 1.096 to 1.304 V.
+
+**It does not stop the reset.** Scanning slot 2 on `r78` still resets the
+handset. So the voltage ranges were wrong and are now right, and they were not
+the cause.
+
+What that leaves for the Sony slots, in order of what has been ruled out by test:
+the PM8150L GPIO numbering is correct, the enable polarity is correct, and the
+rail voltages are correct. The remaining differences between the working slot
+and the three failing ones are the LDOs themselves, ldo1, ldo3 and ldo4 against
+ldo2, and their `vdd-l*-supply` parents, which were inferred from ldo2 and are
+the one part of `0059` that has never been checked against anything.
 
 The vendor sets no `parent-supply` on these at all, so the `vdd-l1-supply`,
 `vdd-l3-supply` and `vdd-l4-supply` choices here cannot be checked against it
@@ -1389,9 +1399,9 @@ directly; they describe physical topology that RPMh manages internally.
 
 ## Remaining
 
-1. correct `0059` to give ldo1, ldo3 and ldo4 the voltage ranges the vendor
-   regulator description gives them, rather than the single points taken from a
-   sensor node
+1. the `vdd-l1-supply`, `vdd-l3-supply` and `vdd-l4-supply` parents in `0059`,
+   the only part of the Sony slots' power description never checked against a
+   source, and the last difference from the slot that works
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
