@@ -23,15 +23,11 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 
 --- a/drivers/media/platform/qcom/camss/camss-vfe-17x.c
 +++ b/drivers/media/platform/qcom/camss/camss-vfe-17x.c
-@@ -260,6 +260,22 @@
+@@ -260,6 +260,18 @@
  		&line->video_out.active_fmt.fmt.pix_mp;
  	u32 stride = pix->plane_fmt[0].bytesperline;
  
-+	/*
-+	 * Bring-up instrumentation. The write master runs while its image
-+	 * address register reads back zero, and the address written here is
-+	 * the only thing that sets it, so report what is actually programmed.
-+	 */
++	/* Bring-up instrumentation: report what is actually programmed. */
 +	{
 +		static int reported;
 +
@@ -46,16 +42,13 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
  	writel_relaxed(addr, vfe->base + VFE_BUS_WM_IMAGE_ADDR(wm));
  	writel_relaxed(stride * pix->height, vfe->base + VFE_BUS_WM_FRAME_INC(wm));
  }
-@@ -348,6 +364,27 @@
+@@ -348,6 +360,24 @@
  	writel_relaxed(CMD_GLOBAL_CLEAR, vfe->base + VFE_IRQ_CMD);
  	writel_relaxed(1, vfe->base + VFE_BUS_IRQ_CLEAR_GLOBAL);
  
 +	/*
-+	 * Bring-up instrumentation. Capture returns correctly sized buffers
-+	 * full of zeroes while every stage checkable from userspace is
-+	 * configured correctly, so the question is what this interrupt really
-+	 * reports. Reset acknowledgements dominate and say nothing, so only
-+	 * interrupts carrying something else are printed, and only a few.
++	 * Bring-up instrumentation. Reset acknowledgements dominate and say
++	 * nothing, so only interrupts carrying something else are printed.
 +	 */
 +	if ((status0 & ~STATUS_0_RESET_ACK) || status1 ||
 +	    vfe_bus_status[VFE_LINE_RDI0] || vfe_bus_status[VFE_LINE_RDI1]) {

@@ -986,15 +986,30 @@ writel_relaxed(0,                       ... BUFFER_HEIGHT_CFG(wm));
 writel_relaxed(WM_STRIDE_DEFAULT_STRIDE, ... STRIDE(wm));            /* 0xFF01 */
 ```
 
-and the hardware read-back confirms `0xFF01` in both. Whether `0xFF01` is a
-valid "unconstrained" sentinel on this part, as it evidently is on the SoCs this
-code already serves, or whether SM8150 requires the real geometry, is the next
-thing to test, and it is a small and well-defined change.
+and the hardware read-back confirms `0xFF01` in both.
+
+**Tested and wrong.** Revision `r67` programmed the real width, height and
+stride for SM8150. The frames stayed entirely zero, and checking the vendor
+driver properly afterwards shows why the idea was misconceived: for RDI outputs
+it sets
+
+```c
+#define CAM_VFE_RDI_BUS_DEFAULT_WIDTH   0xFF01
+#define CAM_VFE_RDI_BUS_DEFAULT_STRIDE  0xFF01
+        rsrc_data->width  = CAM_VFE_RDI_BUS_DEFAULT_WIDTH;
+        rsrc_data->stride = CAM_VFE_RDI_BUS_DEFAULT_STRIDE;
+```
+
+The vendor uses the same sentinel on the RDI path; the real geometry it programs
+is for the pixel path. Mainline's constants were right, and the difference
+spotted above was between two different paths rather than two different SoCs.
+Reverted in `r68`.
 
 ## Remaining
 
-1. program the write master with the real width, height and stride the way the
-   vendor does, instead of mainline's `0xFF01` sentinels
+1. why a write master with correct geometry, address and enable, fed by an
+   error-free link that delivers start of frame every frame, completes its
+   transfer without writing a byte
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
