@@ -704,7 +704,7 @@ against the driver's own inputs and found wrong:
 | CSID receive config | correct | 4 lanes, PHY 0, D-PHY |
 | CSID decode config | correct | RAW10, payload only, enabled |
 | SMMU translation | not faulting | no context faults during capture |
-| frame timing | **unproven** | 30.00 fps, but see the RDI1 result below |
+| frame timing | arriving | one VFE interrupt per frame at 30 Hz, instrumented |
 | pixel data | **absent** | every byte of every buffer is zero |
 
 What is left is the VFE write master, the only stage never inspected, plus the
@@ -733,11 +733,50 @@ observation that weakens a previous conclusion, not as a finding that replaces
 it, and the "frame timing arrives" row of the table above should be treated as
 unproven until it is settled.
 
+## Instrumented: frames and write completions both arrive, the payload is empty
+
+`0065` prints the VFE interrupt and bus status, skipping the reset
+acknowledgements that otherwise dominate. During a capture:
+
+```
+[69.710] vfe0 irq: status0=08000220 status1=00000000 bus0=00000004 bus1=00000000
+[69.741] vfe0 irq: status0=00000200 status1=00000000 bus0=00000000 bus1=00000001
+[69.775] vfe0 irq: status0=00000200 status1=00000000 bus0=00000000 bus1=00000001
+[69.808] vfe0 irq: status0=00000200 status1=00000000 bus0=00000000 bus1=00000001
+```
+
+Those repeat at 32 ms, which is 30 Hz, the sensor's frame rate. So the VFE takes
+one interrupt per frame and a bus interrupt fires alongside each one: frame
+timing reaches the VFE and the write master signals a completion every frame.
+
+The buffers are still entirely zero.
+
+### Correcting an over-correction
+
+An earlier note said the RDI1 experiment made the 30 fps evidence unsafe and
+marked frame timing as unproven. That retraction went too far. The instrumented
+interrupts show a genuine per-frame interrupt at the sensor's rate, so frame
+timing does arrive. The RDI1 capture most likely blocked because its links and
+pad formats were set up wrongly in that one experiment, which was the
+alternative explanation offered at the time.
+
+### What this leaves
+
+Frame boundaries arrive, the write master completes, the SMMU does not fault,
+and the written frame is zero. The remaining candidate is the payload itself:
+the CSI-2 packets arrive with errors and carry nothing usable, which is
+consistent with `RX_IRQ_STATUS` steadily accumulating per-lane error bits
+throughout. A VFE writing a frame that decoded to nothing writes zeroes.
+
+That returns attention to the link's electrical setup, despite the CSIPHY
+generation, lane table and settle count all being nominally correct. The next
+thing to establish is which error bits are latched, which needs the CSI2_RX_IRQ
+bit definitions rather than more guessing.
+
 ## Remaining
 
-1. settle whether frame timing genuinely reaches the VFE, since the 30 fps
-   evidence for it is now in doubt
-2. instrument the VFE RDI write master, the one stage never inspected
+1. decode the latched `RX_IRQ_STATUS` per-lane error bits, now the sole
+   remaining lead for the empty payload
 2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
