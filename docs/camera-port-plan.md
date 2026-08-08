@@ -1005,9 +1005,37 @@ is for the pixel path. Mainline's constants were right, and the difference
 spotted above was between two different paths rather than two different SoCs.
 Reverted in `r68`.
 
+## Bisecting with the CSID's own generator
+
+The CSID carries an internal test generator, exposed as a `test_pattern` control
+on `msm_csid0`. Driving it isolates the CSID-to-memory path from CSI-2 reception
+entirely. The control only takes effect once the CSIPHY link is disabled, since
+a connected source overrides it:
+
+```
+media-ctl -l '"msm_csiphy0":1 -> "msm_csid0":0 [0]'
+v4l2-ctl -d /dev/v4l-subdev4 --set-ctrl=test_pattern=1   -> Incrementing
+```
+
+With the generator running and no CSI-2 input at all, the capture returns **no
+buffers whatsoever** and times out, where the sensor path returns one per frame.
+
+That is a difference worth having, but it is not conclusive on its own: the
+generator may need virtual channel and data type settings this experiment did
+not provide, so "no buffers" may mean "generator not actually producing" rather
+than "path broken". The handset also reset during the experiment, so the run was
+not clean.
+
+What it does establish is that the two paths behave differently, and that the
+generator is the right instrument for separating reception from the write path.
+Repeating it with the generator's own vc and dt configured is the next step, and
+it needs no reflash.
+
 ## Remaining
 
-1. why a write master with correct geometry, address and enable, fed by an
+1. redo the CSID generator bisection with its virtual channel and data type
+   configured, to separate reception from the write path conclusively
+2. why a write master with correct geometry, address and enable, fed by an
    error-free link that delivers start of frame every frame, completes its
    transfer without writing a byte
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
