@@ -1049,10 +1049,47 @@ This is a circular limitation in the driver rather than a property of the
 hardware, so the bisection cannot be done from userspace as it stands. Forcing
 `en_vc` alongside the generator would need a small patch.
 
+## The write master performs no memory writes at all
+
+Every earlier statement here described the frames as "entirely zero". That was
+literally true and diagnostically misleading, and this settles what it meant.
+
+Queueing buffers pre-filled with `0xAA` through the V4L2 mmap interface, rather
+than letting `v4l2-ctl` allocate them, gives:
+
+```
+trame 0 (buf 0): 0xAA restants 100.0%  zeros 0.0%  bytesused=16423680
+trame 1 (buf 1): 0xAA restants 100.0%  zeros 0.0%  bytesused=16423680
+trame 2 (buf 0): 0xAA restants 100.0%  zeros 0.0%  bytesused=16423680
+```
+
+The pattern survives untouched across every frame. The write master is not
+writing zeroes; it is not writing anything. Freshly allocated pages are zero, so
+every capture to a file until now was recording the allocator's zeroes rather
+than anything the hardware produced.
+
+That reframes the whole search. The question was "why does the hardware write
+zeroes", which invited theories about decoding, link errors and formats. The
+question is actually "why does a write master that reports a completed transfer
+issue no bus write at all", which is much narrower.
+
+What sits either side of it, all verified: the CSI-2 link latches no errors, the
+sensor's start of frame arrives every frame at bit 27, the write master is
+enabled with the right mode, geometry, burst limit and frame increment, its
+address register holds a valid IOVA that cycles across the queued buffers, the
+bus signals client-done for write master 0 every frame, and the SMMU records no
+faults because nothing is ever translated.
+
+A write master that signals completion without a single bus transaction points
+at its input: the RDI stream inside the VFE carries no pixels, even though the
+CSID receives them cleanly. That is now the one thing left to explain.
+
 ## Remaining
 
-1. force `en_vc` alongside the CSID generator in a patch, so the bisection
-   between reception and the write path can actually be made
+1. why the RDI stream inside the VFE carries no pixels to a correctly
+   configured write master, when the CSID receives them without error
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. why a write master with correct geometry, address and enable, fed by an
    error-free link that delivers start of frame every frame, completes its
    transfer without writing a byte
