@@ -1084,10 +1084,38 @@ A write master that signals completion without a single bus transaction points
 at its input: the RDI stream inside the VFE carries no pixels, even though the
 CSID receives them cleanly. That is now the one thing left to explain.
 
+## The CSID delivers a full frame to the VFE
+
+The CSID keeps a per-RDI byte counter, enabled here by `RDI_CFG0_BYTE_CNTR_EN`,
+with ping and pong registers at `0x3e0` and `0x3e4` for RDI0. Read during a
+capture:
+
+```
+byte_cntr ping=16411200 pong=16411200  RDI_CTRL=00000001
+```
+
+16,411,200 is exactly 4208 x 3120 x 10/8: one complete RAW10 frame, on both
+halves of the ping-pong pair. So the CSID is not merely receiving cleanly, it is
+handing a full frame's worth of bytes onward every frame.
+
+Combined with the pre-filled buffer result, the fault is now bounded on both
+sides with hardware evidence:
+
+| Boundary | Evidence |
+| --- | --- |
+| into the VFE | CSID byte counter shows a full frame per frame |
+| out of the VFE | queued buffers keep their `0xAA` fill untouched |
+
+Everything before the VFE bus works. The VFE bus receives a complete frame,
+reports its write master done, and performs no memory write. That is the fault,
+stated as narrowly as the hardware allows.
+
 ## Remaining
 
-1. why the RDI stream inside the VFE carries no pixels to a correctly
-   configured write master, when the CSID receives them without error
+1. why the VFE bus, handed a complete frame by the CSID and reporting its write
+   master done, performs no memory write
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. why a write master with correct geometry, address and enable, fed by an
