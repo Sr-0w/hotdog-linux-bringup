@@ -1399,8 +1399,8 @@ directly; they describe physical topology that RPMh manages internally.
 
 ## Remaining
 
-1. observe which supply collapses when a Sony slot is powered, from PMIC state
-   across the reset, rather than testing further descriptions
+1. why enabling PM8009 ldo3 resets the handset, given that supplies alone at
+   stage 1 are enough to do it and the two shared rails are already on
 
    The `pm8009` versus `pm8009-1` compatible was checked and does not matter
    here: both variants give ldo1 through ldo4 the same `vdd-l1` to `vdd-l4`
@@ -1440,9 +1440,32 @@ others use `ldo1`, `ldo3` and `ldo4`, which it added. Nothing in the description
 of those three is now known to be wrong, and no mainline board describes them to
 compare against.
 
-The next thing that would settle it is watching which supply actually collapses,
-which means reading PMIC state across the reset rather than guessing at the
-description again.
+### Staged power-up: it is the regulator enable
+
+`0073` adds a `stage` parameter that stops the sequence after the supplies,
+after the analogue enable GPIOs, after MCLK, or runs it all. Slot 2 at
+`stage=1`, supplies only, with no GPIO asserted, no clock started and reset
+still held:
+
+**the handset resets.**
+
+So it is none of the things tested and refuted above. It is not the GPIOs, not
+their polarity, not the clock, not the reset line. Enabling the regulators is
+enough on its own.
+
+Of the three that slot asks for, `vio` is PM8150L ldo1 and `vana` is the boost
+converter, both shared with much of the system and already on before the camera
+touches them; enabling an already-enabled regulator only takes a reference.
+`vdig` is PM8009 `ldo3`, which nothing else uses and which this port added.
+
+That is now the single suspect, and it is consistent with everything: slot 1
+works and is the only one whose digital rail, `ldo2`, was described before this
+port existed.
+
+What this does not yet say is why enabling that LDO is fatal, given its voltage
+range now matches the vendor description and its parent has been removed. The
+useful next measurement is whether PM8009 is being brought out of a state the
+system depends on, rather than anything about ldo3's own description.
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.

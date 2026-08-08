@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=79
+pkgrel=80
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -109,6 +109,7 @@ source="
 	0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
 	0071-arm64-dts-hotdog-give-the-camera-rails-real-ranges.patch
 	0072-arm64-dts-hotdog-drop-invented-camera-rail-parents.patch
+	0073-media-i2c-stage-the-camera-slot-power-up.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -235,5 +236,6 @@ f1eb938066ab8d6989abe536334484c59c4d0c80d79c1c5243db42786e5076399e61c1d6c1bf0039
 ea10050f42580ca47dc9d386b806ba534e068506f379b080bd4d8b0321a50ca79e630d18550552438d77dd902a646ea9ef5edf724eae26240f58c73b9bfef55c  0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
 f5fff4742d81e60f35277336cf81e13311687f23cc858af3522951c4296b83727298e095d2c0ee7a35ac003ae284fe2524c44e2755012bf0fb582cff60ace9e3  0071-arm64-dts-hotdog-give-the-camera-rails-real-ranges.patch
 cc289e8909eefaf75acded8b13977b7252e9a0418a7d9a8d210447c706083bfaf643f133dc49e8b95a9e83250a7312eb9a61902707e36669b5cdc584e684b4b0  0072-arm64-dts-hotdog-drop-invented-camera-rail-parents.patch
+77b2229b9ba21825271d6b9a8c39cc20d551f2f2cb6db687f91c7bff1da4d01887e07e6f1ecd28e39ffaa0868a45c4bab41057c44caa148633586fae736775d9  0073-media-i2c-stage-the-camera-slot-power-up.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
