@@ -1363,15 +1363,35 @@ any of those three LDOs is actually fed from a different rail, or cannot supply
 what a sensor draws from where it is pointed, enabling it would collapse a
 shared supply, which is exactly a reset with nothing in the log.
 
-Checking `0059`'s parent supplies and voltages against the vendor regulator
-description is the next step, and it explains all three failures at once in a
-way neither the numbering nor the polarity did.
+**A concrete discrepancy found.** The vendor's own regulator description gives:
+
+```
+pm8009_l1: regulator-pm8009-l1 {
+        regulator-min-microvolt = <1100000>;
+        regulator-max-microvolt = <1304000>;
+        qcom,init-voltage       = <1100000>;
+};
+```
+
+A range from 1.100 V to 1.304 V, initialised at 1.100 V. `0059` pins it to a
+single point at 1.104 V, minimum equal to maximum, taken from the stock sensor
+node's `rgltr-min-voltage` rather than from the regulator's own description. The
+same applies to ldo3 and ldo4 at 1.056 V.
+
+Pinning an RPMh regulator to a voltage its own description does not offer is a
+plausible way to have the request fail or land somewhere unintended on enable.
+Whether that is enough to reset the handset is not established, but it is a real
+error in `0059` regardless, and it is the first thing to correct.
+
+The vendor sets no `parent-supply` on these at all, so the `vdd-l1-supply`,
+`vdd-l3-supply` and `vdd-l4-supply` choices here cannot be checked against it
+directly; they describe physical topology that RPMh manages internally.
 
 ## Remaining
 
-1. verify the PM8009 ldo1, ldo3 and ldo4 parent supplies and voltages added in
-   `0059` against the vendor regulator description, since the only slot that
-   powers up cleanly is the only one not using them
+1. correct `0059` to give ldo1, ldo3 and ldo4 the voltage ranges the vendor
+   regulator description gives them, rather than the single points taken from a
+   sensor node
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
