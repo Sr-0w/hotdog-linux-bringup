@@ -1272,10 +1272,39 @@ That is a bounded piece of work and it is the right next step for the Sony
 parts, independent of the VFE write-path fault, which blocks streaming on every
 slot equally including the one sensor that is already driven.
 
+### Attempted, and the Sony slots reset the handset
+
+`0068` extends the identification aid to read `0x0016` as well as `0x0000`, and
+paces the transfers. On `r75` the three scan nodes are present, one per Sony
+slot:
+
+```
+/sys/bus/i2c/devices/5-007f   slot 0
+/sys/bus/i2c/devices/6-007f   slot 2
+/sys/bus/i2c/devices/7-007f   slot 3
+```
+
+Loading it with `scan=1` resets the handset before a single line reaches the
+log. This reproduces the earlier failure and localises it: slot 1, the Samsung
+one, scanned fine and gave its chip id; the three Sony slots do not survive
+being powered this way.
+
+That points at the supplies rather than the bus, and specifically at the enable
+GPIOs those slots use, which slot 1 does not: slot 0 drives `tlmm 11`, `tlmm 29`
+and `pm8150l` GPIO 1, slot 2 drives `pm8150l` GPIO 12 and slot 3 `pm8150l`
+GPIO 2, where slot 1 only drives `tlmm 148`. A reset rather than an oops
+suggests something electrical, a rail being asserted that the running system
+depends on, rather than a driver fault.
+
+The next step is therefore to bring one Sony slot up in isolation, with its
+enable GPIOs asserted one at a time, rather than all three slots at once. The
+aid stays inert unless loaded with `scan=1`, so the handset boots normally with
+it present.
+
 ## Remaining
 
-1. identify the three Sony sensors by chip id, reading register 0x0016 at
-   address 0x1a on slots 0, 2 and 3
+1. bring up one Sony slot at a time, asserting its enable GPIOs individually,
+   since powering all three at once resets the handset
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
