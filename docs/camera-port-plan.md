@@ -932,10 +932,30 @@ detected on this path, on every SoC using this file, not just here. Whether it
 matters for RDI capture is a separate question, since register update and buffer
 done both arrive by other routes, but the test as written cannot be right.
 
+### VFE1 behaves differently from VFE0
+
+Relinking the same CSID output to `msm_vfe1_rdi0` and capturing from
+`/dev/video4` returns no buffers at all, where VFE0 returns them every frame.
+So the two instances are not equivalent, and VFE0 is the one further along.
+
+Whether that is a real asymmetry or an artefact of relinking by hand has not
+been established, and it is recorded as an observation rather than a finding.
+
+### Where the CID mapping sits
+
+The CSID tags each stream with an internal CID built from the virtual channel
+and `DT_ID`, `dt_id = vc & 0x03`, giving CID 0 for this stream. The question
+that follows, and that this session did not reach, is whether anything on the
+VFE side has to be told which CID feeds RDI0, and what it defaults to when
+nothing does.
+
 ## Remaining
 
-1. why a correctly programmed write master, fed by an error-free link and
-   completing every frame, writes nothing
+1. whether the VFE has to be told which CSID CID feeds RDI0, and what it
+   defaults to. That is the last unexamined link between an error-free CSID and
+   a write master that completes without data
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
