@@ -11,10 +11,10 @@ zero, and the write master completes a transfer per frame while issuing no
 memory write at all: buffers queued pre-filled with a pattern come back
 untouched while the CSID byte counter shows a full frame handed over each time.
 
-Writing the vendor's values for the two IFE ports by hand changes that
-behaviour, which nothing else tried in this port has done. Program them from the
-driver, at write-master start, with the values from cpastop_v175_101.h for this
-SoC revision.
+An initial manual run appeared to change that behaviour, but the observation
+did not reproduce with a coherent kernel, module tree and test state. Keep the
+minimal programming as a bounded diagnostic while the remaining CAMNOC path is
+isolated. The values come from cpastop_v175_101.h for this SoC revision.
 
 Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 ---
