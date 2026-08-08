@@ -879,10 +879,63 @@ than anything the board description controls. That is the one place left to
 look, and it needs the VFE bus client configuration compared against what the
 vendor driver programs for the same path.
 
+## Eliminated in the write-master sweep
+
+Each of these was checked and ruled out, so they need not be revisited.
+
+**The write master is fully and correctly programmed.** A full register dump of
+the WM0 block during capture:
+
+```
++0x00 = ff000000   current address, matching what was programmed
++0x08 = 00000003   enabled, MIPI RAW mode
++0x1c = 0000ff01   buffer width, the driver's WM_BUFFER_DEFAULT_WIDTH
++0x28 = 0000ff01   stride, the driver's WM_STRIDE_DEFAULT_STRIDE
++0x4c = ffffffff   frame drop pattern, nothing dropped
++0x58 = 00fa9b00   frame increment, 16423680, exactly stride x height
++0x5c = 0000000f   burst limit
+```
+
+**VFE 175 is not the problem.** The vendor device tree calls this `qcom,vfe175`
+where sdm845 is `qcom,vfe170`, which looked like a repeat of the CSIPHY
+generation mistake. Diffing the vendor's own `cam_vfe170.h` and `cam_vfe175.h`
+by numeric value shows the differences are additions for the camif-lite block,
+not changes to the RDI or bus register offsets. The RDI path is identical.
+
+**The write-master index is right.** The vendor maps RDI0 to write master 0,
+the same as mainline's `wm_idx = line->id`.
+
+**Bandwidth is not the problem.** The sensor also offers a binned 2104x1184
+mode. Captured at half the data rate, the frames are equally zero.
+
+**The sensor's own test pattern still does not arrive**, now retested on a link
+with zero latched errors, which rules out the optics and the analogue path
+again under better conditions.
+
+**`BIT(9)` in `status0` is expected, not a symptom.** It reads as
+`IMAGE_MASTER_PING_PONG(1)` while write master 0 is in use, which looked like a
+mismatch. It is not: mainline's ISR gates its whole write-master-done dispatch
+on a hardcoded `status0 & BIT(9)` rather than on `PING_PONG(wm)`, so BIT(9) is
+exactly what this driver expects to see. Buffer completion is then dispatched
+from the bus status, where `STATUS1_WM_CLIENT_BUF_DONE(0)` does fire each frame.
+
+### An upstream defect found along the way
+
+```c
+for (i = VFE_LINE_RDI0; i < vfe->res->line_num; i++)
+        if (status0 & STATUS_1_RDI_SOF(i))
+                vfe->isr_ops.sof(vfe, i);
+```
+
+A `STATUS_1_` mask tested against `status0`. Start-of-frame is therefore never
+detected on this path, on every SoC using this file, not just here. Whether it
+matters for RDI capture is a separate question, since register update and buffer
+done both arrive by other routes, but the test as written cannot be right.
+
 ## Remaining
 
-1. compare the VFE bus client and RDI input selection against the vendor driver,
-   the only unexplored possibility left
+1. why a correctly programmed write master, fed by an error-free link and
+   completing every frame, writes nothing
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
