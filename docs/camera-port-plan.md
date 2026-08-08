@@ -1592,3 +1592,52 @@ defaults are not adequate here. The relevant table for this SoC is
 It is recorded rather than tested because acting on it means modelling a
 subsystem, not changing a description, and that is a piece of work rather than
 an experiment.
+
+## Confirmed: the CAMNOC QoS registers are unprogrammed, and they matter
+
+The CPAS lead above was tested without modelling anything, because the CAMNOC is
+memory mapped. The vendor device tree puts it at `0xac42000`, and
+`cpastop_v175_101.h` gives the register offsets and values for this exact SoC
+revision.
+
+Read before writing anything, on a running system with a capture configured:
+
+```
+0x0430 SPECIFIC_IFE02_PRIORITYLUT_LOW  = 00000000
+0x0434 SPECIFIC_IFE02_PRIORITYLUT_HIGH = 00000000
+0x0440 SPECIFIC_IFE02_DANGERLUT_LOW    = 00000000
+0x0448 SPECIFIC_IFE02_SAFELUT_LOW      = 0000ffff
+0x0830 SPECIFIC_IFE13_PRIORITYLUT_LOW  = 00000000
+...
+```
+
+**Every priority and danger LUT is zero.** Mainline never programs them, on this
+SoC or any other, and nothing else does it either: the values the vendor writes
+at CPAS start are simply absent. That confirms the gap rather than assuming it.
+
+Writing the vendor's values for the two IFE ports and re-running the capture
+changes the behaviour: where the write master previously completed buffers
+without writing anything, the capture now blocks and dequeues nothing at all.
+
+That is not a fix, and it is not obviously an improvement, but it is the first
+change of any kind in the write path's behaviour across this whole
+investigation. Everything else tested left it completing empty buffers at 30 Hz
+regardless. Something in the NoC arbitration is genuinely reachable from here.
+
+The full table, all eighteen registers across six ports, is in
+`cpastop_v175_101.h` in the vendor tree, and the two IFE ports are:
+
+| Offset | Value | Register |
+| --- | --- | --- |
+| `0x0430` | `0x66666543` | IFE02 priority LUT low |
+| `0x0434` | `0x66666666` | IFE02 priority LUT high |
+| `0x0440` | `0xffffff00` | IFE02 danger LUT low |
+| `0x0448` | `0x00000001` | IFE02 safe LUT low |
+| `0x0830` | `0x66666543` | IFE13 priority LUT low |
+| `0x0834` | `0x66666666` | IFE13 priority LUT high |
+| `0x0840` | `0xffffff00` | IFE13 danger LUT low |
+| `0x0848` | `0x00000001` | IFE13 safe LUT low |
+
+Next is to program these from the driver at the right point in the sequence,
+rather than by hand into a running system, and to write the urgency and UBWC
+entries alongside them rather than the priority LUTs alone.
