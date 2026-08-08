@@ -949,11 +949,54 @@ that follows, and that this session did not reach, is whether anything on the
 VFE side has to be told which CID feeds RDI0, and what it defaults to when
 nothing does.
 
+## Start of frame confirmed, and a concrete difference from the vendor
+
+### The data really does arrive
+
+The vendor header gives RDI0's `sof_irq_mask` as `0x8000000`, bit 27 of the VFE
+status word. That value appears in the instrumented traces, alternating with the
+ping-pong bit:
+
+```
+status0=08000000   <- RDI0 start of frame
+status0=00000200   <- write master ping-pong
+```
+
+So start of frame genuinely arrives every frame. Mainline simply never
+dispatches it, because of the `STATUS_1_` mask tested against `status0` noted
+above. That closes the question of whether pixels reach the VFE: the frame
+structure does.
+
+### What the vendor writes that mainline does not
+
+Comparing `cam_vfe_bus_start_wm` against mainline's `vfe_wm_start`, the vendor
+programs the write master's real geometry:
+
+```c
+cam_io_w_mb(rsrc_data->width,  ...->buffer_width_cfg);
+cam_io_w   (rsrc_data->height, ...->buffer_height_cfg);
+cam_io_w_mb(rsrc_data->stride, ...->stride);
+```
+
+Mainline instead writes fixed constants:
+
+```c
+writel_relaxed(WM_BUFFER_DEFAULT_WIDTH, ... BUFFER_WIDTH_CFG(wm));   /* 0xFF01 */
+writel_relaxed(0,                       ... BUFFER_HEIGHT_CFG(wm));
+writel_relaxed(WM_STRIDE_DEFAULT_STRIDE, ... STRIDE(wm));            /* 0xFF01 */
+```
+
+and the hardware read-back confirms `0xFF01` in both. Whether `0xFF01` is a
+valid "unconstrained" sentinel on this part, as it evidently is on the SoCs this
+code already serves, or whether SM8150 requires the real geometry, is the next
+thing to test, and it is a small and well-defined change.
+
 ## Remaining
 
-1. whether the VFE has to be told which CSID CID feeds RDI0, and what it
-   defaults to. That is the last unexamined link between an error-free CSID and
-   a write master that completes without data
+1. program the write master with the real width, height and stride the way the
+   vendor does, instead of mainline's `0xFF01` sentinels
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
