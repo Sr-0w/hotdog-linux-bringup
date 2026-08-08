@@ -1399,9 +1399,9 @@ directly; they describe physical topology that RPMh manages internally.
 
 ## Remaining
 
-1. why enabling any PM8009 camera rail resets the handset, when supplies alone
-   are enough to do it and the reset leaves no log. This needs recording that
-   survives the reset, not another description change
+1. why enabling a PM8009 camera rail causes a PMIC-level reset. Established to
+   be electrical rather than software, so this needs rail measurement or board
+   documentation, not further description changes
 
    The `pm8009` versus `pm8009-1` compatible was checked and does not matter
    here: both variants give ldo1 through ldo4 the same `vdd-l1` to `vdd-l4`
@@ -1479,9 +1479,27 @@ load, so the aid has to be removed with `rmmod` before `modprobe` with a
 different `scan=`. A run that appears to do nothing is usually the module
 already being loaded from boot with `scan=-1`.
 
-The measurement that would settle it is PMIC state across the reset, which needs
-something that survives the reset to record it: the handset comes back with an
-empty log every time, so the answer is not going to come from `dmesg`.
+### It is a PMIC-level reset, not a kernel fault
+
+The instrument for this already exists on the handset: `ramoops` is described at
+`0xa9800000` and the kernel carries `CONFIG_PSTORE_CONSOLE=y` and
+`CONFIG_PSTORE_RAM=y`, so console output should survive a warm reset.
+
+Triggering the reset by scanning slot 0 and reading `/sys/fs/pstore` afterwards
+gives nothing at all. No console record, no dump, an empty directory.
+
+That is itself the answer to a question that has been open all along. A kernel
+panic or an oops would leave something in that region. Nothing surviving means
+the SoC is being reset below the kernel, by the PMIC, with no opportunity to
+write anything. Enabling a PM8009 camera rail is causing a hardware power fault,
+not a software one.
+
+Which closes what software can establish here. Every part of the description has
+been checked and corrected where it was wrong, the fault has been narrowed to
+the regulator enable itself, and the reset is now known to be electrical. Going
+further means measuring the rail rather than editing its description: the next
+useful step is instrumentation on the hardware, or the PM8009 topology for this
+board from a source that does not exist in any kernel tree checked here.
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
