@@ -773,10 +773,45 @@ generation, lane table and settle count all being nominally correct. The next
 thing to establish is which error bits are latched, which needs the CSI2_RX_IRQ
 bit definitions rather than more guessing.
 
+## The link is now error-free, and the frames are still black
+
+Decoding `RX_IRQ_STATUS` against the vendor headers corrected a misreading
+repeated several times here: its low byte is not errors. Bits 0-7 are
+`PHY_DL0..DL3_EOT_CAPTURED` and `PHY_DL0..DL3_SOT_CAPTURED`, purely
+informational, and `0xff` means all four lanes are capturing packet delimiters
+correctly. The errors live higher up, and included lane FIFO overflows.
+
+A FIFO overflow means data arriving faster than the downstream consumes it. The
+sensor's pixel rate is 482 MHz, while the CSID and VFE source clocks had been
+pinned at 400 MHz, below it. Raising them walked the errors down:
+
+| Revision | CSID and VFE source clocks | `RX_IRQ_STATUS` | error bits |
+| --- | --- | --- | --- |
+| `r63` | 400 MHz | `0x01d7c0ff` | 7 |
+| `r64` | 600 / 637 MHz | `0x000400ff` | 1 |
+| `r65` | 600 / 847 MHz | `0x000000ff` | **0** |
+
+At `r65` the CSI-2 link is completely clean: four lanes capturing SOT and EOT,
+no ECC warnings, no FIFO overflows, nothing latched at all.
+
+The captured frames are still entirely zero.
+
+So the state is now unambiguous in a way it has not been before. The sensor
+streams at the right mode. The link carries it without a single error. Frame
+timing reaches the VFE at 30 Hz. The write master completes every frame. The
+SMMU does not fault. And memory receives zeroes.
+
+That isolates the fault to the RDI output path between the CSID and memory:
+either the write master is addressing somewhere other than the queued buffer, or
+it is enabled but not fed from the RDI. Nothing upstream of it remains
+suspect, which is a much smaller search than at any earlier point.
+
 ## Remaining
 
-1. decode the latched `RX_IRQ_STATUS` per-lane error bits, now the sole
-   remaining lead for the empty payload
+1. the VFE RDI write master's addressing and its input selection, now the only
+   stage not either verified or eliminated
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
 3. confirm the other three slots and write IMX586, IMX481 and IMX471
 4. libcamera, and the pop-up motor the front camera depends on
