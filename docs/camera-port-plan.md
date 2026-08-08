@@ -1663,3 +1663,27 @@ Worth knowing for anyone in the same position:
 
 The Sony slot scan is intrusive enough to leave the handset unbootable after
 repeated use. It should be run sparingly, and the handset checked between runs.
+
+## A RAM dump was captured, and the kernel log is in it
+
+With the handset stuck in `900e`, `capture-qdl-900e-ramdump.sh capture` ran to
+completion and retained all four DDR segments, 8.1 GB in
+`logs/qdl-900e-ramdump-2026-08-08-191830/ramdump`. That directory is gitignored.
+
+The dump is usable: `Linux version` appears 4 times in `DDRCS0_0.BIN` and 36
+times in `DDRCS0_1.BIN`, so kernel memory survived the failed boots.
+
+What it does not give up easily is the log itself. Searching for the
+instrumentation strings finds them, but as format strings in the kernel's
+rodata, which are present whether or not they ever executed. Modern printk
+stores records separately from their format strings, so reading the actual log
+means locating the ring buffer through `vmlinux` symbols and parsing its
+records. That is a forensic exercise rather than a grep.
+
+It is worth doing, because it is the only route to the last messages before a
+reset that `pstore` never survives, and it would say directly how far the slot
+power-up got before the SoC went down. The `vmlinux` for the running kernel is
+reproducible from the package that was flashed.
+
+Note that completing the Sahara session did not reset the handset; it stayed in
+`900e` afterwards and still needs a physical power press.
