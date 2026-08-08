@@ -1177,9 +1177,35 @@ Mainline writes very little in the VFE top block for an RDI path: no
 module-control registers the vendor's map carries alongside it. That is where
 the next look belongs.
 
+## The strongest untested lead: no AXI bandwidth is voted
+
+CAMSS supports interconnect bandwidth voting, as `resources_icc` in `camss.c`,
+and SM8250, SC7280, SC8280XP, SM8550, X1E80100 and MSM8x53 all declare it. The
+SM8150 resources added here declare none, and the device tree node carries no
+`interconnects` property either, because SDM845, the template, has none.
+
+That fits the observation better than anything else tested. Without a vote on
+the camera NoC paths, the write master can be fully configured and enabled while
+having no route to memory, which is exactly a bus that sits completely idle
+while the CSID hands it whole frames.
+
+The values SM8150 needs are available: `MASTER_CAMNOC_HF0`, `MASTER_CAMNOC_HF1`
+and `MASTER_CAMNOC_SF` on `mmss_noc`, `SLAVE_EBI_CH0` on `mc_virt`, and
+`SLAVE_CAMERA_CFG` on `config_noc`, all defined in
+`dt-bindings/interconnect/qcom,sm8150.h`, with the three named paths `cam_ahb`,
+`cam_hf_0_mnoc` and `cam_sf_0_mnoc` matching SM8250's table.
+
+This was drafted and not landed: editing the patch text directly broke the hunk
+headers, the build refused it, and the tree was restored rather than left
+broken. It needs regenerating from source the way the other patches here are,
+which is mechanical.
+
 ## Remaining
 
-1. what the VFE top block needs so it presents the RDI stream to the bus.
+1. land the interconnect bandwidth voting for SM8150, regenerated from source
+   rather than by editing patch text
+2. failing that, what else the VFE top block needs so it presents the RDI stream
+   to the bus.
    Eliminated by test so far: the write master's configuration, geometry and
    addressing, the IOVA range, the bus clock-gating override, the SMMU stream
    IDs, the VFE version, the write master index, and link bandwidth
