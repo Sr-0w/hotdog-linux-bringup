@@ -1406,8 +1406,19 @@ directly; they describe physical topology that RPMh manages internally.
    The `pm8009` versus `pm8009-1` compatible was checked and does not matter
    here: both variants give ldo1 through ldo4 the same `vdd-l1` to `vdd-l4`
    supply names and the same `pmic5_nldo` voltage table, differing only in
-   smps2. So the choice of compatible is not what separates the working slot
-   from the three that reset.
+   smps2.
+
+   **There is no mainline reference for these rails.** Every board in the tree
+   that describes PM8009 declares only ldo2, ldo5 and ldo6, and only
+   `vdd-l2-supply` among the LDO parents. `sm8150-microsoft-surface-duo.dts`,
+   the other mainline SM8150 handset with this PMIC, carries exactly the three
+   LDOs hotdog had before this port added any, with the same voltages.
+
+   So `vdd-l1-supply`, `vdd-l3-supply` and `vdd-l4-supply` here are not a
+   deviation from a known-good description; nobody has described them upstream
+   at all. Getting them right needs the PM8009 topology for this SoC from a
+   source outside the kernel trees checked here, which is why this is where the
+   Sony slots stop rather than at another guess.
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
