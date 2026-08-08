@@ -1541,3 +1541,23 @@ board from a source that does not exist in any kernel tree checked here.
 4. libcamera pipeline configuration
 5. the pop-up motor, which the front camera needs before it can see anything
 6. optionally the lite CSID and VFE instances, and a binding YAML
+
+## The VFE power domains are on, checked during capture
+
+Read from `pm_genpd_summary` while streaming:
+
+```
+ife_0_gdsc      on    genpd:0:acb3000.camss   active
+titan_top_gdsc  on    genpd:2:acb3000.camss   active
+ife_1_gdsc      off   genpd:1:acb3000.camss   suspended
+```
+
+IFE 0 and the Titan top domain are both powered with the camss device active in
+each, and IFE 1 is correctly suspended since nothing uses it. So the VFE that
+sits idle is a powered, clocked VFE, and the power-domain names and mapping in
+the resource table are right.
+
+That removes the last part of the VFE's own environment that software can check.
+Its registers respond, its clocks run at the rates the tables ask for, its power
+domains are on, its write master is configured and addressed, the CSID hands it
+a complete frame every frame, and it writes nothing to memory.
