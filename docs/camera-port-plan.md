@@ -1026,15 +1026,33 @@ not provide, so "no buffers" may mean "generator not actually producing" rather
 than "path broken". The handset also reset during the experiment, so the run was
 not clean.
 
-What it does establish is that the two paths behave differently, and that the
-generator is the right instrument for separating reception from the write path.
-Repeating it with the generator's own vc and dt configured is the next step, and
-it needs no reflash.
+**The experiment was invalid, and the reason is structural.**
+`csid_configure_stream` only configures virtual channels present in
+`csid->phy.en_vc`:
+
+```c
+for (i = 0; i < MSM_CSID_MAX_SRC_STREAMS; i++)
+        if (csid->phy.en_vc & BIT(i)) {
+                if (tg->enabled)
+                        __csid_configure_testgen(csid, enable, i);
+                __csid_configure_rdi_stream(csid, enable, i);
+                ...
+        }
+```
+
+`en_vc` is populated from the CSIPHY link. Disabling that link, which is the only
+way to make the generator control settable, leaves `en_vc` empty, so nothing is
+configured at all and the generator never runs. The "no buffers" result means
+exactly that, and says nothing about the write path.
+
+This is a circular limitation in the driver rather than a property of the
+hardware, so the bisection cannot be done from userspace as it stands. Forcing
+`en_vc` alongside the generator would need a small patch.
 
 ## Remaining
 
-1. redo the CSID generator bisection with its virtual channel and data type
-   configured, to separate reception from the write path conclusively
+1. force `en_vc` alongside the CSID generator in a patch, so the bisection
+   between reception and the write path can actually be made
 2. why a write master with correct geometry, address and enable, fed by an
    error-free link that delivers start of frame every frame, completes its
    transfer without writing a byte
