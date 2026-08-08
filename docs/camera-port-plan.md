@@ -1399,8 +1399,9 @@ directly; they describe physical topology that RPMh manages internally.
 
 ## Remaining
 
-1. why enabling PM8009 ldo3 resets the handset, given that supplies alone at
-   stage 1 are enough to do it and the two shared rails are already on
+1. why enabling any PM8009 camera rail resets the handset, when supplies alone
+   are enough to do it and the reset leaves no log. This needs recording that
+   survives the reset, not another description change
 
    The `pm8009` versus `pm8009-1` compatible was checked and does not matter
    here: both variants give ldo1 through ldo4 the same `vdd-l1` to `vdd-l4`
@@ -1462,10 +1463,25 @@ That is now the single suspect, and it is consistent with everything: slot 1
 works and is the only one whose digital rail, `ldo2`, was described before this
 port existed.
 
-What this does not yet say is why enabling that LDO is fatal, given its voltage
-range now matches the vendor description and its parent has been removed. The
-useful next measurement is whether PM8009 is being brought out of a state the
-system depends on, rather than anything about ldo3's own description.
+### `ldo3` is not declared by the vendor, but that is not the explanation
+
+The vendor's regulator description declares `pm8009_l1`, `l2`, `l4`, `l5`, `l6`
+and `l7`, and **no `l3`**, while its own camera overlay resolves slot 2's
+`cam_vdig` to `pm8009_l3`. So that rail is referenced and never described, which
+made an unprovisioned RPMh resource a strong candidate for the reset.
+
+It does not hold. Slot 0 uses `ldo1`, which the vendor does declare, and
+scanning it alone resets the handset just the same. Whatever is fatal is common
+to all three, not specific to the undeclared rail.
+
+Worth noting for anyone repeating this: module parameters only take effect at
+load, so the aid has to be removed with `rmmod` before `modprobe` with a
+different `scan=`. A run that appears to do nothing is usually the module
+already being loaded from boot with `scan=-1`.
+
+The measurement that would settle it is PMIC state across the reset, which needs
+something that survives the reset to record it: the handset comes back with an
+empty log every time, so the answer is not going to come from `dmesg`.
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
