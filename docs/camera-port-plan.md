@@ -1210,9 +1210,37 @@ source tarball, apply the series once, edit the files and regenerate the diff.
 Worth recording, since editing patch text by hand caused several failures in
 this session and regenerating from a clean tree is the reliable route.
 
+## The clocks are running, except one
+
+Read during a capture:
+
+```
+cam_cc_ife_0_clk_src       en=3 prep=3 rate=847000048
+cam_cc_ife_0_clk           en=2 prep=2 rate=847000048
+cam_cc_ife_0_axi_clk       en=1 prep=1 rate=150000000
+cam_cc_camnoc_axi_clk_src  en=2 prep=2 rate=150000000
+cam_cc_camnoc_axi_clk      en=2 prep=2 rate=150000000
+cam_cc_camnoc_dcd_xo_clk   en=0 prep=0 rate=0
+```
+
+So the IFE core, its AXI clock and the CAMNOC AXI path are all enabled and
+clocked, which removes the last suspicion that the data path to memory is simply
+off.
+
+`cam_cc_camnoc_dcd_xo_clk` is the one clock in the CAMNOC block this port never
+requests. `CAM_CC_CAMNOC_DCD_XO_CLK` exists in
+`dt-bindings/clock/qcom,sm8150-camcc.h` and appears in neither the resource
+table nor the device tree node here. Whether the CAMNOC needs it for data to
+move, or whether it only serves a debug function, is untested and is the next
+concrete thing to try: it is a one-entry addition to the VFE clock list and the
+device tree node.
+
 ## Remaining
 
-1. what the VFE top block needs so it presents the RDI stream to the bus.
+1. add `camnoc_dcd_xo` to the VFE clock list and the device tree node, the one
+   clock in the CAMNOC block this port never enables
+2. failing that, what the VFE top block needs so it presents the RDI stream to
+   the bus.
    Eliminated by test: the write master's configuration, geometry and
    addressing, the IOVA range, the bus clock-gating override, the SMMU stream
    IDs, camera NoC bandwidth voting, the VFE version, the write master index,
