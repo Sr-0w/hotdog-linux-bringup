@@ -1014,40 +1014,38 @@ a connected source overrides it:
 
 ```
 media-ctl -l '"msm_csiphy0":1 -> "msm_csid0":0 [0]'
-v4l2-ctl -d /dev/v4l-subdev4 --set-ctrl=test_pattern=1   -> Incrementing
+v4l2-ctl -d /dev/v4l-subdev4 --set-ctrl=test_pattern=9   # Color bars
 ```
 
-With the generator running and no CSI-2 input at all, the capture returns **no
-buffers whatsoever** and times out, where the sensor path returns one per frame.
+The first experiments used modes 1 and 3. They are invalid controls for this
+diagnosis. Upstream commit
+[`87889f1b7ea4`](https://github.com/torvalds/linux/commit/87889f1b7ea40d2544b49c62092e6ef2792dced7)
+documents the CSID generation-2 hardware limitation: only mode 9 produces its
+intended data, modes 7 and 8 produce zeroes, and modes 1 through 6 produce no
+data. The relevant code corrections from that commit are already present in
+this tree, so this is a test-procedure issue rather than a missing backport.
 
-That is a difference worth having, but it is not conclusive on its own: the
-generator may need virtual channel and data type settings this experiment did
-not provide, so "no buffers" may mean "generator not actually producing" rather
-than "path broken". The handset also reset during the experiment, so the run was
-not clean.
-
-**The experiment was invalid, and the reason is structural.**
-`csid_configure_stream` only configures virtual channels present in
-`csid->phy.en_vc`:
+An earlier interpretation also claimed that disabling the CSIPHY link cleared
+`csid->phy.en_vc`. Source review disproves that. The enabled virtual-channel
+mask is maintained by the **CSID source links**, including the link from source
+pad 1 to VFE0 RDI0:
 
 ```c
-for (i = 0; i < MSM_CSID_MAX_SRC_STREAMS; i++)
-        if (csid->phy.en_vc & BIT(i)) {
-                if (tg->enabled)
-                        __csid_configure_testgen(csid, enable, i);
-                __csid_configure_rdi_stream(csid, enable, i);
-                ...
-        }
+if (local->flags & MEDIA_PAD_FL_SOURCE) {
+        if (flags & MEDIA_LNK_FL_ENABLED)
+                csid->phy.en_vc |= BIT(local->index - 1);
+        else
+                csid->phy.en_vc &= ~BIT(local->index - 1);
+}
 ```
 
-`en_vc` is populated from the CSIPHY link. Disabling that link, which is the only
-way to make the generator control settable, leaves `en_vc` empty, so nothing is
-configured at all and the generator never runs. The "no buffers" result means
-exactly that, and says nothing about the write path.
-
-This is a circular limitation in the driver rather than a property of the
-hardware, so the bisection cannot be done from userspace as it stands. Forcing
-`en_vc` alongside the generator would need a small patch.
+Powering the pipeline also sets `need_vc_update`, so a valid userspace-only test
+is possible: leave `msm_csid0:1 -> msm_vfe0_rdi0:0` enabled, disable only the
+physical `msm_csiphy0 -> msm_csid0` link, select pattern 9, set matching RAW10
+formats and start capture. `scripts/test-mainline616-camera-csid-tpg.sh`
+automates that sequence, pre-fills each capture buffer with `0xAA`, records the
+graph and kernel log, and restores the physical link without flashing or
+resetting the handset. Its hardware result is pending.
 
 ## The write master performs no memory writes at all
 
@@ -1593,7 +1591,7 @@ It is recorded rather than tested because acting on it means modelling a
 subsystem, not changing a description, and that is a piece of work rather than
 an experiment.
 
-## Confirmed: the CAMNOC QoS registers are unprogrammed, and they matter
+## CAMNOC QoS is absent, but the minimal LUT programming is insufficient
 
 The CPAS lead above was tested without modelling anything, because the CAMNOC is
 memory mapped. The vendor device tree puts it at `0xac42000`, and
@@ -1615,14 +1613,9 @@ Read before writing anything, on a running system with a capture configured:
 SoC or any other, and nothing else does it either: the values the vendor writes
 at CPAS start are simply absent. That confirms the gap rather than assuming it.
 
-Writing the vendor's values for the two IFE ports and re-running the capture
-changes the behaviour: where the write master previously completed buffers
-without writing anything, the capture now blocks and dequeues nothing at all.
-
-That is not a fix, and it is not obviously an improvement, but it is the first
-change of any kind in the write path's behaviour across this whole
-investigation. Everything else tested left it completing empty buffers at 30 Hz
-regardless. Something in the NoC arbitration is genuinely reachable from here.
+An initial manual run appeared to change the behaviour from empty completed
+buffers to a blocked dequeue. That observation did not reproduce once kernel,
+module and test state were made coherent, so it must not be used as evidence.
 
 The full table, all eighteen registers across six ports, is in
 `cpastop_v175_101.h` in the vendor tree, and the two IFE ports are:
@@ -1638,11 +1631,16 @@ The full table, all eighteen registers across six ports, is in
 | `0x0840` | `0xffffff00` | IFE13 danger LUT low |
 | `0x0848` | `0x00000001` | IFE13 safe LUT low |
 
-Next is to program these from the driver at the right point in the sequence,
-rather than by hand into a running system, and to write the urgency and UBWC
-entries alongside them rather than the priority LUTs alone.
+Revision `r81` programs those eight IFE LUT registers from the CAMSS driver at
+write-master start. A clean boot with its matching `#82` kernel and
+`qcom-camss.ko` confirms `CAMNOC quality-of-service programmed`, while all three
+queued 16,423,680-byte buffers still complete with 100 percent of their `0xAA`
+prefill intact. The minimal LUT set is therefore a tested no-op for the missing
+DMA writes. The full downstream CPAS sequence also covers urgency, UBWC and
+other ports, but copying more register values is not justified until the CSID
+test generator has isolated the failing side of the pipeline.
 
-## Session end state: the handset is in Qualcomm crashdump mode
+## Qualcomm crashdump incident during slot testing
 
 After roughly a dozen PMIC-level resets from the Sony slot experiments, the
 handset stopped booting and came up as `05c6:900e`, Qualcomm crashdump and
@@ -1658,32 +1656,29 @@ Worth knowing for anyone in the same position:
   memory capture is available. That is potentially the one instrument that
   would show why enabling a PM8009 camera rail resets the SoC, since `pstore`
   never survives it.
-- `r80` was booting normally before this, and `r81`, carrying the CAMNOC
-  quality-of-service patch, is built and waiting.
+- `r80` was booting normally before this. `r81`, carrying the CAMNOC
+  quality-of-service patch, was subsequently installed and tested.
 
 The Sony slot scan is intrusive enough to leave the handset unbootable after
 repeated use. It should be run sparingly, and the handset checked between runs.
 
-## A RAM dump was captured, and the kernel log is in it
+## A RAM dump was captured, but it is not camera evidence
 
 With the handset stuck in `900e`, `capture-qdl-900e-ramdump.sh capture` ran to
 completion and retained all four DDR segments, 8.1 GB in
 `logs/qdl-900e-ramdump-2026-08-08-191830/ramdump`. That directory is gitignored.
 
-The dump is usable: `Linux version` appears 4 times in `DDRCS0_0.BIN` and 36
-times in `DDRCS0_1.BIN`, so kernel memory survived the failed boots.
+The dump is usable, and the kernel log was recovered at physical address
+`0xa997f04d`. It identifies a downstream R6 Linux 4.14 boot, not the current
+mainline camera kernel. Its panic reaches `pinctrl_commit_state()` through
+`pinctrl_select_state()`, `register_common_touch_device()` and `sec_tp_probe()`.
+It therefore records a touchscreen probe failure from the fallback kernel and
+cannot explain either the Sony rail resets or the missing CAMSS DMA writes.
 
-What it does not give up easily is the log itself. Searching for the
-instrumentation strings finds them, but as format strings in the kernel's
-rodata, which are present whether or not they ever executed. Modern printk
-stores records separately from their format strings, so reading the actual log
-means locating the ring buffer through `vmlinux` symbols and parsing its
-records. That is a forensic exercise rather than a grep.
-
-It is worth doing, because it is the only route to the last messages before a
-reset that `pstore` never survives, and it would say directly how far the slot
-power-up got before the SoC went down. The `vmlinux` for the running kernel is
-reproducible from the package that was flashed.
+This also demonstrates that a RAM dump must be tied to its kernel identity and
+boot attempt before interpreting any recovered strings. The captured DDR files
+remain useful for validating the crashdump workflow, but they are excluded from
+the camera fault model.
 
 Note that completing the Sahara session did not reset the handset; it stayed in
 `900e` afterwards and still needs a physical power press.
