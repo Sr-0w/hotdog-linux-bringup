@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=71
+pkgrel=72
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -103,6 +103,7 @@ source="
 	0064-media-camss-give-sm8150-its-own-csiphy-generation.patch
 	0065-media-camss-report-vfe-interrupt-status.patch
 	0066-media-camss-keep-sm8150-dma-in-range.patch
+	0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -223,5 +224,6 @@ a4ca78e9869a903f792ce5388f330400155315512b3f726a0a65b0241453651f441c8ab31e9be1c9
 d16dd61ba5497e6f276a61b47fad53241a41a02412b1d9ff80812e10f0e0c5744d7f0f8ea8f375792df21020c4feff26322f0466db0281b4909998dcff633929  0064-media-camss-give-sm8150-its-own-csiphy-generation.patch
 2bd67baa688dd54d2e3fa1a8ad2616498f8205d94752199ebf9da6ef5ce176f883ff4af4ac80259696284fbd4fa2283c0892a065eaf7e923cd92a571aadcfb34  0065-media-camss-report-vfe-interrupt-status.patch
 10c8948f0adc70ff6035a8f64a9865229bb4d331811d46a4b045e30b56196f302fc42cf556da191dccb79c1f34b664b5df0fdc507c4b42945b145cc200fccf69  0066-media-camss-keep-sm8150-dma-in-range.patch
+13e7cad3e944d4394c5239830c8b001c29273af2ee50e71553835d1585e76cc4404d6307df83b3a71ba5bcc90b9ae4953b421c8f651247aaa5cf97fe2a4c95b6  0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

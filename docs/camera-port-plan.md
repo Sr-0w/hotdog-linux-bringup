@@ -1195,17 +1195,28 @@ and `MASTER_CAMNOC_SF` on `mmss_noc`, `SLAVE_EBI_CH0` on `mc_virt`, and
 `dt-bindings/interconnect/qcom,sm8150.h`, with the three named paths `cam_ahb`,
 `cam_hf_0_mnoc` and `cam_sf_0_mnoc` matching SM8250's table.
 
-This was drafted and not landed: editing the patch text directly broke the hunk
-headers, the build refused it, and the tree was restored rather than left
-broken. It needs regenerating from source the way the other patches here are,
-which is mechanical.
+**Landed as `0067` in `r72`, and tested: it does not fix it.** CAMSS probes
+without complaint and the three paths are described, but buffers queued
+pre-filled with `0xAA` still come back with the pattern fully intact. So the
+absence of bandwidth voting was not the cause either.
+
+The patch is kept, because every other supported part declares these paths and
+describing them is right on its own terms, and it is marked here as explicitly
+not a fix.
+
+An earlier attempt to land it failed because the patch text was edited directly
+and the hunk headers went stale. The fix was to extract a clean tree from the
+source tarball, apply the series once, edit the files and regenerate the diff.
+Worth recording, since editing patch text by hand caused several failures in
+this session and regenerating from a clean tree is the reliable route.
 
 ## Remaining
 
-1. land the interconnect bandwidth voting for SM8150, regenerated from source
-   rather than by editing patch text
-2. failing that, what else the VFE top block needs so it presents the RDI stream
-   to the bus.
+1. what the VFE top block needs so it presents the RDI stream to the bus.
+   Eliminated by test: the write master's configuration, geometry and
+   addressing, the IOVA range, the bus clock-gating override, the SMMU stream
+   IDs, camera NoC bandwidth voting, the VFE version, the write master index,
+   and link bandwidth
    Eliminated by test so far: the write master's configuration, geometry and
    addressing, the IOVA range, the bus clock-gating override, the SMMU stream
    IDs, the VFE version, the write master index, and link bandwidth
