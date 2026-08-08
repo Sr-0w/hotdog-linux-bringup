@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 12:10:00 +0200
+Subject: [PATCH] media: camss: keep sm8150 DMA inside the addressable range
+
+The vendor device tree restricts the IFE context bank's IOVA region to
+0x07400000 through 0xe0000000. Linux allocates from the top of the 32-bit
+space, so buffers land at 0xff000000 and above, outside it.
+
+On this SoC the write master then reports its transfer complete while issuing
+no memory write at all: buffers queued pre-filled with a known pattern come
+back with the pattern untouched, while the CSID byte counter shows a full frame
+handed over every frame.
+
+Narrow the mask so allocations stay inside the range the hardware is described
+as addressing.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/platform/qcom/camss/camss.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -4019,7 +4019,18 @@
+ 	if (ret < 0)
+ 		goto err_genpd_cleanup;
+ 
+-	ret = dma_set_mask_and_coherent(dev, 0xffffffff);
++	/*
++	 * The vendor device tree restricts the IFE context bank's IOVA region
++	 * to 0x07400000..0xe0000000. Linux allocates from the top of the 32-bit
++	 * space, which lands at 0xff000000 and above, outside it. On SM8150 the
++	 * write master then reports its transfer done without issuing a single
++	 * memory write, so keep allocations inside the range the hardware is
++	 * described as addressing.
++	 */
++	if (camss->res->version == CAMSS_8150)
++		ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(31));
++	else
++		ret = dma_set_mask_and_coherent(dev, 0xffffffff);
+ 	if (ret)
+ 		goto err_genpd_cleanup;
+ 
+--
+2.50.1

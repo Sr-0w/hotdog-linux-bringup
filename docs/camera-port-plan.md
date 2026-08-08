@@ -1124,12 +1124,38 @@ Note that `0x3C`, `0x18` and `0x50` all read back the VFE hardware version, so
 these registers are write-only and cannot be inspected; the experiment was the
 only way to test the idea.
 
+### The IOVA range, tested and ruled out
+
+The SMMU stream IDs match the vendor device tree exactly, all eight of them. But
+the same node also declares the IFE context bank's addressable region:
+
+```
+iova-region-start = <0x7400000>;
+iova-region-len   = <0xd8c00000>;      /* 0x07400000 .. 0xe0000000 */
+```
+
+Linux allocates from the top of the 32-bit space, so buffers were landing at
+`0xff000000` and above, outside that region. `0066` narrows the DMA mask for
+SM8150 so allocations stay inside it, and the addresses do move as intended:
+
+```
+vfe0 wm0: addr=7f000000 stride=5264 height=3120
+vfe0 wm0: addr=7e000000 stride=5264 height=3120
+vfe0 wm0: addr=7d000000 stride=5264 height=3120
+```
+
+The pre-filled buffers still come back with their pattern fully intact. So the
+IOVA range was not the cause either. The patch is kept, because staying inside
+the range the hardware is described as addressing is right on its own terms, but
+it is explicitly not a fix.
+
 ## Remaining
 
 1. why the VFE bus, handed a complete frame by the CSID and reporting its write
-   master done, performs no memory write. The write master's own configuration,
-   its addressing, the bus clock-gating override and the SMMU are all now
-   eliminated by test
+   master done, performs no memory write. Eliminated by test so far: the write
+   master's configuration and geometry, its addressing, the IOVA range, the bus
+   clock-gating override, the SMMU stream IDs, the VFE version, the write master
+   index, and link bandwidth
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
