@@ -1340,13 +1340,38 @@ what the board does. Driving a PM8150L pin the wrong way is a far more plausible
 route to an instant reset than an off-by-one, and it fits the correlation
 exactly: slot 1, which works, uses a TLMM pin and no PMIC pin at all.
 
-Changing those three to `GPIO_ACTIVE_LOW` is the next test, and it is a
-three-line device tree change.
+**Tested in `r77`, and it is not that either.** All three PM8150L enables are now
+`GPIO_ACTIVE_LOW`, and scanning slot 2 still resets the handset.
+
+**A better correlation, which the polarity test made visible.** The rails, not
+the GPIOs, split the slots the same way:
+
+| Slot | Digital rail | Pre-existing? | Result |
+| --- | --- | --- | --- |
+| 1 | PM8009 `ldo2` | yes, `vreg_l2f_1p2` was already described | scans cleanly |
+| 0 | PM8009 `ldo1` | no, added by `0059` | resets |
+| 2 | PM8009 `ldo3` | no, added by `0059` | resets |
+| 3 | PM8009 `ldo4` | no, added by `0059` | resets |
+
+The one slot that works is the only one whose digital rail was already in the
+device tree before this port touched it. The three that reset all use LDOs added
+in `0059`, at 1.104 V and 1.056 V, with `vdd-l1-supply`, `vdd-l3-supply` and
+`vdd-l4-supply` all pointed at `vreg_s8c_1p3` because that is what `ldo2` uses.
+
+That parent choice was an inference, not something read from the hardware. If
+any of those three LDOs is actually fed from a different rail, or cannot supply
+what a sensor draws from where it is pointed, enabling it would collapse a
+shared supply, which is exactly a reset with nothing in the log.
+
+Checking `0059`'s parent supplies and voltages against the vendor regulator
+description is the next step, and it explains all three failures at once in a
+way neither the numbering nor the polarity did.
 
 ## Remaining
 
-1. declare the Sony slots' PM8150L enable GPIOs `GPIO_ACTIVE_LOW`, since the
-   stock pinctrl drives them low to activate
+1. verify the PM8009 ldo1, ldo3 and ldo4 parent supplies and voltages added in
+   `0059` against the vendor regulator description, since the only slot that
+   powers up cleanly is the only one not using them
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.

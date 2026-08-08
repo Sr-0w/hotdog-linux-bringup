@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=76
+pkgrel=77
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -106,6 +106,7 @@ source="
 	0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
 	0068-media-i2c-read-the-sony-model-register.patch
 	0069-media-i2c-scan-one-camera-slot-at-a-time.patch
+	0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -229,5 +230,6 @@ d16dd61ba5497e6f276a61b47fad53241a41a02412b1d9ff80812e10f0e0c5744d7f0f8ea8f37579
 13e7cad3e944d4394c5239830c8b001c29273af2ee50e71553835d1585e76cc4404d6307df83b3a71ba5bcc90b9ae4953b421c8f651247aaa5cf97fe2a4c95b6  0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
 c075b5a0f117a8cba0a43f018d3d03390b7ea8b0b1be196620dadb2658418f81311eb57e6d65e4ec836bc5cf2f9ef632220fc7c2a2a35cfb69d7aa63477a0c94  0068-media-i2c-read-the-sony-model-register.patch
 f1eb938066ab8d6989abe536334484c59c4d0c80d79c1c5243db42786e5076399e61c1d6c1bf0039c8e9eab27c92eeb4686a81bd948ac737e41f052dd6cf7988  0069-media-i2c-scan-one-camera-slot-at-a-time.patch
+ea10050f42580ca47dc9d386b806ba534e068506f379b080bd4d8b0321a50ca79e630d18550552438d77dd902a646ea9ef5edf724eae26240f58c73b9bfef55c  0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
