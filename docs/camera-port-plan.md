@@ -1561,3 +1561,34 @@ That removes the last part of the VFE's own environment that software can check.
 Its registers respond, its clocks run at the rates the tables ask for, its power
 domains are on, its write master is configured and addressed, the CSID hands it
 a complete frame every frame, and it writes nothing to memory.
+
+## An unexplored lead: CPAS programs CAMNOC and mainline has no equivalent
+
+The vendor stack carries a whole subsystem mainline CAMSS does not model at all:
+`drivers/media/platform/msm/camera/cam_cpas`, the Camera Performance and
+Analysis Subsystem. Downstream it must be started before any IFE runs.
+
+`cam_cpastop_hw.c` programs per-port CAMNOC configuration on start:
+
+```c
+for (i = 0; i < camnoc_info->specific_size; i++) {
+        if (camnoc_info->specific[i].enable) {
+                cam_cpas_util_reg_update(..., &camnoc_info->specific[i].priority_lut_low);
+                cam_cpas_util_reg_update(..., &camnoc_info->specific[i].priority_lut_high);
+                ...
+        }
+}
+```
+
+Priority, urgency, danger and safe LUTs, per CAMNOC port, none of which mainline
+writes on any SoC. On the parts mainline already supports the defaults evidently
+suffice; whether they do on SM8150 has never been established.
+
+This is the one part of the path between the CSID and memory that has not been
+looked at, and it is where the write master sitting idle would come from if the
+defaults are not adequate here. The relevant table for this SoC is
+`cam_cpastop_v175_100.h` in the vendor tree.
+
+It is recorded rather than tested because acting on it means modelling a
+subsystem, not changing a description, and that is a piece of work rather than
+an experiment.
