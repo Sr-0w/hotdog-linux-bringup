@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 03:00:00 +0200
+Subject: [PATCH] media: camss: enable the SM8150 HF AXI bridge
+
+The downstream SM8150 CPAS node enables GCC_CAMERA_HF_AXI_CLK before any
+camera client starts.  The mainline port already exposes that clock as
+"gcc_camera_axi", but no CAMSS resource requests it, leaving the HF path from
+CAMNOC towards memory gated.
+
+This matches the observed failure: VFE0 issues a non-secure write to the exact
+buffer IOVA, then CAMNOC reports "Disconnected target" before the transaction
+can reach the SMMU.  Enable the HF AXI bridge whenever either full VFE is
+powered.  The camera AHB bridge is already critical in GCC and the SF bridge is
+not part of the VFE0 RDI0 path under test.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/platform/qcom/camss/camss.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -1357,9 +1357,10 @@ static const struct camss_subdev_resources vfe_res_8150[] = {
+ 	/* VFE0 */
+ 	{
+ 		.regulators = {},
+-		.clock = { "camnoc_axi", "cpas_ahb", "slow_ahb_src",
++		.clock = { "camnoc_axi", "cpas_ahb", "gcc_camera_axi", "slow_ahb_src",
+ 				"soc_ahb", "vfe0", "vfe0_axi",
+ 				"vfe0_src", "csi0",
+ 				"csi0_src" },
+ 		.clock_rate = { { 0 },
++				{ 0 },
+ 				{ 0 },
+ 				{ 80000000 },
+ 				{ 0 },
+@@ -1385,9 +1386,10 @@ static const struct camss_subdev_resources vfe_res_8150[] = {
+ 	/* VFE1 */
+ 	{
+ 		.regulators = {},
+-		.clock = { "camnoc_axi", "cpas_ahb", "slow_ahb_src",
++		.clock = { "camnoc_axi", "cpas_ahb", "gcc_camera_axi", "slow_ahb_src",
+ 				"soc_ahb", "vfe1", "vfe1_axi",
+ 				"vfe1_src", "csi1",
+ 				"csi1_src" },
+ 		.clock_rate = { { 0 },
++				{ 0 },
+ 				{ 0 },
+ 				{ 80000000 },
+ 				{ 0 },
+-- 
+2.50.1

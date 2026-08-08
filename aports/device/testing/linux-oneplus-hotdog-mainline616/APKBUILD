@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=82
+pkgrel=83
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -112,6 +112,7 @@ source="
 	0073-media-i2c-stage-the-camera-slot-power-up.patch
 	0074-media-camss-program-the-sm8150-camnoc-qos.patch
 	0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
+	0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -241,5 +242,6 @@ cc289e8909eefaf75acded8b13977b7252e9a0418a7d9a8d210447c706083bfaf643f133dc49e8b9
 77b2229b9ba21825271d6b9a8c39cc20d551f2f2cb6db687f91c7bff1da4d01887e07e6f1ecd28e39ffaa0868a45c4bab41057c44caa148633586fae736775d9  0073-media-i2c-stage-the-camera-slot-power-up.patch
 a515ccf63dd455387a7e4eb16d59c39e4e936b9a1f7e03335f383c59a75d0c17257f68d2de280603c0cb6074da06cbd370be3cd82d9a26b90f100540238ed287  0074-media-camss-program-the-sm8150-camnoc-qos.patch
 5f335fc45b3f5876c9e932d4b0e05c2139308b25cc175431bd7aa74f7433d6bedef3d828016915a1b4be1a9aeabcd4c8eb0f48892c80237f6ade86bd04b581a0  0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
+e45b960afc81ed7de8929fe4f3905c81161e619bf170f8f5bee52113567cb0c6f4f8379caec7f2949c73bc84977bb9a257337f146f8a080b7bcccb67fd3eecab  0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

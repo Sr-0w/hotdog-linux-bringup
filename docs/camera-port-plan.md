@@ -1721,11 +1721,56 @@ untouched buffers and the absence of an SMMU fault.
 
 Downstream CPAS votes two paths for VFE0: the internal
 `CAMNOC_HF0_UNCOMP -> CAMNOC_UNCOMP` path and the external
-`CAMNOC_HF0 -> EBI` path. Revision `r81` votes only the external path. The
-mainline SM8150 interconnect provider already exposes the internal nodes, but
-CAMSS has no consumer for them. The next isolated test is to add that fourth
-interconnect vote; copying more unexplained CPAS register writes is no longer
-the first choice.
+`CAMNOC_HF0 -> EBI` path. Revision `r81` votes only the external path.
+Revision `r82` adds the internal path and boots as matching kernel build `#83`,
+but the test generator still dequeues three consecutive 384,000-byte buffers
+containing 100 percent of their `0xAA` prefill. CAMNOC records the same
+`Disconnected target` write at the first buffer IOVA.
+
+That no-op is consistent with the mainline SM8150 interconnect description:
+the internal and external HF0 nodes both belong to RPMh BCM `MM1`, so the
+external vote had already enabled their shared hardware resource. The missing
+internal consumer was a real description difference, but not this fault.
+
+## The downstream CPAS clock set exposes a stronger omission
+
+The downstream CPAS driver enables the GCC camera AHB, HF AXI and SF AXI
+bridges before starting any camera client. Mainline already keeps
+`GCC_CAMERA_AHB_CLK` critical and the Hotdog port already declares
+`GCC_CAMERA_HF_AXI_CLK` as `gcc_camera_axi`, but no CAMSS resource requests
+that declared clock. Unlike the AHB clock, the HF bridge is not critical and
+can remain gated.
+
+The tested VFE0 RDI0 route is the HF path. A gated bridge after CAMNOC matches
+the observed boundary precisely: VFE writes the correct IOVA, CAMNOC reports a
+disconnected target, and the transaction never reaches the Apps SMMU.
+Revision `r83` is the single-variable candidate that requests
+`gcc_camera_axi` while VFE0 or VFE1 is powered. It was built successfully and
+assembled into a verified direct-boot image; hardware validation is pending.
+
+## Direct GDSC writes are excluded from further tests
+
+An intrusive diagnostic cleared the camera GDSC software-collapse bit while
+`r82` was running. The subsequent test reached `STREAMON`, produced no frame,
+timed out resetting VFE, lost USB and entered Qualcomm `900e`. A complete
+read-only Sahara capture retained all four DDR segments in
+`logs/qdl-900e-ramdump-2026-08-09-011740`.
+
+The dump is tied to exact `r82` symbols and contains no Linux panic, oops or
+SMMU fault. Its recovered ramoops tail is:
+
+```
+qcom-camss ... CAMNOC quality-of-service programmed
+qcom-camss ... VFE reset timeout
+qcom-camss ... Failed to disable vfe outputs
+(NULL device *): disabling streaming failed (-5)
+```
+
+The Qualcomm parser reports an FIQ while the Linux task state remains
+coherent. This establishes the direct GDSC write as the cause of that crashdump
+transition, not as a camera fix. Future tests must use the clock, power-domain
+and interconnect frameworks rather than writing collapse controls through
+`/dev/mem`.
 
 `helpers/hotdog-mmio-read32.c` is the deliberately read-only `/dev/mem` tool
 used for these captures. It opens `/dev/mem` with `O_RDONLY`, maps registers
