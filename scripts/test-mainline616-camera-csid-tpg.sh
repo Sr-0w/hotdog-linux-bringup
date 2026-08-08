@@ -14,6 +14,7 @@ EXPECTED_KERNEL_MARKER="${EXPECTED_KERNEL_MARKER:-oneplus-hotdog-mainline616}"
 WIDTH="${WIDTH:-640}"
 HEIGHT="${HEIGHT:-480}"
 POLL_TIMEOUT_MS="${POLL_TIMEOUT_MS:-8000}"
+HOLD_AFTER_STREAMON_MS="${HOLD_AFTER_STREAMON_MS:-0}"
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/camera-csid-tpg-$stamp}"
 REMOTE_DIR="/tmp/hotdog-camera-csid-tpg-$stamp"
@@ -37,6 +38,9 @@ Options:
   --width PIXELS        Test frame width. Default: 640.
   --height PIXELS       Test frame height. Default: 480.
   --poll-timeout MS     Per-frame poll timeout. Default: 8000.
+  --hold-after-streamon MS
+                        Keep streaming idle for this long before dequeuing.
+                        Default: 0.
   --out DIR             Host output directory.
   -h, --help            Show this help.
 USAGE
@@ -105,6 +109,7 @@ capture_helper="$2"
 width="$3"
 height="$4"
 poll_timeout_ms="$5"
+hold_after_streamon_ms="$6"
 media=/dev/media0
 format="fmt:SGRBG10_1X10/${width}x${height}"
 physical_link='"msm_csiphy0":1 -> "msm_csid0":0'
@@ -200,6 +205,7 @@ python3 "$capture_helper" \
 	--buffers 2 \
 	--frames 3 \
 	--poll-timeout-ms "$poll_timeout_ms" \
+	--hold-after-streamon-ms "$hold_after_streamon_ms" \
 	--fill 0xaa \
 	--dump-first "$out/first-frame.raw" \
 	> "$out/capture.txt" 2>&1
@@ -264,6 +270,11 @@ while [ "$#" -gt 0 ]; do
 		POLL_TIMEOUT_MS="$2"
 		shift
 		;;
+	--hold-after-streamon)
+		[ "$#" -ge 2 ] || die "missing value for --hold-after-streamon"
+		HOLD_AFTER_STREAMON_MS="$2"
+		shift
+		;;
 	--out)
 		[ "$#" -ge 2 ] || die "missing value for --out"
 		OUT="$2"
@@ -283,6 +294,8 @@ done
 positive_integer WIDTH "$WIDTH"
 positive_integer HEIGHT "$HEIGHT"
 positive_integer POLL_TIMEOUT_MS "$POLL_TIMEOUT_MS"
+[[ "$HOLD_AFTER_STREAMON_MS" =~ ^[0-9]+$ ]] ||
+	die "HOLD_AFTER_STREAMON_MS must be a non-negative integer: $HOLD_AFTER_STREAMON_MS" 2
 [ -n "$PMOS_PASSWORD" ] || die "set PMOS_PASSWORD or use --password"
 [ -n "$EXPECTED_KERNEL_MARKER" ] || die "kernel marker must not be empty"
 
@@ -329,7 +342,7 @@ if [ "$REMOTE_SUDO_MODE" = noninteractive ]; then
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS'" \
+			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 else
@@ -347,7 +360,7 @@ else
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS'" \
+			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 fi

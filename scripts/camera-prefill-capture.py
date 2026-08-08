@@ -12,6 +12,7 @@ import mmap
 import os
 import select
 import sys
+import time
 
 
 VIDIOC_REQBUFS = 0xC0145608
@@ -118,12 +119,15 @@ def main() -> int:
     parser.add_argument("--buffers", type=int, default=2)
     parser.add_argument("--frames", type=int, default=3)
     parser.add_argument("--poll-timeout-ms", type=int, default=8000)
+    parser.add_argument("--hold-after-streamon-ms", type=int, default=0)
     parser.add_argument("--fill", type=parse_byte, default=0xAA)
     parser.add_argument("--dump-first")
     args = parser.parse_args()
 
     if args.buffers < 1 or args.frames < 1 or args.poll_timeout_ms < 1:
         parser.error("buffers, frames and poll timeout must be positive")
+    if args.hold_after_streamon_ms < 0:
+        parser.error("hold after streamon must not be negative")
 
     fd = os.open(args.device, os.O_RDWR | os.O_NONBLOCK)
     mappings: list[mmap.mmap] = []
@@ -169,6 +173,12 @@ def main() -> int:
         ioctl(fd, VIDIOC_STREAMON, buffer_type)
         streaming = True
         print("STREAM state=on", flush=True)
+        if args.hold_after_streamon_ms:
+            print(
+                f"HOLD after_streamon_ms={args.hold_after_streamon_ms}",
+                flush=True,
+            )
+            time.sleep(args.hold_after_streamon_ms / 1000)
 
         poller = select.poll()
         poller.register(fd, select.POLLIN | select.POLLPRI | select.POLLERR)

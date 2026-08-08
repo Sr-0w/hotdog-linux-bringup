@@ -1640,6 +1640,12 @@ DMA writes. The full downstream CPAS sequence also covers urgency, UBWC and
 other ports, but copying more register values is not justified until the CSID
 test generator has isolated the failing side of the pipeline.
 
+A controlled live test then set only the downstream write-urgency field
+(`0x30` under mask `0x70`) for IFE02 and IFE13. It did not change the TPG
+result or the CAMNOC error and the original values were restored. The bounded
+helper is retained as `helpers/hotdog-camnoc-ife-qos.c`; it does not expose any
+power-domain or reset control.
+
 ## Qualcomm crashdump incident during slot testing
 
 After roughly a dozen PMIC-level resets from the Sony slot experiments, the
