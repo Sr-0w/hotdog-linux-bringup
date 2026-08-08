@@ -1235,10 +1235,48 @@ move, or whether it only serves a debug function, is untested and is the next
 concrete thing to try: it is a one-entry addition to the VFE clock list and the
 device tree node.
 
+**Tested in `r73` and reverted.** Adding `camnoc_dcd_xo` to the VFE clock list
+and the device tree node stopped CAMSS probing altogether: no `/dev/video0`, no
+`/dev/media0`. The clock and name arrays evidently need more care than a single
+insertion at a matching index, or the resource table's rate array has to grow in
+step. `r74` removes it and CAMSS is back.
+
+So this is untested rather than ruled out, and redoing it needs the clock,
+clock-name and clock-rate arrays kept in lockstep across both the driver table
+and the node.
+
+## Working on the Sony sensors
+
+Three of the four slots hold Sony parts with no upstream driver: IMX586 on slot
+0, IMX481 on slot 2 and IMX471 on slot 3, all inferred rather than confirmed.
+
+Confirming them does not need a driver. The upstream S5K3M5 driver prints the
+chip id it actually read when it does not match:
+
+```c
+dev_err(..., "chip id mismatch: %x!=%x\n", S5K3M5_CHIP_ID, val);
+```
+
+So describing an `s5k3m5` node on a Sony slot powers that slot correctly, reads
+a register and reports what came back, which identifies the part without writing
+anything. Two things have to be right for it: the address, and the register.
+
+Sony sensors on Qualcomm boards usually answer at 0x1a rather than the 0x10 the
+Samsung part uses, and they carry their model at register 0x0016, not 0x0000
+where the Samsung driver looks. So the useful experiment is a small variant of
+the identification aid that reads 0x0016 at 0x1a, on the three slots whose
+supplies, reset lines and MCLKs are already described and known good from the
+slot table above.
+
+That is a bounded piece of work and it is the right next step for the Sony
+parts, independent of the VFE write-path fault, which blocks streaming on every
+slot equally including the one sensor that is already driven.
+
 ## Remaining
 
-1. add `camnoc_dcd_xo` to the VFE clock list and the device tree node, the one
-   clock in the CAMNOC block this port never enables
+1. identify the three Sony sensors by chip id, reading register 0x0016 at
+   address 0x1a on slots 0, 2 and 3
+2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
    Eliminated by test: the write master's configuration, geometry and
