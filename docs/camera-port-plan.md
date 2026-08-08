@@ -1149,13 +1149,42 @@ IOVA range was not the cause either. The patch is kept, because staying inside
 the range the hardware is described as addressing is right on its own terms, but
 it is explicitly not a fix.
 
+## The VFE bus is entirely idle during capture
+
+Snapshotting all 4 KB of the VFE bus register block twice, 1.5 seconds apart,
+in the middle of a running capture, and diffing:
+
+```
+registres qui changent dans 0x2000-0x2fff pendant la capture: 1
+  +0x2200  7e000000 -> 7d000000
+```
+
+Exactly one register moves, and it is the write master's address, which the
+driver itself rewrites each frame from the CPU. No counter advances, no status
+bit toggles, nothing else in the block changes at all.
+
+So the bus is not processing frames slowly or incorrectly. It is doing nothing.
+The buffer-done interrupts that do arrive come from the bus IRQ status, which
+the handler reads and clears immediately, so they do not show up in a sampled
+diff and are not evidence of transfer.
+
+That moves the fault one stage earlier than the previous note placed it. The
+question is not why the bus writes nothing, but why the VFE core never presents
+the RDI stream to the bus, given the CSID hands it a complete frame.
+
+Mainline writes very little in the VFE top block for an RDI path: no
+`VFE_CORE_CFG`, which it defines at `0x050` and never uses, and none of the
+module-control registers the vendor's map carries alongside it. That is where
+the next look belongs.
+
 ## Remaining
 
-1. why the VFE bus, handed a complete frame by the CSID and reporting its write
-   master done, performs no memory write. Eliminated by test so far: the write
-   master's configuration and geometry, its addressing, the IOVA range, the bus
-   clock-gating override, the SMMU stream IDs, the VFE version, the write master
-   index, and link bandwidth
+1. what the VFE top block needs so it presents the RDI stream to the bus.
+   Eliminated by test so far: the write master's configuration, geometry and
+   addressing, the IOVA range, the bus clock-gating override, the SMMU stream
+   IDs, the VFE version, the write master index, and link bandwidth
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
