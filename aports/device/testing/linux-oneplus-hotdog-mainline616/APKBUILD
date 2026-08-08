@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=68
+pkgrel=70
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -220,6 +220,6 @@ c2caec0152b5a1a3473daf228fd1d178994099805c4d1a1465fc8d044d83018c22d7b00387497943
 fed21542cfc0b65ace8b61370989db594000a2ae0236da290091c366bbe9190642cdf2b6facd85f29a1434c44bb3038370aaf92f20f0f1046a9f1555429aa876  0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
 a4ca78e9869a903f792ce5388f330400155315512b3f726a0a65b0241453651f441c8ab31e9be1c9169eb8d774806a5b3d48e1252aa7ee06cae686ff8ae1bf5c  0063-arm64-dts-hotdog-describe-the-telephoto-camera.patch
 d16dd61ba5497e6f276a61b47fad53241a41a02412b1d9ff80812e10f0e0c5744d7f0f8ea8f375792df21020c4feff26322f0466db0281b4909998dcff633929  0064-media-camss-give-sm8150-its-own-csiphy-generation.patch
-ba8bf65e6fab6b50c6fb29c296854d126a7b75e96b43c297b7aaa1bcb007b2b968355ec25cf9744bb42ce8c4487d79e69317c180f65fbc5833355293a9f854a1  0065-media-camss-report-vfe-interrupt-status.patch
+2bd67baa688dd54d2e3fa1a8ad2616498f8205d94752199ebf9da6ef5ce176f883ff4af4ac80259696284fbd4fa2283c0892a065eaf7e923cd92a571aadcfb34  0065-media-camss-report-vfe-interrupt-status.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

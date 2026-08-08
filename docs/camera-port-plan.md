@@ -1110,10 +1110,28 @@ Everything before the VFE bus works. The VFE bus receives a complete frame,
 reports its write master done, and performs no memory write. That is the fault,
 stated as narrowly as the hardware allows.
 
+### The bus clock-gating override, tested and ruled out
+
+The vendor's register map carries `bus_cgc_ovd` at offset `0x3C` in the VFE top
+block, separate from the write-master clock-gating override at `0x200c` that
+mainline does write. A gated bus would fit the symptom exactly: status reported,
+no transfer performed. Revision `r69` lifted it. The pre-filled buffers came
+back with their pattern fully intact, so it changed nothing, and `r70` removes
+the write again rather than leaving a speculative poke at an undocumented
+register in the tree.
+
+Note that `0x3C`, `0x18` and `0x50` all read back the VFE hardware version, so
+these registers are write-only and cannot be inspected; the experiment was the
+only way to test the idea.
+
 ## Remaining
 
 1. why the VFE bus, handed a complete frame by the CSID and reporting its write
-   master done, performs no memory write
+   master done, performs no memory write. The write master's own configuration,
+   its addressing, the bus clock-gating override and the SMMU are all now
+   eliminated by test
+2. confirm the other three slots and write IMX586, IMX481 and IMX471
+3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
 3. libcamera, and the pop-up motor the front camera depends on
 2. confirm the other three slots and write IMX586, IMX481 and IMX471
