@@ -1320,21 +1320,33 @@ correlation with the slot table is exact:
 The one slot that works is the only one that touches no PMIC GPIO. Every slot
 that resets the handset asserts one.
 
-The likely explanation is the addressing convention. `pinctrl-spmi-gpio` uses
-the one-based physical pin number in device tree, and these indices were taken
-from the stock overlay's `gpios` arrays without confirming which convention that
-overlay used. An off-by-one there would assert a neighbouring PMIC pin, and on
-PM8150L those carry rails the running system depends on, which is exactly what a
-reset with no log looks like.
+**The numbering is right, and that hypothesis is refuted.** The stock overlay's
+own pinctrl children name the same pins its `gpios` arrays index:
 
-Checking that convention against the stock overlay's own `__symbols__` entries,
-before powering another Sony slot, is the next step. It costs nothing and would
-explain all three failures at once.
+```
+cam_sensor_rear_0_dvdd_active { pins = "gpio1";  output-low; }
+cam_sensor_rear_2_ana_active  { pins = "gpio2";  output-low; }
+                              { pins = "gpio12"; output-low; }
+```
+
+against `gpios = <&pm8150l_gpios 0x01 ...>`, `<... 0x02 ...>` and
+`<... 0x0c ...>`. So the index is the one-based physical pin number, exactly the
+convention mainline uses, and the numbers here are correct.
+
+**The polarity is the better candidate.** Every one of those stock states drives
+the pin *low* to activate, and the suspend states pull it down. These GPIOs are
+declared `GPIO_ACTIVE_HIGH` here, so the aid asserts them high, the opposite of
+what the board does. Driving a PM8150L pin the wrong way is a far more plausible
+route to an instant reset than an off-by-one, and it fits the correlation
+exactly: slot 1, which works, uses a TLMM pin and no PMIC pin at all.
+
+Changing those three to `GPIO_ACTIVE_LOW` is the next test, and it is a
+three-line device tree change.
 
 ## Remaining
 
-1. confirm the PM8150L GPIO numbering convention used by the stock overlay
-   before powering another Sony slot
+1. declare the Sony slots' PM8150L enable GPIOs `GPIO_ACTIVE_LOW`, since the
+   stock pinctrl drives them low to activate
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
