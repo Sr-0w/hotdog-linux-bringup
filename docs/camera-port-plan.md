@@ -1301,10 +1301,40 @@ enable GPIOs asserted one at a time, rather than all three slots at once. The
 aid stays inert unless loaded with `scan=1`, so the handset boots normally with
 it present.
 
+### One slot at a time, and the correlation is exact
+
+`0069` makes the aid take an I2C bus number so a single slot can be powered.
+Scanning slot 2 alone, on `i2c-6`, resets the handset just as all three together
+did, again before anything reaches the log.
+
+So it is not a cumulative load problem. Any one Sony slot is enough, and the
+correlation with the slot table is exact:
+
+| Slot | Enable GPIOs | Result |
+| --- | --- | --- |
+| 1 | `tlmm 148` only | scans cleanly, gave its chip id |
+| 0 | `tlmm 11`, `tlmm 29`, `pm8150l` GPIO 1 | resets the handset |
+| 2 | `pm8150l` GPIO 12 | resets the handset |
+| 3 | `pm8150l` GPIO 2 | resets the handset |
+
+The one slot that works is the only one that touches no PMIC GPIO. Every slot
+that resets the handset asserts one.
+
+The likely explanation is the addressing convention. `pinctrl-spmi-gpio` uses
+the one-based physical pin number in device tree, and these indices were taken
+from the stock overlay's `gpios` arrays without confirming which convention that
+overlay used. An off-by-one there would assert a neighbouring PMIC pin, and on
+PM8150L those carry rails the running system depends on, which is exactly what a
+reset with no log looks like.
+
+Checking that convention against the stock overlay's own `__symbols__` entries,
+before powering another Sony slot, is the next step. It costs nothing and would
+explain all three failures at once.
+
 ## Remaining
 
-1. bring up one Sony slot at a time, asserting its enable GPIOs individually,
-   since powering all three at once resets the handset
+1. confirm the PM8150L GPIO numbering convention used by the stock overlay
+   before powering another Sony slot
 2. the VFE write-path fault, which blocks streaming on every slot
 2. failing that, what the VFE top block needs so it presents the RDI stream to
    the bus.
