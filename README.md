@@ -122,7 +122,7 @@ Support status for the tested HD1913 handset.
 | Audio | Other analogue/digital microphones, EC/NR | Other live pads, digital microphones, echo cancellation and noise-reduction policy remain open. |
 | Cellular | WWAN data / calls / SMS / SIM handling | Telephony stack is not yet hardware-validated. |
 | GNSS | Location | Not yet hardware-validated. |
-| Cameras | Rear main / ultra-wide / telephoto / front | No camera is hardware-operational yet. CAMSS SM8150 and three missing Sony sensor drivers still need implementation; S5K3M5 has an upstream template/driver path only. |
+| Cameras | Rear main / ultra-wide / telephoto / front | The S5K3M5 telephoto probes and streams complete RAW10 frames into CSID, and the CSID test generator independently reaches VFE. VFE DMA is currently rejected by CAMNOC before reaching RAM; the three Sony sensor drivers and libcamera integration remain open. |
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
 | Haptics | AW8697 | No mainline driver/integration is validated yet. |

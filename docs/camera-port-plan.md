@@ -1045,7 +1045,7 @@ physical `msm_csiphy0 -> msm_csid0` link, select pattern 9, set matching RAW10
 formats and start capture. `scripts/test-mainline616-camera-csid-tpg.sh`
 automates that sequence, pre-fills each capture buffer with `0xAA`, records the
 graph and kernel log, and restores the physical link without flashing or
-resetting the handset. Its hardware result is pending.
+resetting the handset. Its hardware result is recorded below.
 
 ## The write master performs no memory writes at all
 
@@ -1682,3 +1682,51 @@ the camera fault model.
 
 Note that completing the Sahara session did not reset the handset; it stayed in
 `900e` afterwards and still needs a physical power press.
+
+## The failure is after CSID and is logged by CAMNOC
+
+The controlled CSID test-generator run uses the only functional generation-2
+pattern, `test_pattern=9`, at 640x480 RAW10. It disables only the physical
+CSIPHY-to-CSID link and leaves CSID0 RDI0 connected to VFE0 RDI0. Three buffers
+dequeue with consecutive sequence numbers, but all 384,000 bytes in every
+buffer retain the `0xAA` prefill. The sensor, CCI, physical MIPI link and CSIPHY
+are therefore outside the remaining fault path.
+
+The Apps SMMU is configured rather than bypassed. Stream-match entry 11 is
+valid for SID `0x840` with mask `0x620`, selects translation context bank 5,
+and covers the same eight camera stream IDs as the downstream tree. Context
+bank 5 has translation enabled and neither it nor the global SMMU reports a
+fault.
+
+Reading the SM8150 CAMNOC error logger after capture provides the missing
+hardware evidence:
+
+```
+ERRVLD       = 0x00000001
+ERRLOG0_LOW  = 0x00000315
+ERRLOG0_HIGH = 0x000000ff
+ERRLOG1_LOW  = 0x00000012
+ERRLOG1_HIGH = 0x000034a0
+ERRLOG2_LOW  = 0x7ff80000
+ERRLOG2_HIGH = 0x00000000
+ERRLOG3_LOW  = 0x00000008
+```
+
+Using the downstream `cam_cpas_api.h` layout, this is a non-secure write burst
+with `len1=255`, error code 3 (`Disconnected target`), and address
+`0x7ff80000`. That address is exactly the first IOVA programmed into VFE write
+master 0 during this capture. The VFE issues the transaction, CAMNOC rejects
+it, and the request never reaches the SMMU or RAM. This explains both the
+untouched buffers and the absence of an SMMU fault.
+
+Downstream CPAS votes two paths for VFE0: the internal
+`CAMNOC_HF0_UNCOMP -> CAMNOC_UNCOMP` path and the external
+`CAMNOC_HF0 -> EBI` path. Revision `r81` votes only the external path. The
+mainline SM8150 interconnect provider already exposes the internal nodes, but
+CAMSS has no consumer for them. The next isolated test is to add that fourth
+interconnect vote; copying more unexplained CPAS register writes is no longer
+the first choice.
+
+`helpers/hotdog-mmio-read32.c` is the deliberately read-only `/dev/mem` tool
+used for these captures. It opens `/dev/mem` with `O_RDONLY`, maps registers
+with `PROT_READ`, rejects unaligned addresses and has no write operation.

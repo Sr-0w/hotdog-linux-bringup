@@ -111,9 +111,10 @@ physical_link='"msm_csiphy0":1 -> "msm_csid0":0'
 restore_needed=0
 dmesg_pid=
 
-find_video_node() {
-	wanted="$1"
-	for name_file in /sys/class/video4linux/*/name; do
+find_video4linux_node() {
+	prefix="$1"
+	wanted="$2"
+	for name_file in /sys/class/video4linux/"$prefix"*/name; do
 		[ -r "$name_file" ] || continue
 		if [ "$(cat "$name_file")" = "$wanted" ]; then
 			printf '/dev/%s\n' "$(basename "$(dirname "$name_file")")"
@@ -148,11 +149,11 @@ cleanup_remote() {
 trap cleanup_remote EXIT HUP INT TERM
 
 mkdir -p "$out"
-csid="$(find_video_node msm_csid0)" || {
+csid="$(find_video4linux_node v4l-subdev msm_csid0)" || {
 	echo 'missing msm_csid0 subdevice' >&2
 	exit 20
 }
-video="$(find_video_node msm_vfe0_rdi0)" || {
+video="$(find_video4linux_node video msm_vfe0_video0)" || {
 	echo 'missing msm_vfe0_rdi0 video node' >&2
 	exit 20
 }
