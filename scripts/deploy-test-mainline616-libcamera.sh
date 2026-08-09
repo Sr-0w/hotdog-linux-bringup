@@ -13,7 +13,7 @@ PACKAGE_DIR="${PACKAGE_DIR:-$HOTDOG_PMBOOTSTRAP_WORK/packages/edge/aarch64}"
 EXPECTED_KERNEL_MARKER="${EXPECTED_KERNEL_MARKER:-oneplus-hotdog-mainline616}"
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/libcamera-deploy-test-$stamp}"
-REMOTE_DIR="/run/hotdog-libcamera-test-$stamp"
+REMOTE_DIR=""
 REMOTE_PRIVILEGE=""
 DMESG_PID=""
 
@@ -48,6 +48,7 @@ die() {
 
 cleanup() {
 	if [ -n "$DMESG_PID" ]; then
+		pkill -TERM -P "$DMESG_PID" 2>/dev/null || true
 		kill "$DMESG_PID" 2>/dev/null || true
 		wait "$DMESG_PID" 2>/dev/null || true
 	fi
@@ -160,6 +161,15 @@ done
 
 UNAME="$(ssh_base 'uname -a')" || die "phone is not reachable over SSH"
 BOOT_ID="$(ssh_base 'cat /proc/sys/kernel/random/boot_id')" || die "cannot read boot identity"
+# The single-quoted expression is intentionally expanded by the remote shell.
+# shellcheck disable=SC2016
+REMOTE_RUNTIME_DIR="$(ssh_base 'printf %s "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"')" ||
+	die "cannot determine the remote runtime directory"
+case "$REMOTE_RUNTIME_DIR" in
+	/run/user/*) ;;
+	*) die "remote runtime directory is not RAM-backed: $REMOTE_RUNTIME_DIR" ;;
+esac
+REMOTE_DIR="$REMOTE_RUNTIME_DIR/hotdog-libcamera-test-$stamp"
 printf '%s\n' "$UNAME" | tee "$OUT/uname.txt"
 printf '%s\n' "$BOOT_ID" | tee "$OUT/boot-id.txt"
 [[ "$UNAME" == *"$EXPECTED_KERNEL_MARKER"* ]] ||
@@ -205,7 +215,10 @@ ssh_base "LIBCAMERA_LOG_LEVELS='*:DEBUG' cam -l" \
 ssh_base "LIBCAMERA_LOG_LEVELS='*:INFO' cam -c 1 -C60 --metadata -s role=viewfinder,width=640,height=480,pixelformat=XRGB8888" \
 	> "$OUT/cam-ae.txt" 2> "$OUT/cam-ae.stderr"
 
-grep -q 's5k3m5' "$OUT/cam-list.txt" || die "S5K3M5 is absent from cam -l"
+if ! grep -q 'Internal back camera' "$OUT/cam-list.txt" ||
+	! grep -q 's5k3m5' "$OUT/cam-list.stderr"; then
+	die "S5K3M5 is absent from cam -l"
+fi
 if grep -Eqi 'no static properties|no sensor helper|no tuning file' \
 	"$OUT/cam-list.stderr" "$OUT/cam-ae.stderr"; then
 	die "libcamera still reports missing S5K3M5 integration data"
@@ -217,13 +230,13 @@ printf 'distinct_exposure_values=%s\ndistinct_gain_values=%s\n' \
 	"$exposure_values" "$gain_values" | tee "$OUT/automatic-controls.txt"
 
 log "validating Plasma Camera integration"
-ssh_base "timeout 20s sh -lc '
+ssh_base "timeout -k 2s 20s sh -lc '
 	pid=\$(pgrep -n plasmashell)
 	[ -n \"\$pid\" ]
 	export XDG_RUNTIME_DIR=\$(tr \"\\0\" \"\\n\" < /proc/\$pid/environ | sed -n \"s/^XDG_RUNTIME_DIR=//p\")
 	export WAYLAND_DISPLAY=\$(tr \"\\0\" \"\\n\" < /proc/\$pid/environ | sed -n \"s/^WAYLAND_DISPLAY=//p\")
 	export DBUS_SESSION_BUS_ADDRESS=\$(tr \"\\0\" \"\\n\" < /proc/\$pid/environ | sed -n \"s/^DBUS_SESSION_BUS_ADDRESS=//p\")
-	plasma-camera
+	exec plasma-camera
 '" > "$OUT/plasma-camera.txt" 2>&1 || true
 grep -Eq 'setReadyForCapture true|Ready for capture|readyForCapture.*true' \
 	"$OUT/plasma-camera.txt" || die "Plasma Camera did not reach ready-for-capture state"

@@ -1536,7 +1536,7 @@ board from a source that does not exist in any kernel tree checked here.
 2. confirm the other three slots the same way the telephoto was confirmed,
    once the identification aid survives a slot with nothing to answer
 3. write IMX586, IMX481 and IMX471 from the downstream register sequences
-4. libcamera pipeline configuration
+4. production color calibration and automatic focus for the S5K3M5
 5. the pop-up motor, which the front camera needs before it can see anything
 6. optionally the lite CSID and VFE instances, and a binding YAML
 

@@ -5,8 +5,8 @@ Subject: [PATCH] media: s5k3m5 report camera geometry and orientation
 
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts |  2 ++
- drivers/media/i2c/s5k3m5.c                         | 13 ++++++++-----
- 2 files changed, 10 insertions(+), 5 deletions(-)
+ drivers/media/i2c/s5k3m5.c                         | 14 +++++++++-----
+ 2 files changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 index 3cc4fee70e9d..50d7b5bde5da 100644
@@ -16,7 +16,7 @@ index 3cc4fee70e9d..50d7b5bde5da 100644
  	camera@10 {
  		compatible = "samsung,s5k3m5";
  		reg = <0x10>;
-+		orientation = "back";
++		orientation = <1>;
 +		rotation = <90>;
  
  		clocks = <&camcc CAM_CC_MCLK0_CLK>;
@@ -49,11 +49,12 @@ index 565bdca59ed1..6c51f6131cb1 100644
  		.hts = 4928,
  		.vts = 1624,
  		.exposure = 256,
-@@ -1047,12 +1050,12 @@ static int s5k3m5_get_selection(struct v4l2_subdev *sd,
+@@ -1047,12 +1050,13 @@ static int s5k3m5_get_selection(struct v4l2_subdev *sd,
  		return -EINVAL;
  
  	switch (sel->target) {
 -	case V4L2_SEL_TGT_CROP:
++	case V4L2_SEL_TGT_NATIVE_SIZE:
  	case V4L2_SEL_TGT_CROP_BOUNDS:
 -		sel->r.left = 0;
 -		sel->r.top = 0;
@@ -69,4 +70,3 @@ index 565bdca59ed1..6c51f6131cb1 100644
  		return -EINVAL;
 -- 
 2.54.0
-

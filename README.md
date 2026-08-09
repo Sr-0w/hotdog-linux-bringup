@@ -39,7 +39,8 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Runs a full postmarketOS Plasma Mobile installation from persistent storage.
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
-- Hardware-validated RAW10 capture and manual focus from the S5K3M5 telephoto camera.
+- Hardware-validated S5K3M5 telephoto capture with libcamera automatic exposure,
+  calibrated manual focus and Plasma Camera integration.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -104,7 +105,7 @@ Support status for the tested HD1913 handset.
 | Wi-Fi | Power management / suspend / stable factory identity | Basic data works; sustained PM/suspend and factory-address handling remain insufficiently tested. |
 | Bluetooth | Scan and HID connectivity | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
-| Cameras | S5K3M5 telephoto RAW10 capture and manual focus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 frames at 30 fps. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Libcamera tuning, automatic controls and camera-app integration remain open. |
+| Cameras | S5K3M5 telephoto capture, userspace and manual focus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 RAW10 frames. Libcamera 0.7.2 has sensor properties, delay data, a helper and simple-pipeline tuning; automatic exposure moves over live frames and Plasma Camera reaches a ready 4200×3120 viewfinder. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Automatic focus and production-quality color calibration remain open. |
 
 ### 🔴 Broken
 
