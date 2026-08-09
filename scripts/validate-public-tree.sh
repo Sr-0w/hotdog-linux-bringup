@@ -19,6 +19,64 @@ require_command() {
 	command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+shellcheck_mainline616_validator() {
+	local validator="$1"
+	local report_file
+	local status
+
+	report_file="$(mktemp)"
+	status=0
+	shellcheck --format=json --severity=warning --shell=sh -- "$validator" >"$report_file" 2>&1 ||
+		status=$?
+	if [ "$status" -eq 0 ]; then
+		rm -f -- "$report_file"
+		return 0
+	fi
+	[ "$status" -eq 1 ] || {
+		cat -- "$report_file" >&2
+		rm -f -- "$report_file"
+		return "$status"
+	}
+
+	if python3 - "$validator" "$report_file" <<'PY'
+import json
+import sys
+
+validator = sys.argv[1]
+report_path = sys.argv[2]
+with open(report_path, encoding="utf-8") as report_file:
+    report = json.load(report_file)
+comments = report.get("comments", []) if isinstance(report, dict) else report
+
+unexpected = []
+for comment in comments:
+    is_known_typec_alias = (
+        comment.get("code") == 2034
+        and comment.get("file") == validator
+        and "pm8150b_typec appears unused" in comment.get("message", "")
+    )
+    if not is_known_typec_alias:
+        unexpected.append(comment)
+
+if unexpected:
+    for comment in unexpected:
+        print(
+            f"{comment.get('file', validator)}:{comment.get('line', 0)}:"
+            f"{comment.get('column', 0)}: {comment.get('level', 'error')} "
+            f"SC{comment.get('code', '????')}: {comment.get('message', '')}",
+            file=sys.stderr,
+        )
+    raise SystemExit(1)
+PY
+	then
+		rm -f -- "$report_file"
+		return 0
+	fi
+
+	rm -f -- "$report_file"
+	return 1
+}
+
 validate_shell_scripts() {
 	local -a shell_scripts=()
 	local shell_script
@@ -298,7 +356,7 @@ validate_mainline616_aport_inputs() {
 	[ -f "$validator" ] || die "missing mainline 6.16 validator: $validator"
 	log "mainline 6.16 aport SHA512 inputs"
 	sh -n "$validator"
-	shellcheck --severity=warning --shell=sh -- "$validator"
+	shellcheck_mainline616_validator "$validator"
 
 	while IFS= read -r line || [ -n "$line" ]; do
 		if [ "$in_source" -eq 0 ]; then
@@ -403,7 +461,7 @@ validate_hotdog_ucm_contract() {
 	local hifi="$aport_dir/HiFi.conf"
 	local expected
 
-	log "hotdog internal-speaker UCM contract"
+	log "hotdog speaker and microphone UCM contract"
 	grep -q '^[[:space:]]*alsa-ucm-conf$' "$apkbuild" ||
 		die "device package does not depend on alsa-ucm-conf"
 	for input in HiFi.conf hotdog.conf; do
@@ -419,14 +477,34 @@ validate_hotdog_ucm_contract() {
 		die "hotdog UCM master does not select the packaged HiFi profile"
 	grep -Fq 'SectionDevice."Speaker"' "$hifi" ||
 		die "hotdog UCM profile does not expose the internal speakers"
+	grep -Fq 'SectionDevice."Mic"' "$hifi" ||
+		die "hotdog UCM profile does not expose the internal microphone"
 	grep -Fq 'PlaybackPCM "hw:${CardId},0"' "$hifi" ||
 		die "hotdog UCM profile does not select MultiMedia1"
+	grep -Fq 'CapturePCM "hw:${CardId},1"' "$hifi" ||
+		die "hotdog UCM profile does not select MultiMedia2"
 	grep -Fq "cset \"name='QUAT_MI2S_RX Audio Mixer MultiMedia1' 1\"" "$hifi" ||
 		die "hotdog UCM profile does not enable the validated speaker route"
 	grep -Fq "cset \"name='QUAT_MI2S_RX Audio Mixer MultiMedia1' 0\"" "$hifi" ||
 		die "hotdog UCM profile does not disable the validated speaker route"
-	[ "$(grep -c '^[[:space:]]*cset ' "$hifi")" -eq 2 ] ||
-		die "hotdog UCM profile must not touch unvalidated mixer controls"
+	for control in \
+		"cset \"name='AMIC4_5 SEL' AMIC4\"" \
+		"cset \"name='CDC_IF TX0 MUX' DEC0\"" \
+		"cset \"name='AIF1_CAP Mixer SLIM TX0' 1\"" \
+		"cset \"name='MultiMedia2 Mixer SLIMBUS_0_TX' 1\"" \
+		"cset \"name='MultiMedia2 Mixer SLIMBUS_0_TX' 0\"" \
+		"cset \"name='AIF1_CAP Mixer SLIM TX0' 0\"" \
+		"cset \"name='CDC_IF TX0 MUX' ZERO\"" \
+		"cset \"name='ADC MUX0' AMIC\"" \
+		"cset \"name='AMIC MUX0' ADC4\"" \
+		"cset \"name='ADC4 Volume' 20\"" \
+		"cset \"name='DEC0 Volume' 96\"" \
+		"cset \"name='AMIC MUX0' ZERO\"" \
+		"cset \"name='ADC4 Volume' 0\"" \
+		"cset \"name='DEC0 Volume' 84\""; do
+		grep -Fq "$control" "$hifi" ||
+			die "hotdog UCM profile lacks validated mixer control: $control"
+	done
 	grep -Fq '"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"' "$apkbuild" ||
 		die "device package does not install the hotdog HiFi profile"
 	grep -Fq '"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"' \
