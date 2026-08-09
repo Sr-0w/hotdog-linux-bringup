@@ -1,0 +1,25 @@
+From 5c1c44eb228de10b1bc03824bea995bb35441c18 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 23:44:06 +0200
+Subject: [PATCH] arm64: dts: qcom: run hotdog main actuator at 400 kHz
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 66acc502cf12..8ea2634e3b63 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -955,6 +955,9 @@ s5k3m5_ep: endpoint {
+ };
+ 
+ &cci0_i2c1 {
++	/* The stock AK7374 actuator configuration requires CCI FAST mode. */
++	clock-frequency = <400000>;
++
+ 	imx586_vcm: lens@c {
+ 		compatible = "asahi-kasei,ak7374";
+ 		reg = <0x0c>;
+-- 
+2.54.0

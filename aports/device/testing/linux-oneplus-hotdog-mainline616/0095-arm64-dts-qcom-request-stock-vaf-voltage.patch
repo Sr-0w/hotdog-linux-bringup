@@ -1,0 +1,24 @@
+From f15e31b2e2de7662675578f6043fc749386b14d2 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 23:26:04 +0200
+Subject: [PATCH] arm64: dts: qcom: request stock VAF voltage on hotdog
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi b/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
+index 38ce4729c681..a70b2e30ea4d 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
+@@ -298,7 +298,7 @@ pm8150l-rpmh-regulators {
+ 		vdd-rgb-supply = <&vreg_bob>;
+ 
+ 		vreg_bob: bob {
+-			regulator-min-microvolt = <3008000>;
++			regulator-min-microvolt = <3300000>;
+ 			regulator-max-microvolt = <4000000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_AUTO>;
+ 			regulator-allow-bypass;
+-- 
+2.54.0

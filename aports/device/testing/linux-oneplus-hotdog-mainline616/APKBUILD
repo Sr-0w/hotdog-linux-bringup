@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=100
+pkgrel=106
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -128,6 +128,9 @@ source="
 	0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
 	0090-media-i2c-add-Sony-IMX586-main-camera.patch
 	0091-media-i2c-complete-IMX586-userspace-metadata.patch
+	0092-arm64-dts-qcom-add-hotdog-main-camera-actuator.patch
+	0095-arm64-dts-qcom-request-stock-vaf-voltage.patch
+	0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -273,5 +276,8 @@ e3a8e64b6aeafc7779f432c522a7dc58ab58b1c3dbbc541e44a2e67e61013c197e3694f4a67888d4
 e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf70b87f43100efa4da840aa3c16980ca61e130fa2101d3ddf4  0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
 18afe062c2c73199134170c06eebab04312f778f60d4829887dc6aa40d64f05bb1357aeb48d30ab9bd12a573532b2cd62c9f9807df77b78048c9ef59b96e8a80  0090-media-i2c-add-Sony-IMX586-main-camera.patch
 81e16566ac17eaab37663ca1944ffe650dccb4217bbc4e4725303f8879fbe5519b62ec5fc713a297e6a419d0b0031649aa7fed1aa46262b8778f3b8bc62aeeef  0091-media-i2c-complete-IMX586-userspace-metadata.patch
+15d8fd5a67e4361e5714ca56d916dc3660359f09dcd804c696dc17bce724a0735f7265faeed33db286ab9e62f3c1cda3f81b1c9bdd80f7a8c2f85c75723c4ba1  0092-arm64-dts-qcom-add-hotdog-main-camera-actuator.patch
+9a9bc80de2cf87e2ebe73101a05ba04f8dd3a0a894aa385831e4539a937a7189d864ba2fdac249aa73a725fd3bcd9c1c41ebd57e8064a43e4f8c2d503d64690c  0095-arm64-dts-qcom-request-stock-vaf-voltage.patch
+444cc30b7d3903b2c5b84b39fe232b646a13588c441edca4f7f3bf3308f9a3c6490e40f62b7a5e584a8c892157f13be35c28d45dedfdb4069bc58d4c7be1b387  0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
