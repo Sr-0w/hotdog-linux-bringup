@@ -39,8 +39,8 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Runs a full postmarketOS Plasma Mobile installation from persistent storage.
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
-- Hardware-validated S5K3M5 telephoto capture with libcamera automatic exposure,
-  calibrated manual focus and Plasma Camera integration.
+- Hardware-validated S5K3M5 telephoto and IMX586 main-camera capture with
+  libcamera automatic controls and Plasma Camera integration.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -54,6 +54,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ✅ USB-C host, USB 3 and DisplayPort video  
 ✅ Battery fuel gauge  
 ✅ Telephoto RAW10 capture and manual focus
+✅ Main-camera RAW10 capture and automatic exposure/gain
 
 ⚠️ Suspend/resume incomplete  
 ⚠️ 90 Hz wake path unreliable  
@@ -106,6 +107,7 @@ Support status for the tested HD1913 handset.
 | Bluetooth | Scan and HID connectivity | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
 | Cameras | S5K3M5 telephoto capture, userspace and manual focus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 RAW10 frames. Libcamera 0.7.2 has sensor properties, delay data, a helper and simple-pipeline tuning; automatic exposure moves over live frames and Plasma Camera reaches a ready 4200×3120 viewfinder. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Automatic focus and production-quality color calibration remain open. |
+| Cameras | Sony IMX586 main capture and userspace | The main sensor captures complete 4000×3000 RAW10 frames over three-trio C-PHY through CAMSS. Libcamera uses the Sony gain law and OxygenOS control delays; a 60-frame processed run holds 30 fps while automatic gain moves through 16 values, and Plasma Camera reaches ready-for-capture. Main-lens focus, production color calibration, complete metadata and additional modes remain open. |
 
 ### 🔴 Broken
 
@@ -126,7 +128,7 @@ Support status for the tested HD1913 handset.
 | Audio | Other analogue/digital microphones, EC/NR | Other live pads, digital microphones, echo cancellation and noise-reduction policy remain open. |
 | Cellular | WWAN data / calls / SMS / SIM handling | Telephony stack is not yet hardware-validated. |
 | GNSS | Location | Not yet hardware-validated. |
-| Cameras | Rear main / ultra-wide / front | The inferred IMX586, IMX481 and IMX471 sensors still need safe power descriptions, drivers and hardware validation. The pop-up front camera also needs motor integration. |
+| Cameras | Ultra-wide / front | The IMX481 and IMX471 sensors still need drivers and hardware validation. The pop-up front camera also needs motor integration. |
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
 | Haptics | AW8697 | No mainline driver/integration is validated yet. |

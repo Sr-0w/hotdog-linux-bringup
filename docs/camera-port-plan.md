@@ -1836,11 +1836,9 @@ motion and manual focus, not merely control registration.
 
 The next camera work is:
 
-1. implement the hardware-identified IMX586 and its C-PHY transport
-2. validate raw streaming, then add libcamera exposure/gain control and mobile
-   camera integration for the main camera
-3. implement and validate the IMX481 and IMX471 sensors
-4. integrate the front-camera pop-up motor
+1. complete IMX586 geometry, orientation, actuator and colour calibration
+2. implement and validate the IMX481 and IMX471 sensors
+3. integrate the front-camera pop-up motor
 
 ## Main IMX586 identification and C-PHY requirement, revision `r97`
 
@@ -1858,3 +1856,23 @@ driver provides the matching v1.1 C-PHY register table. The implementation
 order is therefore deliberate: port C-PHY bus propagation and PHY/CSID setup,
 then bind the IMX586 V4L2 sensor driver, and only then validate raw capture and
 libcamera controls.
+
+## Main IMX586 capture and userspace, revisions `r98` and `r99`
+
+Revision `r98` propagates V4L2 C-PHY endpoint data through CAMSS and programs
+the downstream SM8150 v1.1 three-trio table plus the CSID PHY-type bit.
+Revision `r99` adds the IMX586 sensor driver with the exact OxygenOS power,
+initialization and 4000x3000 binned mode sequences.
+
+The physical sensor streams complete 15,024,000-byte RAW10 frames at 30 fps
+through CSIPHY1, CSID0 and VFE0 RDI0. Distinct frame hashes and a coherent
+converted image validate the transport end to end. Libcamera revision `r3`
+adds the Sony gain equation, measured black level, OxygenOS control delays and
+a simple IPA profile. A 60-frame processed run holds 30 fps and moves analogue
+gain from 1.122807x to 5.657459x. Plasma Camera reaches ready-for-capture.
+
+WirePlumber's passive libcamera monitor must not own the single CAMSS graph in
+parallel with direct applications. The device package disables only that
+monitor while retaining normal WirePlumber audio policy. Detailed hashes and
+commands are recorded in
+`docs/evidence/2026-08-09-mainline616-camera-imx586.md`.
