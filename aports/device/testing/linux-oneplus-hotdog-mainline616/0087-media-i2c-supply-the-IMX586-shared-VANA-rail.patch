@@ -1,0 +1,149 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 18:00:00 +0200
+Subject: [PATCH] media: i2c: supply the IMX586 shared VANA rail
+
+The OnePlus camera description gives the rear IMX586 both PM8150L BOB and
+GPIO11 as its primary analog supply path.  The OxygenOS EEPROM sequence for
+the rear sensor pair requests BOB at 3.3 V before asserting GPIO11, while the
+sensor-specific sequence starts with its second analog switch on GPIO29.
+
+Reproduce that board-level prerequisite around the already validated IMX586
+probe sequence.  Release both the GPIO and voltage request during teardown so
+the diagnostic remains bounded and does not alter unrelated BOB consumers
+after it exits.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 10 ++++++
+ drivers/media/i2c/hotdog-cam-scan.c                | 47 ++++++++++++++++++++++
+ 2 files changed, 57 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -233,6 +233,13 @@
+ };
+ 
+ &tlmm {
++	cam0_vana_default: cam0-vana-default-state {
++		pins = "gpio11";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	cam0_custom1_default: cam0-custom1-default-state {
+ 		pins = "gpio29";
+ 		function = "gpio";
+@@ -933,15 +940,18 @@
+ 		assigned-clock-rates = <19200000>;
+ 
+ 		vio-supply = <&vreg_l1c_1p8>;
++		vana-supply = <&vreg_bob>;
+ 		vdig-supply = <&vreg_l1f_1p1>;
+ 
+ 		reset-gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
++		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>;
+ 		custom1-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
+ 		custom2-gpios = <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
+ 		oneplus,imx586-power-sequence;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk1_default>,
++			    <&cam0_vana_default>,
+ 			    <&cam0_custom1_default>,
+ 			    <&cam0_custom2_default>,
+ 			    <&cam0_reset_default>;
+diff --git a/drivers/media/i2c/hotdog-cam-scan.c b/drivers/media/i2c/hotdog-cam-scan.c
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -26,6 +26,7 @@
+ 
+ #define HOTDOG_CAM_SCAN_MCLK_RATE	24000000
+ #define HOTDOG_IMX586_MCLK_RATE		19200000
++#define HOTDOG_IMX586_VANA_UV		3300000
+ #define HOTDOG_IMX586_VDIG_LOAD_UA	1100000
+ 
+ /*
+@@ -144,6 +145,8 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	struct gpio_desc *custom1;
+ 	struct gpio_desc *custom2;
+ 	struct gpio_desc *reset;
++	struct gpio_desc *vana_enable;
++	struct regulator *vana;
+ 	struct regulator *vdig;
+ 	struct regulator *vio;
+ 	struct clk *mclk;
+@@ -151,6 +154,8 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	bool custom2_on = false;
+ 	bool mclk_on = false;
+ 	bool reset_up = false;
++	bool vana_on = false;
++	bool vana_voltage_set = false;
+ 	bool vdig_load_set = false;
+ 	bool vdig_on = false;
+ 	bool vio_on = false;
+@@ -171,6 +176,15 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 		return dev_err_probe(dev, PTR_ERR(reset),
+ 				     "cannot get reset GPIO\n");
+ 
++	vana_enable = devm_gpiod_get(dev, "vana-enable", GPIOD_OUT_LOW);
++	if (IS_ERR(vana_enable))
++		return dev_err_probe(dev, PTR_ERR(vana_enable),
++				     "cannot get VANA enable GPIO\n");
++
++	vana = devm_regulator_get(dev, "vana");
++	if (IS_ERR(vana))
++		return dev_err_probe(dev, PTR_ERR(vana), "cannot get VANA\n");
++
+ 	vdig = devm_regulator_get(dev, "vdig");
+ 	if (IS_ERR(vdig))
+ 		return dev_err_probe(dev, PTR_ERR(vdig), "cannot get VDIG\n");
+@@ -187,6 +201,32 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "cannot set IMX586 MCLK rate\n");
+ 
++	/*
++	 * OxygenOS requests 3.3 V from PM8150L BOB and then raises GPIO11
++	 * while probing the EEPROM shared by the rear sensor pair.  Preserve
++	 * that board-level prerequisite while exercising the IMX586 sequence.
++	 */
++	ret = regulator_set_voltage(vana, HOTDOG_IMX586_VANA_UV,
++				    HOTDOG_IMX586_VANA_UV);
++	if (ret) {
++		dev_err(dev, "cannot set IMX586 VANA voltage: %d\n", ret);
++		goto power_down;
++	}
++	vana_voltage_set = true;
++
++	ret = regulator_enable(vana);
++	if (ret) {
++		dev_err(dev, "cannot enable IMX586 VANA: %d\n", ret);
++		goto power_down;
++	}
++	vana_on = true;
++	gpiod_set_value_cansleep(vana_enable, 1);
++	usleep_range(1000, 2000);
++	dev_info(dev,
++		 "IMX586 prerequisite: VANA enabled=%d voltage=%d uV, GPIO11 logical=%d\n",
++		 regulator_is_enabled(vana), regulator_get_voltage(vana),
++		 gpiod_get_value_cansleep(vana_enable));
++
+ 	gpiod_set_value_cansleep(custom1, 1);
+ 	custom1_on = true;
+ 	dev_info(dev, "IMX586 stage 1: CUSTOM_GPIO1 asserted, logical=%d\n",
+@@ -278,6 +318,12 @@ power_down:
+ 		gpiod_set_value_cansleep(custom2, 0);
+ 	if (custom1_on)
+ 		gpiod_set_value_cansleep(custom1, 0);
++	if (vana_on) {
++		regulator_disable(vana);
++		gpiod_set_value_cansleep(vana_enable, 0);
++	}
++	if (vana_voltage_set)
++		regulator_set_voltage(vana, 0, 4000000);
+ 
+ 	return ret ? ret : -ENODEV;
+ }
+-- 
+2.50.1
