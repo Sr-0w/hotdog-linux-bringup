@@ -1,0 +1,98 @@
+From f8a2d48454bd0f7016b1ff7fa6c048ceaae0f1a5 Mon Sep 17 00:00:00 2001
+From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 18:30:23 +0200
+Subject: [PATCH] media: i2c: complete IMX586 userspace metadata
+
+---
+ drivers/media/i2c/imx586.c | 44 ++++++++++++++++++++++++++++++++++----
+ 1 file changed, 40 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/i2c/imx586.c b/drivers/media/i2c/imx586.c
+index 8befc53673f6..8ec9e17e7c20 100644
+--- a/drivers/media/i2c/imx586.c
++++ b/drivers/media/i2c/imx586.c
+@@ -809,6 +809,26 @@ static int imx586_set_pad_format(struct v4l2_subdev *sd,
+ 	return ret;
+ }
+ 
++static int imx586_get_selection(struct v4l2_subdev *sd,
++				struct v4l2_subdev_state *sd_state,
++				struct v4l2_subdev_selection *sel)
++{
++	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
++		return -EINVAL;
++
++	switch (sel->target) {
++	case V4L2_SEL_TGT_NATIVE_SIZE:
++	case V4L2_SEL_TGT_CROP_BOUNDS:
++	case V4L2_SEL_TGT_CROP_DEFAULT:
++	case V4L2_SEL_TGT_CROP:
++		/* The 4000x3000 mode bins the complete 8000x6000 array 2x2. */
++		sel->r = (struct v4l2_rect) { 0, 0, 8000, 6000 };
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
+ /**
+  * imx586_init_state() - Initialize sub-device state
+  * @sd: pointer to imx586 V4L2 sub-device structure
+@@ -1082,6 +1102,7 @@ static const struct v4l2_subdev_pad_ops imx586_pad_ops = {
+ 	.enum_frame_size = imx586_enum_frame_size,
+ 	.get_fmt = imx586_get_pad_format,
+ 	.set_fmt = imx586_set_pad_format,
++	.get_selection = imx586_get_selection,
+ };
+ 
+ static const struct v4l2_subdev_ops imx586_subdev_ops = {
+@@ -1199,10 +1220,11 @@ static int imx586_init_controls(struct imx586 *imx586)
+ {
+ 	struct v4l2_ctrl_handler *ctrl_hdlr = &imx586->ctrl_handler;
+ 	const struct imx586_mode *mode = imx586->cur_mode;
++	struct v4l2_fwnode_device_properties props;
+ 	u32 lpfr;
+ 	int ret;
+ 
+-	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 6);
++	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -1262,16 +1284,30 @@ static int imx586_init_controls(struct imx586 *imx586)
+ 	if (imx586->hblank_ctrl)
+ 		imx586->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+ 
++	ret = v4l2_fwnode_device_parse(imx586->dev, &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &imx586_ctrl_ops,
++					      &props);
++	if (ret)
++		goto error_free_hdlr;
++
+ 	if (ctrl_hdlr->error) {
++		ret = ctrl_hdlr->error;
+ 		dev_err(imx586->dev, "control init failed: %d\n",
+-			ctrl_hdlr->error);
+-		v4l2_ctrl_handler_free(ctrl_hdlr);
+-		return ctrl_hdlr->error;
++			ret);
++		goto error_free_hdlr;
+ 	}
+ 
+ 	imx586->sd.ctrl_handler = ctrl_hdlr;
+ 
+ 	return 0;
++
++error_free_hdlr:
++	v4l2_ctrl_handler_free(ctrl_hdlr);
++
++	return ret;
+ }
+ 
+ /**
+-- 
+2.54.0
+

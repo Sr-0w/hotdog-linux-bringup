@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=99
+pkgrel=100
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -127,6 +127,7 @@ source="
 	0088-media-i2c-round-the-IMX586-VANA-vote.patch
 	0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
 	0090-media-i2c-add-Sony-IMX586-main-camera.patch
+	0091-media-i2c-complete-IMX586-userspace-metadata.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -271,5 +272,6 @@ e3a8e64b6aeafc7779f432c522a7dc58ab58b1c3dbbc541e44a2e67e61013c197e3694f4a67888d4
 217b3e703547fdd7c01429ca86c24d9ca998562b2f2ed7c8c1153c4e55153622224732bd8c6129c86261c29676e1c25ffb346fadeecf75aea122e187b12f3eeb  0088-media-i2c-round-the-IMX586-VANA-vote.patch
 e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf70b87f43100efa4da840aa3c16980ca61e130fa2101d3ddf4  0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
 18afe062c2c73199134170c06eebab04312f778f60d4829887dc6aa40d64f05bb1357aeb48d30ab9bd12a573532b2cd62c9f9807df77b78048c9ef59b96e8a80  0090-media-i2c-add-Sony-IMX586-main-camera.patch
+81e16566ac17eaab37663ca1944ffe650dccb4217bbc4e4725303f8879fbe5519b62ec5fc713a297e6a419d0b0031649aa7fed1aa46262b8778f3b8bc62aeeef  0091-media-i2c-complete-IMX586-userspace-metadata.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

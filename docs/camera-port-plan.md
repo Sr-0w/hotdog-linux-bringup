@@ -62,7 +62,7 @@ which only describes slots and CSIPHY assignment.
 
 | Role | Sensor | Upstream driver |
 | --- | --- | --- |
-| Main 48 MP | Sony IMX586 | absent |
+| Main 48 MP | Sony IMX586 | local mainline port in revision `r99` |
 | Ultra-wide | Sony IMX481 | absent |
 | Telephoto | Samsung S5K3M5 | present in linux-next |
 | Front, pop-up | Sony IMX471 | absent |
@@ -1836,7 +1836,7 @@ motion and manual focus, not merely control registration.
 
 The next camera work is:
 
-1. complete IMX586 geometry, orientation, actuator and colour calibration
+1. complete IMX586 actuator and colour calibration
 2. implement and validate the IMX481 and IMX471 sensors
 3. integrate the front-camera pop-up motor
 
@@ -1876,3 +1876,12 @@ parallel with direct applications. The device package disables only that
 monitor while retaining normal WirePlumber audio policy. Detailed hashes and
 commands are recorded in
 `docs/evidence/2026-08-09-mainline616-camera-imx586.md`.
+
+## Main IMX586 metadata, revision `r100`
+
+Revision `r100` completes the metadata expected by libcamera. The sensor now
+reports its 8000x6000 native array, the full-array crop bounds used by the
+4000x3000 2x2-binned mode, board orientation and 90-degree rotation. A direct
+boot enumerates both cameras without the previous geometry/orientation
+warnings. A fresh 60-frame processed IMX586 run completes at 30 fps with 16
+automatic-gain values, and Plasma Camera reaches ready-for-capture.

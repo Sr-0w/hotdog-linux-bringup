@@ -51,7 +51,24 @@ direct libcamera applications from configuring it. The hotdog device package
 therefore disables only `monitor.libcamera`; WirePlumber continues to manage
 audio, while camera applications access libcamera directly.
 
-Remaining IMX586 work is main-lens actuator integration, production colour
-calibration, complete V4L2 geometry/orientation metadata and additional sensor
-modes. Those limitations do not invalidate raw capture, automatic exposure and
-gain, or Plasma Camera integration.
+## Complete userspace metadata, revision `r100`
+
+Revision `r100` adds the native 8000x6000 pixel-array geometry and reports the
+board orientation and 90-degree rotation through standard V4L2 controls. Its
+direct-boot image has SHA-256
+`715999dc33b5354771b7f6bd55ebdd3b956ff33af7da21146075135052f4b49c`.
+The image was read back byte-for-byte from `boot_b` before booting.
+
+The validated boot reports kernel build
+`#101-oneplus-hotdog-mainline616` and boot ID
+`03ca6bb9-8524-4eff-bd0a-bb94903d49ef`. Libcamera enumerates the IMX586 as an
+internal back camera without its previous missing geometry or orientation
+warnings. A fresh 60-frame ABGR8888 viewfinder run again completed at 30 fps,
+used the Adreno 640 software-ISP path, and moved analogue gain through the same
+16 values from 1.122807x to 5.657459x. Plasma Camera again reported
+`PlasmaCameraManager::setReadyForCapture true`.
+
+Remaining IMX586 work is main-lens actuator integration, production colour and
+AWB calibration, and additional sensor modes. Those limitations do not
+invalidate raw capture, automatic exposure and gain, complete userspace
+metadata, or Plasma Camera integration.
