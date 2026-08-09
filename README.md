@@ -46,6 +46,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ## Current status
 
 ✅ Direct boot from OnePlus bootloader  
+✅ Reliable clean software reboot<br>
 ✅ Native 1440×3120 display  
 ✅ Adreno 640 accelerated graphics  
 ✅ Touchscreen and hardware keys  
@@ -75,6 +76,7 @@ Support status for the tested HD1913 handset.
 |---|---|---|
 | Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`. |
 | Boot | Persistent postmarketOS rootfs / OpenRC / SSH | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
+| Boot | Clean software reboot | Revision `r108` describes the SM8150 TCSR download-mode register. Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`. |
 | Storage | UFS | Direct boot, raw I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
 | Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
 | Display | Internal panel 1440×3120 at 60 Hz | Native DPU/DSI/DSC KMS scanout is stable in graphical userspace. |

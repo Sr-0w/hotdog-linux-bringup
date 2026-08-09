@@ -36,6 +36,9 @@ Raw experiment records live in the ignored local `reports/` directory. Promote
 reusable conclusions into the documents above without publishing device serials,
 credentials, proprietary dumps, or workstation-specific paths.
 
+- [evidence/2026-08-10-mainline616-software-reboot.md](evidence/2026-08-10-mainline616-software-reboot.md):
+  exact R107 crashdump analysis, the missing SM8150 TCSR download-mode
+  description, and six hardware-validated clean software reboots on R108.
 - [evidence/2026-08-09-mainline616-camera-imx586.md](evidence/2026-08-09-mainline616-camera-imx586.md):
   IMX586 three-trio C-PHY RAW10 capture, libcamera automatic controls and
   Plasma Camera validation.

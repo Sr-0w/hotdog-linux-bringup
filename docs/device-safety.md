@@ -169,9 +169,10 @@ The active direct-UFS workflow does not use that `reset` action. A Sahara reset
 can immediately relaunch the same persistent candidate, obscuring whether an
 observed transition came from the kernel, firmware, or the host. After a
 mainline failure, the host therefore performs `inspect` only and waits for an
-explicit manual recovery to fastboot. A software reboot remains acceptable
-from a freshly identity-checked R6 userspace when it is the deliberate handoff
-into the next test.
+explicit manual recovery to fastboot. Normal software reboot is
+hardware-validated on mainline 6.16 revision `r108`, after SCM gained the
+missing SM8150 TCSR download-mode register. It remains forbidden from a device
+already in `900e`, where no Linux userspace is running.
 
 ## Reporting a failed test
 

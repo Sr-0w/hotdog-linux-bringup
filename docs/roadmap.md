@@ -24,7 +24,8 @@ The submission gates are tracked in the
 experiments, acceptance criteria, and fallback conditions are detailed in the
 [hardware enablement roadmap](hardware-roadmap.md).
 
-The current hardware candidate is the reproducible 6.16 `r22` package. The
+The current hardware candidate is the 6.16 `r108` package, built on the
+reproducible `r22` memory-reservation baseline. The
 accepted 6.16 stack direct-boots with writable rootfs, USB SSH, S6SY761
 multitouch, an Adreno 640 render node that completes Turnip Vulkan workloads,
 corrected conservative SMB5 limits, registered Power plus volume-key inputs,
@@ -72,7 +73,8 @@ for the hotdog footer contract are the remaining packaging gates. Revision
   command line deliberately omits the rescue watchdog so a failure remains
   observable until manual recovery
 - after direct entry works, validate the built-in Qualcomm APSS watchdog,
-  reliable software reboot, and the hotdog-only PON reboot-mode properties
+  and the hotdog-only PON reboot-mode properties; reliable normal software
+  reboot is hardware-validated on `r108`
 - remove the downstream kexec bridge from the normal boot path
 - replace the 120-second and 45-second waits with readiness checks
 - restore the complete RAM map
