@@ -16,6 +16,8 @@ HEIGHT="${HEIGHT:-480}"
 POLL_TIMEOUT_MS="${POLL_TIMEOUT_MS:-8000}"
 HOLD_AFTER_STREAMON_MS="${HOLD_AFTER_STREAMON_MS:-0}"
 SOURCE="${SOURCE:-tpg}"
+EXPOSURE="${EXPOSURE:-}"
+ANALOGUE_GAIN="${ANALOGUE_GAIN:-}"
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/camera-csid-tpg-$stamp}"
 REMOTE_DIR="/tmp/hotdog-camera-csid-tpg-$stamp"
@@ -38,6 +40,8 @@ Options:
   --kernel-marker TEXT  Required substring in uname -a.
   --serial SERIAL       Required androidboot.serialno value.
   --source SOURCE       tpg or s5k3m5. Default: tpg.
+  --exposure LINES      Optional sensor exposure for s5k3m5.
+  --analogue-gain GAIN  Optional sensor analogue gain for s5k3m5.
   --width PIXELS        Test frame width. Default: 640.
   --height PIXELS       Test frame height. Default: 480.
   --poll-timeout MS     Per-frame poll timeout. Default: 8000.
@@ -114,6 +118,8 @@ height="$4"
 poll_timeout_ms="$5"
 hold_after_streamon_ms="$6"
 source="$7"
+exposure="$8"
+analogue_gain="$9"
 media=/dev/media0
 format="fmt:SGRBG10_1X10/${width}x${height}"
 physical_link='"msm_csiphy0":1 -> "msm_csid0":0'
@@ -221,6 +227,13 @@ s5k3m5)
 		exit 23
 	}
 	printf 'SENSOR entity=%s node=%s\n' "$sensor_entity" "$sensor"
+	if [ -n "$exposure" ]; then
+		v4l2-ctl -d "$sensor" --set-ctrl="exposure=$exposure"
+	fi
+	if [ -n "$analogue_gain" ]; then
+		v4l2-ctl -d "$sensor" --set-ctrl="analogue_gain=$analogue_gain"
+	fi
+	v4l2-ctl -d "$sensor" --get-ctrl=exposure,analogue_gain
 	v4l2-ctl -d "$csid" --set-ctrl=test_pattern=0
 	media-ctl -d "$media" -V "\"$sensor_entity\":0 [$format]"
 	media-ctl -d "$media" -V "\"msm_csiphy0\":0 [$format]"
@@ -306,6 +319,16 @@ while [ "$#" -gt 0 ]; do
 		SOURCE="$2"
 		shift
 		;;
+	--exposure)
+		[ "$#" -ge 2 ] || die "missing value for --exposure"
+		EXPOSURE="$2"
+		shift
+		;;
+	--analogue-gain)
+		[ "$#" -ge 2 ] || die "missing value for --analogue-gain"
+		ANALOGUE_GAIN="$2"
+		shift
+		;;
 	--width)
 		[ "$#" -ge 2 ] || die "missing value for --width"
 		WIDTH="$2"
@@ -351,6 +374,8 @@ case "$SOURCE" in
 	tpg|s5k3m5) ;;
 	*) die "SOURCE must be tpg or s5k3m5: $SOURCE" 2 ;;
 esac
+[ -z "$EXPOSURE" ] || positive_integer EXPOSURE "$EXPOSURE"
+[ -z "$ANALOGUE_GAIN" ] || positive_integer ANALOGUE_GAIN "$ANALOGUE_GAIN"
 [ -n "$PMOS_PASSWORD" ] || die "set PMOS_PASSWORD or use --password"
 [ -n "$EXPECTED_KERNEL_MARKER" ] || die "kernel marker must not be empty"
 
@@ -397,7 +422,7 @@ if [ "$REMOTE_SUDO_MODE" = noninteractive ]; then
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE'" \
+			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE' '$EXPOSURE' '$ANALOGUE_GAIN'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 else
@@ -415,7 +440,7 @@ else
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE'" \
+			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE' '$EXPOSURE' '$ANALOGUE_GAIN'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 fi
