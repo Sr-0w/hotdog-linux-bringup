@@ -60,6 +60,20 @@ address `0x1a`. The handset stayed on the same boot and the `r97` module was
 unloaded cleanly. Sensor identity, bus, voltage and power ordering are now
 hardware facts rather than inferred wiring.
 
+## SM8150 C-PHY support, revision `r98`
+
+The IMX586 module uses three C-PHY trios rather than four D-PHY lanes. The
+existing CAMSS support accepted only D-PHY endpoints and programmed the SM8150
+CSIPHY with two-phase tables even when downstream firmware described C-PHY.
+Revision `r98` carries the SM8150 three-phase register table from Qualcomm's
+GPL downstream kernel and propagates the bus type through the CAMSS pipeline.
+It also selects C-PHY in the CSID, validates three-trio endpoint mappings and
+widens the settle counter so the hardware value is not truncated.
+
+The complete postmarketOS package passed the strict pmbootstrap build. Runtime
+validation follows with the real IMX586 driver; that test will also calibrate
+the initial C-PHY link frequency and settle time against hardware errors.
+
 ## OxygenOS module sequence
 
 The remaining identification failure led to the exact OnePlus sensor-module
@@ -93,3 +107,5 @@ or TLMM GPIO 11 during power-up. That exact sequence is the input for `r93`.
 - boot image SHA-256: `e7f81ca2583dc1e5b1a4de5279410df1add4fe3ba823aded73047711a6ca46ec`
 - `r97` package: `linux-oneplus-hotdog-mainline616-6.16.0-r97.apk`
 - `r97` package SHA-256: `5d4dc5cca431c55b9d192401cc2c596fb648714c133e74610a5377458c18b9a8`
+- `r98` package: `linux-oneplus-hotdog-mainline616-6.16.0-r98.apk`
+- `r98` package SHA-256: `0ac76a0a69a2d2afc8dba3d9caa0fc11e0935cae2df391d56e461a64d2078470`
