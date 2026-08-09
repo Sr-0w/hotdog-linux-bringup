@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=98
+pkgrel=99
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -126,6 +126,7 @@ source="
 	0087-media-i2c-supply-the-IMX586-shared-VANA-rail.patch
 	0088-media-i2c-round-the-IMX586-VANA-vote.patch
 	0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
+	0090-media-i2c-add-Sony-IMX586-main-camera.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -179,7 +180,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-f0ea5b2b011b28dd9b703ad9602a3d7c5e155034fb1d15739fafa098e37fa39a1bc197e780c9148b28fedbf8b2b9999b1c86f156a9b41fd1e023394d0c9b7d8b  config-oneplus-hotdog-mainline616.aarch64
+0ce31d4a9bf73eab3a2d7298687fa7a0e02cce3bbb56e7dd7ed1c4a0d088113d32500ffe6856274c3b0500a2a6a859457ff18e6d1743a32f84ca83f0e9415531  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -269,5 +270,6 @@ e3a8e64b6aeafc7779f432c522a7dc58ab58b1c3dbbc541e44a2e67e61013c197e3694f4a67888d4
 5dffd03c57a509b354e17e45ad90b0f2eca8f3c357ad300f487ef861e931a8097b204ee593e4fba20b54997814fcb783dc19f2a67abb6a93b39ca01598799fda  0087-media-i2c-supply-the-IMX586-shared-VANA-rail.patch
 217b3e703547fdd7c01429ca86c24d9ca998562b2f2ed7c8c1153c4e55153622224732bd8c6129c86261c29676e1c25ffb346fadeecf75aea122e187b12f3eeb  0088-media-i2c-round-the-IMX586-VANA-vote.patch
 e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf70b87f43100efa4da840aa3c16980ca61e130fa2101d3ddf4  0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
+18afe062c2c73199134170c06eebab04312f778f60d4829887dc6aa40d64f05bb1357aeb48d30ab9bd12a573532b2cd62c9f9807df77b78048c9ef59b96e8a80  0090-media-i2c-add-Sony-IMX586-main-camera.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
