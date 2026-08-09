@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=93
+pkgrel=95
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -121,6 +121,8 @@ source="
 	0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
 	0083-media-i2c-sequence-hotdog-camera-rails.patch
 	0084-media-i2c-follow-the-OnePlus-IMX586-power-sequence.patch
+	0085-media-i2c-instrument-the-OnePlus-IMX586-sequence.patch
+	0086-media-i2c-apply-the-IMX586-VDIG-load-vote.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -259,5 +261,7 @@ b573ee7edfda6787ab52adb0be44bb41c40b69501f23166c537ef43ba0230173665edf3ab5051b14
 746c6b05a57c1191ae41db4032c2015cce14162c25646a7199771dc57af0baaea5a16b1ed5b383df333051db32c2292500cca76be7cd6b6d9ffe0b802e3ceabf  0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
 6e2bbb571469fe98bd003f840b1e306636c7d1758095113348db27c4570574dcef781483fe8d06612d0fac99879e059e2a4bcc684c4a7062050cf4036bd4b120  0083-media-i2c-sequence-hotdog-camera-rails.patch
 e3a8e64b6aeafc7779f432c522a7dc58ab58b1c3dbbc541e44a2e67e61013c197e3694f4a67888d41d450ee04844ef5b2301ef16e91fab4c3a4c2a2270b120be  0084-media-i2c-follow-the-OnePlus-IMX586-power-sequence.patch
+7c2260b2efa9e33b08d7ca7e099a0cb654684958bcea63fbdb312f156d78c6b5e259bdb12e7b3f4cecd86aa88be8c26aaa462a2663d33e738e9d7e4624744df6  0085-media-i2c-instrument-the-OnePlus-IMX586-sequence.patch
+52a81a74255e535fd87410ba5c5115911a9dd161bf3cf04c852e45c604449621746c4260cf27b2066d34ce192fa63917d1ffd9a5cec4dec27619a1d04fd89284  0086-media-i2c-apply-the-IMX586-VDIG-load-vote.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
