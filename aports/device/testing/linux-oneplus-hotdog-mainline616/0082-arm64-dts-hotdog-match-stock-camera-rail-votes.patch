@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 14:30:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: match stock camera rail votes
+
+The stock hotdog tree includes sm8150-regulator.dtsi, where PM8009 ldo1,
+ldo3 and ldo4 are plain VRM resources without an initial operating mode. The
+camera consumers then request 1.104 V from ldo1 and 1.056 V from ldo3/ldo4.
+
+The earlier mainline description instead copied the wider constraints and LPM
+capability of sdmmagpie's PM8009 and forced all three rails into HPM. That is
+not the regulator contract used by the hotdog firmware and is the last common
+difference between these three rails and the stock description. Enabling any
+one of them currently causes a PMIC-level reset.
+
+Use the exact per-camera voltages and leave the operating mode untouched, as
+the stock SM8150 description does. Keep the parent supplies absent: the stock
+RPMh nodes do not describe them either.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi | 15 ++++++---------
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
+@@ -398,26 +398,23 @@
+ 		vdd-l5-l6-supply = <&vreg_bob>;
+ 
+ 		vreg_l1f_1p1: ldo1 {
+-			regulator-min-microvolt = <1100000>;
+-			regulator-max-microvolt = <1304000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-min-microvolt = <1104000>;
++			regulator-max-microvolt = <1104000>;
+ 		};
+ 
+ 		vreg_l2f_1p2: ldo2 {
+ 			regulator-min-microvolt = <1200000>;
+ 			regulator-max-microvolt = <1200000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+ 		vreg_l3f_1p05: ldo3 {
+-			regulator-min-microvolt = <1096000>;
+-			regulator-max-microvolt = <1304000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-min-microvolt = <1056000>;
++			regulator-max-microvolt = <1056000>;
+ 		};
+ 
+ 		vreg_l4f_1p05: ldo4 {
+-			regulator-min-microvolt = <1096000>;
+-			regulator-max-microvolt = <1304000>;
+-			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-min-microvolt = <1056000>;
++			regulator-max-microvolt = <1056000>;
+ 		};
+ 
+ 		vreg_l5f_2p85: ldo5 {
+-- 
+2.50.1

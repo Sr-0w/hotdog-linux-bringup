@@ -1492,52 +1492,43 @@ the SoC is being reset below the kernel, by the PMIC, with no opportunity to
 write anything. Enabling a PM8009 camera rail is causing a hardware power fault,
 not a software one.
 
-Which closes what software can establish here. Every part of the description has
-been checked and corrected where it was wrong, the fault has been narrowed to
-the regulator enable itself, and the reset is now known to be electrical. Going
-further means measuring the rail rather than editing its description: the next
-useful step is instrumentation on the hardware, or the PM8009 topology for this
-board from a source that does not exist in any kernel tree checked here.
-2. the VFE write-path fault, which blocks streaming on every slot
-2. failing that, what the VFE top block needs so it presents the RDI stream to
-   the bus.
-   Eliminated by test: the write master's configuration, geometry and
-   addressing, the IOVA range, the bus clock-gating override, the SMMU stream
-   IDs, camera NoC bandwidth voting, the VFE version, the write master index,
-   and link bandwidth
-   Eliminated by test so far: the write master's configuration, geometry and
-   addressing, the IOVA range, the bus clock-gating override, the SMMU stream
-   IDs, the VFE version, the write master index, and link bandwidth
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. why a write master with correct geometry, address and enable, fed by an
-   error-free link that delivers start of frame every frame, completes its
-   transfer without writing a byte
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots and write IMX586, IMX481 and IMX471
-3. libcamera, and the pop-up motor the front camera depends on
-2. decode the accumulating `RX_IRQ_STATUS` per-lane errors
-3. confirm the other three slots and write IMX586, IMX481 and IMX471
-4. libcamera, and the pop-up motor the front camera depends on
-2. decode the residual per-lane errors in CSID `RX_IRQ_STATUS` `0x010000ff`
-3. confirm the other three slots and write IMX586, IMX481 and IMX471
-4. libcamera, and the pop-up motor the front camera depends on
-2. confirm the other three slots the same way the telephoto was confirmed,
-   once the identification aid survives a slot with nothing to answer
-3. write IMX586, IMX481 and IMX471 from the downstream register sequences
-4. production color calibration and automatic focus for the S5K3M5
-5. the pop-up motor, which the front camera needs before it can see anything
+That conclusion was superseded by `r92`. The PMIC reason is indeed UVLO, but
+the PM8009 rails are not intrinsically unsafe. The old helper enabled VDIG
+before physically connecting the module's analogue path. The working Samsung
+slot hid that ordering mistake because its VANA GPIO is represented by a fixed
+regulator and therefore ran as part of the bulk regulator enable.
+
+`r92` separates VIO/VANA preparation, the external gates, VDIG, MCLK and reset.
+Slot 0 completed all five stages in one boot without a reset. This directly
+refutes the LDO fault hypothesis and leaves the final module wake sequence as
+the reason the Sony ID did not answer.
+
+### Exact IMX586 sequence recovered from OxygenOS
+
+The four OnePlus IMX586 sensor-module blobs in the OxygenOS vendor partition
+encode an identical sequence. Its power-up order is:
+
+1. TLMM GPIO 29 (`CUSTOM_GPIO1`) high
+2. VDIG on, wait 1 ms
+3. PM8150L GPIO 1 (`CUSTOM_GPIO2`) high
+4. VIO on, wait 1 ms
+5. MCLK at 19.2 MHz, wait 1 ms
+6. reset high, wait 1 ms
+
+It does not enable the BOB/VANA regulator or TLMM GPIO 11 on power-up. The
+sensor is expected at address `0x1a`, with `0x0586` in register `0x0016`.
+`r93` applies this exact sequence while retaining staged, reverse-order cleanup.
+
+The full `r92` evidence and blob provenance are recorded in
+`docs/evidence/2026-08-09-mainline616-camera-power-sequence.md`.
+
+## Remaining
+
+1. identify the IMX586 with the exact OxygenOS sequence
+2. implement the IMX586 sensor driver and validate streaming through CAMSS
+3. recover and validate the IMX481 and IMX471 module sequences
+4. integrate each sensor into libcamera and Plasma Camera
+5. support the pop-up motor required by the front camera
 6. optionally the lite CSID and VFE instances, and a binding YAML
 
 ## The VFE power domains are on, checked during capture

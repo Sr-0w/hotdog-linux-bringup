@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=90
+pkgrel=92
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -118,6 +118,8 @@ source="
 	0079-media-lc898217xc-use-the-documented-ready-transactio.patch
 	0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
 	0081-media-s5k3m5-report-camera-geometry-and-orientation.patch
+	0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
+	0083-media-i2c-sequence-hotdog-camera-rails.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -253,5 +255,7 @@ e45b960afc81ed7de8929fe4f3905c81161e619bf170f8f5bee52113567cb0c6f4f8379caec7f294
 cf6a82b173aad289d18da517c475396b1da2c3de5f0ba01d2c1107229bd3d1f6f43cbd959685f1fe581225f2385199ce7118d254f9fe532cc9aaf4f711de248d  0079-media-lc898217xc-use-the-documented-ready-transactio.patch
 b573ee7edfda6787ab52adb0be44bb41c40b69501f23166c537ef43ba0230173665edf3ab5051b14d8682b485fc0bc44ed61041d4ea688f24616f3fc1de6c527  0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
 9279fddb87aa1fee25553de59eba5eaa0bf4ab52f535ec8a168312515a2dfa3eb6d6c7aecd609fe24f9cf85f7413bd0010e83dfebeabaf2f4f7579266eddcddc  0081-media-s5k3m5-report-camera-geometry-and-orientation.patch
+746c6b05a57c1191ae41db4032c2015cce14162c25646a7199771dc57af0baaea5a16b1ed5b383df333051db32c2292500cca76be7cd6b6d9ffe0b802e3ceabf  0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
+6e2bbb571469fe98bd003f840b1e306636c7d1758095113348db27c4570574dcef781483fe8d06612d0fac99879e059e2a4bcc684c4a7062050cf4036bd4b120  0083-media-i2c-sequence-hotdog-camera-rails.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
