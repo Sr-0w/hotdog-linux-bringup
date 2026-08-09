@@ -1,0 +1,102 @@
+From d14864af2acd76c5dd37e0f8ab8fcd89ebe95a31 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 12:00:06 +0200
+Subject: [PATCH] media: lc898217xc: use the documented ready transaction
+
+---
+ drivers/media/i2c/lc898217xc.c | 36 +++++++++++++++++-----------------
+ 1 file changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/media/i2c/lc898217xc.c b/drivers/media/i2c/lc898217xc.c
+index 12643f634d7e..8b45181adfb6 100644
+--- a/drivers/media/i2c/lc898217xc.c
++++ b/drivers/media/i2c/lc898217xc.c
+@@ -19,6 +19,7 @@
+ #define LC898217XC_CTRL_DELAY_US		1000
+ #define LC898217XC_POWER_DELAY_US	1000
+ #define LC898217XC_READY_RETRIES		20
++#define LC898217XC_READY_DELAY_US	20000
+ 
+ static const char * const lc898217xc_supply_names[] = {
+ 	"vdd",
+@@ -41,25 +42,14 @@ to_lc898217xc(struct v4l2_subdev *sd)
+ static int lc898217xc_read8(struct lc898217xc_device *vcm, u8 reg, u8 *val)
+ {
+ 	struct i2c_client *client = v4l2_get_subdevdata(&vcm->sd);
+-	struct i2c_msg msgs[] = {
+-		{
+-			.addr = client->addr,
+-			.len = 1,
+-			.buf = &reg,
+-		}, {
+-			.addr = client->addr,
+-			.flags = I2C_M_RD,
+-			.len = 1,
+-			.buf = val,
+-		},
+-	};
+ 	int ret;
+ 
+-	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	ret = i2c_smbus_read_byte_data(client, reg);
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	return ret == ARRAY_SIZE(msgs) ? 0 : -EIO;
++	*val = ret;
++	return 0;
+ }
+ 
+ static int lc898217xc_set_position(struct lc898217xc_device *vcm, u16 position)
+@@ -83,7 +73,7 @@ static int lc898217xc_wait_ready(struct lc898217xc_device *vcm)
+ {
+ 	int ret;
+ 	int i;
+-	u8 status;
++	u8 status = 0xff;
+ 
+ 	for (i = 0; i < LC898217XC_READY_RETRIES; i++) {
+ 		ret = lc898217xc_read8(vcm, LC898217XC_REG_STATUS, &status);
+@@ -91,9 +81,11 @@ static int lc898217xc_wait_ready(struct lc898217xc_device *vcm)
+ 			return 0;
+ 		if (ret && ret != -ENXIO && ret != -EREMOTEIO)
+ 			return ret;
+-		usleep_range(1000, 1500);
++		usleep_range(LC898217XC_READY_DELAY_US,
++			     LC898217XC_READY_DELAY_US + 1000);
+ 	}
+ 
++	dev_err(vcm->sd.dev, "status 0x%02x did not become ready\n", status);
+ 	return ret ? ret : -EBUSY;
+ }
+ 
+@@ -244,16 +236,24 @@ static int lc898217xc_probe(struct i2c_client *client)
+ 		goto err_free_ctrls;
+ 
+ 	ret = lc898217xc_power_up(vcm);
+-	if (ret)
++	if (ret) {
++		dev_err_probe(&client->dev, ret,
++			      "failed to power or identify actuator\n");
+ 		goto err_cleanup_entity;
++	}
++
++	dev_info(&client->dev, "LC898217XC actuator ready\n");
+ 
+ 	pm_runtime_set_active(&client->dev);
+ 	pm_runtime_get_noresume(&client->dev);
+ 	pm_runtime_enable(&client->dev);
+ 
+ 	ret = v4l2_async_register_subdev(&vcm->sd);
+-	if (ret)
++	if (ret) {
++		dev_err_probe(&client->dev, ret,
++			      "failed to register V4L2 subdevice\n");
+ 		goto err_pm;
++	}
+ 
+ 	pm_runtime_set_autosuspend_delay(&client->dev, 1000);
+ 	pm_runtime_use_autosuspend(&client->dev);
+-- 
+2.54.0
+

@@ -39,7 +39,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Runs a full postmarketOS Plasma Mobile installation from persistent storage.
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
-- Hardware-validated RAW10 capture from the S5K3M5 telephoto camera.
+- Hardware-validated RAW10 capture and manual focus from the S5K3M5 telephoto camera.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -52,7 +52,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ✅ Internal speakers and handset microphone  
 ✅ USB-C host, USB 3 and DisplayPort video  
 ✅ Battery fuel gauge  
-✅ Telephoto RAW10 capture
+✅ Telephoto RAW10 capture and manual focus
 
 ⚠️ Suspend/resume incomplete  
 ⚠️ 90 Hz wake path unreliable  
@@ -104,7 +104,7 @@ Support status for the tested HD1913 handset.
 | Wi-Fi | Power management / suspend / stable factory identity | Basic data works; sustained PM/suspend and factory-address handling remain insufficiently tested. |
 | Bluetooth | Scan and HID connectivity | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
-| Cameras | S5K3M5 telephoto RAW10 capture | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 frames at 30 fps. Basic raw capture is hardware-validated; libcamera tuning, automatic exposure and camera-app integration remain open. |
+| Cameras | S5K3M5 telephoto RAW10 capture and manual focus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 frames at 30 fps. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Libcamera tuning, automatic controls and camera-app integration remain open. |
 
 ### 🔴 Broken
 

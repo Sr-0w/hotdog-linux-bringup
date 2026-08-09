@@ -36,6 +36,11 @@ Raw experiment records live in the ignored local `reports/` directory. Promote
 reusable conclusions into the documents above without publishing device serials,
 credentials, proprietary dumps, or workstation-specific paths.
 
+- [evidence/2026-08-09-mainline616-camera-telephoto-focus.md](evidence/2026-08-09-mainline616-camera-telephoto-focus.md):
+  cold-boot validation of the LC898217XC lens actuator, calibrated manual
+  focus controls, matched focus sweep, and focused S5K3M5 RAW10 capture.
+- [evidence/2026-08-09-mainline616-camera-telephoto.md](evidence/2026-08-09-mainline616-camera-telephoto.md):
+  end-to-end S5K3M5 RAW10 capture and the SM8150 HF AXI bridge fix.
 - [evidence/2026-07-30-direct-pid1.md](evidence/2026-07-30-direct-pid1.md):
   direct Linux 6.17 completion through active PID 1 syscalls, the diagnostic
   framebuffer mapping fix, and the observed 511-character ABL command-line

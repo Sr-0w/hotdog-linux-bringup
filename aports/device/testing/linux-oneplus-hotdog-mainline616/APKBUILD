@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=84
+pkgrel=87
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -114,6 +114,9 @@ source="
 	0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
 	0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
 	0077-media-i2c-add-the-hotdog-telephoto-autofocus.patch
+	0078-media-i2c-add-LC898217XC-lens-actuator-support.patch
+	0079-media-lc898217xc-use-the-documented-ready-transactio.patch
+	0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -167,7 +170,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-e8255057be06471ea60f54368726293d7274fda9c36cc4e2e9c47fb0d55532abb8d9eda17d50f95a97612310ec1740fe2c8eb4b3759101823eb7c4a270f8de8b  config-oneplus-hotdog-mainline616.aarch64
+f0ea5b2b011b28dd9b703ad9602a3d7c5e155034fb1d15739fafa098e37fa39a1bc197e780c9148b28fedbf8b2b9999b1c86f156a9b41fd1e023394d0c9b7d8b  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -245,5 +248,8 @@ a515ccf63dd455387a7e4eb16d59c39e4e936b9a1f7e03335f383c59a75d0c17257f68d2de280603
 5f335fc45b3f5876c9e932d4b0e05c2139308b25cc175431bd7aa74f7433d6bedef3d828016915a1b4be1a9aeabcd4c8eb0f48892c80237f6ade86bd04b581a0  0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
 e45b960afc81ed7de8929fe4f3905c81161e619bf170f8f5bee52113567cb0c6f4f8379caec7f2949c73bc84977bb9a257337f146f8a080b7bcccb67fd3eecab  0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
 6a3cef2f6d626dc2507c3233956abdf7417f59018dc0a88395320b972cd4ac3232c6531504bb0ac3520fcf1e471717c68c8b897997576a61d493efd5abfcf787  0077-media-i2c-add-the-hotdog-telephoto-autofocus.patch
+2fa51c9b4d9bd78ecbc664d0fa8b102c8f06dc88f87862273046cb8b434f53cb14d4b0e2598f81eafec73e98262a2f222fbe87ff85b7a4101147cca95faf19aa  0078-media-i2c-add-LC898217XC-lens-actuator-support.patch
+cf6a82b173aad289d18da517c475396b1da2c3de5f0ba01d2c1107229bd3d1f6f43cbd959685f1fe581225f2385199ce7118d254f9fe532cc9aaf4f711de248d  0079-media-lc898217xc-use-the-documented-ready-transactio.patch
+b573ee7edfda6787ab52adb0be44bb41c40b69501f23166c537ef43ba0230173665edf3ab5051b14d8682b485fc0bc44ed61041d4ea688f24616f3fc1de6c527  0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

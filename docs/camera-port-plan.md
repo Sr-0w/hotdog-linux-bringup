@@ -1820,9 +1820,32 @@ fault: the missing GCC HF AXI bridge was the root cause.
 
 `scripts/test-mainline616-camera-csid-tpg.sh --source s5k3m5` reproduces the
 physical capture, and `scripts/raw10-to-png.py` converts its stride-padded RAW10
-frame into a viewable PNG. The next camera work is:
+frame into a viewable PNG.
 
-1. add normal exposure, gain and frame-interval controls plus libcamera tuning
+## Telephoto manual focus, revision `r87`
+
+The vendor camera data lists two slot-1 module variants: an Ofilm AK7374 and a
+Semco LC898217XC. The AK7374 driver added in `r84` correctly fails to address
+this handset's actuator at `0x0c`. With the autofocus rail enabled through the
+regulator framework, a read-only CCI probe identifies this physical unit at
+7-bit address `0x74`; its status register `0xb3` returns ready value `0x00`.
+
+The LC898217XC driver uses the vendor-described protocol only: an 8-bit status
+read at `0xb3`, a two-byte big-endian DAC value at register `0x84`, and the
+existing VAF and VIO regulators. It exposes `V4L2_CID_FOCUS_ABSOLUTE`. Module
+calibration lives in the board DT rather than the generic driver: this Semco
+unit uses the vendor range 0–400 and initial position 50.
+
+A cold `r87` boot binds `lc898217xc 4-0074` and exposes `/dev/v4l-subdev15`
+with `focus_absolute` min 0, max 400 and default 50. Five matched 4208x3120
+captures at positions 0, 100, 200, 300 and 400 all complete without CAMNOC,
+SMMU or I2C errors. Position 0 leaves the ceiling visibly blurred; position
+400 resolves the ceiling joints and surface grain. This validates actual lens
+motion and manual focus, not merely control registration.
+
+The next camera work is:
+
+1. add libcamera tuning and automatic focus, exposure, gain and white balance
    for the S5K3M5
 2. identify a safe PM8009 power sequence before touching the three Sony slots
    again
