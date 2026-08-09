@@ -1750,9 +1750,8 @@ can remain gated.
 The tested VFE0 RDI0 route is the HF path. A gated bridge after CAMNOC matches
 the observed boundary precisely: VFE writes the correct IOVA, CAMNOC reports a
 disconnected target, and the transaction never reaches the Apps SMMU.
-Revision `r83` is the single-variable candidate that requests
-`gcc_camera_axi` while VFE0 or VFE1 is powered. It was built successfully and
-assembled into a verified direct-boot image; hardware validation is pending.
+Revision `r83` requests `gcc_camera_axi` while VFE0 or VFE1 is powered. It was
+built, direct-booted and hardware-validated. The result is recorded below.
 
 ## Direct GDSC writes are excluded from further tests
 
@@ -1781,3 +1780,51 @@ and interconnect frameworks rather than writing collapse controls through
 `helpers/hotdog-mmio-read32.c` is the deliberately read-only `/dev/mem` tool
 used for these captures. It opens `/dev/mem` with `O_RDONLY`, maps registers
 with `PROT_READ`, rejects unaligned addresses and has no write operation.
+
+## The HF AXI bridge fixes VFE DMA, revision `r83`
+
+With `gcc_camera_axi` added to both VFE resource lists, debugfs reports
+`gcc_camera_hf_axi_clk` prepared and enabled by `acb3000.camss`. The same
+640x480 RAW10 CSID test pattern that previously left every byte at `0xAA`
+then dequeues three complete 384,000-byte buffers. Every byte changes and all
+three frames have the expected color-bar payload.
+
+The decisive physical-sensor test starts from a clean boot and never enables
+the test generator. The dynamically discovered entity is
+`s5k3m5 6-0010`; the exact CCI bus number is intentionally not hard-coded.
+The complete route is:
+
+```
+S5K3M5 -> CSIPHY0 -> CSID0 RDI0 -> VFE0 RDI0 -> CAMNOC -> Apps SMMU -> RAM
+```
+
+At 4208x3120 `SGRBG10_1X10`, VFE uses a 5,264-byte stride and a
+16,423,680-byte buffer. Three consecutive frames complete at about 30 fps:
+
+```
+sequence=0 changed=16416627 sha256=f12730eada640c71...
+sequence=1 changed=16416536 sha256=fdffe0be7ce8348c...
+sequence=2 changed=16416756 sha256=af6202a313cb559a...
+```
+
+Only a few thousand bytes happen to equal the `0xAA` prefill value; the entire
+frame is overwritten and the distinct hashes prove live sensor data. The first
+frame decodes as packed MIPI RAW10 with a GRBG Bayer order and contains a real
+optical scene. Its observed sample range is 61 to 72 because the sensor still
+uses its fixed initial exposure and gain; this is a controls/tuning issue, not
+a transport failure.
+
+After capture, CAMNOC `ERRVLD` and all eight error-log words read zero. No
+CAMNOC, SMMU or IOMMU fault appears in the kernel log. This closes the VFE DMA
+fault: the missing GCC HF AXI bridge was the root cause.
+
+`scripts/test-mainline616-camera-csid-tpg.sh --source s5k3m5` reproduces the
+physical capture, and `scripts/raw10-to-png.py` converts its stride-padded RAW10
+frame into a viewable PNG. The next camera work is:
+
+1. add normal exposure, gain and frame-interval controls plus libcamera tuning
+   for the S5K3M5
+2. identify a safe PM8009 power sequence before touching the three Sony slots
+   again
+3. implement and validate the inferred IMX586, IMX481 and IMX471 sensors
+4. integrate the front-camera pop-up motor and a mobile camera application

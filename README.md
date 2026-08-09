@@ -39,6 +39,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Runs a full postmarketOS Plasma Mobile installation from persistent storage.
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
+- Hardware-validated RAW10 capture from the S5K3M5 telephoto camera.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -51,11 +52,12 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ✅ Internal speakers and handset microphone  
 ✅ USB-C host, USB 3 and DisplayPort video  
 ✅ Battery fuel gauge  
+✅ Telephoto RAW10 capture
 
 ⚠️ Suspend/resume incomplete  
 ⚠️ 90 Hz wake path unreliable  
 ❌ DisplayPort audio currently broken  
-🚧 Telephony, cameras and sensors still in progress
+🚧 Telephony, remaining cameras and sensors still in progress
 
 > [!NOTE]
 > **Support claims are hardware evidence based.** An offline build, prepared DT
@@ -102,6 +104,7 @@ Support status for the tested HD1913 handset.
 | Wi-Fi | Power management / suspend / stable factory identity | Basic data works; sustained PM/suspend and factory-address handling remain insufficiently tested. |
 | Bluetooth | Scan and HID connectivity | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
+| Cameras | S5K3M5 telephoto RAW10 capture | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 frames at 30 fps. Basic raw capture is hardware-validated; libcamera tuning, automatic exposure and camera-app integration remain open. |
 
 ### 🔴 Broken
 
@@ -122,7 +125,7 @@ Support status for the tested HD1913 handset.
 | Audio | Other analogue/digital microphones, EC/NR | Other live pads, digital microphones, echo cancellation and noise-reduction policy remain open. |
 | Cellular | WWAN data / calls / SMS / SIM handling | Telephony stack is not yet hardware-validated. |
 | GNSS | Location | Not yet hardware-validated. |
-| Cameras | Rear main / ultra-wide / telephoto / front | The S5K3M5 telephoto probes and streams complete RAW10 frames into CSID, and the CSID test generator independently reaches VFE. VFE DMA is currently rejected by CAMNOC before reaching RAM; the three Sony sensor drivers and libcamera integration remain open. |
+| Cameras | Rear main / ultra-wide / front | The inferred IMX586, IMX481 and IMX471 sensors still need safe power descriptions, drivers and hardware validation. The pop-up front camera also needs motor integration. |
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
 | Haptics | AW8697 | No mainline driver/integration is validated yet. |

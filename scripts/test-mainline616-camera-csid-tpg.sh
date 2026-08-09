@@ -15,6 +15,7 @@ WIDTH="${WIDTH:-640}"
 HEIGHT="${HEIGHT:-480}"
 POLL_TIMEOUT_MS="${POLL_TIMEOUT_MS:-8000}"
 HOLD_AFTER_STREAMON_MS="${HOLD_AFTER_STREAMON_MS:-0}"
+SOURCE="${SOURCE:-tpg}"
 stamp="$(date +%F-%H%M%S)"
 OUT="${OUT:-$HOTDOG_LOG_ROOT/camera-csid-tpg-$stamp}"
 REMOTE_DIR="/tmp/hotdog-camera-csid-tpg-$stamp"
@@ -25,9 +26,10 @@ usage() {
 	cat <<'USAGE'
 Usage: test-mainline616-camera-csid-tpg.sh [options]
 
-Isolate the SM8150 CSID-to-VFE path with the CSID generation-2 color-bars
-test pattern. The physical CSIPHY link is disabled only for the duration of
-the test and restored on exit. This script never flashes or resets the phone.
+Capture either the SM8150 CSID generation-2 color-bars test pattern or the
+physical S5K3M5 telephoto sensor. In TPG mode, the physical CSIPHY link is
+disabled only for the duration of the test and restored on exit. This script
+never flashes or resets the phone.
 
 Options:
   --host HOST           SSH host. Default: 172.16.42.1.
@@ -35,6 +37,7 @@ Options:
   --password PASS       SSH and sudo password. Defaults to PMOS_PASSWORD.
   --kernel-marker TEXT  Required substring in uname -a.
   --serial SERIAL       Required androidboot.serialno value.
+  --source SOURCE       tpg or s5k3m5. Default: tpg.
   --width PIXELS        Test frame width. Default: 640.
   --height PIXELS       Test frame height. Default: 480.
   --poll-timeout MS     Per-frame poll timeout. Default: 8000.
@@ -110,6 +113,7 @@ width="$3"
 height="$4"
 poll_timeout_ms="$5"
 hold_after_streamon_ms="$6"
+source="$7"
 media=/dev/media0
 format="fmt:SGRBG10_1X10/${width}x${height}"
 physical_link='"msm_csiphy0":1 -> "msm_csid0":0'
@@ -125,6 +129,22 @@ find_video4linux_node() {
 			printf '/dev/%s\n' "$(basename "$(dirname "$name_file")")"
 			return 0
 		fi
+	done
+	return 1
+}
+
+find_video4linux_node_prefix() {
+	prefix="$1"
+	wanted_prefix="$2"
+	for name_file in /sys/class/video4linux/"$prefix"*/name; do
+		[ -r "$name_file" ] || continue
+		name="$(cat "$name_file")"
+		case "$name" in
+		"$wanted_prefix"*)
+			printf '/dev/%s\n' "$(basename "$(dirname "$name_file")")"
+			return 0
+			;;
+		esac
 	done
 	return 1
 }
@@ -170,7 +190,8 @@ for command_name in dmesg media-ctl python3 v4l2-ctl; do
 	}
 done
 
-printf 'IDENTITY csid=%s video=%s width=%s height=%s\n' "$csid" "$video" "$width" "$height"
+printf 'IDENTITY source=%s csid=%s video=%s width=%s height=%s\n' \
+	"$source" "$csid" "$video" "$width" "$height"
 media-ctl -d "$media" -p > "$out/media-before.txt"
 dmesg > "$out/dmesg-before.txt"
 
@@ -183,9 +204,34 @@ grep -F -- '-> "msm_csid0":0 [ENABLED' "$out/media-before.txt" >/dev/null || {
 	exit 22
 }
 
-restore_needed=1
-media-ctl -d "$media" -l "$physical_link [0]"
-v4l2-ctl -d "$csid" --set-ctrl=test_pattern=9
+case "$source" in
+tpg)
+	restore_needed=1
+	media-ctl -d "$media" -l "$physical_link [0]"
+	v4l2-ctl -d "$csid" --set-ctrl=test_pattern=9
+	;;
+s5k3m5)
+	sensor="$(find_video4linux_node_prefix v4l-subdev 's5k3m5 ')" || {
+		echo 'missing S5K3M5 media entity' >&2
+		exit 23
+	}
+	sensor_entity="$(cat "/sys/class/video4linux/$(basename "$sensor")/name")"
+	grep -F -- "$sensor_entity" "$out/media-before.txt" >/dev/null || {
+		echo "S5K3M5 node is absent from media graph: $sensor_entity" >&2
+		exit 23
+	}
+	printf 'SENSOR entity=%s node=%s\n' "$sensor_entity" "$sensor"
+	v4l2-ctl -d "$csid" --set-ctrl=test_pattern=0
+	media-ctl -d "$media" -V "\"$sensor_entity\":0 [$format]"
+	media-ctl -d "$media" -V "\"msm_csiphy0\":0 [$format]"
+	media-ctl -d "$media" -V "\"msm_csiphy0\":1 [$format]"
+	media-ctl -d "$media" -V "\"msm_csid0\":0 [$format]"
+	;;
+*)
+	echo "unsupported source: $source" >&2
+	exit 24
+	;;
+esac
 v4l2-ctl -d "$csid" --get-ctrl=test_pattern
 
 media-ctl -d "$media" -V "\"msm_csid0\":1 [$format]"
@@ -255,6 +301,11 @@ while [ "$#" -gt 0 ]; do
 		TARGET_SERIAL="$2"
 		shift
 		;;
+	--source)
+		[ "$#" -ge 2 ] || die "missing value for --source"
+		SOURCE="$2"
+		shift
+		;;
 	--width)
 		[ "$#" -ge 2 ] || die "missing value for --width"
 		WIDTH="$2"
@@ -296,6 +347,10 @@ positive_integer HEIGHT "$HEIGHT"
 positive_integer POLL_TIMEOUT_MS "$POLL_TIMEOUT_MS"
 [[ "$HOLD_AFTER_STREAMON_MS" =~ ^[0-9]+$ ]] ||
 	die "HOLD_AFTER_STREAMON_MS must be a non-negative integer: $HOLD_AFTER_STREAMON_MS" 2
+case "$SOURCE" in
+	tpg|s5k3m5) ;;
+	*) die "SOURCE must be tpg or s5k3m5: $SOURCE" 2 ;;
+esac
 [ -n "$PMOS_PASSWORD" ] || die "set PMOS_PASSWORD or use --password"
 [ -n "$EXPECTED_KERNEL_MARKER" ] || die "kernel marker must not be empty"
 
@@ -305,7 +360,7 @@ done
 
 mkdir -p "$OUT"
 exec > >(tee "$OUT/run.log") 2>&1
-phone_lock_acquire "mainline616 CSID test-pattern diagnostic" 0 ||
+phone_lock_acquire "mainline616 camera source diagnostic ($SOURCE)" 0 ||
 	die "could not acquire phone-operation lock" 3
 
 ping -c 1 -W 2 "$PMOS_HOST" >/dev/null 2>&1 || die "phone is not reachable at $PMOS_HOST" 4
@@ -328,7 +383,7 @@ ssh_base "mkdir -p '$REMOTE_DIR'" || die "could not create remote test directory
 scp_base "$(dirname "$0")/camera-prefill-capture.py" \
 	"$PMOS_USER@$PMOS_HOST:$REMOTE_CAPTURE" || die "could not stage capture helper" 6
 
-log "Running CSID color-bars test on boot $boot_id"
+log "Running $SOURCE camera test on boot $boot_id"
 set +e
 if [ "$REMOTE_SUDO_MODE" = noninteractive ]; then
 	remote_program |
@@ -342,7 +397,7 @@ if [ "$REMOTE_SUDO_MODE" = noninteractive ]; then
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS'" \
+			"sudo -n sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 else
@@ -360,7 +415,7 @@ else
 			-o PreferredAuthentications=password \
 			-o PubkeyAuthentication=no \
 			"$PMOS_USER@$PMOS_HOST" \
-			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS'" \
+			"sudo -S -p '' sh -s -- '$REMOTE_DIR' '$REMOTE_CAPTURE' '$WIDTH' '$HEIGHT' '$POLL_TIMEOUT_MS' '$HOLD_AFTER_STREAMON_MS' '$SOURCE'" \
 		> >(tee "$OUT/test.txt") 2> >(tee "$OUT/test.stderr" >&2)
 	test_status=${PIPESTATUS[1]}
 fi
@@ -384,4 +439,4 @@ if [ "$scp_status" -ne 0 ]; then
 	die "test completed but remote artifacts could not be copied" 9
 fi
 
-log "CSID test-pattern evidence: $OUT"
+log "Camera source evidence: $OUT"
