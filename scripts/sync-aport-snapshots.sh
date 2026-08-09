@@ -45,6 +45,7 @@ snapshot_rels=(
 	"device/testing/linux-oneplus-hotdog-lineage414"
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
+	"temp/libcamera"
 )
 selected_rels=()
 
@@ -141,7 +142,12 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0002-input-fts-fix-strict-prototypes.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0003-power-supply-idtp9418-include-gpio-consumer.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0004-arm64-dts-qcom-add-oneplus-hotdog.patch | \
-		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh)
+		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh | \
+		temp/libcamera:APKBUILD | \
+		temp/libcamera:*.patch | \
+		temp/libcamera:*.yaml | \
+		temp/libcamera:*.desktop | \
+		temp/libcamera:*.rules)
 			return 0
 			;;
 		*)
