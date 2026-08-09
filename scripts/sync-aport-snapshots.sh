@@ -116,6 +116,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
 		device/testing/device-oneplus-hotdog:postprocess-boot-avb.sh | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
+		device/testing/device-oneplus-hotdog:90-hotdog-camera.conf | \
 		device/testing/device-oneplus-hotdog:90-hotdog-single-battery.rules | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
@@ -223,7 +224,12 @@ sync_dir() {
 	validate_snapshot_tree "$rel" "$src"
 	diff_file="$(mktemp "${TMPDIR:-/tmp}/hotdog-aport-snapshot-diff.XXXXXX")"
 	if [ -d "$dst" ]; then
-		validate_snapshot_tree "$rel" "$dst"
+		# The canonical pmaports package may contain additional upstream files.
+		# In the snapshot-to-pmaports direction it is replaced atomically below,
+		# so only the curated snapshot source needs the strict allowlist check.
+		if [ "$direction" = "to-snapshots" ]; then
+			validate_snapshot_tree "$rel" "$dst"
+		fi
 		if diff -qr "$src" "$dst" > "$diff_file" 2>&1; then
 			note "$rel: $destination_label already matches $source_label"
 			rm -f "$diff_file"

@@ -8,6 +8,8 @@ single developer workstation or a live debugging session.
 - [status.md](status.md): current hardware support matrix and known limitations
 - [build-and-test.md](build-and-test.md): source bootstrap, reproducible builds,
   image assembly, AVB validation, and the hardware-test workflow
+- [release-install.md](release-install.md): public release contract, download
+  verification, fastboot installation, recovery, and version policy
 - [bringup-history.md](bringup-history.md): detailed project-status chronology,
   validated boot path, recovery experiments, and historical bring-up narrative
 - [mainline-bringup.md](mainline-bringup.md): validated mainline fixes and their
