@@ -1836,9 +1836,25 @@ motion and manual focus, not merely control registration.
 
 The next camera work is:
 
-1. add libcamera tuning and automatic focus, exposure, gain and white balance
-   for the S5K3M5
-2. identify a safe PM8009 power sequence before touching the three Sony slots
-   again
-3. implement and validate the inferred IMX586, IMX481 and IMX471 sensors
-4. integrate the front-camera pop-up motor and a mobile camera application
+1. implement the hardware-identified IMX586 and its C-PHY transport
+2. validate raw streaming, then add libcamera exposure/gain control and mobile
+   camera integration for the main camera
+3. implement and validate the IMX481 and IMX471 sensors
+4. integrate the front-camera pop-up motor
+
+## Main IMX586 identification and C-PHY requirement, revision `r97`
+
+The main camera is no longer inferred. The exact OxygenOS module sequence,
+preceded by the shared PM8150L BOB and GPIO 11 prerequisite, reads model
+register `0x0016` as `0x0586` at address `0x1a` on CCI0 master 1. The BOB must
+be requested as a 3.300--3.320 V range; its 32 mV regulator steps select the
+valid 3.320 V setting. An exact 3.300 V request is invalid.
+
+The recovered Qualcomm IMX586 mode descriptions specify three C-PHY trios for
+every mode. SM8150 has the required C-PHY clocks and its generation-2 CSID has
+a PHY-type bit, but the mainline CAMSS driver currently rejects C-PHY
+endpoints and programs only the D-PHY v1.1 table. The downstream GPL camera
+driver provides the matching v1.1 C-PHY register table. The implementation
+order is therefore deliberate: port C-PHY bus propagation and PHY/CSID setup,
+then bind the IMX586 V4L2 sensor driver, and only then validate raw capture and
+libcamera controls.

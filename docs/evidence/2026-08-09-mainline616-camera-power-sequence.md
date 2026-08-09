@@ -36,6 +36,30 @@ and SSH remained available, and every test unloaded the helper cleanly. This
 is direct hardware evidence that LDO1 can be enabled safely with the module
 rails sequenced correctly.
 
+## IMX586 identification, revisions `r96` and `r97`
+
+The OxygenOS sensor-module sequence was completed with the prerequisite shared
+analogue rail that the module binary assumes is already on. Revision `r96`
+enabled the PM8150L BOB supply and GPIO 11 before applying the six module-local
+steps below. An exact 3.300 V regulator request failed with `-EINVAL`: the BOB
+uses a 3.000 V base and 32 mV steps, so 3.300 V is not representable.
+
+Revision `r97` requests the board requirement as the inclusive 3.300--3.320 V
+range. The regulator framework selects 3.320 V, after which the complete slot
+0 sequence succeeds without a reset:
+
+```text
+IMX586 prerequisite: VANA enabled=1 voltage=3320000 uV, GPIO11 logical=1
+VDIG 1104000 load 1100000 mode=2
+custom2, VIO 1800000, MCLK 19200000, reset released
+IMX586 model register 0x0016 = 0x0586 (matched)
+```
+
+This identifies the main camera on CCI0 master 1 (mainline `i2c-5`) at 7-bit
+address `0x1a`. The handset stayed on the same boot and the `r97` module was
+unloaded cleanly. Sensor identity, bus, voltage and power ordering are now
+hardware facts rather than inferred wiring.
+
 ## OxygenOS module sequence
 
 The remaining identification failure led to the exact OnePlus sensor-module
@@ -67,4 +91,5 @@ or TLMM GPIO 11 during power-up. That exact sequence is the input for `r93`.
 - package SHA-256: `7933a6164112dfc60465ed8e6d167b007a3df5312cc869b`
 - boot image: `images/pmos-experiments/2026-08-09-r92-camera-power-sequence/boot.img`
 - boot image SHA-256: `e7f81ca2583dc1e5b1a4de5279410df1add4fe3ba823aded73047711a6ca46ec`
-
+- `r97` package: `linux-oneplus-hotdog-mainline616-6.16.0-r97.apk`
+- `r97` package SHA-256: `5d4dc5cca431c55b9d192401cc2c596fb648714c133e74610a5377458c18b9a8`

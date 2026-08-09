@@ -1,0 +1,46 @@
+From 7b3b19f28b92de213c35978b5698087c0920a3de Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 17:15:00 +0200
+Subject: [PATCH] media: i2c: round the IMX586 VANA vote
+
+PM8150L BOB exposes 32 mV voltage steps starting at 3.0 V, so the
+OxygenOS 3.3 V camera vote is not exactly representable.  An exact
+3.3 V regulator request therefore fails with -EINVAL before the sensor
+sequence starts.
+
+Keep 3.3 V as the minimum and permit the next hardware step, 3.32 V, as
+the maximum.  The regulator core will select 3.32 V, which is the closest
+supported value that satisfies the downstream minimum.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/hotdog-cam-scan.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/i2c/hotdog-cam-scan.c b/drivers/media/i2c/hotdog-cam-scan.c
+index 74267036bc86..90d6d707d0a7 100644
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -26,7 +26,8 @@
+ 
+ #define HOTDOG_CAM_SCAN_MCLK_RATE	24000000
+ #define HOTDOG_IMX586_MCLK_RATE		19200000
+-#define HOTDOG_IMX586_VANA_UV		3300000
++#define HOTDOG_IMX586_VANA_MIN_UV	3300000
++#define HOTDOG_IMX586_VANA_MAX_UV	3320000
+ #define HOTDOG_IMX586_VDIG_LOAD_UA	1100000
+ 
+ /*
+@@ -206,8 +207,8 @@ static int hotdog_cam_scan_imx586(struct i2c_client *client,
+ 	 * while probing the EEPROM shared by the rear sensor pair.  Preserve
+ 	 * that board-level prerequisite while exercising the IMX586 sequence.
+ 	 */
+-	ret = regulator_set_voltage(vana, HOTDOG_IMX586_VANA_UV,
+-				    HOTDOG_IMX586_VANA_UV);
++	ret = regulator_set_voltage(vana, HOTDOG_IMX586_VANA_MIN_UV,
++				    HOTDOG_IMX586_VANA_MAX_UV);
+ 	if (ret) {
+ 		dev_err(dev, "cannot set IMX586 VANA voltage: %d\n", ret);
+ 		goto power_down;
+-- 
+2.50.1
