@@ -51,17 +51,44 @@ nfc0:  Protocols: [ Felica MIFARE Jewel ISO-DEP NFC-DEP ]
        Powered: No
 ```
 
-## Where it stops
+## The pin configuration was wrong, and fixing it powers the controller
 
-Setting `Powered` to true on the adapter does not return. The NCI core reset is
-not completing, so the controller is not answering as expected over I2C. One
-attempt left the handset wedged enough that it rebooted.
+The first attempt invented the pin states: `bias-disable` with `output-low` on
+the enable and firmware lines. Setting `Powered` then never returned, and one
+attempt rebooted the handset.
 
-Things worth checking, none of them tested yet: whether `enable-gpios` should be
-active low rather than active high, whether the firmware-download line needs to
-be held low during reset rather than merely configured, and whether the
-clock-request line the stock tree describes is in fact required for the
-controller's reference clock.
+The stock states say something different:
+
+```
+nfc_enable_active   pins = gpio41, gpio42, gpio48   bias-pull-up
+nfc_int_active      pins = gpio47                   bias-pull-up
+nfc_clk_req_active  pins = gpio113                  bias-pull-up
+```
+
+All pulled up, no driven levels, and the enable group covering the
+secure-element line as well. Following that exactly:
+
+```
+Powered before: b false
+Powered after:  b true
+```
+
+The controller now completes its NCI reset and powers on.
+
+## Where it stops now
+
+Starting the RF poll loop reboots the handset. `StartPollLoop` does not return,
+neard is gone afterwards, and the log written to `/tmp` does not survive. This
+happened twice.
+
+So the controller answers on I2C and initialises, and something about bringing
+the RF field up takes the system down. No tag has been read.
+
+What has not been tried: powering the controller without the secure-element line
+pulled up, since `gpio42` is grouped with the enable pins here only because the
+stock groups them; checking whether the reboot is a supply collapse the way the
+camera rails were, by staging the operation; and reading the stock's own NFC
+regulator description, which this node currently does not carry at all.
 
 The kernel also logs, harmlessly and only at boot, `udevd: nxp-nci.ko error=No
 such file or directory`, which is udev trying to load the module before the
