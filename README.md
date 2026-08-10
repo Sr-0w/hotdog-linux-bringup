@@ -190,7 +190,7 @@ mainline fixes live in [docs/bringup-history.md](docs/bringup-history.md).
 
 ## Public releases
 
-The first planned public image set is `v0.1.0-alpha.1`: postmarketOS Plasma
+The first public image set is `v0.1.0-alpha.1`: postmarketOS Plasma
 Mobile paired with the R108 mainline 6.16 boot chain. A release always contains
 a matching boot and rootfs pair; their UUID contract makes cross-release mixing
 unsafe. The public installation procedure, first-login details, recovery

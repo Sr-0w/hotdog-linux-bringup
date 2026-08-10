@@ -31,6 +31,10 @@ They are UUID-bound and intentionally cannot be mixed with any other build.
 Verify `SHA256SUMS`, then follow
 [the release installation guide](release-install.md).
 
+The hardware-validated installation path writes `super` from fastbootd with
+128 MiB sparse segments. Do not flash the rootfs directly from bootloader
+fastboot on this release.
+
 The initial account is `user` with password and Plasma PIN `147147`. Change
 both before using any untrusted network.
 
@@ -45,3 +49,8 @@ Before publishing, the release assets are checked for:
   APK;
 - read-only GPT and ext filesystem checks; and
 - SHA-256 hashes for every uploaded file.
+
+The packaged pair was then flashed to the physical HD1913, booted directly to
+Plasma Mobile with USB networking and SSH, and completed a normal software
+reboot into a second, distinct boot session. The full record is in
+[the Alpha 1 hardware evidence](evidence/2026-08-10-v0.1.0-alpha.1.md).

@@ -39,7 +39,9 @@ done
 [ -s "$assets/MANIFEST.md" ] || die "missing MANIFEST.md"
 [ -s "$notes" ] || die "release notes not found: $notes"
 command -v gh >/dev/null 2>&1 || die "missing GitHub CLI"
-git diff --quiet && git diff --cached --quiet || die "commit or stash local changes before tagging"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+	die "commit or stash local changes before tagging"
+fi
 git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null 2>&1 &&
 	die "tag already exists on origin: $version"
 (cd "$assets" && sha256sum -c SHA256SUMS)

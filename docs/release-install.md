@@ -78,23 +78,29 @@ sha256sum oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 The rootfs is written to physical `super`. The mainline boot image is written
 to `boot_b`, leaving `boot_a` untouched as an additional recovery option.
 
+Use userspace fastboot (`fastbootd`) for `super`. The HD1913 bootloader accepted
+the first large sparse segment during release validation but stopped responding
+on the next transfer. Fastbootd completed the same image as 30 bounded segments.
+
 ```bash
-# From bootloader fastboot. If super is rejected here, use userspace fastboot
-# as shown below.
-fastboot flash super oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
+# Start in bootloader fastboot, then enter the recovery-provided fastbootd.
+fastboot reboot fastboot
+fastboot getvar is-userspace  # must report: yes
+
+# Keep sparse transfers small enough for the tested HD1913 USB path.
+fastboot -S 128M flash super \
+  oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 fastboot reboot bootloader
 fastboot flash boot_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-boot.img
 fastboot set_active b
 fastboot reboot
 ```
 
-If bootloader fastboot rejects the `super` flash:
-
-```bash
-fastboot reboot fastboot
-fastboot flash super oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
-fastboot reboot bootloader
-```
+If `fastboot reboot fastboot` cannot start fastbootd, the active slot does not
+contain a compatible recovery. Restore or select a known-good HD1913 recovery
+slot before continuing. Do not substitute a direct bootloader `super` flash.
+In this project's slot layout, `boot_a` is deliberately preserved for that
+recovery path and postmarketOS is installed to `boot_b`.
 
 The first boot can take longer than normal while the root partition is checked
 and expanded. A healthy boot reaches Plasma Mobile and exposes USB networking
@@ -117,6 +123,10 @@ With a host configured at `172.16.42.2/24`, SSH is available as:
 ```bash
 ssh user@172.16.42.1
 ```
+
+Normal software reboot is validated. Reboot-to-bootloader/recovery from the
+running Alpha is not; enter those modes with the physical key sequence when
+maintenance is required.
 
 Do not repeatedly reset a device that has enumerated as Qualcomm `900e`.
 Disconnect it, use the physical HD1913 key sequence to return to bootloader
