@@ -433,4 +433,7 @@ undescribed and unpowered. See the
 Revision `r114` adds a deliberately one-shot DRV8834 motor preflight. It emits
 exactly `320` upward microsteps only from the measured closed Hall state, then
 removes motor power. The strict 32-job package build and AVB image validation
-passed; physical actuation remains pending.
+passed. Revision `r115` fixes successful IIO return-value normalization before
+the first actuation. Its hardware preflight changed the lower Hall reading
+from `-370` to a stable `-364..-365` while the upper reading stayed near
+`-13`, proving the upward direction and bounded 1/32-step movement.

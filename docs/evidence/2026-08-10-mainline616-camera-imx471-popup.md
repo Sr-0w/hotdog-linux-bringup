@@ -66,8 +66,25 @@ The first command emits exactly `320` individual STEP edges in 1/32 mode. It
 is accepted only from the measured closed region (`abs(down) >= 300` and
 `abs(up) < 50`), may run only once per module load, and always disables STEP,
 SLEEP, mode and BOOST afterward. This avoids relying on scheduler timing or a
-free-running PWM for the first physical movement. Hardware actuation is still
-pending; no claim about direction or Hall slope is made yet.
+free-running PWM for the first physical movement.
+
+Revision `r114` booted directly but exposed an integration error before any
+actuation: successful `iio_read_channel_raw()` calls return `IIO_VAL_INT`, not
+zero. Revision `r115` normalizes those successful reads. The corrected module
+was loaded from the validated r115 package into the ABI-identical running
+kernel, and the one-shot preflight completed with:
+
+```text
+before: hall_up=-14 hall_down=-370
+after:  hall_up=-14 hall_down=-365
+20 samples: hall_up=-12..-14 hall_down=-364..-365
+driver: used=1 error=0 microsteps=320
+```
+
+The decrease in lower-sensor magnitude is consistent with upward travel away
+from the closed endpoint. Ten full steps therefore produce approximately five
+raw Hall counts on this mechanism. The upper Hall remains nearly unchanged at
+this early position, as expected.
 
 ## Artifacts
 
@@ -84,12 +101,12 @@ pending; no claim about direction or Hall slope is made yet.
 | r114 `boot.img` | `54dcc1bc3c176148f5e774bdc5aa3cbb65e0d546546d24e4519a4df1aee3ad6a` |
 | r114 kernel | `8ae83ada5525e8a45e1eda99fddbacede0a0423cc7417859de38a0254b3318ae` |
 | r114 DTB | `b6a800f884be0a90e76b681a987e1ed58ad22db517f38dee12c63baa74597f1a` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r115.apk` | `7c38148d868e6ae07217c7a3ffc73da208428729db3970126dcb9ccb3695f774` |
 
 ## Next step
 
-Run the `320`-microstep preflight once and measure both Hall deltas. Only after
-direction and slope are confirmed should the driver gain a full opening path.
-That path must continuously sample both Hall sensors, stop at the measured
-upper endpoint, reject no-progress or inverted motion, retain the OxygenOS
-count as a hard ceiling, and leave the motor unpowered afterward. IMX471
-streaming and libcamera integration follow only after opening is confirmed.
+Add full opening only now that direction and slope are confirmed. The path
+must continuously sample both Hall sensors, stop at the measured upper
+endpoint, reject no-progress or inverted motion, retain the OxygenOS count as
+a hard ceiling, and leave the motor unpowered afterward. IMX471 streaming and
+libcamera integration follow only after opening is confirmed.

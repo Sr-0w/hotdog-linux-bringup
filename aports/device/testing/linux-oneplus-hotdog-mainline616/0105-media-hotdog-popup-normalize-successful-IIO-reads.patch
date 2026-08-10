@@ -1,0 +1,28 @@
+From 5a9ab3d1ce75b6e62f783c112109e944dcfe2e44 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 14:08:21 +0200
+Subject: [PATCH] media: hotdog-popup: normalize successful IIO reads
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index eb8c5e6c3..627a4a055 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -53,7 +53,11 @@ static int hotdog_popup_read_halls(struct hotdog_popup *popup,
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	return iio_read_channel_raw(popup->hall_down, down);
++	ret = iio_read_channel_raw(popup->hall_down, down);
++	if (ret < 0)
++		return ret;
++
++	return 0;
+ }
+ 
+ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+-- 
+2.54.0

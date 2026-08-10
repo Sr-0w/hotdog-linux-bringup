@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=114
+pkgrel=115
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -139,6 +139,7 @@ source="
 	0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
 	0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 	0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
+	0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -295,5 +296,6 @@ ed741a179117f7da07413ebdebec608e6b0c0d55b89e9e11f2da73de2ab21d20da81971693258ec0
 19abb8b9426d8a3a17f18a1084b9de5507c0a96f5495b81dbee2b7e62dcd7f1a519f9e35e0cff7f966ddc1713ad6fd31c664483e205ed44c338c993408cc9b93  0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
 8ca8011c3924f4b9074a483fc18672e0e7d125f327d75ee37e398f69eabe82c5d1c6af2619d15162b88c40d9537c9fb6439eac722855193184b3eaa277fb5c8d  0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 c6d1a62dc5b4f8b65ba03dd6b55a9ad5db5a320b16778ba47daeb3288bb45b9a4bebba73c158de190315c857d0660e752e869ea9fa0b1cdd3bf805b49b79c2b5  0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
+8f0fdd473f5bc9135e50f5a01414a7491d650c7c5ee3d6fa350cc8b0fc647049d78580f3b7a834cb65a3fdaf0b88bd5cc688ad2cfa17d20baeb41069f7492e98  0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
