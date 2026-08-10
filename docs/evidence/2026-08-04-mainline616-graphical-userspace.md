@@ -80,8 +80,8 @@ kwin_wayland_drm: No suitable DRM devices have been found
 Starting the packaged `tinydm` service created the expected PAM/elogind local
 session on active `seat0`. KWin then acquired `card0`, started Xwayland,
 `plasmashell`, the Plasma Mobile initial-start flow, and the lock screen. The
-graphical shell filled the panel at the correct orientation. The user unlocked
-the session, navigated the interface, and confirmed that it was smooth and
+graphical shell filled the panel at the correct orientation. I unlocked the
+session, navigated the interface, and confirmed that it was smooth and
 that touch input responded correctly.
 
 No new GPU, GMU, or IOMMU fault appeared after Plasma Mobile started. KWin

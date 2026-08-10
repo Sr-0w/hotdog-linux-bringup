@@ -250,7 +250,7 @@ runtime data and must remain local.
 
 ## Contributing
 
-The project particularly welcomes help with:
+I particularly welcome help with:
 
 - SM8150 CAMSS and camera sensors
 - telephony / WWAN

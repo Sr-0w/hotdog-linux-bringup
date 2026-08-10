@@ -157,7 +157,7 @@ An already running development image may also request the bootloader with
 
 ## Installation
 
-There is no supported end-user installation procedure yet. The device and
+There is no supported normal installation procedure yet. The device and
 kernel packages are public development snapshots, but they have not been
 merged into pmaports and cannot currently be selected from a normal
 `pmbootstrap init` session.

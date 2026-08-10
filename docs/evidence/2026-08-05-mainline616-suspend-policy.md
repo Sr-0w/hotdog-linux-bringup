@@ -20,7 +20,7 @@ required PHY state and the touchscreen resume callback failed.
 
 After the wake, the system later entered Qualcomm `900e` without a Linux panic,
 oops, or call trace. The bounded ramoops capture contains one post-wake runtime
-record with UFS active, the USB gadget configured, and Bluetooth idle. The user
+record with UFS active, the USB gadget configured, and Bluetooth idle. I
 subsequently identified software-install attempts as the repeated trigger for
 these transitions. No evidence currently links that crashdump to the earlier
 system-suspend attempt; storage-load stability is tracked separately.

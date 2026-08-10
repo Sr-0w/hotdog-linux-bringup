@@ -199,7 +199,7 @@ automatic_open_count=1 automatic_close_count=2
 
 This validates automatic extension before front-camera streaming and automatic
 retraction when the camera is released, including the application camera-switch
-path. The user-validated movement speed matches the OxygenOS behavior closely.
+path. The movement speed I validated matches the OxygenOS behavior closely.
 
 ## Artifacts
 

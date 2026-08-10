@@ -52,6 +52,6 @@ export HOTDOG_PMBOOTSTRAP_WORK="$PWD/pmbootstrap-work-r9"
 ./scripts/deploy-test-mainline616-libcamera.sh
 ```
 
-The script stages packages in the user's RAM-backed runtime directory, refuses
+The script stages packages in the host's RAM-backed runtime directory, refuses
 to run in Qualcomm 900e mode, preserves the boot identity, captures kernel logs
 and never flashes or reboots the handset.

@@ -38,7 +38,7 @@ missing source link.
 
 ## Device identity note
 
-The physical test handset is rear-labelled HD1913. Its recovery and vendor
+My physical test handset is rear-labelled HD1913. Its recovery and vendor
 software report HD1911 while exposing the same `hotdog` project identifiers
 used by this source: project `19801`, DTB index `12`, DTBO index `5`, and
 hardware version `14`. The historical HD1911 wording is therefore preserved
