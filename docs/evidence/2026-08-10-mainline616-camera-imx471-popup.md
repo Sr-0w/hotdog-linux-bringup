@@ -54,6 +54,21 @@ The driver checks device ID `0x9c`, selects 10-bit 80 Hz operation and exposes
 polling reads through standard IIO sysfs. Interrupt thresholds are deferred
 until both mechanical endpoints have been measured.
 
+## Bounded motor preflight
+
+Kernel revision `r114` adds the DRV8834 board resources and a deliberately
+limited preflight driver. The OxygenOS implementation defines a nominal upward
+course of `1380 * 32 = 44160` microsteps and accepts the open endpoint when the
+absolute upper Hall reading reaches `150`. Mainline retains `44160` only as a
+future hard ceiling.
+
+The first command emits exactly `320` individual STEP edges in 1/32 mode. It
+is accepted only from the measured closed region (`abs(down) >= 300` and
+`abs(up) < 50`), may run only once per module load, and always disables STEP,
+SLEEP, mode and BOOST afterward. This avoids relying on scheduler timing or a
+free-running PWM for the first physical movement. Hardware actuation is still
+pending; no claim about direction or Hall slope is made yet.
+
 ## Artifacts
 
 | Artifact | SHA-256 |
@@ -65,11 +80,16 @@ until both mechanical endpoints have been measured.
 | r113 kernel | `efd1a3d804eb3974f5f4132234a271c24f7335aa14b45576f7055883350aae68` |
 | r113 DTB | `4c21ccc5ca9809bf39e1d34d0870c2ae9ffe75b77deaf6c8c5c8d4674be8c66f` |
 | r113 initramfs | `d81f113caf74122a20063677c6381f6d2fad144209dc67561ccc9ec203738e08` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r114.apk` | `b48ca941c1ed6095468d2e1504f7d2548f5ed85ebbcf8a06bfa655f7c86b0d97` |
+| r114 `boot.img` | `54dcc1bc3c176148f5e774bdc5aa3cbb65e0d546546d24e4519a4df1aee3ad6a` |
+| r114 kernel | `8ae83ada5525e8a45e1eda99fddbacede0a0423cc7417859de38a0254b3318ae` |
+| r114 DTB | `b6a800f884be0a90e76b681a987e1ed58ad22db517f38dee12c63baa74597f1a` |
 
 ## Next step
 
-Implement a minimal modern platform driver for the pop-up mechanism. Movement
-must be time- and step-bounded, sample both Hall sensors continuously, stop on
-the measured endpoint, and leave the motor unpowered after every operation.
-Only after the upper endpoint is confirmed may IMX471 streaming and libcamera
-integration be tested.
+Run the `320`-microstep preflight once and measure both Hall deltas. Only after
+direction and slope are confirmed should the driver gain a full opening path.
+That path must continuously sample both Hall sensors, stop at the measured
+upper endpoint, reject no-progress or inverted motion, retain the OxygenOS
+count as a hard ceiling, and leave the motor unpowered afterward. IMX471
+streaming and libcamera integration follow only after opening is confirmed.

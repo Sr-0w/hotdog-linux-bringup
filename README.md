@@ -137,7 +137,7 @@ Support status for the tested HD1913 handset.
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
 | Haptics | AW8697 | No mainline driver/integration is validated yet. |
-| Hall sensors | MXM1120 | Driver/integration work remains. |
+| Hall sensors | MXM1120 | Both pop-up position sensors work through IIO. Closed baselines are stable; bounded motor preflight is built but not yet hardware-tested. |
 | Range sensor | STMVL53L1 laser rangefinder | Driver/integration work remains. |
 | Fingerprint | In-display fingerprint reader | Plasma/fprintd can provide the userspace authentication path; Hotdog still needs sensor/firmware integration and UDFPS display-illumination coordination. |
 | Fast charging | OnePlus Warp charge | Vendor-dependent path; no mainline hardware support is validated. |

@@ -1941,3 +1941,24 @@ samples. No motor resource is described in this revision, so the probe is
 mechanically passive. These values provide the first safe endpoint reference
 for a bounded motor driver. Full hashes and hardware evidence are recorded in
 `docs/evidence/2026-08-10-mainline616-camera-imx471-popup.md`.
+
+## Pop-up motor bounded preflight, revision `r114`
+
+The downstream DRV8834 implementation establishes the mechanical reference:
+`1380` full steps in 1/32 mode, or `44160` microsteps, for the nominal upward
+course. That value is retained as an absolute ceiling, not used as an
+unconditional target. OxygenOS accepts the upper endpoint once the absolute
+upper Hall reading reaches `150`.
+
+Revision `r114` deliberately does not implement a full course. It configures
+the same 1/32 mode and exposes one root-only preflight that emits exactly `320`
+individual STEP edges, equivalent to ten full steps if the downstream
+microstep mapping is correct. The command is refused unless the lower Hall
+absolute value is at least `300` and the upper value is below `50`, and it can
+run only once per module load. STEP, SLEEP, mode and BOOST are returned to
+their inactive states on every completion or error path.
+
+The first hardware result must establish the direction and Hall slope before
+full travel is implemented. The eventual opening path will stop at the upper
+Hall threshold, reject stalled or inverted progress, and retain `44160` only
+as its final hard limit.

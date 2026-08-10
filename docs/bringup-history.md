@@ -429,3 +429,8 @@ two MXM1120 Hall sensors and direct-boots with stable closed-position readings
 of `-13..-14` upper and `-369..-370` lower. The motor remains entirely
 undescribed and unpowered. See the
 [front-camera and pop-up evidence](evidence/2026-08-10-mainline616-camera-imx471-popup.md).
+
+Revision `r114` adds a deliberately one-shot DRV8834 motor preflight. It emits
+exactly `320` upward microsteps only from the measured closed Hall state, then
+removes motor power. The strict 32-job package build and AVB image validation
+passed; physical actuation remains pending.
