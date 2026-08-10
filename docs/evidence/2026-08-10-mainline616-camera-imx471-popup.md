@@ -140,7 +140,23 @@ error=0
 
 The course stopped on the measured closed thresholds before the `44160`
 microstep hard ceiling and powered the motor down. Automatic opening before an
-IMX471 stream and automatic closing after release remain to be integrated.
+IMX471 stream and automatic closing after release remain to be hardware-tested.
+
+Revision `r121` implements that lifecycle through a generic PM domain owned by
+the pop-up motor driver and referenced by the IMX471 device-tree node. The
+sensor's existing runtime-PM acquisition now opens the mechanism before sensor
+resume and streaming, while its final runtime-PM release closes it after sensor
+suspend. Opening and closing are idempotent at their measured Hall endpoints;
+a failed automatic opening also attempts the bounded closing course before
+returning the error. The provider starts logically powered so attaching and
+probing the I2C sensor cannot raise the mechanism during boot. Its first idle
+transition establishes the physically closed state.
+
+The driver object, device tree, binding and complete pmaports package build all
+pass offline validation. Hardware lifecycle validation is pending because the
+handset stopped enumerating after a host-side USB recovery attempt. No motor
+command was issued during that outage. The mechanism must be treated as
+physically open until fresh Hall readings prove otherwise.
 
 ## Artifacts
 
@@ -159,14 +175,15 @@ IMX471 stream and automatic closing after release remain to be integrated.
 | r114 DTB | `b6a800f884be0a90e76b681a987e1ed58ad22db517f38dee12c63baa74597f1a` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r115.apk` | `7c38148d868e6ae07217c7a3ffc73da208428729db3970126dcb9ccb3695f774` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r120.apk` | `741fd83e5c5e55748d07669a2453ffa7e592977adcefa073616a49cbf0bb2dfc` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r121.apk` | `e6144844244e0bf7e5df1d7755c8e7d4cfd22334ee1494529cd34f8b55c623c7` |
 | `libcamera-99990.7.2-r9.apk` | `0ea39a98a3a67967ab2c6ce25ab17db69758e6807ffb17412d171b8b022fc82f` |
 | `libcamera-ipa-99990.7.2-r9.apk` | `9f1dc9b00b06ea5d0bcb84a835f0241ed53be0de6ebf2c66c7cbb143f29ba3bf` |
 | `libcamera-tools-99990.7.2-r9.apk` | `5a43b39a954662a33d1e2e0f1d6c666ba8763197e030a522426c609d750aab32` |
 
 ## Next step
 
-Connect the validated motor lifecycle to IMX471 use: open before sensor
-streaming, unwind the sensor start if opening fails, and close after the final
-stream user releases the camera. Then repeat application capture and suspend
-tests while verifying that the mechanism never remains raised after a normal
-camera exit.
+Install and direct-boot revision `r121`, read both Hall sensors before any
+motion, and verify automatic opening before an IMX471 stream plus automatic
+closing after its final runtime-PM release. Then repeat application capture,
+failed-start, process-abort and suspend tests while verifying that the
+mechanism never remains raised after camera ownership ends.

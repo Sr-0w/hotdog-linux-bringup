@@ -1982,6 +1982,10 @@ both closed thresholds are satisfied. Hardware stopped after `42112`
 additional microsteps following the bounded 320-step direction test, at
 `hall_up=-12` and `hall_down=-368`, before the hard limit.
 
-Manual sysfs commands are still a bring-up interface. The next implementation
-step is to make IMX471 stream acquisition open the mechanism and stream release
-close it, with complete unwind on sensor or motor failure.
+Revision `r121` replaces the manual-only lifecycle with a generic PM domain
+provided by the pop-up motor driver and consumed by the IMX471 node. Runtime
+resume opens before the sensor powers and runtime suspend closes after it powers
+down. Endpoint checks are idempotent, and an automatic opening failure attempts
+a bounded close before returning. Object, DTB, binding and strict pmaports
+package validation pass; installation and hardware stream-lifecycle tests are
+the next step.

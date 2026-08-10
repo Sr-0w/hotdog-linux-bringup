@@ -446,4 +446,12 @@ delays and tuning. Plasma Camera produced a correctly exposed front capture,
 and a separate 180-frame metadata-only run exercised four exposure times and
 43 analogue gains. Revision `r120` adds symmetric Hall-terminated closing; it
 returned the mechanism to approximately `-13` upper and `-368` lower with no
-error. The remaining mechanism task is automatic stream-lifetime integration.
+error.
+
+Revision `r121` connects the motor to the IMX471 runtime-PM lifecycle through a
+generic PM domain. It opens before sensor runtime resume, closes after runtime
+suspend, avoids movement while the sensor is merely probed, and attempts a
+bounded close if automatic opening fails. The kernel object, DTB, binding and
+strict 32-job pmaports build pass. Hardware validation remains pending; the
+handset must be treated as physically open until fresh Hall readings confirm
+its position.

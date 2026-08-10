@@ -1,0 +1,296 @@
+From cec1c3d624666739d015f6cd9fdc76e1df629ef8 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 15:41:38 +0200
+Subject: [PATCH] media: hotdog-popup: follow front sensor runtime PM
+
+---
+ .../media/oneplus,hotdog-popup-motor.yaml     |  10 +-
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |   2 +
+ drivers/media/platform/qcom/Kconfig           |  10 +-
+ .../media/platform/qcom/hotdog-popup-motor.c  | 121 ++++++++++++++++--
+ 4 files changed, 128 insertions(+), 15 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml b/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
+index 196bc562c..7ecb4218a 100644
+--- a/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
++++ b/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
+@@ -11,13 +11,17 @@ maintainers:
+ 
+ description: |
+   The OnePlus 7T Pro uses a DRV8834 stepper controller and two Hall effect
+-  sensors to raise and lower its front camera. This binding initially exposes
+-  the board-specific resources needed for bounded mechanism bring-up.
++  sensors to raise and lower its front camera. This binding exposes the
++  board-specific resources and a power domain consumed by the front camera
++  sensor. Runtime power transitions raise and lower the mechanism.
+ 
+ properties:
+   compatible:
+     const: oneplus,hotdog-popup-motor
+ 
++  '#power-domain-cells':
++    const: 0
++
+   boost-enable-gpios:
+     maxItems: 1
+ 
+@@ -50,6 +54,7 @@ properties:
+ 
+ required:
+   - compatible
++  - '#power-domain-cells'
+   - boost-enable-gpios
+   - direction-gpios
+   - mode1-gpios
+@@ -66,6 +71,7 @@ examples:
+   - |
+     camera-popup {
+         compatible = "oneplus,hotdog-popup-motor";
++        #power-domain-cells = <0>;
+         boost-enable-gpios = <&pmic_gpio 12 0>;
+         direction-gpios = <&pmic_gpio 11 0>;
+         mode1-gpios = <&pmic_gpio 8 0>;
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index dbb7cdc88..dc111f9ab 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -77,6 +77,7 @@ volume-down {
+ 
+ 	camera_popup: camera-popup {
+ 		compatible = "oneplus,hotdog-popup-motor";
++		#power-domain-cells = <0>;
+ 		boost-enable-gpios = <&pm8150b_gpios 12 GPIO_ACTIVE_HIGH>;
+ 		direction-gpios = <&pm8150l_gpios 11 GPIO_ACTIVE_HIGH>;
+ 		mode1-gpios = <&pm8150l_gpios 8 GPIO_ACTIVE_HIGH>;
+@@ -1129,6 +1130,7 @@ camera@10 {
+ 
+ 		reset-gpios = <&tlmm 12 GPIO_ACTIVE_LOW>;
+ 		vana-enable-gpios = <&pm8150l_gpios 12 GPIO_ACTIVE_HIGH>;
++		power-domains = <&camera_popup>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk2_default>;
+diff --git a/drivers/media/platform/qcom/Kconfig b/drivers/media/platform/qcom/Kconfig
+index a0e2170d6..7f909eaf1 100644
+--- a/drivers/media/platform/qcom/Kconfig
++++ b/drivers/media/platform/qcom/Kconfig
+@@ -3,12 +3,12 @@
+ comment "Qualcomm media platform drivers"
+ 
+ config VIDEO_QCOM_HOTDOG_POPUP
+-	tristate "OnePlus hotdog pop-up camera motor bring-up"
+-	depends on IIO && GPIOLIB
++	tristate "OnePlus hotdog pop-up camera motor"
++	depends on IIO && GPIOLIB && PM_GENERIC_DOMAINS_OF
+ 	help
+-	  Enable the bounded bring-up driver for the OnePlus 7T Pro pop-up
+-	  front-camera stepper motor. The initial interface only permits one
+-	  short, fixed-length upward movement after validating both Hall sensors.
++	  Enable the Hall-bounded driver for the OnePlus 7T Pro pop-up front
++	  camera stepper motor. It exposes a generic power domain so camera
++	  sensor runtime PM opens and closes the mechanism automatically.
+ 
+ source "drivers/media/platform/qcom/camss/Kconfig"
+ source "drivers/media/platform/qcom/iris/Kconfig"
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 416734df4..c740aeafb 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -12,6 +12,7 @@
+ #include <linux/mutex.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_domain.h>
+ 
+ #define HOTDOG_PREFLIGHT_MICROSTEPS	320
+ #define HOTDOG_CLOSED_DOWN_MIN		300
+@@ -33,6 +34,8 @@
+ #define HOTDOG_DIRECTION_CHECK_STEPS	320
+ #define HOTDOG_PROGRESS_MIN_COUNTS	2
+ #define HOTDOG_OPEN_HALL_MIN		150
++#define HOTDOG_HALL_ABS_MAX		450
++#define HOTDOG_HALL_SUM_MIN		250
+ 
+ struct hotdog_popup {
+ 	struct device *dev;
+@@ -43,6 +46,7 @@ struct hotdog_popup {
+ 	struct gpio_desc *step;
+ 	struct iio_channel *hall_up;
+ 	struct iio_channel *hall_down;
++	struct generic_pm_domain genpd;
+ 	struct mutex lock;
+ 	bool preflight_used;
+ 	bool restore_used;
+@@ -56,8 +60,29 @@ struct hotdog_popup {
+ 	int after_up;
+ 	int after_down;
+ 	int last_error;
++	unsigned int automatic_open_count;
++	unsigned int automatic_close_count;
+ };
+ 
++static bool hotdog_popup_is_closed(int up, int down)
++{
++	return abs(up) < HOTDOG_CLOSED_UP_MAX &&
++	       abs(down) >= HOTDOG_OPEN_DOWN_MIN;
++}
++
++static bool hotdog_popup_is_open(int up, int down)
++{
++	return abs(up) >= HOTDOG_OPEN_HALL_MIN &&
++	       abs(down) <= HOTDOG_FINISH_DOWN_MAX;
++}
++
++static bool hotdog_popup_halls_plausible(int up, int down)
++{
++	return abs(up) <= HOTDOG_HALL_ABS_MAX &&
++	       abs(down) <= HOTDOG_HALL_ABS_MAX &&
++	       abs(up) + abs(down) >= HOTDOG_HALL_SUM_MIN;
++}
++
+ static void hotdog_popup_stop(struct hotdog_popup *popup)
+ {
+ 	gpiod_set_value_cansleep(popup->step, 0);
+@@ -197,9 +222,15 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 				       &popup->before_down);
+ 	if (ret)
+ 		return ret;
++	if (hotdog_popup_is_open(popup->before_up, popup->before_down)) {
++		popup->after_up = popup->before_up;
++		popup->after_down = popup->before_down;
++		popup->endpoint_reached = true;
++		popup->last_steps = 0;
++		return 0;
++	}
+ 
+-	if (abs(popup->before_down) < HOTDOG_OPEN_DOWN_MIN ||
+-	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++	if (!hotdog_popup_is_closed(popup->before_up, popup->before_down))
+ 		return -ERANGE;
+ 
+ 	popup->endpoint_reached = false;
+@@ -294,9 +325,17 @@ static int hotdog_popup_close(struct hotdog_popup *popup)
+ 				       &popup->before_down);
+ 	if (ret)
+ 		return ret;
++	if (hotdog_popup_is_closed(popup->before_up, popup->before_down)) {
++		popup->after_up = popup->before_up;
++		popup->after_down = popup->before_down;
++		popup->endpoint_reached = true;
++		popup->last_steps = 0;
++		return 0;
++	}
+ 
+-	if (abs(popup->before_up) < HOTDOG_OPEN_HALL_MIN ||
+-	    abs(popup->before_down) > HOTDOG_FINISH_DOWN_MAX)
++	/* A failed opening may leave the mechanism between both endpoints. */
++	if (!hotdog_popup_halls_plausible(popup->before_up,
++					 popup->before_down))
+ 		return -ERANGE;
+ 
+ 	popup->endpoint_reached = false;
+@@ -352,6 +391,44 @@ static int hotdog_popup_close(struct hotdog_popup *popup)
+ 	return ret;
+ }
+ 
++static int hotdog_popup_domain_power_on(struct generic_pm_domain *domain)
++{
++	struct hotdog_popup *popup =
++		container_of(domain, struct hotdog_popup, genpd);
++	int recovery_ret;
++	int ret;
++
++	guard(mutex)(&popup->lock);
++	popup->automatic_open_count++;
++	ret = hotdog_popup_open(popup);
++	if (ret) {
++		/* Never leave a failed opening at an unknown intermediate point. */
++		recovery_ret = hotdog_popup_close(popup);
++		if (recovery_ret)
++			dev_err(popup->dev,
++				"automatic open failed (%d), close recovery failed (%d)\n",
++				ret, recovery_ret);
++	}
++
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	return ret;
++}
++
++static int hotdog_popup_domain_power_off(struct generic_pm_domain *domain)
++{
++	struct hotdog_popup *popup =
++		container_of(domain, struct hotdog_popup, genpd);
++	int ret;
++
++	guard(mutex)(&popup->lock);
++	popup->automatic_close_count++;
++	ret = hotdog_popup_close(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	return ret;
++}
++
+ static ssize_t status_show(struct device *dev,
+ 			   struct device_attribute *attr, char *buf)
+ {
+@@ -366,9 +443,10 @@ static ssize_t status_show(struct device *dev,
+ 		return ret;
+ 
+ 	return sysfs_emit(buf,
+-		"preflight_used=%u restore_used=%u open_used=%u finish_open_used=%u close_used=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
++		"preflight_used=%u restore_used=%u open_used=%u finish_open_used=%u close_used=%u automatic_open_count=%u automatic_close_count=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
+ 		popup->preflight_used, popup->restore_used, popup->open_used,
+ 		popup->finish_open_used, popup->close_used,
++		popup->automatic_open_count, popup->automatic_close_count,
+ 		popup->endpoint_reached, popup->last_error, up, down,
+ 		popup->before_up, popup->before_down, popup->after_up,
+ 		popup->after_down, popup->last_steps,
+@@ -578,17 +656,44 @@ static int hotdog_popup_probe(struct platform_device *pdev)
+ 				     "failed to get lower Hall channel\n");
+ 
+ 	hotdog_popup_stop(popup);
+-	ret = devm_device_add_group(dev, hotdog_popup_groups[0]);
++	popup->genpd.name = "hotdog-camera-popup";
++	popup->genpd.power_on = hotdog_popup_domain_power_on;
++	popup->genpd.power_off = hotdog_popup_domain_power_off;
++	/*
++	 * The sensor is probed while retracted. Start logically on so attaching
++	 * the I2C device does not move the mechanism; its first runtime suspend
++	 * establishes the closed/off state.
++	 */
++	ret = pm_genpd_init(&popup->genpd, NULL, false);
+ 	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to initialize power domain\n");
++
++	ret = of_genpd_add_provider_simple(dev->of_node, &popup->genpd);
++	if (ret) {
++		pm_genpd_remove(&popup->genpd);
++		return dev_err_probe(dev, ret,
++				     "failed to register power domain\n");
++	}
++
++	ret = devm_device_add_group(dev, hotdog_popup_groups[0]);
++	if (ret) {
++		of_genpd_del_provider(dev->of_node);
++		pm_genpd_remove(&popup->genpd);
+ 		return ret;
++	}
+ 
+-	dev_info(dev, "bounded pop-up motor preflight ready; motor remains off\n");
++	dev_info(dev, "Hall-bounded pop-up power domain ready; motor remains off\n");
+ 	return 0;
+ }
+ 
+ static void hotdog_popup_remove(struct platform_device *pdev)
+ {
+-	hotdog_popup_stop(platform_get_drvdata(pdev));
++	struct hotdog_popup *popup = platform_get_drvdata(pdev);
++
++	of_genpd_del_provider(pdev->dev.of_node);
++	pm_genpd_remove(&popup->genpd);
++	hotdog_popup_stop(popup);
+ }
+ 
+ static const struct of_device_id hotdog_popup_of_match[] = {
