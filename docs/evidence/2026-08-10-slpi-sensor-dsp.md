@@ -86,3 +86,67 @@ to the sensor core over FastRPC and is what turns this into IIO devices.
 The firmware also needs packaging. It is currently installed by hand at
 `/usr/lib/firmware/qcom/sm8150/oneplus/hotdog/slpi.mbn`; the firmware aport
 sources a fixed upstream tarball that does not carry it.
+
+## The sensor process exists, and attaching to it crashes the island
+
+`hexagonrpcd` is the userspace half. It is a file server: it hands the DSP the
+files it asks for from `-R DIR`, and `-s` attaches to the sensors protection
+domain. Installed and pointed at the new channel:
+
+```
+hexagonrpcd -f /dev/fastrpc-sdsp -d sdsp -s
+Starting hexagonrpcd (INIT_ATTACH_SNS) on /dev/fastrpc-sdsp
+Could not attach to FastRPC node: Broken pipe
+```
+
+The kernel side of that attempt is the interesting part:
+
+```
+arm-smmu 15000000.iommu: Unhandled context fault: fsr=0x402, iova=0x1fffff000,
+                         fsynr=0x330001, cbfrsynra=0x5a1, cb=11
+PDM: service 'sensor_process' crash:
+     'EX:sensor_process:0x1:frpck_0_0:0x58:PC=0xb218da68'
+qcom_q6v5_pas 2400000.remoteproc: fatal error received
+remoteproc remoteproc0: crash detected in slpi: type fatal error
+remoteproc remoteproc0: recovering slpi
+```
+
+Two things follow from this. The SLPI genuinely runs a `sensor_process`
+protection domain, so the firmware is the right one and the island is doing what
+it should. And the attach fails because that process takes an SMMU fault, at
+`iova=0x1fffff000` on stream `0x5a1`.
+
+That stream is not a mystery: `sm8150.dtsi` gives the SLPI's FastRPC node
+`qcom,non-secure-domain` and three compute contexts at `0x5a1`, `0x5a2` and
+`0x5a3`, and the fault is on the first of them. So the description is right and
+the DSP is reaching for an address the host has not mapped into that context.
+
+The kernel does say, for both the SLPI and the ADSP channels:
+
+```
+qcom,fastrpc ...fastrpcglink-apps-dsp: no reserved DMA memory for FASTRPC
+```
+
+Whether that is the cause or incidental is not established. The ADSP channel
+fails differently, with `Operation not permitted` rather than a crash, so the
+two are not the same problem.
+
+Recovery is clean: remoteproc restarts the island by itself and it returns to
+`running` with the system otherwise unaffected.
+
+## Where the sensor work stands
+
+| Step | State |
+| --- | --- |
+| SLPI firmware extracted and squashed | done |
+| SLPI node enabled, island boots | done |
+| FastRPC sensor channel present | done |
+| `sensor_process` PD exists on the DSP | confirmed by its crash signature |
+| Attaching from the host | faults the SMMU and crashes the PD |
+| Sensors exposed as IIO | not reached |
+
+The next thing to establish is what `iova=0x1fffff000` is, and whether the
+FastRPC reserved-memory region the driver asks for is what is missing. The
+vendor's own SLPI userspace is available for reference in the handset's `dsp`
+partition, under `sdsp`, including `fastrpc_shell_2` and
+`libchre_slpi_skel.so`.
