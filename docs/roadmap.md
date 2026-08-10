@@ -50,11 +50,24 @@ queue below starts with GNSS after the camera capture milestone.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| GNSS | Location | Not yet hardware-validated. |
+| GNSS | Location | Engine answers QMI; userspace path blocked behind IPA. |
 
-Bring up the GNSS device and its firmware path, expose a standard userspace
-location service, and validate cold, warm, and resumed fixes without disturbing
-Wi-Fi, Bluetooth, or USB recovery.
+The modem's GNSS engine works. With `pd-mapper` started, the LOC service answers
+over QRTR: NMEA types are readable and location sessions start and stop cleanly.
+The rest of the modem answers too, reporting its revision, signal strength, and
+that no SIM is inserted.
+
+What is missing is the bridge to a location service, and it is not GNSS-specific.
+`gnss-share` has only serial and ModemManager backends, ModemManager discards the
+modem with `Failed to find a net port in the QMI modem`, and that net port is
+`rmnet` over IPA. Upstream IPA has no SM8150 support and neither mainline nor
+`linux-next` carries data for it.
+
+So GNSS is not independent: it sits behind the same IPA work as mobile data.
+Either port IPA for SM8150, which unlocks data, ModemManager, and GNSS together
+and is the change that belongs upstream, or add a QMI backend to `gnss-share`,
+which is smaller but GNSS-only. See the
+[GNSS QMI evidence](evidence/2026-08-10-gnss-qmi-loc.md).
 
 Exit criterion: a repeatable fix is available through the normal postmarketOS
 location stack after boot and resume.
