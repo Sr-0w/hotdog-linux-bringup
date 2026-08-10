@@ -15,13 +15,6 @@ The pin configuration follows the stock nfc_enable_active and nfc_int_active
 states rather than being invented: both pull up, and the enable group covers
 GPIO 42 as well, which is the secure-element power line. The clock-request line
 on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
-but leaving them floating is not what the board expects.
-
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
----
- arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 52 +++++++++++++++
- 1 file changed, 52 insertions(+)
-
 --- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 +++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 @@ -313,6 +313,30 @@
@@ -37,7 +30,7 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 +		};
 +
 +		enable-pins {
-+			pins = "gpio41", "gpio42", "gpio48";
++			pins = "gpio41", "gpio48";
 +			function = "gpio";
 +			drive-strength = <2>;
 +			bias-pull-up;
@@ -55,16 +48,20 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
  	cam0_vana_default: cam0-vana-default-state {
  		pins = "gpio11";
  		function = "gpio";
-@@ -504,6 +528,34 @@
+@@ -504,6 +528,38 @@
  	};
  };
  
 +/*
-+ * NFC. The stock tree puts an NXP NQ controller at 0x28 on this bus, with the
-+ * enable line on GPIO 41, firmware download on GPIO 48 and the interrupt on
-+ * GPIO 47. The pin configuration follows the stock nfc_enable_active and
-+ * nfc_int_active states, which pull the enable group and the interrupt up and
-+ * leave the levels to the driver.
++ * NFC. An NXP NQ controller at 0x28 on the bus mainline calls i2c9, taken from
++ * the stock tree: interrupt on GPIO 47, enable on GPIO 41, firmware download on
++ * GPIO 48. The pin states follow the stock nfc_enable_active and nfc_int_active,
++ * which pull up and leave levels to the driver.
++ *
++ * The secure-element power line on GPIO 42 is deliberately not pulled up here
++ * even though the stock groups it with the enable pins: nothing drives the
++ * secure element on this system, and powering it is one of the candidates for
++ * the reset seen when the RF field comes up.
 + */
 +&i2c9 {
 +	/delete-property/ dmas;

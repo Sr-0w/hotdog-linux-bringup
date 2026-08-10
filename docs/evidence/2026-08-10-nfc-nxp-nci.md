@@ -91,11 +91,22 @@ no chance to write.
 So the controller answers on I2C and initialises, and something about bringing
 the RF field up takes the system down. No tag has been read.
 
-What has not been tried: powering the controller without the secure-element line
-pulled up, since `gpio42` is grouped with the enable pins here only because the
-stock groups them; checking whether the reboot is a supply collapse the way the
-camera rails were, by staging the operation; and reading the stock's own NFC
-regulator description, which this node currently does not carry at all.
+**Tested: the secure-element line is not it.** `gpio42` was grouped with the
+enable pins only because the stock groups it, and nothing here drives a secure
+element, so powering it was a candidate. Dropping it from the group and
+retesting reboots the handset exactly as before.
+
+The node still carries no regulators at all, and the stock `nq@28` node carries
+none either, so whatever supplies the controller is always on from Linux's point
+of view. That makes a described-supply gap unlikely and leaves the RF field
+itself, or the driver's handling of it, as what takes the system down.
+
+Worth trying next, in rough order of cost: bringing the field up with a single
+technology selected rather than the full initiator sweep, since `StartPollLoop`
+asks for everything the adapter advertises; checking whether the interrupt is
+actually being delivered on GPIO 47 before the field comes up, by watching the
+count in `/proc/interrupts`; and comparing against the stock's NCI init sequence,
+which the vendor driver in the published kernel spells out.
 
 The kernel also logs, harmlessly and only at boot, `udevd: nxp-nci.ko error=No
 such file or directory`, which is udev trying to load the module before the
