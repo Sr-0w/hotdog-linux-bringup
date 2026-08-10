@@ -1,0 +1,46 @@
+From acbdf5e4de16ed8272feb86686fec7687acfebfe Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 21:41:37 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: fully seat camera after close
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 665bacdbf..9f1852325 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -21,6 +21,7 @@
+ #define HOTDOG_CLOSED_UP_MAX		50
+ #define HOTDOG_RESTORE_DOWN_MIN		340
+ #define HOTDOG_RESTORE_DOWN_MAX		368
++#define HOTDOG_SETTLED_DOWN_MIN		350
+ #define HOTDOG_RECOVER_MICROSTEPS	1920
+ #define HOTDOG_RECOVER_DOWN_MIN		320
+ #define HOTDOG_RECOVER_DOWN_MAX		360
+@@ -470,7 +471,20 @@ static int hotdog_popup_finish_open(struct hotdog_popup *popup)
+ 
+ static int hotdog_popup_close(struct hotdog_popup *popup)
+ {
+-	return hotdog_popup_move_profile(popup, false);
++	unsigned int close_steps;
++	int ret;
++
++	ret = hotdog_popup_move_profile(popup, false);
++	if (ret || abs(popup->after_down) >= HOTDOG_SETTLED_DOWN_MIN)
++		return ret;
++
++	close_steps = popup->last_steps;
++	ret = hotdog_popup_restore_closed(popup,
++					 HOTDOG_PREFLIGHT_MICROSTEPS);
++	if (!ret)
++		popup->last_steps += close_steps;
++
++	return ret;
+ }
+ 
+ static int hotdog_popup_close_with_retry(struct hotdog_popup *popup)
+-- 
+2.54.0
+

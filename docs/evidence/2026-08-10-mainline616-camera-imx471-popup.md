@@ -201,6 +201,61 @@ This validates automatic extension before front-camera streaming and automatic
 retraction when the camera is released, including the application camera-switch
 path. The movement speed I validated matches the OxygenOS behavior closely.
 
+## Occlusion correction and rollback
+
+A later front-camera test initially appeared almost black while exposure and
+analogue gain converged to their limits. That observation led to two candidate
+motor changes: raising the open Hall threshold from `300` to `335` in `r132`,
+then forcing the complete 44160-microstep opening course in the unflashed
+`r133` candidate. The handset was subsequently found resting with the front
+lens against the table. The optical result therefore did not measure popup
+travel, and neither candidate is accepted evidence for changing the mechanism.
+
+The module had also stopped slightly above its closed position. The existing
+bounded recovery command moved it downward by exactly 320 microsteps:
+
+```text
+before: hall_up=-14 hall_down=-348
+after:  hall_up=-13 hall_down=-355
+error=0 restore_used=1
+```
+
+With the handset face-up, the still-running `r132` kernel then completed a
+metadata-only 180-frame IMX471 stream at approximately 90 fps. A single
+processed PPM buffer was written only to `/dev/shm`, reduced to scalar pixel
+statistics, and immediately deleted:
+
+```text
+mean=0.496741 stddev=0.355905 min=0 max=1
+```
+
+Those statistics prove that the unobstructed sensor produces a non-black,
+high-variance image. The same run opened and closed the module automatically
+without a motor error and ended at `hall_down=-353`. No frame, raw buffer or
+image fingerprint from the front camera is retained in the repository.
+
+Kernel package `r134` removes both `r132` and `r133` changes. Direct boot build
+`#135` completed a front-camera stream with the r131 opening behavior and
+returned to SSH normally.
+
+That test confirmed a separate, real closing issue: the Hall endpoint could
+stop around `-344..-346`, matching the position where the module was observed
+slightly above the chassis. Revision `r135` preserves the r131 opening path and
+adds only a seated-close threshold. If the normal close succeeds below
+`|hall_down|=350`, it reuses the already validated, Hall-gated 320-microstep
+restore operation once. It does nothing when the normal close is already at or
+beyond that threshold.
+
+Direct boot build `#136` passed two consecutive automatic stream lifecycles:
+
+```text
+cycle 1 close: -344 -> bounded 320-microstep restore -> -350, error=0
+cycle 2 close: -360, no restore required, error=0
+```
+
+This addresses the visible residual extension without changing the opening
+distance or repeatedly driving against an already seated mechanism.
+
 ## Artifacts
 
 | Artifact | SHA-256 |
@@ -221,13 +276,18 @@ path. The movement speed I validated matches the OxygenOS behavior closely.
 | `linux-oneplus-hotdog-mainline616-6.16.0-r121.apk` | `e6144844244e0bf7e5df1d7755c8e7d4cfd22334ee1494529cd34f8b55c623c7` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r131.apk` | `0f78808bba1b1aa2845b0550e6278ed69f4fd8fdc2d3d5e04b55aed003e2a03a` |
 | r131 `boot.img` | `4f4c5ab8014edf630284de1122450777473f37538e0e7aae3b061595155da8e1` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r134.apk` | `af2f57b435359475fe05711321a0fbf86d5d2624794f6586d40f1c52b2679020` |
+| r134 `boot.img` | `73f3711d78b666882c4a5c81e988071927c073e646c13fc0ae3daa3aff7bb60c` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r135.apk` | `438254242c40e6d36ee2cea9a374b615a8b5b5e351f11771c41c915972634087` |
+| r135 `boot.img` | `c06460cd043a6420515f17122b6c0d43bfba05bb5195c135c6533621cec66a73` |
 | `libcamera-99990.7.2-r9.apk` | `0ea39a98a3a67967ab2c6ce25ab17db69758e6807ffb17412d171b8b022fc82f` |
 | `libcamera-ipa-99990.7.2-r9.apk` | `9f1dc9b00b06ea5d0bcb84a835f0241ed53be0de6ebf2c66c7cbb143f29ba3bf` |
 | `libcamera-tools-99990.7.2-r9.apk` | `5a43b39a954662a33d1e2e0f1d6c666ba8763197e030a522426c609d750aab32` |
 
 ## Next step
 
-Repeat failed-start, process-abort and suspend tests while verifying that the
-mechanism never remains raised after camera ownership ends. Then tune automatic
-exposure and white balance convergence for IMX471 and validate the application
-camera-switch lifecycle alongside the remaining three sensors.
+Repeat failed-start and process-abort tests while verifying that the mechanism
+never remains raised after camera ownership ends. Then tune automatic exposure
+and white balance convergence for IMX471 and validate repeated application
+camera switches. Suspend testing remains deferred while the wake path is
+explicitly disabled.

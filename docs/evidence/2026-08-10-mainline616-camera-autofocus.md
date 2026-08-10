@@ -125,7 +125,8 @@ pmbootstrap aarch64 package build. The package has no upstream Meson tests.
 
 ## Remaining work
 
-Calibrate autofocus thresholds against more scenes, replace the experimental normalized lens
-position with calibrated lens-distance data, and complete production color
-and AWB tuning. The IMX481 ultra-wide and IMX471 pop-up front camera remain to
-be ported.
+Calibrate autofocus thresholds against more scenes, replace the experimental
+normalized lens position with calibrated lens-distance data, and complete
+production color and AWB tuning. IMX481 and IMX471 now stream through libcamera;
+the remaining work is tuning and robust application lifecycle handling rather
+than initial sensor porting.
