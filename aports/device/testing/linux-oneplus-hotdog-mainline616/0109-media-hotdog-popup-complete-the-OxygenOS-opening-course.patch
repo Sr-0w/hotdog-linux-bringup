@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 14:39:16 +0200
+Subject: [PATCH] media: hotdog-popup: complete the OxygenOS opening course
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c  | 84 +++++++++++++++++--
+ 1 file changed, 76 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 0434442e6..f94e4ccf0 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -23,6 +23,12 @@
+ #define HOTDOG_RECOVER_DOWN_MAX		360
+ #define HOTDOG_OPEN_DOWN_MIN		368
+ #define HOTDOG_FULL_COURSE_MICROSTEPS	(1380 * 32)
++#define HOTDOG_APPROACH_MICROSTEPS	31680
++#define HOTDOG_FINISH_OPEN_MICROSTEPS	(HOTDOG_FULL_COURSE_MICROSTEPS - \
++					 HOTDOG_APPROACH_MICROSTEPS)
++#define HOTDOG_FINISH_UP_MIN		130
++#define HOTDOG_FINISH_UP_MAX		200
++#define HOTDOG_FINISH_DOWN_MAX		50
+ #define HOTDOG_HALL_SAMPLE_MICROSTEPS	64
+ #define HOTDOG_DIRECTION_CHECK_STEPS	320
+ #define HOTDOG_PROGRESS_MIN_COUNTS	2
+@@ -41,6 +47,7 @@ struct hotdog_popup {
+ 	bool preflight_used;
+ 	bool restore_used;
+ 	bool open_used;
++	bool finish_open_used;
+ 	bool endpoint_reached;
+ 	unsigned int last_steps;
+ 	int before_up;
+@@ -211,12 +218,6 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 
+ 		popup->after_up = current_up;
+ 		popup->after_down = current_down;
+-		if (abs(current_up) >= HOTDOG_OPEN_HALL_MIN) {
+-			popup->endpoint_reached = true;
+-			ret = 0;
+-			goto out_stop;
+-		}
+-
+ 		if (steps == HOTDOG_DIRECTION_CHECK_STEPS &&
+ 		    current_down - popup->before_down <
+ 		    HOTDOG_PROGRESS_MIN_COUNTS) {
+@@ -226,7 +227,8 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 
+ 	}
+ 
+-	ret = -ERANGE;
++	popup->endpoint_reached = abs(popup->after_up) >= HOTDOG_OPEN_HALL_MIN;
++	ret = popup->endpoint_reached ? 0 : -ERANGE;
+ 
+ out_stop:
+ 	hotdog_popup_stop(popup);
+@@ -245,6 +247,41 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 	return ret;
+ }
+ 
++static int hotdog_popup_finish_open(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_up) < HOTDOG_FINISH_UP_MIN ||
++	    abs(popup->before_up) > HOTDOG_FINISH_UP_MAX ||
++	    abs(popup->before_down) > HOTDOG_FINISH_DOWN_MAX)
++		return -ERANGE;
++
++	hotdog_popup_drive_exact(popup, true, HOTDOG_FINISH_OPEN_MICROSTEPS);
++	msleep(20);
++
++	ret = hotdog_popup_read_halls(popup, &popup->after_up,
++				       &popup->after_down);
++	if (ret)
++		return ret;
++
++	popup->last_steps = HOTDOG_FINISH_OPEN_MICROSTEPS;
++	popup->endpoint_reached = abs(popup->after_up) >= HOTDOG_OPEN_HALL_MIN;
++	if (!popup->endpoint_reached)
++		return -ERANGE;
++
++	dev_info(popup->dev,
++		 "finish open: %u microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 HOTDOG_FINISH_OPEN_MICROSTEPS, popup->before_up,
++		 popup->after_up, popup->before_down, popup->after_down);
++
++	return 0;
++}
++
+ static ssize_t status_show(struct device *dev,
+ 			   struct device_attribute *attr, char *buf)
+ {
+@@ -259,8 +296,9 @@ static ssize_t status_show(struct device *dev,
+ 		return ret;
+ 
+ 	return sysfs_emit(buf,
+-		"preflight_used=%u restore_used=%u open_used=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
++		"preflight_used=%u restore_used=%u open_used=%u finish_open_used=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
+ 		popup->preflight_used, popup->restore_used, popup->open_used,
++		popup->finish_open_used,
+ 		popup->endpoint_reached, popup->last_error, up, down,
+ 		popup->before_up, popup->before_down, popup->after_up,
+ 		popup->after_down, popup->last_steps,
+@@ -356,11 +394,41 @@ static ssize_t open_store(struct device *dev,
+ }
+ static DEVICE_ATTR_WO(open);
+ 
++static ssize_t finish_open_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int microsteps;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &microsteps);
++	if (ret)
++		return ret;
++	if (microsteps != HOTDOG_FINISH_OPEN_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->finish_open_used)
++		return -EALREADY;
++
++	popup->finish_open_used = true;
++	ret = hotdog_popup_finish_open(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(finish_open);
++
+ static struct attribute *hotdog_popup_attrs[] = {
+ 	&dev_attr_status.attr,
+ 	&dev_attr_pulse_up.attr,
+ 	&dev_attr_restore_closed.attr,
+ 	&dev_attr_open.attr,
++	&dev_attr_finish_open.attr,
+ 	NULL,
+ };
+ ATTRIBUTE_GROUPS(hotdog_popup);

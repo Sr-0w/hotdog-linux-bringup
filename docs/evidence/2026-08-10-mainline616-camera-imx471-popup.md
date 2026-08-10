@@ -86,6 +86,62 @@ from the closed endpoint. Ten full steps therefore produce approximately five
 raw Hall counts on this mechanism. The upper Hall remains nearly unchanged at
 this early position, as expected.
 
+## Full travel and front-camera capture
+
+Revisions `r116` through `r119` extend the bounded preflight into a complete
+opening course. The final implementation preserves the OxygenOS limit of
+`44160` microsteps, verifies the initial direction after `320` microsteps,
+samples both Hall sensors every `64` microsteps and leaves every motor control
+inactive after completion. The accepted full opening used exactly `44160`
+microsteps and ended at:
+
+```text
+hall_up=-349..-350
+hall_down=-11..-12
+endpoint=1
+error=0
+```
+
+With the module physically open, Plasma Camera selected the fourth libcamera
+camera and produced a correctly exposed `1748x1740` JPEG from the IMX471. The
+capture was inspected locally for technical validation only. No captured image
+or image fingerprint is retained in this repository.
+
+Libcamera package revision `r9` adds the IMX471 static properties, the Sony
+`1024 / (1024 - code)` analogue-gain conversion, a 1.0 micrometre pixel size,
+RAW10 black level `4096`, two-frame exposure/gain/blanking delays and a simple
+IPA tuning profile. After installation, libcamera uses
+`/usr/share/libcamera/ipa/simple/imx471.yaml` and no longer emits missing sensor
+properties, helper, tuning or control-delay warnings.
+
+A metadata-only 180-frame run completed without writing image data. It held
+approximately 90 fps at the native raw pipeline size, selected four exposure
+times from `7429` through `8352` microseconds, and selected 43 distinct analogue
+gains from `1.0x` through `14.222222x`. This validates automatic exposure and
+gain control as well as the two-frame delayed-control path.
+
+The first direct test after Plasma Camera had released the graph exposed a
+separate CAMSS recovery limitation: CSID/VFE reset timeouts persisted across a
+`qcom_camss` module reload. One normal software reboot restored the graph, all
+four cameras enumerated again, and the 180-frame IMX471 run then completed.
+
+Revision `r120` adds the symmetric Hall-terminated closing course. Its initial
+direction check proved that only the upper Hall sensor changes measurably near
+the open endpoint, so the guard rejects motion only when neither sensor moves
+in the expected direction. Starting after that bounded 320-microstep check, the
+accepted closing command stopped after another `42112` microsteps:
+
+```text
+hall_up=-338 -> -12
+hall_down=-12 -> -368
+endpoint=1
+error=0
+```
+
+The course stopped on the measured closed thresholds before the `44160`
+microstep hard ceiling and powered the motor down. Automatic opening before an
+IMX471 stream and automatic closing after release remain to be integrated.
+
 ## Artifacts
 
 | Artifact | SHA-256 |
@@ -102,11 +158,15 @@ this early position, as expected.
 | r114 kernel | `8ae83ada5525e8a45e1eda99fddbacede0a0423cc7417859de38a0254b3318ae` |
 | r114 DTB | `b6a800f884be0a90e76b681a987e1ed58ad22db517f38dee12c63baa74597f1a` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r115.apk` | `7c38148d868e6ae07217c7a3ffc73da208428729db3970126dcb9ccb3695f774` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r120.apk` | `741fd83e5c5e55748d07669a2453ffa7e592977adcefa073616a49cbf0bb2dfc` |
+| `libcamera-99990.7.2-r9.apk` | `0ea39a98a3a67967ab2c6ce25ab17db69758e6807ffb17412d171b8b022fc82f` |
+| `libcamera-ipa-99990.7.2-r9.apk` | `9f1dc9b00b06ea5d0bcb84a835f0241ed53be0de6ebf2c66c7cbb143f29ba3bf` |
+| `libcamera-tools-99990.7.2-r9.apk` | `5a43b39a954662a33d1e2e0f1d6c666ba8763197e030a522426c609d750aab32` |
 
 ## Next step
 
-Add full opening only now that direction and slope are confirmed. The path
-must continuously sample both Hall sensors, stop at the measured upper
-endpoint, reject no-progress or inverted motion, retain the OxygenOS count as
-a hard ceiling, and leave the motor unpowered afterward. IMX471 streaming and
-libcamera integration follow only after opening is confirmed.
+Connect the validated motor lifecycle to IMX471 use: open before sensor
+streaming, unwind the sensor start if opening fails, and close after the final
+stream user releases the camera. Then repeat application capture and suspend
+tests while verifying that the mechanism never remains raised after a normal
+camera exit.

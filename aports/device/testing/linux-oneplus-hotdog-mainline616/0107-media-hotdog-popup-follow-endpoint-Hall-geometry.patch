@@ -1,0 +1,134 @@
+From 0df7d583bf77f382016045986723dc03e7c820a7 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 14:23:31 +0200
+Subject: [PATCH] media: hotdog-popup: follow endpoint Hall geometry
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c  | 49 +++++++++----------
+ 1 file changed, 23 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index ca0f46d29..a675eb2c9 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -18,11 +18,13 @@
+ #define HOTDOG_CLOSED_UP_MAX		50
+ #define HOTDOG_RESTORE_DOWN_MIN		340
+ #define HOTDOG_RESTORE_DOWN_MAX		368
++#define HOTDOG_RECOVER_MICROSTEPS	1920
++#define HOTDOG_RECOVER_DOWN_MIN		320
++#define HOTDOG_RECOVER_DOWN_MAX		360
+ #define HOTDOG_OPEN_DOWN_MIN		368
+ #define HOTDOG_FULL_COURSE_MICROSTEPS	(1380 * 32)
+ #define HOTDOG_HALL_SAMPLE_MICROSTEPS	64
+ #define HOTDOG_DIRECTION_CHECK_STEPS	320
+-#define HOTDOG_PROGRESS_WINDOW_STEPS	640
+ #define HOTDOG_PROGRESS_MIN_COUNTS	2
+ #define HOTDOG_OPEN_HALL_MIN		150
+ 
+@@ -133,7 +135,8 @@ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+ 	return 0;
+ }
+ 
+-static int hotdog_popup_restore_closed(struct hotdog_popup *popup)
++static int hotdog_popup_restore_closed(struct hotdog_popup *popup,
++				       unsigned int microsteps)
+ {
+ 	int ret;
+ 
+@@ -142,12 +145,20 @@ static int hotdog_popup_restore_closed(struct hotdog_popup *popup)
+ 	if (ret)
+ 		return ret;
+ 
+-	if (abs(popup->before_down) < HOTDOG_RESTORE_DOWN_MIN ||
+-	    abs(popup->before_down) > HOTDOG_RESTORE_DOWN_MAX ||
+-	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++	if (abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++		return -ERANGE;
++
++	if (microsteps == HOTDOG_PREFLIGHT_MICROSTEPS &&
++	    (abs(popup->before_down) < HOTDOG_RESTORE_DOWN_MIN ||
++	     abs(popup->before_down) > HOTDOG_RESTORE_DOWN_MAX))
++		return -ERANGE;
++
++	if (microsteps == HOTDOG_RECOVER_MICROSTEPS &&
++	    (abs(popup->before_down) < HOTDOG_RECOVER_DOWN_MIN ||
++	     abs(popup->before_down) > HOTDOG_RECOVER_DOWN_MAX))
+ 		return -ERANGE;
+ 
+-	hotdog_popup_drive_exact(popup, false, HOTDOG_PREFLIGHT_MICROSTEPS);
++	hotdog_popup_drive_exact(popup, false, microsteps);
+ 	msleep(20);
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->after_up,
+@@ -158,10 +169,10 @@ static int hotdog_popup_restore_closed(struct hotdog_popup *popup)
+ 	if (abs(popup->after_down) <= abs(popup->before_down))
+ 		return -EPROTO;
+ 
+-	popup->last_steps = HOTDOG_PREFLIGHT_MICROSTEPS;
++	popup->last_steps = microsteps;
+ 	dev_info(popup->dev,
+-		 "restore closed: %d microsteps, Hall up %d -> %d, down %d -> %d\n",
+-		 HOTDOG_PREFLIGHT_MICROSTEPS, popup->before_up, popup->after_up,
++		 "restore closed: %u microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 microsteps, popup->before_up, popup->after_up,
+ 		 popup->before_down, popup->after_down);
+ 
+ 	return 0;
+@@ -169,8 +180,6 @@ static int hotdog_popup_restore_closed(struct hotdog_popup *popup)
+ 
+ static int hotdog_popup_open(struct hotdog_popup *popup)
+ {
+-	int window_up;
+-	int window_down;
+ 	int current_up;
+ 	int current_down;
+ 	unsigned int steps;
+@@ -185,8 +194,6 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
+ 		return -ERANGE;
+ 
+-	window_up = popup->before_up;
+-	window_down = popup->before_down;
+ 	popup->endpoint_reached = false;
+ 	popup->last_steps = 0;
+ 	hotdog_popup_power_on(popup, true);
+@@ -217,17 +224,6 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 			goto out_stop;
+ 		}
+ 
+-		if (!(steps % HOTDOG_PROGRESS_WINDOW_STEPS)) {
+-			if (abs(current_up - window_up) <
+-			    HOTDOG_PROGRESS_MIN_COUNTS &&
+-			    abs(current_down - window_down) <
+-			    HOTDOG_PROGRESS_MIN_COUNTS) {
+-				ret = -ETIMEDOUT;
+-				goto out_stop;
+-			}
+-			window_up = current_up;
+-			window_down = current_down;
+-		}
+ 	}
+ 
+ 	ret = -ERANGE;
+@@ -283,7 +279,8 @@ static ssize_t pulse_up_store(struct device *dev,
+ 	ret = kstrtouint(buf, 0, &microsteps);
+ 	if (ret)
+ 		return ret;
+-	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS)
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS &&
++	    microsteps != HOTDOG_RECOVER_MICROSTEPS)
+ 		return -EINVAL;
+ 
+ 	guard(mutex)(&popup->lock);
+@@ -320,7 +317,7 @@ static ssize_t restore_closed_store(struct device *dev,
+ 		return -EALREADY;
+ 
+ 	popup->restore_used = true;
+-	ret = hotdog_popup_restore_closed(popup);
++	ret = hotdog_popup_restore_closed(popup, microsteps);
+ 	hotdog_popup_stop(popup);
+ 	popup->last_error = ret;
+ 	if (ret)
+-- 
+2.54.0

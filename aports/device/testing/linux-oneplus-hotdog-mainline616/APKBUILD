@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=115
+pkgrel=120
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -140,6 +140,11 @@ source="
 	0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 	0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
 	0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
+	0106-media-hotdog-popup-add-Hall-terminated-opening.patch
+	0107-media-hotdog-popup-follow-endpoint-Hall-geometry.patch
+	0108-media-hotdog-popup-gate-recovery-on-restore-command.patch
+	0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
+	0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -297,5 +302,10 @@ ed741a179117f7da07413ebdebec608e6b0c0d55b89e9e11f2da73de2ab21d20da81971693258ec0
 8ca8011c3924f4b9074a483fc18672e0e7d125f327d75ee37e398f69eabe82c5d1c6af2619d15162b88c40d9537c9fb6439eac722855193184b3eaa277fb5c8d  0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 c6d1a62dc5b4f8b65ba03dd6b55a9ad5db5a320b16778ba47daeb3288bb45b9a4bebba73c158de190315c857d0660e752e869ea9fa0b1cdd3bf805b49b79c2b5  0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
 8f0fdd473f5bc9135e50f5a01414a7491d650c7c5ee3d6fa350cc8b0fc647049d78580f3b7a834cb65a3fdaf0b88bd5cc688ad2cfa17d20baeb41069f7492e98  0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
+2b6a74692097d1bf1861aedc2e1264d1e265b735fcfce2d9be0b34dec92540887269480be335fbd6af0b528e9fa3c702fbce7dcc645a42d2fe9190e75439b96e  0106-media-hotdog-popup-add-Hall-terminated-opening.patch
+f54eb729c25d1595bea47eae6e156904a2d2dabf4aa322a7a179e511fcd37db416c458eac179faaf24255c20ed648cf3739c7b330e122ed5d0e709c75f9d6c51  0107-media-hotdog-popup-follow-endpoint-Hall-geometry.patch
+404014478b7a271e58e7196bb165916bd9097d1c9ebe3caf1ac968017b00f049427b11bf74f742c5e8a2e1b059bca20f39561540509f0698f01163dc0d2b99bb  0108-media-hotdog-popup-gate-recovery-on-restore-command.patch
+3dda69afd6f233310e6d291498251ba8b7dde327d0e268e5e980e58b433103c5a0a9acd555c4d4395607498a0bb380107319246500b3fd67e5c9919433a2fa66  0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
+18c1854e1f572660b44a5341ab242669e063d1faf9061f6a1532f0ab0be3be47afa675cb777c0bbca53342ce4aebbdb4b2974bdc19aa48b6559bf0b90a67202b  0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

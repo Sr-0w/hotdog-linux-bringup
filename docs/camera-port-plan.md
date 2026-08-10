@@ -1962,3 +1962,26 @@ The first hardware result must establish the direction and Hall slope before
 full travel is implemented. The eventual opening path will stop at the upper
 Hall threshold, reject stalled or inverted progress, and retain `44160` only
 as its final hard limit.
+
+## Front IMX471 capture and full pop-up travel, revisions `r116` through `r120`
+
+The full OxygenOS opening distance is now hardware-validated. The accepted
+course emits `44160` microsteps, samples both Hall sensors every `64`
+microsteps, reaches approximately `-350` upper and `-11` lower, and powers the
+DRV8834 path down. Plasma Camera then captures from the fourth camera at
+`1748x1740`.
+
+Libcamera `r9` carries static IMX471 data, the Sony analogue-gain equation,
+two-frame delayed controls and a simple IPA profile. A metadata-only 180-frame
+run completes with four exposure values and 43 gain values, proving that the
+front camera is no longer limited to manual raw capture.
+
+Revision `r120` adds the reverse course. It validates direction near the upper
+endpoint using whichever Hall sensor has useful local slope, then stops when
+both closed thresholds are satisfied. Hardware stopped after `42112`
+additional microsteps following the bounded 320-step direction test, at
+`hall_up=-12` and `hall_down=-368`, before the hard limit.
+
+Manual sysfs commands are still a bring-up interface. The next implementation
+step is to make IMX471 stream acquisition open the mechanism and stream release
+close it, with complete unwind on sensor or motor failure.

@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 15:05:00 +0200
+Subject: [PATCH] libcamera: add Sony IMX471 sensor data
+
+---
+ src/ipa/libipa/camera_sensor_helper.cpp           | 13 +++++++++++++
+ src/libcamera/sensor/camera_sensor_properties.cpp | 10 ++++++++++
+ 2 files changed, 23 insertions(+)
+
+diff --git a/src/ipa/libipa/camera_sensor_helper.cpp b/src/ipa/libipa/camera_sensor_helper.cpp
+index 5979d70..9db8670 100644
+--- a/src/ipa/libipa/camera_sensor_helper.cpp
++++ b/src/ipa/libipa/camera_sensor_helper.cpp
+@@ -655,6 +655,19 @@ public:
+ };
+ REGISTER_CAMERA_SENSOR_HELPER("imx481", CameraSensorHelperImx481)
+ 
++class CameraSensorHelperImx471 : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperImx471()
++	{
++		/* The sensor reports a 64-code pedestal in its 10-bit samples. */
++		blackLevel_ = 4096;
++		/* Sony: gain = 1024 / (1024 - register code). */
++		gain_ = AnalogueGainLinear{ 0, 1024, -1, 1024 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("imx471", CameraSensorHelperImx471)
++
+ class CameraSensorHelperImx586 : public CameraSensorHelper
+ {
+ public:
+diff --git a/src/libcamera/sensor/camera_sensor_properties.cpp b/src/libcamera/sensor/camera_sensor_properties.cpp
+index 76c6e5d..8fb12db 100644
+--- a/src/libcamera/sensor/camera_sensor_properties.cpp
++++ b/src/libcamera/sensor/camera_sensor_properties.cpp
+@@ -301,5 +301,15 @@ const CameraSensorProperties *CameraSensorProperties::get(const std::string &sen
+ 			},
+ 		} },
++		{ "imx471", {
++			.unitCellSize = { 1000, 1000 },
++			.testPatternModes = {},
++			.sensorDelays = {
++				.exposureDelay = 2,
++				.gainDelay = 2,
++				.vblankDelay = 2,
++				.hblankDelay = 2
++			},
++		} },
+ 		{ "imx586", {
+ 			.unitCellSize = { 800, 800 },
+ 			.testPatternModes = {},
+-- 
+2.54.0

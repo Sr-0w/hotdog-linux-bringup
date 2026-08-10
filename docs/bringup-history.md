@@ -437,3 +437,13 @@ passed. Revision `r115` fixes successful IIO return-value normalization before
 the first actuation. Its hardware preflight changed the lower Hall reading
 from `-370` to a stable `-364..-365` while the upper reading stayed near
 `-13`, proving the upward direction and bounded 1/32-step movement.
+
+Revisions `r116` through `r119` complete the OxygenOS `44160`-microstep
+opening course with continuous Hall sampling and motor shutdown on every exit.
+The accepted endpoint reads approximately `-350` upper and `-11` lower.
+Libcamera `r9` adds the IMX471 helper, sensor properties, two-frame control
+delays and tuning. Plasma Camera produced a correctly exposed front capture,
+and a separate 180-frame metadata-only run exercised four exposure times and
+43 analogue gains. Revision `r120` adds symmetric Hall-terminated closing; it
+returned the mechanism to approximately `-13` upper and `-368` lower with no
+error. The remaining mechanism task is automatic stream-lifetime integration.
