@@ -1,0 +1,502 @@
+From 3d4ce923b662aeedbd84799106d0c436c66f6179 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 16:50:28 +0200
+Subject: [PATCH 113/114] media: qcom: hotdog-popup: match stock motor cadence
+
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  16 +-
+ drivers/media/platform/qcom/Kconfig           |   2 +-
+ .../media/platform/qcom/hotdog-popup-motor.c  | 282 +++++++++++-------
+ 3 files changed, 187 insertions(+), 113 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index dc111f9ab..bc5a63ed3 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -83,12 +83,15 @@ camera_popup: camera-popup {
+ 		mode1-gpios = <&pm8150l_gpios 8 GPIO_ACTIVE_HIGH>;
+ 		sleep-gpios = <&pm8150_gpios 10 GPIO_ACTIVE_HIGH>;
+ 		step-gpios = <&pm8150l_gpios 10 GPIO_ACTIVE_HIGH>;
++		pwms = <&pm8150l_lpg 3 104166>;
++		pwm-names = "step";
+ 		io-channels = <&hall_up>, <&hall_down>;
+ 		io-channel-names = "hall-up", "hall-down";
+-		pinctrl-names = "default";
++		pinctrl-names = "default", "pwm";
+ 		pinctrl-0 = <&motor_sleep_default>, <&motor_mode1_default>,
+ 			    <&motor_direction_default>, <&motor_step_default>,
+ 			    <&motor_mode0_high_z>, <&motor_boost_default>;
++		pinctrl-1 = <&motor_step_pwm>;
+ 	};
+ 
+ 	memory@80000000 {
+@@ -264,6 +267,10 @@ motor_boost_default: motor-boost-default-state {
+ 	};
+ };
+ 
++&pm8150l_lpg {
++	status = "okay";
++};
++
+ &pm8150l_gpios {
+ 	cam0_custom2_default: cam0-custom2-default-state {
+ 		pins = "gpio1";
+@@ -289,6 +296,13 @@ motor_step_default: motor-step-default-state {
+ 		input-disable;
+ 	};
+ 
++	motor_step_pwm: motor-step-pwm-state {
++		pins = "gpio10";
++		function = "func1";
++		power-source = <0>;
++		bias-disable;
++	};
++
+ 	motor_direction_default: motor-direction-default-state {
+ 		pins = "gpio11";
+ 		function = "normal";
+diff --git a/drivers/media/platform/qcom/Kconfig b/drivers/media/platform/qcom/Kconfig
+index 7f909eaf1..9985a9a22 100644
+--- a/drivers/media/platform/qcom/Kconfig
++++ b/drivers/media/platform/qcom/Kconfig
+@@ -4,7 +4,7 @@ comment "Qualcomm media platform drivers"
+ 
+ config VIDEO_QCOM_HOTDOG_POPUP
+ 	tristate "OnePlus hotdog pop-up camera motor"
+-	depends on IIO && GPIOLIB && PM_GENERIC_DOMAINS_OF
++	depends on IIO && GPIOLIB && PM_GENERIC_DOMAINS_OF && PWM
+ 	help
+ 	  Enable the Hall-bounded driver for the OnePlus 7T Pro pop-up front
+ 	  camera stepper motor. It exposes a generic power domain so camera
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index c740aeafb..c2a1fce75 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -11,8 +11,10 @@
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/of.h>
++#include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+ #include <linux/pm_domain.h>
++#include <linux/pwm.h>
+ 
+ #define HOTDOG_PREFLIGHT_MICROSTEPS	320
+ #define HOTDOG_CLOSED_DOWN_MIN		300
+@@ -36,6 +38,11 @@
+ #define HOTDOG_OPEN_HALL_MIN		150
+ #define HOTDOG_HALL_ABS_MAX		450
+ #define HOTDOG_HALL_SUM_MIN		250
++#define HOTDOG_FULL_OPEN_UP_MIN		300
++#define HOTDOG_SLOW_PERIOD_NS		104166
++#define HOTDOG_FAST_PERIOD_NS		12000
++#define HOTDOG_RAMP_MICROSTEPS		(30 * 32)
++#define HOTDOG_HALL_POLL_US		15000
+ 
+ struct hotdog_popup {
+ 	struct device *dev;
+@@ -44,6 +51,10 @@ struct hotdog_popup {
+ 	struct gpio_desc *mode1;
+ 	struct gpio_desc *sleep;
+ 	struct gpio_desc *step;
++	struct pwm_device *step_pwm;
++	struct pinctrl *pinctrl;
++	struct pinctrl_state *step_gpio_state;
++	struct pinctrl_state *step_pwm_state;
+ 	struct iio_channel *hall_up;
+ 	struct iio_channel *hall_down;
+ 	struct generic_pm_domain genpd;
+@@ -67,15 +78,53 @@ struct hotdog_popup {
+ static bool hotdog_popup_is_closed(int up, int down)
+ {
+ 	return abs(up) < HOTDOG_CLOSED_UP_MAX &&
+-	       abs(down) >= HOTDOG_OPEN_DOWN_MIN;
++	       abs(down) >= HOTDOG_RESTORE_DOWN_MIN;
+ }
+ 
+ static bool hotdog_popup_is_open(int up, int down)
+ {
+-	return abs(up) >= HOTDOG_OPEN_HALL_MIN &&
++	return abs(up) >= HOTDOG_FULL_OPEN_UP_MIN &&
+ 	       abs(down) <= HOTDOG_FINISH_DOWN_MAX;
+ }
+ 
++static void hotdog_popup_pwm_disable(struct hotdog_popup *popup)
++{
++	struct pwm_state state;
++
++	if (popup->step_pwm) {
++		pwm_get_state(popup->step_pwm, &state);
++		state.enabled = false;
++		pwm_apply_might_sleep(popup->step_pwm, &state);
++	}
++
++	if (popup->pinctrl && popup->step_gpio_state)
++		pinctrl_select_state(popup->pinctrl, popup->step_gpio_state);
++
++	if (popup->step)
++		gpiod_set_value_cansleep(popup->step, 0);
++}
++
++static int hotdog_popup_pwm_enable(struct hotdog_popup *popup, u64 period)
++{
++	struct pwm_state state;
++	int ret;
++
++	ret = pinctrl_select_state(popup->pinctrl, popup->step_pwm_state);
++	if (ret)
++		return ret;
++
++	pwm_init_state(popup->step_pwm, &state);
++	state.period = period;
++	state.duty_cycle = period / 2;
++	state.polarity = PWM_POLARITY_NORMAL;
++	state.enabled = true;
++	ret = pwm_apply_might_sleep(popup->step_pwm, &state);
++	if (ret)
++		hotdog_popup_pwm_disable(popup);
++
++	return ret;
++}
++
+ static bool hotdog_popup_halls_plausible(int up, int down)
+ {
+ 	return abs(up) <= HOTDOG_HALL_ABS_MAX &&
+@@ -85,7 +134,7 @@ static bool hotdog_popup_halls_plausible(int up, int down)
+ 
+ static void hotdog_popup_stop(struct hotdog_popup *popup)
+ {
+-	gpiod_set_value_cansleep(popup->step, 0);
++	hotdog_popup_pwm_disable(popup);
+ 	gpiod_set_value_cansleep(popup->sleep, 0);
+ 	gpiod_set_value_cansleep(popup->mode1, 0);
+ 	gpiod_set_value_cansleep(popup->direction, 0);
+@@ -119,23 +168,24 @@ static void hotdog_popup_power_on(struct hotdog_popup *popup, bool upward)
+ 	usleep_range(1000, 1500);
+ }
+ 
+-static void hotdog_popup_step(struct hotdog_popup *popup)
+-{
+-	gpiod_set_value_cansleep(popup->step, 1);
+-	usleep_range(40, 60);
+-	gpiod_set_value_cansleep(popup->step, 0);
+-	usleep_range(40, 60);
+-}
+-
+-static void hotdog_popup_drive_exact(struct hotdog_popup *popup, bool upward,
+-				     unsigned int microsteps)
++static int hotdog_popup_drive_exact(struct hotdog_popup *popup, bool upward,
++				    unsigned int microsteps)
+ {
+-	unsigned int i;
++	u64 duration_us;
++	int ret;
+ 
+ 	hotdog_popup_power_on(popup, upward);
+-	for (i = 0; i < microsteps; i++)
+-		hotdog_popup_step(popup);
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_SLOW_PERIOD_NS);
++	if (ret)
++		goto out;
++
++	duration_us = DIV_ROUND_UP_ULL((u64)microsteps *
++					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
++	usleep_range(duration_us, duration_us + 100);
++
++out:
+ 	hotdog_popup_stop(popup);
++	return ret;
+ }
+ 
+ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+@@ -152,7 +202,10 @@ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+ 		return -ERANGE;
+ 
+ 	/* DRV8834 1/32 mode: M0 is high-impedance in pinctrl, M1 is high. */
+-	hotdog_popup_drive_exact(popup, true, HOTDOG_PREFLIGHT_MICROSTEPS);
++	ret = hotdog_popup_drive_exact(popup, true,
++				       HOTDOG_PREFLIGHT_MICROSTEPS);
++	if (ret)
++		return ret;
+ 	msleep(20);
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->after_up,
+@@ -191,7 +244,9 @@ static int hotdog_popup_restore_closed(struct hotdog_popup *popup,
+ 	     abs(popup->before_down) > HOTDOG_RECOVER_DOWN_MAX))
+ 		return -ERANGE;
+ 
+-	hotdog_popup_drive_exact(popup, false, microsteps);
++	ret = hotdog_popup_drive_exact(popup, false, microsteps);
++	if (ret)
++		return ret;
+ 	msleep(20);
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->after_up,
+@@ -211,18 +266,26 @@ static int hotdog_popup_restore_closed(struct hotdog_popup *popup,
+ 	return 0;
+ }
+ 
+-static int hotdog_popup_open(struct hotdog_popup *popup)
++static bool hotdog_popup_motion_endpoint(bool upward, int up, int down)
++{
++	return upward ? hotdog_popup_is_open(up, down) :
++			 hotdog_popup_is_closed(up, down);
++}
++
++static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
+ {
+ 	int current_up;
+ 	int current_down;
+-	unsigned int steps;
++	u64 remaining_ns;
++	u64 sleep_us;
+ 	int ret;
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->before_up,
+ 				       &popup->before_down);
+ 	if (ret)
+ 		return ret;
+-	if (hotdog_popup_is_open(popup->before_up, popup->before_down)) {
++	if (hotdog_popup_motion_endpoint(upward, popup->before_up,
++					 popup->before_down)) {
+ 		popup->after_up = popup->before_up;
+ 		popup->after_down = popup->before_down;
+ 		popup->endpoint_reached = true;
+@@ -230,37 +293,81 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 		return 0;
+ 	}
+ 
+-	if (!hotdog_popup_is_closed(popup->before_up, popup->before_down))
++	if (upward && !hotdog_popup_is_closed(popup->before_up,
++					      popup->before_down))
++		return -ERANGE;
++	if (!upward &&
++	    !hotdog_popup_halls_plausible(popup->before_up, popup->before_down))
+ 		return -ERANGE;
+ 
+ 	popup->endpoint_reached = false;
+ 	popup->last_steps = 0;
+-	hotdog_popup_power_on(popup, true);
++	hotdog_popup_power_on(popup, upward);
++
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_SLOW_PERIOD_NS);
++	if (ret)
++		goto out_stop;
++
++	sleep_us = DIV_ROUND_UP_ULL((u64)HOTDOG_DIRECTION_CHECK_STEPS *
++					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
++	usleep_range(sleep_us, sleep_us + 100);
++	popup->last_steps = HOTDOG_DIRECTION_CHECK_STEPS;
++
++	ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++	if (ret)
++		goto out_stop;
++	popup->after_up = current_up;
++	popup->after_down = current_down;
++	if ((upward && current_down - popup->before_down <
++		       HOTDOG_PROGRESS_MIN_COUNTS) ||
++	    (!upward && abs(current_down) - abs(popup->before_down) <
++			 HOTDOG_PROGRESS_MIN_COUNTS &&
++		       abs(popup->before_up) - abs(current_up) <
++			 HOTDOG_PROGRESS_MIN_COUNTS)) {
++		ret = -EPROTO;
++		goto out_stop;
++	}
+ 
+-	for (steps = 1; steps <= HOTDOG_FULL_COURSE_MICROSTEPS; steps++) {
+-		hotdog_popup_step(popup);
+-		popup->last_steps = steps;
++	sleep_us = DIV_ROUND_UP_ULL((u64)(HOTDOG_RAMP_MICROSTEPS -
++					     HOTDOG_DIRECTION_CHECK_STEPS) *
++					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
++	usleep_range(sleep_us, sleep_us + 100);
++	popup->last_steps = HOTDOG_RAMP_MICROSTEPS;
+ 
+-		if (steps % HOTDOG_HALL_SAMPLE_MICROSTEPS)
+-			continue;
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_FAST_PERIOD_NS);
++	if (ret)
++		goto out_stop;
++
++	remaining_ns = (u64)(HOTDOG_FULL_COURSE_MICROSTEPS -
++				 HOTDOG_RAMP_MICROSTEPS) * HOTDOG_FAST_PERIOD_NS;
++	while (remaining_ns) {
++		u64 interval_ns = min_t(u64, remaining_ns,
++					 (u64)HOTDOG_HALL_POLL_US * NSEC_PER_USEC);
++
++		sleep_us = DIV_ROUND_UP_ULL(interval_ns, NSEC_PER_USEC);
++		usleep_range(sleep_us, sleep_us + 100);
++		remaining_ns -= interval_ns;
++		popup->last_steps = HOTDOG_FULL_COURSE_MICROSTEPS -
++			DIV_ROUND_UP_ULL(remaining_ns, HOTDOG_FAST_PERIOD_NS);
+ 
+ 		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
+ 		if (ret)
+ 			goto out_stop;
+-
+ 		popup->after_up = current_up;
+ 		popup->after_down = current_down;
+-		if (steps == HOTDOG_DIRECTION_CHECK_STEPS &&
+-		    current_down - popup->before_down <
+-		    HOTDOG_PROGRESS_MIN_COUNTS) {
+-			ret = -EPROTO;
++		if (!hotdog_popup_halls_plausible(current_up, current_down)) {
++			ret = -ERANGE;
++			goto out_stop;
++		}
++		if (hotdog_popup_motion_endpoint(upward, current_up,
++						  current_down)) {
++			popup->endpoint_reached = true;
++			ret = 0;
+ 			goto out_stop;
+ 		}
+-
+ 	}
+ 
+-	popup->endpoint_reached = abs(popup->after_up) >= HOTDOG_OPEN_HALL_MIN;
+-	ret = popup->endpoint_reached ? 0 : -ERANGE;
++	ret = -ERANGE;
+ 
+ out_stop:
+ 	hotdog_popup_stop(popup);
+@@ -271,7 +378,8 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 	}
+ 
+ 	dev_info(popup->dev,
+-		 "open stopped: steps=%u endpoint=%u error=%d Hall up %d -> %d, down %d -> %d\n",
++		 "%s stopped: steps=%u endpoint=%u error=%d Hall up %d -> %d, down %d -> %d\n",
++		 upward ? "open" : "close",
+ 		 popup->last_steps, popup->endpoint_reached, ret,
+ 		 popup->before_up, popup->after_up, popup->before_down,
+ 		 popup->after_down);
+@@ -279,6 +387,11 @@ static int hotdog_popup_open(struct hotdog_popup *popup)
+ 	return ret;
+ }
+ 
++static int hotdog_popup_open(struct hotdog_popup *popup)
++{
++	return hotdog_popup_move_profile(popup, true);
++}
++
+ static int hotdog_popup_finish_open(struct hotdog_popup *popup)
+ {
+ 	int ret;
+@@ -293,7 +406,10 @@ static int hotdog_popup_finish_open(struct hotdog_popup *popup)
+ 	    abs(popup->before_down) > HOTDOG_FINISH_DOWN_MAX)
+ 		return -ERANGE;
+ 
+-	hotdog_popup_drive_exact(popup, true, HOTDOG_FINISH_OPEN_MICROSTEPS);
++	ret = hotdog_popup_drive_exact(popup, true,
++				       HOTDOG_FINISH_OPEN_MICROSTEPS);
++	if (ret)
++		return ret;
+ 	msleep(20);
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->after_up,
+@@ -316,79 +432,7 @@ static int hotdog_popup_finish_open(struct hotdog_popup *popup)
+ 
+ static int hotdog_popup_close(struct hotdog_popup *popup)
+ {
+-	int current_up;
+-	int current_down;
+-	unsigned int steps;
+-	int ret;
+-
+-	ret = hotdog_popup_read_halls(popup, &popup->before_up,
+-				       &popup->before_down);
+-	if (ret)
+-		return ret;
+-	if (hotdog_popup_is_closed(popup->before_up, popup->before_down)) {
+-		popup->after_up = popup->before_up;
+-		popup->after_down = popup->before_down;
+-		popup->endpoint_reached = true;
+-		popup->last_steps = 0;
+-		return 0;
+-	}
+-
+-	/* A failed opening may leave the mechanism between both endpoints. */
+-	if (!hotdog_popup_halls_plausible(popup->before_up,
+-					 popup->before_down))
+-		return -ERANGE;
+-
+-	popup->endpoint_reached = false;
+-	popup->last_steps = 0;
+-	hotdog_popup_power_on(popup, false);
+-
+-	for (steps = 1; steps <= HOTDOG_FULL_COURSE_MICROSTEPS; steps++) {
+-		hotdog_popup_step(popup);
+-		popup->last_steps = steps;
+-
+-		if (steps % HOTDOG_HALL_SAMPLE_MICROSTEPS)
+-			continue;
+-
+-		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
+-		if (ret)
+-			goto out_stop;
+-
+-		popup->after_up = current_up;
+-		popup->after_down = current_down;
+-		if (steps == HOTDOG_DIRECTION_CHECK_STEPS &&
+-		    (abs(current_down) - abs(popup->before_down) <
+-		     HOTDOG_PROGRESS_MIN_COUNTS &&
+-		     abs(popup->before_up) - abs(current_up) <
+-		     HOTDOG_PROGRESS_MIN_COUNTS)) {
+-			ret = -EPROTO;
+-			goto out_stop;
+-		}
+-
+-		if (abs(current_down) >= HOTDOG_OPEN_DOWN_MIN &&
+-		    abs(current_up) < HOTDOG_CLOSED_UP_MAX) {
+-			popup->endpoint_reached = true;
+-			ret = 0;
+-			goto out_stop;
+-		}
+-	}
+-
+-	ret = -ERANGE;
+-
+-out_stop:
+-	hotdog_popup_stop(popup);
+-	msleep(20);
+-	if (!hotdog_popup_read_halls(popup, &current_up, &current_down)) {
+-		popup->after_up = current_up;
+-		popup->after_down = current_down;
+-	}
+-
+-	dev_info(popup->dev,
+-		 "close stopped: steps=%u endpoint=%u error=%d Hall up %d -> %d, down %d -> %d\n",
+-		 popup->last_steps, popup->endpoint_reached, ret,
+-		 popup->before_up, popup->after_up, popup->before_down,
+-		 popup->after_down);
+-
+-	return ret;
++	return hotdog_popup_move_profile(popup, false);
+ }
+ 
+ static int hotdog_popup_domain_power_on(struct generic_pm_domain *domain)
+@@ -645,6 +689,22 @@ static int hotdog_popup_probe(struct platform_device *pdev)
+ 	if (IS_ERR(popup->step))
+ 		return dev_err_probe(dev, PTR_ERR(popup->step),
+ 				     "failed to get step GPIO\n");
++	popup->step_pwm = devm_pwm_get(dev, "step");
++	if (IS_ERR(popup->step_pwm))
++		return dev_err_probe(dev, PTR_ERR(popup->step_pwm),
++				     "failed to get step PWM\n");
++	popup->pinctrl = devm_pinctrl_get(dev);
++	if (IS_ERR(popup->pinctrl))
++		return dev_err_probe(dev, PTR_ERR(popup->pinctrl),
++				     "failed to get pinctrl\n");
++	popup->step_gpio_state = pinctrl_lookup_state(popup->pinctrl, "default");
++	if (IS_ERR(popup->step_gpio_state))
++		return dev_err_probe(dev, PTR_ERR(popup->step_gpio_state),
++				     "failed to get GPIO step state\n");
++	popup->step_pwm_state = pinctrl_lookup_state(popup->pinctrl, "pwm");
++	if (IS_ERR(popup->step_pwm_state))
++		return dev_err_probe(dev, PTR_ERR(popup->step_pwm_state),
++				     "failed to get PWM step state\n");
+ 
+ 	popup->hall_up = devm_iio_channel_get(dev, "hall-up");
+ 	if (IS_ERR(popup->hall_up))
+-- 
+2.54.0
+

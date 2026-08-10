@@ -1,0 +1,33 @@
+From 61ee0fcf93241dbdf1ddf16341fd843e312b41d7 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:31:48 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: allow Hall midpoint valley
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 2506f4f36..830d14314 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -36,7 +36,7 @@
+ #define HOTDOG_PROGRESS_MIN_COUNTS	2
+ #define HOTDOG_OPEN_HALL_MIN		150
+ #define HOTDOG_HALL_ABS_MAX		450
+-#define HOTDOG_HALL_SUM_MIN		250
++#define HOTDOG_HALL_SUM_MIN		4
+ #define HOTDOG_FULL_OPEN_UP_MIN		300
+ #define HOTDOG_SLOW_PERIOD_NS		104166
+ #define HOTDOG_FAST_PERIOD_NS		12000
+@@ -126,6 +126,7 @@ static int hotdog_popup_pwm_enable(struct hotdog_popup *popup, u64 period)
+ 
+ static bool hotdog_popup_halls_plausible(int up, int down)
+ {
++	/* Both endpoint sensors are naturally weak around mid-travel. */
+ 	return abs(up) <= HOTDOG_HALL_ABS_MAX &&
+ 	       abs(down) <= HOTDOG_HALL_ABS_MAX &&
+ 	       abs(up) + abs(down) >= HOTDOG_HALL_SUM_MIN;
+-- 
+2.54.0
+

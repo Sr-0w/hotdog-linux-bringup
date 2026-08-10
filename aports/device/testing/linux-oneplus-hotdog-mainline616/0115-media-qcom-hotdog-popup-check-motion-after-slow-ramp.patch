@@ -1,0 +1,56 @@
+From 040c4cb448ebc299b79f1f54f7496976625e0923 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:06:20 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: check motion after slow ramp
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c    | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index c2a1fce75..2506f4f36 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -33,7 +33,6 @@
+ #define HOTDOG_FINISH_UP_MAX		200
+ #define HOTDOG_FINISH_DOWN_MAX		50
+ #define HOTDOG_HALL_SAMPLE_MICROSTEPS	64
+-#define HOTDOG_DIRECTION_CHECK_STEPS	320
+ #define HOTDOG_PROGRESS_MIN_COUNTS	2
+ #define HOTDOG_OPEN_HALL_MIN		150
+ #define HOTDOG_HALL_ABS_MAX		450
+@@ -308,10 +307,16 @@ static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
+ 	if (ret)
+ 		goto out_stop;
+ 
+-	sleep_us = DIV_ROUND_UP_ULL((u64)HOTDOG_DIRECTION_CHECK_STEPS *
++	/*
++	 * The Hall sensors are flat close to either mechanical endpoint. Let the
++	 * complete stock slow-start ramp run before deciding that the motor did
++	 * not move; a 320-pulse check produces false stalls when closing a fully
++	 * extended camera.
++	 */
++	sleep_us = DIV_ROUND_UP_ULL((u64)HOTDOG_RAMP_MICROSTEPS *
+ 					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
+ 	usleep_range(sleep_us, sleep_us + 100);
+-	popup->last_steps = HOTDOG_DIRECTION_CHECK_STEPS;
++	popup->last_steps = HOTDOG_RAMP_MICROSTEPS;
+ 
+ 	ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
+ 	if (ret)
+@@ -328,12 +333,6 @@ static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
+ 		goto out_stop;
+ 	}
+ 
+-	sleep_us = DIV_ROUND_UP_ULL((u64)(HOTDOG_RAMP_MICROSTEPS -
+-					     HOTDOG_DIRECTION_CHECK_STEPS) *
+-					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
+-	usleep_range(sleep_us, sleep_us + 100);
+-	popup->last_steps = HOTDOG_RAMP_MICROSTEPS;
+-
+ 	ret = hotdog_popup_pwm_enable(popup, HOTDOG_FAST_PERIOD_NS);
+ 	if (ret)
+ 		goto out_stop;
+-- 
+2.54.0
+

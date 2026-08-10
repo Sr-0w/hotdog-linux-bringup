@@ -1986,6 +1986,19 @@ Revision `r121` replaces the manual-only lifecycle with a generic PM domain
 provided by the pop-up motor driver and consumed by the IMX471 node. Runtime
 resume opens before the sensor powers and runtime suspend closes after it powers
 down. Endpoint checks are idempotent, and an automatic opening failure attempts
-a bounded close before returning. Object, DTB, binding and strict pmaports
-package validation pass; installation and hardware stream-lifecycle tests are
-the next step.
+a bounded close before returning.
+
+Revisions `r122` through `r131` move STEP generation to PM8150L LPG channel 5,
+match the OxygenOS slow and fast cadence using exactly representable periods,
+keep the downstream always-on motor boost policy, and stage period changes with
+PWM disabled. Hardware testing found that both Hall sensors are flat near the
+mechanical endpoints. The final driver therefore permits a bounded 3200-step
+fast probe after its 960-step slow ramp, but still refuses the rest of the
+course unless Hall movement is measured.
+
+Revision `r131` passes an immediate open/close reversal and a clean direct-boot
+libcamera lifecycle. A 60-frame IMX471 stream opens automatically, sustains
+approximately 90 fps and retracts automatically when released; all movements
+reach a measured Hall endpoint with `error=0`. The next camera work is the
+cross-sensor AF/AE/AWB convergence pass, touch-to-focus support, color tuning
+and failure-path testing.

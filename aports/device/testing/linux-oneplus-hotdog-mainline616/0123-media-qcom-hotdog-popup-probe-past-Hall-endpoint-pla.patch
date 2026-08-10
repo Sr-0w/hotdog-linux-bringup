@@ -1,0 +1,93 @@
+From 43cf06387ed984466dec64351942c94409583cc0 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 18:41:34 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: probe past Hall endpoint plateau
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c  | 50 +++++++++++++++----
+ 1 file changed, 40 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 36b5505e0..665bacdbf 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -42,6 +42,7 @@
+ #define HOTDOG_SLOW_PERIOD_NS		105000
+ #define HOTDOG_FAST_PERIOD_NS		13125
+ #define HOTDOG_RAMP_MICROSTEPS		(30 * 32)
++#define HOTDOG_PROGRESS_PROBE_MICROSTEPS	(100 * 32)
+ #define HOTDOG_HALL_POLL_US		15000
+ 
+ struct hotdog_popup {
+@@ -284,6 +285,7 @@ static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
+ {
+ 	int current_up;
+ 	int current_down;
++	bool progress;
+ 	u64 remaining_ns;
+ 	u64 sleep_us;
+ 	int ret;
+@@ -332,22 +334,50 @@ static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
+ 		goto out_stop;
+ 	popup->after_up = current_up;
+ 	popup->after_down = current_down;
+-	if ((upward && current_down - popup->before_down <
+-		       HOTDOG_PROGRESS_MIN_COUNTS) ||
+-	    (!upward && abs(current_down) - abs(popup->before_down) <
+-			 HOTDOG_PROGRESS_MIN_COUNTS &&
+-		       abs(popup->before_up) - abs(current_up) <
+-			 HOTDOG_PROGRESS_MIN_COUNTS)) {
+-		ret = -EPROTO;
+-		goto out_stop;
+-	}
++	progress = upward ?
++		current_down - popup->before_down >= HOTDOG_PROGRESS_MIN_COUNTS :
++		abs(current_down) - abs(popup->before_down) >=
++			HOTDOG_PROGRESS_MIN_COUNTS ||
++		abs(popup->before_up) - abs(current_up) >=
++			HOTDOG_PROGRESS_MIN_COUNTS;
+ 
+ 	ret = hotdog_popup_pwm_enable(popup, HOTDOG_FAST_PERIOD_NS);
+ 	if (ret)
+ 		goto out_stop;
+ 
++	/*
++	 * Both Hall sensors are flat at the mechanical endpoints.  The stock
++	 * driver accelerates unconditionally after its slow ramp, so allow a
++	 * short, bounded fast probe to clear endpoint backlash before declaring
++	 * a stall.  A real obstruction is still stopped far short of a course.
++	 */
++	if (!progress) {
++		sleep_us = DIV_ROUND_UP_ULL(
++			(u64)HOTDOG_PROGRESS_PROBE_MICROSTEPS *
++			HOTDOG_FAST_PERIOD_NS, NSEC_PER_USEC);
++		usleep_range(sleep_us, sleep_us + 100);
++		popup->last_steps += HOTDOG_PROGRESS_PROBE_MICROSTEPS;
++
++		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++		if (ret)
++			goto out_stop;
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++		progress = upward ?
++			current_down - popup->before_down >=
++				HOTDOG_PROGRESS_MIN_COUNTS :
++			abs(current_down) - abs(popup->before_down) >=
++				HOTDOG_PROGRESS_MIN_COUNTS ||
++			abs(popup->before_up) - abs(current_up) >=
++				HOTDOG_PROGRESS_MIN_COUNTS;
++		if (!progress) {
++			ret = -EPROTO;
++			goto out_stop;
++		}
++	}
++
+ 	remaining_ns = (u64)(HOTDOG_FULL_COURSE_MICROSTEPS -
+-				 HOTDOG_RAMP_MICROSTEPS) * HOTDOG_FAST_PERIOD_NS;
++				 popup->last_steps) * HOTDOG_FAST_PERIOD_NS;
+ 	while (remaining_ns) {
+ 		u64 interval_ns = min_t(u64, remaining_ns,
+ 					 (u64)HOTDOG_HALL_POLL_US * NSEC_PER_USEC);
+-- 
+2.54.0
+

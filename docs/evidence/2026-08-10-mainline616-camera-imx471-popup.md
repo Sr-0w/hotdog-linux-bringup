@@ -158,6 +158,49 @@ handset stopped enumerating after a host-side USB recovery attempt. No motor
 command was issued during that outage. The mechanism must be treated as
 physically open until fresh Hall readings prove otherwise.
 
+## Production-speed automatic lifecycle
+
+Revisions `r122` through `r131` replace the diagnostic GPIO stepping path with
+the PM8150L LPG channel and match the downstream DRV8834 sequence. The final
+configuration uses the closest periods that the LPG can represent exactly:
+`105000` ns for the 960-microstep slow ramp and `13125` ns for the remainder of
+the course. It keeps the motor boost rail enabled as OxygenOS does, stages each
+period change while PWM output is disabled, and retains the Hall endpoints and
+`44160`-microstep hard limit.
+
+The first production-speed tests exposed a Hall dead zone at both mechanical
+endpoints. A guard immediately after the slow ramp incorrectly reported a
+stall even though the downstream driver accelerates unconditionally at that
+point. Revision `r131` permits a bounded `3200`-microstep fast probe when the
+slow ramp has not changed either Hall sensor, then requires measured progress
+before allowing the rest of the course. A real obstruction is therefore
+stopped after only 4160 microsteps, while endpoint backlash can be cleared.
+
+The corrected module was first tested live against the ABI-identical running
+kernel. It retracted a module that the previous guard had left open, then
+completed an opening followed only 200 ms later by a closing:
+
+```text
+open:  steps=30445 endpoint=1 error=0 Hall -13/-351 -> -316/-10
+close: steps=27017 endpoint=1 error=0 Hall -317/-11 -> -12/-357
+```
+
+The `r131` package and generated AVB boot image were then installed to
+`boot_b`; the full 96 MiB partition readback matched. Direct boot build `#132`
+enumerated a clean media graph with all four cameras. A 60-frame libcamera run
+on IMX471 sustained approximately 90 fps and exercised the generic PM-domain
+lifecycle without any explicit motor command:
+
+```text
+open:  steps=31817 endpoint=1 error=0 Hall -12/-357 -> -311/-10
+close: steps=32731 endpoint=1 error=0 Hall -310/-11 -> -12/-359
+automatic_open_count=1 automatic_close_count=2
+```
+
+This validates automatic extension before front-camera streaming and automatic
+retraction when the camera is released, including the application camera-switch
+path. The user-validated movement speed matches the OxygenOS behavior closely.
+
 ## Artifacts
 
 | Artifact | SHA-256 |
@@ -176,14 +219,15 @@ physically open until fresh Hall readings prove otherwise.
 | `linux-oneplus-hotdog-mainline616-6.16.0-r115.apk` | `7c38148d868e6ae07217c7a3ffc73da208428729db3970126dcb9ccb3695f774` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r120.apk` | `741fd83e5c5e55748d07669a2453ffa7e592977adcefa073616a49cbf0bb2dfc` |
 | `linux-oneplus-hotdog-mainline616-6.16.0-r121.apk` | `e6144844244e0bf7e5df1d7755c8e7d4cfd22334ee1494529cd34f8b55c623c7` |
+| `linux-oneplus-hotdog-mainline616-6.16.0-r131.apk` | `0f78808bba1b1aa2845b0550e6278ed69f4fd8fdc2d3d5e04b55aed003e2a03a` |
+| r131 `boot.img` | `4f4c5ab8014edf630284de1122450777473f37538e0e7aae3b061595155da8e1` |
 | `libcamera-99990.7.2-r9.apk` | `0ea39a98a3a67967ab2c6ce25ab17db69758e6807ffb17412d171b8b022fc82f` |
 | `libcamera-ipa-99990.7.2-r9.apk` | `9f1dc9b00b06ea5d0bcb84a835f0241ed53be0de6ebf2c66c7cbb143f29ba3bf` |
 | `libcamera-tools-99990.7.2-r9.apk` | `5a43b39a954662a33d1e2e0f1d6c666ba8763197e030a522426c609d750aab32` |
 
 ## Next step
 
-Install and direct-boot revision `r121`, read both Hall sensors before any
-motion, and verify automatic opening before an IMX471 stream plus automatic
-closing after its final runtime-PM release. Then repeat application capture,
-failed-start, process-abort and suspend tests while verifying that the
-mechanism never remains raised after camera ownership ends.
+Repeat failed-start, process-abort and suspend tests while verifying that the
+mechanism never remains raised after camera ownership ends. Then tune automatic
+exposure and white balance convergence for IMX471 and validate the application
+camera-switch lifecycle alongside the remaining three sensors.

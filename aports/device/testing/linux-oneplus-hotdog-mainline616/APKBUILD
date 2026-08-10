@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=121
+pkgrel=131
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -146,6 +146,18 @@ source="
 	0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
 	0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
 	0111-media-hotdog-popup-follow-front-sensor-runtime-PM.patch
+	0112-dt-bindings-media-hotdog-popup-add-step-PWM.patch
+	0113-media-qcom-hotdog-popup-match-stock-motor-cadence.patch
+	0114-media-qcom-camss-unwind-failed-stream-starts.patch
+	0115-media-qcom-hotdog-popup-check-motion-after-slow-ramp.patch
+	0116-arm64-dts-qcom-route-hotdog-step-PWM-through-LPG-5.patch
+	0117-media-qcom-hotdog-popup-allow-Hall-midpoint-valley.patch
+	0118-media-qcom-hotdog-popup-use-realizable-LPG-periods.patch
+	0119-media-qcom-hotdog-popup-keep-motor-boost-enabled.patch
+	0120-arm64-dts-qcom-keep-hotdog-motor-boost-enabled.patch
+	0121-media-qcom-hotdog-popup-stage-LPG-period-changes.patch
+	0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
+	0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -309,5 +321,17 @@ f54eb729c25d1595bea47eae6e156904a2d2dabf4aa322a7a179e511fcd37db416c458eac179faaf
 3dda69afd6f233310e6d291498251ba8b7dde327d0e268e5e980e58b433103c5a0a9acd555c4d4395607498a0bb380107319246500b3fd67e5c9919433a2fa66  0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
 18c1854e1f572660b44a5341ab242669e063d1faf9061f6a1532f0ab0be3be47afa675cb777c0bbca53342ce4aebbdb4b2974bdc19aa48b6559bf0b90a67202b  0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
 266aaac8dab0099bbd738474443c88005a9f5a4e02687a16dd33cb33892d5ca880760e4e9b84af9ff39c57fc146e11fa56e825b4be4b08df75ada49640727396  0111-media-hotdog-popup-follow-front-sensor-runtime-PM.patch
+4c2e69f82584d776f00bce638943198621015d1cc39bacb272b61e2007e01f11e4ccb3a40626e2635e78108dd484459f285189b4d9280c5e7f8d078cb20419b5  0112-dt-bindings-media-hotdog-popup-add-step-PWM.patch
+d8e8b826d6d9524387b31048d7b2ab43f7736be8b7fbb99f30652bf5f9f719bc3ad82e019abc1357409751b0c9883764be1f27e955d78d7255d52b0bc7fab64e  0113-media-qcom-hotdog-popup-match-stock-motor-cadence.patch
+58a1c4e8f324eb377fb492e6dd105356e1f7fc8fd8c8540dcdac4ef3e085cc1550dfd60f820fe00c719deb1de84e0e1fafc38483839833aa4367dc12f71d8fe6  0114-media-qcom-camss-unwind-failed-stream-starts.patch
+42ba4210cd8c1330943f493baf94fb609b0fc195cc924068787859f428bbb4a7c4423e331a5cccf4f0f9f1467b6b46f0560191d5a3f7583202cf7b200c73ce1c  0115-media-qcom-hotdog-popup-check-motion-after-slow-ramp.patch
+bc947d52cef5c9bd678567b127d4e3595b908a6e8f213af9bd0bd3d1a1c6739545b90dcdc6055175a3edfbf71679764a46a4bdb04c9ade040e64b73151bfbc6e  0116-arm64-dts-qcom-route-hotdog-step-PWM-through-LPG-5.patch
+2b08eceb9f661f30b1f6130d4e90ed4b82ab122c28ff7bbc77e931a70e524e6a08cfa3bc6ae81700f2153e1f9fd708c3a83fb11611b8b5daece1ea86d1017833  0117-media-qcom-hotdog-popup-allow-Hall-midpoint-valley.patch
+b5481b3da1443cb353a411353f72f13e5d09ce6cdeafdda2bea6974ceb100904f82afc167a4cb2186aaee361e41fb2b1bd9106f6df3801a25ec42a530dbe4339  0118-media-qcom-hotdog-popup-use-realizable-LPG-periods.patch
+84a3f51ebb7c076650bc941c1bf8de1aee99f105919a9c7e5813e5075daee66b05d9f41cc66c8036d63f25a275abe8f7495a04fbc3878aa88e479c2355895911  0119-media-qcom-hotdog-popup-keep-motor-boost-enabled.patch
+c75272b7362f7745793e4295c9d89cb79124abd331dc6e8aafb01166ea4ee6a34a9c803cec6f6099023eb153e476d6656cefe535b13ce2713f13e5b5cdc649fd  0120-arm64-dts-qcom-keep-hotdog-motor-boost-enabled.patch
+01b37c7166b1d9bb33a28d0b05a4cad28feb9433a5e87f06523d37fcb21f295baf8c0c29a508a82c0789b1309d8dc90e5cecb4b4fb68ee7eb5895e5dda4f2daa  0121-media-qcom-hotdog-popup-stage-LPG-period-changes.patch
+051950c25269d0c5d8c51c315ec26dd8fe32e916fcfae7e45c9223c078209ff37e17add88af6588f72a860df1de14b17411986072cb39bce69ce1f80bef79a51  0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
+5e1cecdecc18afad165cb1efd90cda76fce0f18ce7d1bef5f2c5dbc54988508ae717f79c7543affea5e805cb903cb6d9f2265dfd5b0ebe2e9e47449367f49cfa  0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
