@@ -99,3 +99,40 @@ socket, so a session opened by one `qmicli` invocation ends when it exits, and
 `qmicli` refuses to combine `--loc-start` with a follow action. Whether the
 receiver acquires satellites therefore remains untested and needs either sky
 view with a single long-lived client, or the userspace bridge above.
+
+## The session can be kept open: use the QMI proxy
+
+An earlier note here said the LOC session dies with the `qmicli` process, because
+the QMI client is bound to the QRTR socket, and that `--client-no-release-cid`
+did not survive across invocations. That is true without the proxy and wrong
+with it.
+
+`qmicli -p` routes through `qmi-proxy`, which owns the transport and keeps
+clients alive between processes:
+
+```
+qmicli -p -d qrtr://0 --loc-session-id=1 --loc-start --client-no-release-cid
+  Client ID not released:  Service: 'loc'  CID: '1'
+
+qmicli -p -d qrtr://0 --client-cid=1 --client-no-release-cid --loc-get-nmea-types
+  Service: 'loc'  CID: '1'
+```
+
+The second call reuses the client instead of failing with `Unknown client 1 for
+service loc`. So a location session can be started and then queried or followed
+from separate processes.
+
+That matters beyond convenience: it means a GNSS bridge does not have to go
+through ModemManager. The blocker recorded above, that `gnss-share` only speaks
+serial and ModemManager and ModemManager needs an IPA net port, applies to the
+packaged path, not to the hardware. A QMI backend, whether contributed to
+`gnss-share` or run as a small NMEA feeder into `gpsd`, has a working transport
+underneath it now.
+
+## Still not acquired
+
+With the session held open through the proxy, `--loc-get-gnss-sv-info` with a
+100-second timeout returns `Transaction timed out`: no satellite indication
+arrives. The handset was indoors on a desk throughout, which is the expected
+result for a cold start with no sky view, so this neither confirms nor rules out
+the receiver. Acquisition needs a run outdoors.

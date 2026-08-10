@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 23:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: describe the NFC controller
+
+Nothing described NFC, so no controller appeared and there was no nfc class at
+all. The stock device tree has it: an NXP NQ NCI part at 0x28 on the bus
+mainline calls i2c9, with the interrupt on GPIO 47, the enable line on GPIO 41
+and firmware download on GPIO 48.
+
+The upstream nxp-nci-i2c driver takes exactly those, and the kernel already
+builds it along with the NCI core. The stock secure-element power and
+clock-request lines are deliberately left out, since nothing upstream consumes
+them and the secure element is a separate question.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 45 ++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -313,6 +313,24 @@
+ };
+ 
+ &tlmm {
++	nfc_default: nfc-default-state {
++		irq-pins {
++			pins = "gpio47";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		enable-pins {
++			pins = "gpio41", "gpio48";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++			output-low;
++		};
++	};
++
++
+ 	cam0_vana_default: cam0-vana-default-state {
+ 		pins = "gpio11";
+ 		function = "gpio";
+@@ -504,6 +522,33 @@
+ 	};
+ };
+ 
++/*
++ * NFC. The stock tree puts an NXP NQ controller at 0x28 on this bus, with the
++ * enable line on GPIO 41, firmware download on GPIO 48 and the interrupt on
++ * GPIO 47. The secure element and clock-request lines it also describes are
++ * left out: nothing upstream consumes them.
++ */
++&i2c9 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	nfc@28 {
++		compatible = "nxp,nxp-nci-i2c";
++		reg = <0x28>;
++
++		interrupt-parent = <&tlmm>;
++		interrupts = <47 IRQ_TYPE_LEVEL_HIGH>;
++
++		enable-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&tlmm 48 GPIO_ACTIVE_HIGH>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&nfc_default>;
++	};
++};
++
+ &i2c4 {
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+--
+2.50.1
