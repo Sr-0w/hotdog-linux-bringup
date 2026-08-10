@@ -142,14 +142,14 @@ fi
 {
 	for file in "$boot_asset" "$apk_asset"; do
 		[ -e "$file" ] || continue
-		sha256sum "$file"
+		(cd "$outdir" && sha256sum "$(basename "$file")")
 	done
 	if [ "$split_rootfs" -eq 1 ]; then
 		for file in "$root_archive".part*; do
-			sha256sum "$file"
+			(cd "$outdir" && sha256sum "$(basename "$file")")
 		done
 	else
-		sha256sum "$root_archive"
+		(cd "$outdir" && sha256sum "$(basename "$root_archive")")
 	fi
 } > "$outdir/SHA256SUMS"
 
