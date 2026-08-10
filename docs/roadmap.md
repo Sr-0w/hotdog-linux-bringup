@@ -1,123 +1,274 @@
 # Roadmap
 
-## Project goal
+Last updated: 2026-08-10
 
-The goal has two halves, and both are required.
+## Final objective
 
-**Publishable in postmarketOS.** The device must be submittable as a normal
-pmaports device: built from a shared, upstreamable kernel package rather than
-the device-specific fork used during bring-up, without laboratory-only
-deployment steps, with device-tree changes that are correct descriptions rather
-than temporary removals, and with an honest support matrix.
+The final objective is a fully usable OnePlus 7T Pro running postmarketOS with:
 
-**Complete hardware support.** Every peripheral the handset has should work,
-not merely enough of them to clear a device category. USB host mode, external
-display over the Type-C dock, cameras, sensors and telephony are all in scope.
+- a maintained mainline Linux kernel suitable for upstreaming;
+- complete hardware support for the HD1913 test handset;
+- a clean, maintainable `pmaports` submission;
+- a normal postmarketOS installation and upgrade path;
+- a 100% functional Plasma Mobile/postmarketOS userspace with no
+  laboratory-only boot steps.
 
-Neither half is subordinate to the other. Submission gates are not an excuse to
-stop enabling hardware, and hardware work is not an excuse to leave the packages
-unsubmittable. An earlier framing of this project as a dockable Gentoo desktop
-is dropped, but the dock hardware itself remains a real target.
+The project is not complete when an image merely boots. Each subsystem must be
+hardware-tested, integrated into the normal package flow, documented, and
+retested after the shared kernel and device packages are cleaned up.
 
-The submission gates are tracked in the
-[pmaports upstreaming plan](pmaports-upstreaming.md). The subsystem-by-subsystem
-experiments, acceptance criteria, and fallback conditions are detailed in the
-[hardware enablement roadmap](hardware-roadmap.md).
+## Current state
 
-The current hardware candidate is the 6.16 `r108` package, built on the
-reproducible `r22` memory-reservation baseline. The
-accepted 6.16 stack direct-boots with writable rootfs, USB SSH, S6SY761
-multitouch, an Adreno 640 render node that completes Turnip Vulkan workloads,
-corrected conservative SMB5 limits, registered Power plus volume-key inputs,
-dynamic stock 60/90 Hz KMS modes, Wi-Fi association, Bluetooth HID, and a
-usable Plasma Mobile session. The isolated `r22` DT hardware test fixes the
-reproducible large buffered-import crash by completing the stock HD1913 memory
-reservation union. The exact source-built `r22` kernel, DTB, modules, and
-standard `boot-deploy` image also direct-booted and passed a synchronized 6 GiB
-buffered-write soak. A fresh image assembled only from the public pmaports tree
-is installed in `super` with complete SHA-256 readback, and its matching
-deterministic AVB image direct-boots from `boot_b` into Plasma Mobile. Repeated
-boots have kept the clean image healthy, including a successful Discover
-installation and smooth interactive 0 A.D. gameplay. Device package `3-r7`
-closes the separate manual AVB-wrapping step: a full clean 1,524-package build
-generated the verified fixed-size image twice with identical bytes. Automatic
-`polkit-elogind` provider selection and eventual generic `boot-deploy` support
-for the hotdog footer contract are the remaining packaging gates. Revision
-`r20` remains the binary control.
+The public Linux 6.16 reference stack already direct-boots the physical HD1913
+from the OnePlus bootloader, mounts a writable postmarketOS root filesystem,
+starts OpenRC, exposes USB networking and SSH, and runs Plasma Mobile.
 
-## Priority 0: reproducible mainline boot
+The following are currently working or hardware-validated:
 
-- keep D6 as a timing-sensitive negative control; it exposes all UFS LUNs,
-  NCM, and ACM, but a repeat cycle entered Qualcomm `900e` crashdump mode
-- prearm the verified ACM bootloader fallback before every initramfs
-  continuation so a failed rootfs transition remains remotely recoverable
-- rerun the `super` loop hook after late UFS discovery and require both pinned
-  postmarketOS filesystem UUIDs before leaving the ACM shell
-- use hardware-validated D7 for the next direct-mainline pairing; unchanged R5
-  produced fresh SSH and exact `boot_b`/`dtbo_b` readback with this overlay
-- retain the hash-pinned R6 bridge plus stock DTBO as the validated rollback
-  baseline; hardware readback proves the watchdog-disabled command line and
-  both partition images
-- retain D12 as proof that the hotdog runtime identity guard selects HS-G3
-  Rate B on controller revision 4.1.0, and D13 as proof that the downstream
-  revision-2 Gear 3 lane values still leave the first UFS NOP at `-11`
-- retain D14 as proof that requesting a second UFS device reset after the final
-  host reset is insufficient; its generic GPIO readback is invalid for the
-  dedicated output-only `UFS_RESET` pad, so trace the output latch directly if
-  reset sequencing needs further investigation
-- retain D15 as proof that the downstream PCS software-reset order still leaves
-  the first UFS NOP at `-11`
-- capture a clock-safe host, QMP, and local UniPro reference from working R6,
-  then test the passive D16 image whose DTB removes only GPIO175
-  `reset-gpios`, matching the external ClearStaff hotdog DTS policy; the test
-  command line deliberately omits the rescue watchdog so a failure remains
-  observable until manual recovery
-- after direct entry works, validate the built-in Qualcomm APSS watchdog,
-  and the hotdog-only PON reboot-mode properties; reliable normal software
-  reboot is hardware-validated on `r108`
-- remove the downstream kexec bridge from the normal boot path
-- replace the 120-second and 45-second waits with readiness checks
-- restore the complete RAM map
-- repair Apps SMMU registration and reattach UFS, QUP, and DWC3 clients
-- restore Qualcomm ICE support for UFS
+- direct boot, persistent storage, clean software reboot, and recovery paths;
+- native 1440×3120 display at stable 60 Hz, with 90 Hz mode selection working
+  but wake reliability still incomplete;
+- Adreno 640 acceleration through Freedreno/Turnip;
+- S6SY761 touchscreen, Power, Volume Up, and Volume Down;
+- basic Wi-Fi association and Bluetooth HID connectivity;
+- internal stereo speakers and the handset microphone through packaged audio
+  profiles;
+- USB-C host mode, USB 3, and DisplayPort video output;
+- battery fuel-gauge reporting;
+- capture from all four cameras through libcamera and Plasma Camera;
+- automatic IMX471 pop-up extension, capture, and retraction.
 
-## Priority 1: local interaction
+The remaining support gaps are tracked explicitly in
+the [hardware status matrix](status.md). Camera capture is working, but AF/AE/AWB
+convergence, touch-to-focus, production color calibration, and broader camera
+application testing remain final camera-quality work. The ordered hardware
+queue below starts with GNSS after the camera capture milestone.
 
-- preserve the working native display clocks, DSI, DSC, Samsung panel, and
-  persistent framebuffer console while the userspace package is finalized
-- repeat graphical boots of the accepted clean Plasma Mobile image and retain
-  package, filesystem, display, input, radio, and USB attestations
-- retain the validated fixed 90 Hz mode, then implement panel-aware dynamic
-  60/90 Hz switching and validate frame pacing, blank/unblank, and suspend/resume
-- validate S6SY761 suspend/resume and touch wake after the successful Weston
-  and Plasma Mobile orientation tests
-- capture physical volume-key events, then validate wake behavior
-- validate haptics and extend the working basic battery/charging support to
-  cable transitions, termination, thermal limits, and suspend
+## Ordered execution plan
 
-## Priority 2: connectivity
+### 1. GNSS / location
 
-- validate stable Wi-Fi MAC handling and sustained traffic after the successful
-  NetworkManager association test
-- extend the validated `r15` Bluetooth firmware, scan, HID connection, and
-  disconnect path with repeated reconnects and longer bidirectional traffic
-- validate USB host mode and common docks
-- bring up QRTR/QMI and modem services without compromising recovery access
+| Subsystem | Function | Current state |
+|---|---|---|
+| GNSS | Location | Not yet hardware-validated. |
 
-## Priority 3: multimedia and power
+Bring up the GNSS device and its firmware path, expose a standard userspace
+location service, and validate cold, warm, and resumed fixes without disturbing
+Wi-Fi, Bluetooth, or USB recovery.
 
-- audio routing and codecs
-- suspend, resume, and idle power
-- camera sensors and ISP integration
-- thermal management and performance states
+Exit criterion: a repeatable fix is available through the normal postmarketOS
+location stack after boot and resume.
 
-## Upstreaming
+### 2. Sensors
 
-Before proposing changes upstream:
+| Subsystem | Function | Current state |
+|---|---|---|
+| Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 
-1. replace temporary DT property removals with correct provider descriptions
-2. split device-specific changes from generic SM8150 fixes
-3. test against a current upstream kernel
-4. run DT schema validation
-5. document regressions on other SM8150 devices
-6. submit pmaports packaging independently from Linux upstream patches
+Identify the sensor hub and individual sensors, add the required mainline
+drivers and firmware, expose IIO events, and integrate orientation, proximity,
+and motion into Plasma Mobile.
+
+Exit criterion: accelerometer, gyroscope, magnetometer, light, proximity, and
+the relevant motion events work through standard Linux interfaces and survive
+repeated boots.
+
+### 3. NFC
+
+| Subsystem | Function | Current state |
+|---|---|---|
+| NFC | NFC / secure-element path | Not yet hardware-validated. |
+
+Identify the controller and bus, package only redistributable firmware, bring up
+reader mode, and document the secure-element and payment limitations separately.
+
+Exit criterion: NFC tag detection and reader operation work in userspace, with
+any secure-element limitation explicitly documented.
+
+### 4. Haptics
+
+| Subsystem | Function | Current state |
+|---|---|---|
+| Haptics | AW8697 | No mainline driver/integration is validated yet. |
+
+Identify the AW8697 bus, reset, regulators, firmware, and effect interface.
+Implement or adapt the mainline driver, then connect it to feedbackd without
+making vibration dependent on a vendor Android service.
+
+Exit criterion: notification and user-interface haptics work repeatedly through
+the normal postmarketOS feedback stack.
+
+### 5. Range sensor
+
+| Subsystem | Function | Current state |
+|---|---|---|
+| Range sensor | STMVL53L1 laser rangefinder | Driver/integration work remains. |
+
+Confirm the I2C address, interrupt, regulators, and calibration data. Bring up
+the STMVL53L1 through an appropriate mainline interface and integrate it with
+the proximity or sensor service where appropriate.
+
+Exit criterion: range measurements are stable, exposed through a standard
+interface, and safe across suspend and resume.
+
+### 6. Fingerprint
+
+| Subsystem | Function | Current state |
+|---|---|---|
+| Fingerprint | In-display fingerprint reader | Plasma/fprintd can provide the userspace authentication path; Hotdog still needs sensor/firmware integration and UDFPS display-illumination coordination. |
+
+Identify the reader, vendor firmware, transport, TEE dependency, and display
+illumination sequence. Implement the smallest maintainable integration possible,
+and keep enrollment, authentication, suspend, and lock-screen behavior separate
+in the test matrix.
+
+Exit criterion: enrollment and unlock work through fprintd/Plasma, including
+the required display illumination, or every unsupported vendor dependency is
+proven and documented rather than hidden behind an Android HAL.
+
+### 7. Telephony and mobile data
+
+The MPSS and QRTR/RMTFS foundations are present, but the actual modem service is
+not yet hardware-validated.
+
+Complete the modem path in this order:
+
+1. modem enumeration and firmware lifecycle;
+2. SIM detection and PIN handling;
+3. LTE data through ModemManager and NetworkManager;
+4. SMS send and receive;
+5. voice calls and in-call audio;
+6. VoLTE/IMS only if the hardware and upstream userspace make it practical.
+
+Exit criterion: SIM, data, SMS, and calls work through normal postmarketOS
+services without losing USB recovery or breaking suspend.
+
+### 8. Audio completion
+
+The internal stereo speakers and handset microphone are working. The remaining
+audio work is to finish the physical endpoints and normal application path:
+
+- earpiece speaker;
+- wired USB-C/headset paths and detection;
+- remaining analogue and digital microphones;
+- capture volume and protection telemetry;
+- echo cancellation and noise-reduction policy;
+- DisplayPort audio;
+- complete ALSA UCM and PipeWire/WirePlumber profiles.
+
+Exit criterion: playback, capture, calls, earpiece, headphones, speakerphone,
+and external-display audio work through normal Plasma applications with safe
+power-down and conservative gain defaults.
+
+### 9. Power, charging, thermal, and suspend/resume
+
+The fuel gauge and conservative charger limits are working, but charging policy,
+thermal behavior, and full suspend remain incomplete. The touchscreen resume
+failure currently blocks reliable system suspend.
+
+Complete this phase in dependency order:
+
+1. touchscreen reset and resume;
+2. display blank/unblank and touch wake;
+3. `s2idle` and repeated suspend/resume with USB, Wi-Fi, Bluetooth, and audio;
+4. charging transitions, termination, low-battery behavior, and Warp/USB limits;
+5. thermal zones, throttling, and sustained CPU/GPU workloads;
+6. stable dynamic 60/90 Hz behavior after wake.
+
+Exit criterion: the handset can suspend, resume, charge, throttle, and recover
+reliably over repeated cycles without losing storage, display, radios, or SSH.
+
+### 10. USB-C and dock completion
+
+USB-C host mode, USB 3, and DisplayPort video are working. The remaining work is
+to complete the role and power contract:
+
+- Type-C role switching;
+- source VBUS for an unpowered peripheral;
+- peripheral mode recovery after host-mode tests;
+- SuperSpeed and powered/unpowered dock combinations;
+- USB mass storage, Ethernet, keyboard, mouse, and display regression tests;
+- DisplayPort audio once the audio phase is ready.
+
+Exit criterion: common powered and unpowered dock scenarios work without losing
+the normal USB recovery path or requiring a laboratory DTB.
+
+### 11. Storage and SoC integration cleanup
+
+After the peripheral queue is complete, remove the remaining core bring-up
+limitations:
+
+- restore and validate UFS ICE;
+- complete Apps SMMU client attachment for UFS, QUP, DWC3, and other supported
+  clients;
+- replace temporary DMA, SMMU, reserved-memory, and firmware workarounds with
+  correct device-tree descriptions;
+- validate reboot to system, bootloader, and recovery from the direct image;
+- repeat storage stress, graphics workloads, radios, audio, and suspend from a
+  clean package-generated image.
+
+Exit criterion: the normal kernel path no longer depends on the K1 forensic
+package, downstream bridge, nested-GPT laboratory layout, or temporary bypasses.
+
+### 12. Mainline kernel cleanup
+
+Move the maintained device support into the shared
+`linux-postmarketos-qcom-sm8150` package and keep the Hotdog-specific changes
+small and reviewable.
+
+1. separate generic SM8150 changes from Hotdog DTS and device quirks;
+2. remove the downstream 4.14/kexec bridge from the supported boot path;
+3. remove binary DTB mutation and laboratory-only scripts;
+4. run schema validation, `dtbs_check`, kernel configuration checks, and clean
+   reproducible builds;
+5. test the resulting kernel against a current supported mainline baseline;
+6. prepare focused upstreamable Linux patches with regression notes.
+
+Exit criterion: a clean shared-kernel build boots the exact device package on
+hardware and preserves the completed support matrix.
+
+### 13. pmaports submission
+
+Prepare the final `device/testing` submission only from the maintained package
+architecture:
+
+- `linux-postmarketos-qcom-sm8150` for the shared kernel;
+- `device-oneplus-hotdog` for device metadata and narrowly justified runtime
+  integration;
+- `firmware-oneplus-hotdog` only for firmware with documented provenance,
+  ownership, checksums, and redistribution terms.
+
+The submission must build from a clean checkout, pass current `pmaports` policy
+checks, generate the boot image through the normal device flow, direct-boot
+that exact output, and publish only reproducible hashes and permitted evidence.
+The nested `userdata` GPT, fixed-size AVB wrapper used only for laboratory
+recovery, permissive `doas`, custom watchers, and unvalidated convenience
+policies must not be submission requirements.
+
+Exit criterion: a reviewer can build, install, boot, recover, and upgrade the
+device using normal postmarketOS and pmaports workflows.
+
+### 14. Final postmarketOS validation and release
+
+Run the complete acceptance matrix on the final shared-kernel and pmaports
+packages:
+
+- first install, reboot, upgrade, rollback, and recovery;
+- Plasma Mobile display, touch, GPU, cameras, sensors, radios, audio, haptics,
+  fingerprint, charging, suspend, and dock workflows;
+- repeated cold boots and software reboots;
+- normal application use without manual ALSA, mixer, GPIO, or camera commands;
+- release artifacts, installation instructions, recovery guidance, and known
+  limitations kept in sync with the hardware status matrix.
+
+The project is complete only when the final image is a normal, reproducible,
+maintainable postmarketOS device image with the intended OnePlus 7T Pro hardware
+working end to end.
+
+## Working references
+
+- [Hardware support status](status.md)
+- [Hardware enablement details](hardware-roadmap.md)
+- [pmaports upstreaming plan](pmaports-upstreaming.md)
+- [Build and test workflow](build-and-test.md)
+- [Device safety rules](device-safety.md)
