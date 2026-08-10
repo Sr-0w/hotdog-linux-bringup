@@ -177,11 +177,20 @@ qcom,fastrpc ...fastrpcglink-apps-dsp: assigned reserved memory node fastrpc-sha
 
 The pool sits at `0xfee00000`, comfortably below 4 GB.
 
-**The attach still fails identically.** Same `iova=0x1fffff000`, same stream
-`0x5a1`, same `sensor_process` crash at the same `PC=0xb218da68`. An address that
-does not move when the allocator's constraints change is not an allocation: it
-is a fixed address the DSP expects to find mapped. `FSYNR0` reports `PLVL=1`, so
-nothing is mapped there at all.
+**The attach still fails.** Same stream `0x5a1`, same `sensor_process` crash,
+same `PC`, and `FSYNR0` reporting `PLVL=1` so nothing is mapped at the target at
+all.
+
+The fault address is *not* constant, which corrects a conclusion recorded here
+earlier. Attaching plainly faults at `0x1fffff000`; attaching with the vendor's
+`fastrpc_shell_2` supplied through `-c` faults at `0x1ff7ff040` instead. Both sit
+just under 8 GB, so the DSP is reaching into the top of a large aperture rather
+than at one fixed sentinel.
+
+That is not the host allocator's doing either: `fastrpc.c` already sets a 32-bit
+DMA mask on both the context banks and the rpmsg device, so anything Linux hands
+out stays below 4 GB. Whatever the sensor process dereferences up there, it is
+computing itself.
 
 The pool change is kept regardless. The kernel asks for that region, the stock
 describes it, and `assigned reserved memory node` is the correct state rather
@@ -189,10 +198,14 @@ than the informational complaint that preceded it.
 
 ## Where to look next
 
-The constant fault address is the lead. `0x1fffff000` is one page below 8 GB,
-which looks like the top of a 33-bit aperture rather than anything the host
-chose, so the question is what the SLPI's sensor process expects to be mapped
-there and who maps it on the stock system.
+The fault addresses are the lead. Both land just under 8 GB, and they move with
+what the host does, so the question is what the sensor process computes up there
+and who maps it on the stock system. The 32-bit DMA mask the driver already sets
+means it is not simply Linux handing out an unreachable buffer.
+
+The vendor's SLPI userspace is now staged on the handset at
+`/usr/share/qcom/sdsp`, copied from the `dsp` partition, so `-c` and `-R` can be
+pointed at it without remounting anything.
 
 The vendor's own SLPI userspace is on the handset, in the `dsp` partition under
 `sdsp`: `fastrpc_shell_2`, `libchre_slpi_skel.so`, and the CHRE drivers. The
