@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 23:55:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: give FastRPC an addressable heap
+
+Attaching to the SLPI's sensor process crashes it on an SMMU context fault at
+iova 0x1fffff000, stream 0x5a1, which is the first of the FastRPC compute
+contexts. That address is above 4 GB and the DSP addresses 32 bits, so it can
+never reach it.
+
+The kernel says as much on both DSP channels, as an informational message rather
+than an error:
+
+	qcom,fastrpc ...fastrpcglink-apps-dsp: no reserved DMA memory for FASTRPC
+
+The stock device tree carries what is missing: a 16 MB shared-dma-pool with an
+allocation range capped at 0xffffffff, which is what keeps FastRPC buffers where
+the DSP can see them. Describe the same pool and point the SLPI's FastRPC node
+at it.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 27 +++++++++++
+ 1 file changed, 27 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -583,11 +583,37 @@
+ 	status = "okay";
+ };
+ 
++/ {
++	reserved-memory {
++		/*
++		 * FastRPC heap. The DSPs address 32 bits, so this has to stay
++		 * below 4 GB: without it the allocator hands out an IOVA above
++		 * that and the sensor process faults the SMMU the moment the
++		 * host attaches. The stock device tree carries the same pool,
++		 * 16 MB with the same allocation range.
++		 */
++		fastrpc_mem: fastrpc-shared-pool {
++			compatible = "shared-dma-pool";
++			alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
++			size = <0x0 0x01000000>;
++			reusable;
++		};
++	};
++};
++
+ &remoteproc_slpi {
+ 	firmware-name = "qcom/sm8150/oneplus/hotdog/slpi.mbn";
+ 	status = "okay";
+ };
+ 
++&remoteproc_slpi {
++	glink-edge {
++		fastrpc {
++			memory-region = <&fastrpc_mem>;
++		};
++	};
++};
++
+ &remoteproc_mpss {
+ 	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
+ 	status = "okay";
+--
+2.50.1

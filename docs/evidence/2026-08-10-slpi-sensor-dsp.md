@@ -150,3 +150,51 @@ FastRPC reserved-memory region the driver asks for is what is missing. The
 vendor's own SLPI userspace is available for reference in the handset's `dsp`
 partition, under `sdsp`, including `fastrpc_shell_2` and
 `libchre_slpi_skel.so`.
+
+## The FastRPC heap was genuinely missing, and it is not the fault
+
+The stock device tree carries an `adsp_region` as a `shared-dma-pool` of 16 MB
+with `alloc-ranges` capped at `0xffffffff`. The DSPs address 32 bits, the fault
+was at `0x1fffff000` which is above 4 GB, and the kernel was saying `no reserved
+DMA memory for FASTRPC`, so describing the same pool looked like the answer.
+
+`0126` adds it and points the SLPI's FastRPC node at it. The first attempt was
+rejected outright:
+
+```
+OF: reserved mem: node fastrpc-shared-pool compatible matching fail
+```
+
+because a `reusable` `shared-dma-pool` is CMA and `CONFIG_CMA` was not set.
+Enabling `CONFIG_CMA` and `CONFIG_DMA_CMA` fixes that, and the region is now
+placed and handed over as intended:
+
+```
+OF: reserved mem: initialized node fastrpc-shared-pool, compatible id shared-dma-pool
+OF: reserved mem: 0x00000000fee00000..0x00000000ffdfffff (16384 KiB) map reusable
+qcom,fastrpc ...fastrpcglink-apps-dsp: assigned reserved memory node fastrpc-shared-pool
+```
+
+The pool sits at `0xfee00000`, comfortably below 4 GB.
+
+**The attach still fails identically.** Same `iova=0x1fffff000`, same stream
+`0x5a1`, same `sensor_process` crash at the same `PC=0xb218da68`. An address that
+does not move when the allocator's constraints change is not an allocation: it
+is a fixed address the DSP expects to find mapped. `FSYNR0` reports `PLVL=1`, so
+nothing is mapped there at all.
+
+The pool change is kept regardless. The kernel asks for that region, the stock
+describes it, and `assigned reserved memory node` is the correct state rather
+than the informational complaint that preceded it.
+
+## Where to look next
+
+The constant fault address is the lead. `0x1fffff000` is one page below 8 GB,
+which looks like the top of a 33-bit aperture rather than anything the host
+chose, so the question is what the SLPI's sensor process expects to be mapped
+there and who maps it on the stock system.
+
+The vendor's own SLPI userspace is on the handset, in the `dsp` partition under
+`sdsp`: `fastrpc_shell_2`, `libchre_slpi_skel.so`, and the CHRE drivers. The
+sensor registry that the stock sensor stack reads is a separate matter and lives
+in the vendor partition.
