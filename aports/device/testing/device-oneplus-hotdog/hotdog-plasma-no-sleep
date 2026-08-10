@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -eu
+
+for profile in AC Battery LowBattery; do
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key idleTime 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key lockBeforeTurnOff false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key turnOffOnIdleTimeout false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DimDisplay --key idleTime 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayIdleTimeoutSec 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayWhenIdle false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key DimDisplayIdleTimeoutSec 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key DimDisplayWhenIdle false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key LockBeforeTurnOffDisplay false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutSec 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutWhenLockedSec 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayWhenIdle false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group SuspendAndShutdown --key AutoSuspendAction 0
+done
+
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockGrace 0
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockOnResume false
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Timeout 0
+
+qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement reparseConfiguration >/dev/null 2>&1 || true
+qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement wakeup >/dev/null 2>&1 || true

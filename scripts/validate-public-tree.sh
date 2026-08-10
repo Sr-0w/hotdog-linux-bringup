@@ -428,6 +428,10 @@ validate_hotdog_wifi_package_contract() {
 validate_hotdog_plasma_apps_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
 	local powerdevil_config="aports/device/testing/device-oneplus-hotdog/powerdevilrc"
+	local inhibitor_service="aports/device/testing/device-oneplus-hotdog/hotdog-no-sleep.initd"
+	local inhibitor_install="aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-plasma-mobile-apps.post-install"
+	local session_policy="aports/device/testing/device-oneplus-hotdog/hotdog-plasma-no-sleep"
+	local session_autostart="aports/device/testing/device-oneplus-hotdog/hotdog-plasma-no-sleep.desktop"
 	local package=""
 
 	log "hotdog Plasma Mobile application contract"
@@ -444,14 +448,40 @@ validate_hotdog_plasma_apps_contract() {
 	done
 	grep -q '"$subpkgdir/etc/xdg/powerdevilrc"' "$device_apkbuild" ||
 		die "Plasma Mobile subpackage does not install the PowerDevil defaults"
+	grep -q '"$subpkgdir/etc/init.d/hotdog-no-sleep"' "$device_apkbuild" ||
+		die "Plasma Mobile subpackage does not install the suspend inhibitor"
+	grep -q '"$subpkgdir/usr/libexec/hotdog-plasma-no-sleep"' "$device_apkbuild" ||
+		die "Plasma Mobile subpackage does not install the session policy"
+	grep -q '"$subpkgdir/etc/xdg/autostart/hotdog-plasma-no-sleep.desktop"' \
+		"$device_apkbuild" || die "Plasma Mobile subpackage does not autostart the session policy"
 	[ -f "$powerdevil_config" ] ||
 		die "missing PowerDevil defaults: $powerdevil_config"
+	[ -f "$inhibitor_service" ] ||
+		die "missing suspend inhibitor: $inhibitor_service"
+	[ -f "$inhibitor_install" ] ||
+		die "missing suspend inhibitor post-install script: $inhibitor_install"
+	[ -f "$session_policy" ] || die "missing Plasma session policy: $session_policy"
+	[ -f "$session_autostart" ] || die "missing Plasma session autostart: $session_autostart"
 	for profile in AC Battery LowBattery; do
 		grep -Fq "[$profile][SuspendAndShutdown]" "$powerdevil_config" ||
 			die "PowerDevil defaults lack the $profile suspend group"
+		grep -Fq "[$profile][DisplayAndBrightness]" "$powerdevil_config" ||
+			die "PowerDevil defaults lack the $profile display group"
 	done
 	[ "$(grep -c '^AutoSuspendAction=0$' "$powerdevil_config")" -eq 3 ] ||
 		die "automatic suspend must be disabled for all three PowerDevil profiles"
+	[ "$(grep -c '^TurnOffDisplayWhenIdle=false$' "$powerdevil_config")" -eq 6 ] ||
+		die "display blanking must be disabled for all three PowerDevil profiles"
+	grep -q -- '--key Autolock false$' "$session_policy" ||
+		die "automatic screen locking must be disabled"
+	grep -q -- '--key LockOnResume false$' "$session_policy" ||
+		die "screen locking on resume must be disabled"
+	grep -q '^command="/usr/bin/elogind-inhibit"$' "$inhibitor_service" ||
+		die "suspend inhibitor does not invoke elogind-inhibit"
+	grep -q '^command_args="--what=idle:sleep ' "$inhibitor_service" ||
+		die "suspend inhibitor must block both idle and sleep"
+	grep -q '^rc-update add hotdog-no-sleep default$' "$inhibitor_install" ||
+		die "Plasma Mobile package does not enable the suspend inhibitor"
 }
 
 validate_hotdog_ucm_contract() {

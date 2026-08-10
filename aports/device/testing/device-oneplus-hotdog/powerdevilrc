@@ -1,10 +1,70 @@
-# Automatic suspend is disabled until USB gadget and storage resume are
-# reliable. Display blanking, locking, and explicit suspend remain available.
+# Automatic suspend, dimming, and display blanking are disabled until the
+# display and USB wake paths are reliable.
+[AC][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=false
+turnOffOnIdleTimeout=false
+
+[AC][DimDisplay]
+idleTime=0
+
+[AC][Display]
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayWhenIdle=false
+
+[AC][DisplayAndBrightness]
+DimDisplayIdleTimeoutSec=0
+DimDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayIdleTimeoutWhenLockedSec=0
+TurnOffDisplayWhenIdle=false
+
 [AC][SuspendAndShutdown]
 AutoSuspendAction=0
 
+[Battery][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=false
+turnOffOnIdleTimeout=false
+
+[Battery][DimDisplay]
+idleTime=0
+
+[Battery][Display]
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayWhenIdle=false
+
+[Battery][DisplayAndBrightness]
+DimDisplayIdleTimeoutSec=0
+DimDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayIdleTimeoutWhenLockedSec=0
+TurnOffDisplayWhenIdle=false
+
 [Battery][SuspendAndShutdown]
 AutoSuspendAction=0
+
+[LowBattery][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=false
+turnOffOnIdleTimeout=false
+
+[LowBattery][DimDisplay]
+idleTime=0
+
+[LowBattery][Display]
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayWhenIdle=false
+
+[LowBattery][DisplayAndBrightness]
+DimDisplayIdleTimeoutSec=0
+DimDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
+TurnOffDisplayIdleTimeoutSec=0
+TurnOffDisplayIdleTimeoutWhenLockedSec=0
+TurnOffDisplayWhenIdle=false
 
 [LowBattery][SuspendAndShutdown]
 AutoSuspendAction=0

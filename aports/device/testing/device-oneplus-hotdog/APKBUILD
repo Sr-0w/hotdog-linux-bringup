@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=18
+pkgrel=20
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -30,6 +30,9 @@ source="
 	90-hotdog-camera.conf
 	90-hotdog-single-battery.rules
 	postprocess-boot-avb.sh
+	hotdog-no-sleep.initd
+	hotdog-plasma-no-sleep
+	hotdog-plasma-no-sleep.desktop
 	powerdevilrc
 "
 
@@ -87,6 +90,7 @@ bringup() {
 
 plasma_mobile_apps() {
 	pkgdesc="Mobile application set for Plasma Mobile"
+	install="$subpkgname.post-install"
 	depends="
 		angelfish
 		discover
@@ -114,6 +118,12 @@ plasma_mobile_apps() {
 	install_if="$pkgname=$pkgver-r$pkgrel postmarketos-ui-plasma-mobile"
 	install -Dm644 "$srcdir/powerdevilrc" \
 		"$subpkgdir/etc/xdg/powerdevilrc"
+	install -Dm755 "$srcdir/hotdog-no-sleep.initd" \
+		"$subpkgdir/etc/init.d/hotdog-no-sleep"
+	install -Dm755 "$srcdir/hotdog-plasma-no-sleep" \
+		"$subpkgdir/usr/libexec/hotdog-plasma-no-sleep"
+	install -Dm644 "$srcdir/hotdog-plasma-no-sleep.desktop" \
+		"$subpkgdir/etc/xdg/autostart/hotdog-plasma-no-sleep.desktop"
 }
 
 mainline_firmware() {
@@ -168,5 +178,8 @@ d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270c
 7b1c01a079a372a6258652914d95b95ace6431271f8fa4fd8a9d975aff31ee12e28e5bb1b5bf61019b334863e64fc0928dfec328ba423795053c98da94e29051  90-hotdog-camera.conf
 db5da5123383e14d168eb0c80073a98dc8b9b796dc6fdbfca70ed12e82ae96df1090ef643b9e430543514d4340735d7a81350dff446f06efd8da6e3ac5f11bbe  90-hotdog-single-battery.rules
 19335cacba66016775e9cae6905e4f3d2ed5e7795764b2ac8f8886f2aaa36cbe36f761b4c4888bbce18fc870bacd514229cbcfce6a1c307b36a8a4991d688e94  postprocess-boot-avb.sh
-4839584eb202655d6e55695e8e09559514c8d12a8d85db97ca0854c636c89ebdb82e2c671bc52607c07b4601f0284bab3430639a103ae3a8e22c26acd146919f  powerdevilrc
+050412dd86b9b7f9de40110ce84289108f19c197488b3cf5f3c5804d43dd0c98ea268bf4657480402ecf5c8b2c4bf3c309dddfd6da1c05a7796c0dbd1617e9cd  hotdog-no-sleep.initd
+b13ecd7055ea6090f3de8bafed14682f9d34a4203bcd499798d0752a706bb144c2b3b9323d3a1755006ebaea4ad052e638cc5b5bc41de339de2a9186c45e52c5  hotdog-plasma-no-sleep
+9af850d3d1508748cce0823a82d846872859306fa781c0cd96435c628f96030b7df7826c884b4de530fd54aab316740a4eff193f299850fbee76744fb8ee9523  hotdog-plasma-no-sleep.desktop
+820b19d9c0bc43ffd3f3b1a6cf1aec2daeb13be99df7c312cf0c0cb54ee8e45e48e457bd29bf23d1db2f263d64cd968361552cd5ff9691bf7c93a56894944259  powerdevilrc
 "

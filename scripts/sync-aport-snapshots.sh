@@ -118,6 +118,10 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
 		device/testing/device-oneplus-hotdog:90-hotdog-camera.conf | \
 		device/testing/device-oneplus-hotdog:90-hotdog-single-battery.rules | \
+		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-plasma-mobile-apps.post-install | \
+		device/testing/device-oneplus-hotdog:hotdog-no-sleep.initd | \
+		device/testing/device-oneplus-hotdog:hotdog-plasma-no-sleep | \
+		device/testing/device-oneplus-hotdog:hotdog-plasma-no-sleep.desktop | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
 		device/testing/device-oneplus-hotdog:HiFi.conf | \

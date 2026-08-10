@@ -27,15 +27,44 @@ system-suspend attempt; storage-load stability is tracked separately.
 
 ## Policy
 
-Device package `3-r5` installs Plasma 6 PowerDevil defaults with
-`AutoSuspendAction=0` for the `AC`, `Battery`, and `LowBattery` profiles. Screen
-blanking, locking, the power-button screen action, and explicit user-requested
-suspend are unchanged. The same values were applied to the existing live user
-profile and reloaded through PowerDevil's D-Bus interface without rebooting.
+Device package `3-r20` applies a stricter temporary policy because display
+blanking itself can leave the handset black and unreachable. For the `AC`,
+`Battery`, and `LowBattery` profiles it disables automatic suspend, dimming and
+display blanking. A KDE session autostart writes the same values into the live
+user profile, disables automatic locking and locking on resume, reloads
+PowerDevil through D-Bus, and requests an immediate wake.
 
-This is a temporary reliability policy. It prevents the default mobile timeout
-from interrupting unattended development while preserving controlled
-suspend/resume testing.
+The Plasma Mobile application subpackage also installs and enables the OpenRC
+service `hotdog-no-sleep`. It runs `elogind-inhibit` as root and blocks both
+`idle` and `sleep`; unlike the generic postmarketOS `sleep-inhibitor`, this
+inhibitor is visible explicitly in elogind:
+
+```text
+WHO             WHAT        MODE
+hotdog-no-sleep sleep:idle  block
+```
+
+The live handset accepted `device-oneplus-hotdog-plasma-mobile-apps-3-r20`
+without taking ownership of Plasma's `/etc/xdg/kscreenlockerrc`. The session
+policy is instead installed under `/usr/libexec` and runs through an XDG
+autostart entry. This avoids an APK file-ownership conflict while retaining
+per-user KDE configuration. A subsequent direct reboot started
+`hotdog-no-sleep` automatically and restored USB networking and SSH with a new
+boot ID.
+
+The built package hashes are:
+
+```text
+device-oneplus-hotdog-3-r20.apk
+74d0fd1d0f7cfc6225203746c21439989ca4ebadbcc399d05214e73f1fff67ef
+
+device-oneplus-hotdog-plasma-mobile-apps-3-r20.apk
+816e060b7ce106ecbe90dac5e2b69fccbba50f3e901e9f9d659ca6b4635cb24d
+```
+
+This is a temporary bring-up reliability policy. Explicit suspend testing
+requires stopping `hotdog-no-sleep` first; ordinary operation intentionally
+offers no automatic path into suspend or display blanking.
 
 ## Remaining work
 

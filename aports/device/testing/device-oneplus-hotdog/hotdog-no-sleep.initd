@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+supervisor="supervise-daemon"
+name="OnePlus hotdog suspend inhibitor"
+description="Block sleep until the display and USB wake paths are reliable"
+
+command="/usr/bin/elogind-inhibit"
+command_args="--what=idle:sleep --mode=block --who=hotdog-no-sleep --why=Unreliable-display-and-USB-wake /bin/sleep infinity"
+
+depend() {
+	need elogind
+}
