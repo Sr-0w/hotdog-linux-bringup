@@ -39,9 +39,9 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Runs a full postmarketOS Plasma Mobile installation from persistent storage.
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
-- Hardware-validated S5K3M5 telephoto and IMX586 main-camera capture with
-  manual focus, libcamera automatic controls and Plasma Camera integration;
-  both rear modules have hardware-validated continuous autofocus.
+- Hardware-validated S5K3M5 telephoto, IMX586 main and IMX481 ultra-wide
+  capture with libcamera automatic controls and Plasma Camera integration;
+  the two focused rear modules have hardware-validated continuous autofocus.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -56,7 +56,8 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ✅ USB-C host, USB 3 and DisplayPort video  
 ✅ Battery fuel gauge  
 ✅ Telephoto RAW10 capture and manual focus<br>
-✅ Main-camera RAW10 capture, continuous autofocus and automatic exposure/gain
+✅ Main-camera RAW10 capture, continuous autofocus and automatic exposure/gain<br>
+✅ Ultra-wide RAW10 capture, automatic exposure/gain and Plasma Camera
 
 ⚠️ Suspend/resume incomplete  
 ⚠️ 90 Hz wake path unreliable  
@@ -111,6 +112,7 @@ Support status for the tested HD1913 handset.
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
 | Cameras | S5K3M5 telephoto capture, userspace and autofocus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 RAW10 frames. Libcamera 0.7.2 has sensor properties, delay data, a helper and simple-pipeline tuning; automatic exposure moves over live frames and Plasma Camera reaches a ready 4200×3120 viewfinder. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Libcamera `r7` waits for stable exposure, completes coarse/fine continuous autofocus, and selects the visually sharp endpoint on a textured scene. Production color calibration remains open. |
 | Cameras | Sony IMX586 main capture, userspace and autofocus | The main sensor captures complete 4000×3000 RAW10 frames over three-trio C-PHY through CAMSS. Libcamera uses the Sony gain law and OxygenOS control delays; processed runs hold 30 fps with automatic exposure and gain. Revision `r109` selects the handset's Semco second-lens module and validates the complete 0–400 focus range. Libcamera `r4` adds lens-control plumbing plus coarse/fine contrast autofocus: direct capture reaches `AfState=Focused`, selects non-endpoint positions, and Plasma Camera completes continuous autofocus while ready for capture. Production color calibration and additional modes remain open. |
+| Cameras | Sony IMX481 ultra-wide capture and userspace | Revision `r111` binds the physical sensor on CCI1 master 1 and streams complete 4656×3496 RAW10 frames over four-lane D-PHY through CSIPHY3, CSID0 and VFE0. Two consecutive 180-frame processed runs completed at 30 fps without CSID, CAMNOC or SMMU faults. Libcamera `r8` supplies the Sony gain law, black level, control delays and tuning profile. Plasma Camera explicitly selected IMX481, configured a 4648×3496 viewfinder and reached ready-for-capture. Production color calibration and additional modes remain open. |
 
 ### 🔴 Broken
 
@@ -131,7 +133,7 @@ Support status for the tested HD1913 handset.
 | Audio | Other analogue/digital microphones, EC/NR | Other live pads, digital microphones, echo cancellation and noise-reduction policy remain open. |
 | Cellular | WWAN data / calls / SMS / SIM handling | Telephony stack is not yet hardware-validated. |
 | GNSS | Location | Not yet hardware-validated. |
-| Cameras | Ultra-wide / front | The IMX481 and IMX471 sensors still need drivers and hardware validation. The pop-up front camera also needs motor integration. |
+| Cameras | Front | The IMX471 sensor still needs a driver and hardware validation. The pop-up motor also needs integration. |
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
 | Haptics | AW8697 | No mainline driver/integration is validated yet. |

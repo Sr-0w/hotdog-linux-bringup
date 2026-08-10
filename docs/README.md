@@ -47,6 +47,9 @@ credentials, proprietary dumps, or workstation-specific paths.
 - [evidence/2026-08-10-mainline616-camera-autofocus.md](evidence/2026-08-10-mainline616-camera-autofocus.md):
   IMX586 coarse/fine contrast autofocus, standard libcamera metadata, Plasma
   Camera integration and the WirePlumber camera-ownership packaging fix.
+- [evidence/2026-08-10-mainline616-camera-imx481.md](evidence/2026-08-10-mainline616-camera-imx481.md):
+  IMX481 ultra-wide RAW10 capture, libcamera automatic controls and explicit
+  Plasma Camera validation.
 - [evidence/2026-08-09-mainline616-camera-telephoto-focus.md](evidence/2026-08-09-mainline616-camera-telephoto-focus.md):
   cold-boot validation of the LC898217XC lens actuator, calibrated manual
   focus controls, matched focus sweep, and focused S5K3M5 RAW10 capture.

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=110
+pkgrel=111
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -135,6 +135,7 @@ source="
 	0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
 	0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 	0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
+	0101-media-imx481-keep-default-exposure-in-range.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -287,5 +288,6 @@ e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf7
 a36e991acb5e31071686898087129b21b3aef1a2cf2aaf7c4d59381e0e90e250b88d2903463749e309670d19ddf273ca82fb6c639cdb649714e19746589926f8  0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
 d008dc6e0401fbf38ccf2ccab882eeee6c06cbe6d38f51a9dbdc5a7e203bc70ef03977377fc756aaaac1bcdecfcc74f208f6d58c82a73663dc2b1e40312f7b71  0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 ed741a179117f7da07413ebdebec608e6b0c0d55b89e9e11f2da73de2ab21d20da81971693258ec0e42e47abf6014017b4dc6fb8c0de16618f3626719a1d80a8  0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
+0fdf96299335cdb80553d81e48bf542f05c124e1f965e1a2d418ebdda604f4eb9736e67dfaf6092fe925d072d184925a59c422a1f035a46738eba381275d67a3  0101-media-imx481-keep-default-exposure-in-range.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

@@ -63,7 +63,7 @@ which only describes slots and CSIPHY assignment.
 | Role | Sensor | Upstream driver |
 | --- | --- | --- |
 | Main 48 MP | Sony IMX586 | local mainline port in revision `r99` |
-| Ultra-wide | Sony IMX481 | absent |
+| Ultra-wide | Sony IMX481 | absent at the initial audit; implemented in `r110` |
 | Telephoto | Samsung S5K3M5 | present in linux-next |
 | Front, pop-up | Sony IMX471 | absent |
 
@@ -199,6 +199,7 @@ question above is settled first.
    PM8009 rails and the VANA switches, and add the sensor nodes
 4. confirm the telephoto path end to end
 5. write IMX586, IMX481 and IMX471 using the downstream register sequences
+   (IMX586 and IMX481 are now implemented)
 6. libcamera pipeline configuration
 7. optionally add the lite instances, and a binding YAML before submission
 
@@ -328,21 +329,20 @@ S5K3M5 properly rather than to keep debugging the aid.
 
 ### What the vendor modules say about the other three
 
-The stock per-sensor modules name four sensors, and slot 0 is the only slot
-carrying an actuator, an OIS block, a second analogue rail and `CAM_PVDD`,
-which is the signature of the stabilised main camera. Slot 3 is the only one
-with a different orientation, 270 degrees of roll, which is the pop-up. That
-leaves the ultra-wide on slot 2.
+The stock per-sensor modules name four sensors. The initial assignment below
+was inferred from power resources and orientation before the hardware could be
+probed. Later direct chip-ID reads proved that the IMX481 is slot 3, not slot 2;
+the remaining IMX471 assignment to slot 2 is still an inference.
 
 | Slot | Sensor | Basis |
 | --- | --- | --- |
 | 0 | Sony IMX586, main | actuator, OIS, extra rails |
 | 1 | Samsung S5K3M5, telephoto | confirmed by chip ID |
-| 2 | Sony IMX481, ultra-wide | elimination |
-| 3 | Sony IMX471, pop-up front | orientation |
+| 2 | Sony IMX471, pop-up front | remaining inference; not yet probed |
+| 3 | Sony IMX481, ultra-wide | confirmed by `0x0481` chip ID and capture |
 
-Only slot 1 is proven. The rest is inference and must be confirmed the same
-way before any driver is written against it.
+Slots 0, 1 and 3 are now proven by chip ID and complete capture. Slot 2 remains
+to be confirmed before the IMX471 driver is bound.
 
 ## The telephoto probes, revision `r59`
 
@@ -1247,6 +1247,8 @@ and the node.
 
 Three of the four slots hold Sony parts with no upstream driver: IMX586 on slot
 0, IMX481 on slot 2 and IMX471 on slot 3, all inferred rather than confirmed.
+Later chip-ID and capture work corrected this mapping: IMX481 is slot 3 and
+IMX471 is the remaining slot-2 candidate.
 
 Confirming them does not need a driver. The upstream S5K3M5 driver prints the
 chip id it actually read when it does not match:
@@ -1526,7 +1528,7 @@ The full `r92` evidence and blob provenance are recorded in
 
 1. identify the IMX586 with the exact OxygenOS sequence
 2. implement the IMX586 sensor driver and validate streaming through CAMSS
-3. recover and validate the IMX481 and IMX471 module sequences
+3. recover and validate the remaining IMX471 module sequence
 4. integrate each sensor into libcamera and Plasma Camera
 5. support the pop-up motor required by the front camera
 6. optionally the lite CSID and VFE instances, and a binding YAML
@@ -1836,8 +1838,8 @@ motion and manual focus, not merely control registration.
 
 The next camera work is:
 
-1. complete IMX586 actuator and colour calibration
-2. implement and validate the IMX481 and IMX471 sensors
+1. complete production colour calibration for the three working rear sensors
+2. implement and validate the IMX471 front sensor
 3. integrate the front-camera pop-up motor
 
 ## Main IMX586 identification and C-PHY requirement, revision `r97`
@@ -1903,3 +1905,23 @@ previously latent packaging issue that left WirePlumber's passive libcamera
 monitor enabled: the camera-policy subpackage is now installed automatically
 with the device and WirePlumber. Full evidence is recorded in
 `docs/evidence/2026-08-10-mainline616-camera-autofocus.md`.
+
+## Ultra-wide IMX481 capture and userspace, revisions `r110` and `r111`
+
+Direct chip-ID reads corrected the early slot inference: IMX481 is physical
+slot 3 on CCI1 master 1 (`i2c-7`) at address `0x1a`. It uses MCLK3 at 19.2 MHz,
+the OxygenOS rail and GPIO sequence, and a four-lane D-PHY link to CSIPHY3.
+Revision `r110` adds the V4L2 driver and full 4656x3496 RAW10 mode table.
+
+The first probe found that the initial exposure default exceeded the mode's
+frame-length-minus-margin maximum by four lines. Revision `r111` changes the
+default to `0x0dcc`; a clean direct boot then registers the sensor without a
+control warning. Two independent 180-frame processed runs complete at 30 fps
+without a CSID timeout, CAMNOC fault or SMMU fault.
+
+Libcamera `r8` adds sensor properties, the Sony analogue-gain conversion,
+RAW10 black pedestal, OxygenOS two-frame control delays and a simple IPA
+profile. Plasma Camera explicitly selects the IMX481, configures a
+4648x3496 ABGR8888 viewfinder and reaches ready-for-capture. Full evidence and
+artifact hashes are recorded in
+`docs/evidence/2026-08-10-mainline616-camera-imx481.md`.
