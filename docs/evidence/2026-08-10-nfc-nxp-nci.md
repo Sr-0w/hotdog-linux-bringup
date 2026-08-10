@@ -77,9 +77,16 @@ The controller now completes its NCI reset and powers on.
 
 ## Where it stops now
 
-Starting the RF poll loop reboots the handset. `StartPollLoop` does not return,
-neard is gone afterwards, and the log written to `/tmp` does not survive. This
-happened twice.
+Starting the RF poll loop reboots the handset, reproducibly, on every attempt
+with the corrected pin configuration as well. Sometimes `StartPollLoop` blocks
+and sometimes it returns before the reset lands, so the reboot is not simply the
+call hanging.
+
+Streaming `dmesg -w` to another machine while triggering it does not catch
+anything either: the stream picks up again from the *next* boot, so nothing is
+emitted between the RF field coming up and the system going down. That is the
+same signature the camera rails had, where a PMIC-level reset leaves the kernel
+no chance to write.
 
 So the controller answers on I2C and initialises, and something about bringing
 the RF field up takes the system down. No tag has been read.
