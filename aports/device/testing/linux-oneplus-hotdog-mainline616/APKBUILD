@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=111
+pkgrel=113
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -136,6 +136,8 @@ source="
 	0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 	0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
 	0101-media-imx481-keep-default-exposure-in-range.patch
+	0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
+	0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -189,7 +191,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-5fdf5c00e89a6357a9a7959e53f070d267a0b992263ff831e79a6b6376d7227dcd881213a715f4be7accd755ec8dd2761686641ae95fb3cafe30bd38b77765bc  config-oneplus-hotdog-mainline616.aarch64
+54695d124507bb6468b1b8fbd2af9de811ae05410246c88a25d8a4d362706dfd8fa3995eb9b8899c919a91ba60c72d908593f13ffd51334486ec79daa8345d80  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -289,5 +291,7 @@ a36e991acb5e31071686898087129b21b3aef1a2cf2aaf7c4d59381e0e90e250b88d2903463749e3
 d008dc6e0401fbf38ccf2ccab882eeee6c06cbe6d38f51a9dbdc5a7e203bc70ef03977377fc756aaaac1bcdecfcc74f208f6d58c82a73663dc2b1e40312f7b71  0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 ed741a179117f7da07413ebdebec608e6b0c0d55b89e9e11f2da73de2ab21d20da81971693258ec0e42e47abf6014017b4dc6fb8c0de16618f3626719a1d80a8  0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
 0fdf96299335cdb80553d81e48bf542f05c124e1f965e1a2d418ebdda604f4eb9736e67dfaf6092fe925d072d184925a59c422a1f035a46738eba381275d67a3  0101-media-imx481-keep-default-exposure-in-range.patch
+19abb8b9426d8a3a17f18a1084b9de5507c0a96f5495b81dbee2b7e62dcd7f1a519f9e35e0cff7f966ddc1713ad6fd31c664483e205ed44c338c993408cc9b93  0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
+8ca8011c3924f4b9074a483fc18672e0e7d125f327d75ee37e398f69eabe82c5d1c6af2619d15162b88c40d9537c9fb6439eac722855193184b3eaa277fb5c8d  0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

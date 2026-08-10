@@ -419,3 +419,13 @@ line, coherent rootfs installation, and final hardware validation still need
 to be resolved before submission.
 The technical evidence and rationale are documented in
 [mainline-bringup.md](mainline-bringup.md).
+
+## 2026-08-10: front sensor identification and passive pop-up sensing
+
+Revision `r112` identifies the fourth physical camera as a Sony IMX471 on
+CCI1 master 0 and registers it through CSIPHY2 without attempting a stream
+while the pop-up is closed. Revision `r113` adds standard IIO support for the
+two MXM1120 Hall sensors and direct-boots with stable closed-position readings
+of `-13..-14` upper and `-369..-370` lower. The motor remains entirely
+undescribed and unpowered. See the
+[front-camera and pop-up evidence](evidence/2026-08-10-mainline616-camera-imx471-popup.md).

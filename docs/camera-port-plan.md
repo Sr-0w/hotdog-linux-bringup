@@ -65,7 +65,7 @@ which only describes slots and CSIPHY assignment.
 | Main 48 MP | Sony IMX586 | local mainline port in revision `r99` |
 | Ultra-wide | Sony IMX481 | absent at the initial audit; implemented in `r110` |
 | Telephoto | Samsung S5K3M5 | present in linux-next |
-| Front, pop-up | Sony IMX471 | absent |
+| Front, pop-up | Sony IMX471 | local mainline port in revision `r112`; optical validation waits for pop-up control |
 
 The stock device tree assigns `cam-sensor@0..6` across the four CSIPHYs. Seven
 slots for four physical sensors reflects the shared vendor image, so the actual
@@ -1839,8 +1839,8 @@ motion and manual focus, not merely control registration.
 The next camera work is:
 
 1. complete production colour calibration for the three working rear sensors
-2. implement and validate the IMX471 front sensor
-3. integrate the front-camera pop-up motor
+2. implement bounded, Hall-aware front-camera pop-up control
+3. validate IMX471 capture and add its libcamera profile
 
 ## Main IMX586 identification and C-PHY requirement, revision `r97`
 
@@ -1925,3 +1925,19 @@ profile. Plasma Camera explicitly selects the IMX481, configures a
 4648x3496 ABGR8888 viewfinder and reaches ready-for-capture. Full evidence and
 artifact hashes are recorded in
 `docs/evidence/2026-08-10-mainline616-camera-imx481.md`.
+
+## Front IMX471 identification and pop-up Hall sensing, revisions `r112` and `r113`
+
+Revision `r112` identifies and binds the physical Sony IMX471 on CCI1 master 0
+at address `0x10`. It uses MCLK2, four-lane D-PHY through CSIPHY2 and the exact
+OxygenOS-derived power and mode sequences. The sensor becomes the fourth
+libcamera-visible camera, but no stream is started while its pop-up module is
+closed.
+
+Revision `r113` enables the two MagnaChip MXM1120 Hall sensors on QUPv3 SE1 as
+standard polling IIO devices. A direct boot measures a stable closed baseline:
+the upper sensor stays at `-13..-14`, and the lower at `-369..-370`, across 20
+samples. No motor resource is described in this revision, so the probe is
+mechanically passive. These values provide the first safe endpoint reference
+for a bounded motor driver. Full hashes and hardware evidence are recorded in
+`docs/evidence/2026-08-10-mainline616-camera-imx471-popup.md`.
