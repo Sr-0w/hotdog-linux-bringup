@@ -40,7 +40,8 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - Native 1440×3120 DSI/DSC display with accelerated Adreno 640 rendering.
 - Working USB-C dual-role, USB 3 SuperSpeed and DisplayPort video output.
 - Hardware-validated S5K3M5 telephoto and IMX586 main-camera capture with
-  manual focus, libcamera automatic controls and Plasma Camera integration.
+  manual focus, libcamera automatic controls and Plasma Camera integration;
+  the IMX586 also has hardware-validated continuous autofocus.
 - Hardware bring-up is validated on a physical European HD1913 handset.
 
 ## Current status
@@ -55,7 +56,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 ✅ USB-C host, USB 3 and DisplayPort video  
 ✅ Battery fuel gauge  
 ✅ Telephoto RAW10 capture and manual focus<br>
-✅ Main-camera RAW10 capture, manual focus and automatic exposure/gain
+✅ Main-camera RAW10 capture, continuous autofocus and automatic exposure/gain
 
 ⚠️ Suspend/resume incomplete  
 ⚠️ 90 Hz wake path unreliable  
@@ -109,7 +110,7 @@ Support status for the tested HD1913 handset.
 | Bluetooth | Scan and HID connectivity | Scanning and real HID connections work, but one historical `900e` event plus incomplete repeated/suspend/audio validation keep this partial. |
 | Power | SMB5 charging basic limits | 4.40 V float, 1.50 A fast-charge and 500 mA USB input limits are directly verified; termination, low-SoC, thermal and long-duration policy remain open. |
 | Cameras | S5K3M5 telephoto capture, userspace and manual focus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 RAW10 frames. Libcamera 0.7.2 has sensor properties, delay data, a helper and simple-pipeline tuning; automatic exposure moves over live frames and Plasma Camera reaches a ready 4200×3120 viewfinder. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Automatic focus and production-quality color calibration remain open. |
-| Cameras | Sony IMX586 main capture, userspace and manual focus | The main sensor captures complete 4000×3000 RAW10 frames over three-trio C-PHY through CAMSS. Libcamera uses the Sony gain law and OxygenOS control delays; a 60-frame processed run holds 30 fps while automatic gain moves through 16 values, and Plasma Camera reaches ready-for-capture. Revision `r100` supplies native-array geometry plus standard orientation and rotation controls. Revision `r109` selects the handset's Semco second-lens module, binds its LC898217XC actuator and validates the complete 0–400 focus range with five distinct processed captures. Automatic focus, production color calibration and additional modes remain open. |
+| Cameras | Sony IMX586 main capture, userspace and autofocus | The main sensor captures complete 4000×3000 RAW10 frames over three-trio C-PHY through CAMSS. Libcamera uses the Sony gain law and OxygenOS control delays; processed runs hold 30 fps with automatic exposure and gain. Revision `r109` selects the handset's Semco second-lens module and validates the complete 0–400 focus range. Libcamera `r4` adds lens-control plumbing plus coarse/fine contrast autofocus: direct capture reaches `AfState=Focused`, selects non-endpoint positions, and Plasma Camera completes continuous autofocus while ready for capture. Production color calibration and additional modes remain open. |
 
 ### 🔴 Broken
 

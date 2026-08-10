@@ -1,0 +1,605 @@
+From dcc8d9fbf789142f5838c2639b6e98c7a03f4f6e Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 03:50:35 +0200
+Subject: [PATCH] libcamera: software_isp: add contrast autofocus
+
+---
+ .../internal/software_isp/software_isp.h      |   5 +-
+ .../internal/software_isp/swisp_stats.h       |   4 +
+ include/libcamera/ipa/soft.mojom              |   4 +-
+ src/ipa/simple/algorithms/af.cpp              | 231 ++++++++++++++++++
+ src/ipa/simple/algorithms/af.h                |  36 +++
+ src/ipa/simple/algorithms/meson.build         |   1 +
+ src/ipa/simple/ipa_context.h                  |  27 ++
+ src/ipa/simple/soft_simple.cpp                |   9 +-
+ src/libcamera/pipeline/simple/simple.cpp      |  20 +-
+ src/libcamera/software_isp/software_isp.cpp   |   5 +-
+ src/libcamera/software_isp/swstats_cpu.cpp    |  39 ++-
+ 11 files changed, 361 insertions(+), 20 deletions(-)
+ create mode 100644 src/ipa/simple/algorithms/af.cpp
+ create mode 100644 src/ipa/simple/algorithms/af.h
+
+diff --git a/include/libcamera/internal/software_isp/software_isp.h b/include/libcamera/internal/software_isp/software_isp.h
+index 4f72dce..2d0dba9 100644
+--- a/include/libcamera/internal/software_isp/software_isp.h
++++ b/include/libcamera/internal/software_isp/software_isp.h
+@@ -86,11 +86,12 @@ public:
+ 	Signal<FrameBuffer *> outputBufferReady;
+ 	Signal<uint32_t, uint32_t> ispStatsReady;
+ 	Signal<uint32_t, const ControlList &> metadataReady;
+-	Signal<const ControlList &> setSensorControls;
++	Signal<const ControlList &, const ControlList &> setSensorControls;
+ 
+ private:
+ 	void saveIspParams();
+-	void setSensorCtrls(const ControlList &sensorControls);
++	void setSensorCtrls(const ControlList &sensorControls,
++			    const ControlList &lensControls);
+ 	void statsReady(uint32_t frame, uint32_t bufferId);
+ 	void inputReady(FrameBuffer *input);
+ 	void outputReady(FrameBuffer *output);
+diff --git a/include/libcamera/internal/software_isp/swisp_stats.h b/include/libcamera/internal/software_isp/swisp_stats.h
+index d9d0d9b..b0b9377 100644
+--- a/include/libcamera/internal/software_isp/swisp_stats.h
++++ b/include/libcamera/internal/software_isp/swisp_stats.h
+@@ -43,6 +43,10 @@ struct SwIspStats {
+ 	 * \brief A histogram of luminance values of all the sampled pixels
+ 	 */
+ 	Histogram yHistogram;
++	/**
++	 * \brief Exposure-normalized horizontal green-channel edge energy
++	 */
++	uint64_t sharpness;
+ };
+ 
+ } /* namespace libcamera */
+diff --git a/include/libcamera/ipa/soft.mojom b/include/libcamera/ipa/soft.mojom
+index 77328c5..a6e3ed5 100644
+--- a/include/libcamera/ipa/soft.mojom
++++ b/include/libcamera/ipa/soft.mojom
+@@ -10,6 +10,7 @@ import "include/libcamera/ipa/core.mojom";
+ 
+ struct IPAConfigInfo {
+ 	libcamera.ControlInfoMap sensorControls;
++	libcamera.ControlInfoMap lensControls;
+ };
+ 
+ interface IPASoftInterface {
+@@ -32,7 +33,8 @@ interface IPASoftInterface {
+ };
+ 
+ interface IPASoftEventInterface {
+-	setSensorControls(libcamera.ControlList sensorControls);
++	setSensorControls(libcamera.ControlList sensorControls,
++			  libcamera.ControlList lensControls);
+ 	setIspParams();
+ 	metadataReady(uint32 frame, libcamera.ControlList metadata);
+ };
+diff --git a/src/ipa/simple/algorithms/af.cpp b/src/ipa/simple/algorithms/af.cpp
+new file mode 100644
+index 0000000..b9ec07f
+--- /dev/null
++++ b/src/ipa/simple/algorithms/af.cpp
+@@ -0,0 +1,231 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++/*
++ * Contrast autofocus for the simple software ISP
++ */
++
++#include "af.h"
++
++#include <algorithm>
++#include <cmath>
++#include <stdint.h>
++
++#include <linux/v4l2-controls.h>
++
++#include <libcamera/base/log.h>
++
++#include "control_ids.h"
++
++namespace libcamera {
++
++LOG_DEFINE_CATEGORY(IPASoftAf)
++
++namespace ipa::soft::algorithms {
++
++int Af::init(IPAContext &context,
++	     [[maybe_unused]] const ValueNode &tuningData)
++{
++	context.ctrlMap[&controls::AfMode] =
++		ControlInfo(controls::AfModeValues, controls::AfModeContinuous);
++	context.ctrlMap[&controls::AfTrigger] =
++		ControlInfo(controls::AfTriggerValues);
++	/*
++	 * The actuator has no calibrated DAC-to-dioptre curve yet. Expose a
++	 * normalized manual range until that calibration is available.
++	 */
++	context.ctrlMap[&controls::LensPosition] =
++		ControlInfo(0.0f, 1.0f, 1.0f);
++
++	return 0;
++}
++
++int Af::configure(IPAContext &context, const IPAConfigInfo &configInfo)
++{
++	auto lens = configInfo.lensControls.find(V4L2_CID_FOCUS_ABSOLUTE);
++	if (lens == configInfo.lensControls.end()) {
++		context.configuration.focus.available = false;
++		LOG(IPASoftAf, Warning) << "No focus lens control available";
++		return 0;
++	}
++
++	context.configuration.focus.available = true;
++	context.configuration.focus.min = lens->second.min().get<int32_t>();
++	context.configuration.focus.max = lens->second.max().get<int32_t>();
++
++	const int32_t range = std::max(1, context.configuration.focus.max -
++						  context.configuration.focus.min);
++	context.configuration.focus.coarseStep = std::max(1, range / 8);
++	context.configuration.focus.fineStep = std::max(1, range / 40);
++
++	auto &af = context.activeState.af;
++	af.mode = controls::AfModeContinuous;
++	af.state = controls::AfStateScanning;
++	startScan(context);
++
++	LOG(IPASoftAf, Info)
++		<< "Focus range " << context.configuration.focus.min << "-"
++		<< context.configuration.focus.max << ", steps "
++		<< context.configuration.focus.coarseStep << "/"
++		<< context.configuration.focus.fineStep;
++
++	return 0;
++}
++
++void Af::startScan(IPAContext &context)
++{
++	if (!context.configuration.focus.available)
++		return;
++
++	auto &af = context.activeState.af;
++	af.scanning = true;
++	af.fineScan = false;
++	af.state = controls::AfStateScanning;
++	af.scanStart = context.configuration.focus.min;
++	af.scanEnd = context.configuration.focus.max;
++	af.scanStep = context.configuration.focus.coarseStep;
++	af.position = af.scanStart;
++	af.bestPosition = af.position;
++	af.bestSharpness = 0;
++	af.settleSamples = 1;
++	af.lowSharpnessSamples = 0;
++
++	LOG(IPASoftAf, Debug) << "Starting autofocus scan";
++}
++
++void Af::queueRequest([[maybe_unused]] typename Module::Context &context,
++		      [[maybe_unused]] const uint32_t frame,
++		      [[maybe_unused]] typename Module::FrameContext &frameContext,
++		      const ControlList &requestControls)
++{
++	if (!context.configuration.focus.available)
++		return;
++
++	auto &af = context.activeState.af;
++
++	if (const auto mode = requestControls.get(controls::AfMode)) {
++		if (*mode != af.mode) {
++			af.mode = *mode;
++			if (af.mode == controls::AfModeContinuous)
++				startScan(context);
++			else {
++				af.scanning = false;
++				af.state = controls::AfStateIdle;
++			}
++		}
++	}
++
++	if (af.mode == controls::AfModeManual) {
++		if (const auto position = requestControls.get(controls::LensPosition)) {
++			const float normalized = std::clamp(*position, 0.0f, 1.0f);
++			const int32_t range = context.configuration.focus.max -
++					      context.configuration.focus.min;
++			af.position = context.configuration.focus.min +
++				      std::lround(normalized * range);
++		}
++		return;
++	}
++
++	if (af.mode != controls::AfModeAuto)
++		return;
++
++	if (const auto trigger = requestControls.get(controls::AfTrigger)) {
++		if (*trigger == controls::AfTriggerStart && !af.scanning)
++			startScan(context);
++		else if (*trigger == controls::AfTriggerCancel && af.scanning) {
++			af.scanning = false;
++			af.state = controls::AfStateIdle;
++		}
++	}
++}
++
++void Af::processScan(IPAContext &context, uint64_t sharpness)
++{
++	auto &af = context.activeState.af;
++
++	if (af.settleSamples) {
++		--af.settleSamples;
++		return;
++	}
++
++	if (sharpness > af.bestSharpness) {
++		af.bestSharpness = sharpness;
++		af.bestPosition = af.position;
++	}
++
++	if (af.position + af.scanStep <= af.scanEnd) {
++		af.position += af.scanStep;
++		af.settleSamples = 1;
++		return;
++	}
++
++	if (!af.fineScan) {
++		const int32_t radius = context.configuration.focus.coarseStep;
++		af.fineScan = true;
++		af.scanStart = std::max(context.configuration.focus.min,
++					af.bestPosition - radius);
++		af.scanEnd = std::min(context.configuration.focus.max,
++				      af.bestPosition + radius);
++		af.scanStep = context.configuration.focus.fineStep;
++		af.position = af.scanStart;
++		af.bestSharpness = 0;
++		af.settleSamples = 1;
++		return;
++	}
++
++	af.scanning = false;
++	af.position = af.bestPosition;
++	af.lockedSharpness = af.bestSharpness;
++	af.state = af.bestSharpness ? controls::AfStateFocused
++				    : controls::AfStateFailed;
++	af.settleSamples = 1;
++
++	LOG(IPASoftAf, Info)
++		<< "Autofocus completed at " << af.position
++		<< " (sharpness " << af.bestSharpness << ")";
++}
++
++float Af::normalizedPosition(const IPAContext &context) const
++{
++	const auto &focus = context.configuration.focus;
++	const int32_t range = focus.max - focus.min;
++	if (!range)
++		return 0.0f;
++
++	return static_cast<float>(context.activeState.af.position - focus.min) /
++	       range;
++}
++
++void Af::process(IPAContext &context,
++		 [[maybe_unused]] const uint32_t frame,
++		 IPAFrameContext &frameContext,
++		 const SwIspStats *stats,
++		 ControlList &metadata)
++{
++	auto &af = context.activeState.af;
++
++	if (context.configuration.focus.available && stats->valid) {
++		if (af.scanning) {
++			processScan(context, stats->sharpness);
++		} else if (af.mode == controls::AfModeContinuous &&
++			   af.state == controls::AfStateFocused &&
++			   !af.settleSamples && af.lockedSharpness &&
++			   stats->sharpness * 100 < af.lockedSharpness * 65) {
++			if (++af.lowSharpnessSamples >= 3)
++				startScan(context);
++		} else {
++			af.lowSharpnessSamples = 0;
++			if (af.settleSamples)
++				--af.settleSamples;
++		}
++	}
++
++	frameContext.lens.position = af.position;
++	metadata.set(controls::AfMode, af.mode);
++	metadata.set(controls::AfState, af.state);
++	metadata.set(controls::LensPosition, normalizedPosition(context));
++}
++
++REGISTER_IPA_ALGORITHM(Af, "Af")
++
++} /* namespace ipa::soft::algorithms */
++
++} /* namespace libcamera */
+diff --git a/src/ipa/simple/algorithms/af.h b/src/ipa/simple/algorithms/af.h
+new file mode 100644
+index 0000000..0e0b7d6
+--- /dev/null
++++ b/src/ipa/simple/algorithms/af.h
+@@ -0,0 +1,36 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++/*
++ * Contrast autofocus for the simple software ISP
++ */
++
++#pragma once
++
++#include "algorithm.h"
++
++namespace libcamera {
++
++namespace ipa::soft::algorithms {
++
++class Af : public Algorithm
++{
++public:
++	int init(IPAContext &context, const ValueNode &tuningData) override;
++	int configure(IPAContext &context, const IPAConfigInfo &configInfo) override;
++	void queueRequest(typename Module::Context &context,
++			  const uint32_t frame,
++			  typename Module::FrameContext &frameContext,
++			  const ControlList &controls) override;
++	void process(IPAContext &context, const uint32_t frame,
++		     IPAFrameContext &frameContext,
++		     const SwIspStats *stats,
++		     ControlList &metadata) override;
++
++private:
++	void startScan(IPAContext &context);
++	void processScan(IPAContext &context, uint64_t sharpness);
++	float normalizedPosition(const IPAContext &context) const;
++};
++
++} /* namespace ipa::soft::algorithms */
++
++} /* namespace libcamera */
+diff --git a/src/ipa/simple/algorithms/meson.build b/src/ipa/simple/algorithms/meson.build
+index 73c6372..1cd58d5 100644
+--- a/src/ipa/simple/algorithms/meson.build
++++ b/src/ipa/simple/algorithms/meson.build
+@@ -2,6 +2,7 @@
+ 
+ soft_simple_ipa_algorithms = files([
+     'adjust.cpp',
++    'af.cpp',
+     'awb.cpp',
+     'agc.cpp',
+     'blc.cpp',
+diff --git a/src/ipa/simple/ipa_context.h b/src/ipa/simple/ipa_context.h
+index 8ccfacb..ecc0581 100644
+--- a/src/ipa/simple/ipa_context.h
++++ b/src/ipa/simple/ipa_context.h
+@@ -33,6 +33,13 @@ struct IPASessionConfiguration {
+ 	struct {
+ 		std::optional<uint8_t> level;
+ 	} black;
++	struct {
++		bool available;
++		int32_t min;
++		int32_t max;
++		int32_t coarseStep;
++		int32_t fineStep;
++	} focus;
+ };
+ 
+ struct IPAActiveState {
+@@ -61,6 +68,22 @@ struct IPAActiveState {
+ 		std::optional<float> contrast;
+ 		std::optional<float> saturation;
+ 	} knobs;
++
++	struct {
++		int32_t mode;
++		int32_t state;
++		int32_t position;
++		int32_t scanStart;
++		int32_t scanEnd;
++		int32_t scanStep;
++		int32_t bestPosition;
++		uint64_t bestSharpness;
++		uint64_t lockedSharpness;
++		unsigned int settleSamples;
++		unsigned int lowSharpnessSamples;
++		bool scanning;
++		bool fineScan;
++	} af;
+ };
+ 
+ struct IPAFrameContext : public FrameContext {
+@@ -71,6 +94,10 @@ struct IPAFrameContext : public FrameContext {
+ 		double gain;
+ 	} sensor;
+ 
++	struct {
++		int32_t position;
++	} lens;
++
+ 	RGB<float> gains;
+ 
+ 	float gamma;
+diff --git a/src/ipa/simple/soft_simple.cpp b/src/ipa/simple/soft_simple.cpp
+index 629e1a3..0c21693 100644
+--- a/src/ipa/simple/soft_simple.cpp
++++ b/src/ipa/simple/soft_simple.cpp
+@@ -78,6 +78,7 @@ private:
+ 	SwIspStats *stats_;
+ 	std::unique_ptr<CameraSensorHelper> camHelper_;
+ 	ControlInfoMap sensorInfoMap_;
++	ControlInfoMap lensInfoMap_;
+ 
+ 	/* Local parameter storage */
+ 	struct IPAContext context_;
+@@ -202,6 +203,7 @@ int IPASoftSimple::init(const IPASettings &settings,
+ int IPASoftSimple::configure(const IPAConfigInfo &configInfo)
+ {
+ 	sensorInfoMap_ = configInfo.sensorControls;
++	lensInfoMap_ = configInfo.lensControls;
+ 
+ 	const ControlInfo &exposureInfo = sensorInfoMap_.find(V4L2_CID_EXPOSURE)->second;
+ 	const ControlInfo &gainInfo = sensorInfoMap_.find(V4L2_CID_ANALOGUE_GAIN)->second;
+@@ -325,7 +327,12 @@ void IPASoftSimple::processStats(const uint32_t frame,
+ 	ctrls.set(V4L2_CID_ANALOGUE_GAIN,
+ 		  static_cast<int32_t>(camHelper_ ? camHelper_->gainCode(againNew) : againNew));
+ 
+-	setSensorControls.emit(ctrls);
++	ControlList lensCtrls(lensInfoMap_);
++	if (lensInfoMap_.find(V4L2_CID_FOCUS_ABSOLUTE) != lensInfoMap_.end())
++		lensCtrls.set(V4L2_CID_FOCUS_ABSOLUTE,
++			      frameContext.lens.position);
++
++	setSensorControls.emit(ctrls, lensCtrls);
+ }
+ 
+ std::string IPASoftSimple::logPrefix() const
+diff --git a/src/libcamera/pipeline/simple/simple.cpp b/src/libcamera/pipeline/simple/simple.cpp
+index b96b8b5..7c1b2bd 100644
+--- a/src/libcamera/pipeline/simple/simple.cpp
++++ b/src/libcamera/pipeline/simple/simple.cpp
+@@ -33,6 +33,7 @@
+ #include <libcamera/stream.h>
+ 
+ #include "libcamera/internal/camera.h"
++#include "libcamera/internal/camera_lens.h"
+ #include "libcamera/internal/camera_manager.h"
+ #include "libcamera/internal/camera_sensor.h"
+ #include "libcamera/internal/camera_sensor_properties.h"
+@@ -371,7 +372,8 @@ private:
+ 
+ 	void ispStatsReady(uint32_t frame, uint32_t bufferId);
+ 	void metadataReady(uint32_t frame, const ControlList &metadata);
+-	void setSensorControls(const ControlList &sensorControls);
++	void setSensorControls(const ControlList &sensorControls,
++			       const ControlList &lensControls);
+ };
+ 
+ class SimpleCameraConfiguration : public CameraConfiguration
+@@ -1039,7 +1041,8 @@ void SimpleCameraData::metadataReady(uint32_t frame, const ControlList &metadata
+ 	tryCompleteRequest(info->request);
+ }
+ 
+-void SimpleCameraData::setSensorControls(const ControlList &sensorControls)
++void SimpleCameraData::setSensorControls(const ControlList &sensorControls,
++					 const ControlList &lensControls)
+ {
+ 	delayedCtrls_->push(sensorControls);
+ 	/*
+@@ -1054,6 +1057,16 @@ void SimpleCameraData::setSensorControls(const ControlList &sensorControls)
+ 		ControlList ctrls(sensorControls);
+ 		sensor_->setControls(&ctrls);
+ 	}
++
++	CameraLens *focusLens = sensor_->focusLens();
++	if (!focusLens || !lensControls.contains(V4L2_CID_FOCUS_ABSOLUTE))
++		return;
++
++	const ControlValue &focus = lensControls.get(V4L2_CID_FOCUS_ABSOLUTE);
++	int ret = focusLens->setFocusPosition(focus.get<int32_t>());
++	if (ret)
++		LOG(SimplePipeline, Error)
++			<< "Failed to set focus position: " << ret;
+ }
+ 
+ /* Retrieve all source pads connected to a sink pad through active routes. */
+@@ -1603,6 +1616,9 @@ int SimplePipelineHandler::configure(Camera *camera, CameraConfiguration *c)
+ 	} else {
+ 		ipa::soft::IPAConfigInfo configInfo;
+ 		configInfo.sensorControls = data->sensor_->controls();
++		CameraLens *focusLens = data->sensor_->focusLens();
++		if (focusLens)
++			configInfo.lensControls = focusLens->controls();
+ 		return data->swIsp_->configure(inputCfg, outputCfgs, configInfo);
+ 	}
+ }
+diff --git a/src/libcamera/software_isp/software_isp.cpp b/src/libcamera/software_isp/software_isp.cpp
+index c73a16c..703b943 100644
+--- a/src/libcamera/software_isp/software_isp.cpp
++++ b/src/libcamera/software_isp/software_isp.cpp
+@@ -436,9 +436,10 @@ void SoftwareIsp::saveIspParams()
+ 	debayerParams_ = *sharedParams_;
+ }
+ 
+-void SoftwareIsp::setSensorCtrls(const ControlList &sensorControls)
++void SoftwareIsp::setSensorCtrls(const ControlList &sensorControls,
++				 const ControlList &lensControls)
+ {
+-	setSensorControls.emit(sensorControls);
++	setSensorControls.emit(sensorControls, lensControls);
+ }
+ 
+ void SoftwareIsp::statsReady(uint32_t frame, uint32_t bufferId)
+diff --git a/src/libcamera/software_isp/swstats_cpu.cpp b/src/libcamera/software_isp/swstats_cpu.cpp
+index 7fb77ce..be44abd 100644
+--- a/src/libcamera/software_isp/swstats_cpu.cpp
++++ b/src/libcamera/software_isp/swstats_cpu.cpp
+@@ -177,22 +177,32 @@ static constexpr unsigned int kBlueYMul = 29; /* 0.114 * 256 */
+                                           \
+ 	uint64_t sumR = 0;                \
+ 	uint64_t sumG = 0;                \
+-	uint64_t sumB = 0;
+-
+-#define SWSTATS_ACCUMULATE_LINE_STATS(div) \
+-	sumR += r;                         \
+-	sumG += g;                         \
+-	sumB += b;                         \
+-                                           \
+-	yVal = r * kRedYMul;               \
+-	yVal += g * kGreenYMul;            \
+-	yVal += b * kBlueYMul;             \
+-	stats.yHistogram[yVal * SwIspStats::kYHistogramSize / (256 * 256 * (div))]++;
++	uint64_t sumB = 0;                \
++	uint64_t sharpness = 0;           \
++	pixel_t previousG = 0;            \
++	bool havePreviousG = false;
++
++#define SWSTATS_ACCUMULATE_LINE_STATS(div)                                            \
++	sumR += r;                                                                    \
++	sumG += g;                                                                    \
++	sumB += b;                                                                    \
++                                                                                      \
++	yVal = r * kRedYMul;                                                          \
++	yVal += g * kGreenYMul;                                                       \
++	yVal += b * kBlueYMul;                                                        \
++	stats.yHistogram[yVal * SwIspStats::kYHistogramSize / (256 * 256 * (div))]++; \
++	if (havePreviousG) {                                                          \
++		const int64_t delta = static_cast<int64_t>(g) - previousG;            \
++		sharpness += static_cast<uint64_t>(delta * delta);                    \
++	}                                                                             \
++	previousG = g;                                                                \
++	havePreviousG = true;
+ 
+ #define SWSTATS_FINISH_LINE_STATS() \
+ 	stats.sum_.r() += sumR;     \
+ 	stats.sum_.g() += sumG;     \
+-	stats.sum_.b() += sumB;
++	stats.sum_.b() += sumB;     \
++	stats.sharpness += sharpness;
+ 
+ void SwStatsCpu::statsBGGR8Line0(const uint8_t *src[], SwIspStats &stats)
+ {
+@@ -392,6 +402,7 @@ void SwStatsCpu::startFrame(uint32_t frame)
+ 	for (auto &s : stats_) {
+ 		s.sum_ = RGB<uint64_t>({ 0, 0, 0 });
+ 		s.yHistogram.fill(0);
++		s.sharpness = 0;
+ 	}
+ }
+ 
+@@ -409,13 +420,17 @@ void SwStatsCpu::finishFrame(uint32_t frame, uint32_t bufferId)
+ 	if (valid) {
+ 		sharedStats_->sum_ = RGB<uint64_t>({ 0, 0, 0 });
+ 		sharedStats_->yHistogram.fill(0);
++		uint64_t sharpness = 0;
+ 		for (const auto &s : stats_) {
+ 			sharedStats_->sum_ += s.sum_;
++			sharpness += s.sharpness;
+ 			for (unsigned int j = 0; j < SwIspStats::kYHistogramSize; j++)
+ 				sharedStats_->yHistogram[j] += s.yHistogram[j];
+ 		}
+ 
+ 		sharedStats_->sum_ >>= sumShift_;
++		const uint64_t green = sharedStats_->sum_.g();
++		sharedStats_->sharpness = green ? sharpness * 1000 / green : 0;
+ 	}
+ 
+ 	sharedStats_->valid = valid;

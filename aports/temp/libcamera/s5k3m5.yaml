@@ -8,4 +8,5 @@ algorithms:
   - Awb:
   - Adjust:
   - Agc:
+  - Af:
 ...

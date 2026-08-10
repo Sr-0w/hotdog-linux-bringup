@@ -22,15 +22,15 @@ usage() {
 Usage: deploy-test-mainline616-libcamera.sh [options]
 
 Install locally built libcamera packages from a RAM-backed staging directory,
-then validate S5K3M5 enumeration, automatic exposure/gain metadata and Plasma
-Camera startup. The script never flashes or reboots the phone and refuses to
-run while Qualcomm 900e is visible.
+then validate both rear cameras, automatic exposure/gain, IMX586 autofocus and
+Plasma Camera startup. The script never flashes or reboots the phone and
+refuses to run while Qualcomm 900e is visible.
 
 Options:
   --host HOST           SSH host. Default: 172.16.42.1.
   --user USER           SSH user. Default: user.
   --password PASS       SSH/root password. Defaults to PMOS_PASSWORD.
-  --package-dir DIR     Directory containing libcamera *-r2 APKs.
+  --package-dir DIR     Directory containing locally built libcamera APKs.
   --kernel-marker TEXT  Required substring in uname -a.
   --out DIR             Host output directory.
   -h, --help            Show this help.
@@ -149,13 +149,11 @@ mkdir -p "$OUT"
 exec > >(tee "$OUT/run.log") 2>&1
 
 packages=()
-for pattern in \
-	'libcamera-99990.7.2-r2.apk' \
-	'libcamera-ipa-99990.7.2-r2.apk' \
-	'libcamera-tools-99990.7.2-r2.apk' \
-	'libcamera-gstreamer-99990.7.2-r2.apk'; do
-	package="$PACKAGE_DIR/$pattern"
-	[ -s "$package" ] || die "missing package: $package"
+for name in libcamera libcamera-ipa libcamera-tools libcamera-gstreamer; do
+	mapfile -t matches < <(find "$PACKAGE_DIR" -maxdepth 1 -type f \
+		-name "$name-99990.7.2-r*.apk" -print | sort -V)
+	[ "${#matches[@]}" -gt 0 ] || die "missing package for $name in $PACKAGE_DIR"
+	package="${matches[-1]}"
 	packages+=("$package")
 done
 
@@ -208,16 +206,17 @@ assert_same_boot
 ssh_base "apk info -v | grep -E '^(libcamera|plasma-camera|pipewire-spa-libcamera)'" \
 	| tee "$OUT/packages.txt"
 
-log "validating S5K3M5 properties and automatic controls"
+log "validating both rear cameras and IMX586 automatic controls"
 ssh_base 'pkill -x plasma-camera 2>/dev/null || true'
 ssh_base "LIBCAMERA_LOG_LEVELS='*:DEBUG' cam -l" \
 	> "$OUT/cam-list.txt" 2> "$OUT/cam-list.stderr"
-ssh_base "LIBCAMERA_LOG_LEVELS='*:INFO' cam -c 1 -C60 --metadata -s role=viewfinder,width=640,height=480,pixelformat=XRGB8888" \
+ssh_base "LIBCAMERA_LOG_LEVELS='*:INFO,IPASoftAf:DEBUG' cam -c 1 --capture=240 --metadata -s role=viewfinder,width=640,height=480,pixelformat=XRGB8888" \
 	> "$OUT/cam-ae.txt" 2> "$OUT/cam-ae.stderr"
 
-if ! grep -q 'Internal back camera' "$OUT/cam-list.txt" ||
+if [ "$(grep -c 'Internal back camera' "$OUT/cam-list.txt")" -lt 2 ] ||
+	! grep -q 'imx586' "$OUT/cam-list.stderr" ||
 	! grep -q 's5k3m5' "$OUT/cam-list.stderr"; then
-	die "S5K3M5 is absent from cam -l"
+	die "IMX586 or S5K3M5 is absent from cam -l"
 fi
 if grep -Eqi 'no static properties|no sensor helper|no tuning file' \
 	"$OUT/cam-list.stderr" "$OUT/cam-ae.stderr"; then
@@ -225,7 +224,10 @@ if grep -Eqi 'no static properties|no sensor helper|no tuning file' \
 fi
 exposure_values="$(grep -oE 'ExposureTime = [0-9]+' "$OUT/cam-ae.txt" | sort -u | wc -l)"
 gain_values="$(grep -oE 'AnalogueGain = [0-9.]+' "$OUT/cam-ae.txt" | sort -u | wc -l)"
-[ "$exposure_values" -gt 1 ] || die "automatic exposure did not move during the 60-frame run"
+[ "$exposure_values" -gt 1 ] || die "automatic exposure did not move during the 240-frame run"
+grep -q 'AfState = 2' "$OUT/cam-ae.txt" || die "IMX586 autofocus did not reach focused state"
+grep -q 'Autofocus completed at' "$OUT/cam-ae.stderr" ||
+	die "IMX586 autofocus did not report a completed scan"
 printf 'distinct_exposure_values=%s\ndistinct_gain_values=%s\n' \
 	"$exposure_values" "$gain_values" | tee "$OUT/automatic-controls.txt"
 

@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=16
+pkgrel=17
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -149,6 +149,7 @@ nonfree_firmware() {
 }
 
 wireplumber() {
+	install_if="$pkgname=$pkgver-r$pkgrel wireplumber"
 	install -Dm644 "$srcdir"/51-qcom-sm8150.lua \
 		-t "$subpkgdir"/usr/share/wireplumber/main.lua.d
 	install -Dm644 "$srcdir"/90-hotdog-camera.conf \

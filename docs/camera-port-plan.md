@@ -1885,3 +1885,21 @@ reports its 8000x6000 native array, the full-array crop bounds used by the
 boot enumerates both cameras without the previous geometry/orientation
 warnings. A fresh 60-frame processed IMX586 run completes at 30 fps with 16
 automatic-gain values, and Plasma Camera reaches ready-for-capture.
+
+## Main IMX586 autofocus, libcamera revision `r4`
+
+The simple pipeline now transfers actuator controls separately from delayed
+sensor controls, so the SM8150 frame-start path no longer prevents lens
+updates. The software ISP computes exposure-normalized green-channel edge
+energy and drives a deterministic coarse/fine contrast scan. It exposes
+standard `AfMode`, `AfTrigger`, `AfState` and normalized `LensPosition`
+controls. Continuous mode is the default until Plasma Camera grows an AF UI.
+
+Direct 1280x960 and 640x480 runs reached `AfState=Focused` at physical
+positions 400 and 130 respectively. The latter improved FFmpeg blur mean from
+4.8950138 to 4.0738420. Plasma Camera reached ready-for-capture and completed
+the same algorithm at position 320. Device package `3-r17` also fixes the
+previously latent packaging issue that left WirePlumber's passive libcamera
+monitor enabled: the camera-policy subpackage is now installed automatically
+with the device and WirePlumber. Full evidence is recorded in
+`docs/evidence/2026-08-10-mainline616-camera-autofocus.md`.

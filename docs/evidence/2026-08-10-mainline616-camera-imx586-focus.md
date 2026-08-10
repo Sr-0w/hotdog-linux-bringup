@@ -67,6 +67,7 @@ Alpha rootfs UUIDs.
 
 ## Remaining work
 
-Manual focus is complete. Libcamera still needs an autofocus algorithm and a
-lens-control bridge for the simple pipeline, followed by production colour,
-AWB calibration and additional IMX586 modes.
+Manual focus is complete. Libcamera `r4` subsequently added the autofocus
+algorithm and simple-pipeline lens-control bridge described in the
+[autofocus evidence](2026-08-10-mainline616-camera-autofocus.md). Production
+colour, AWB calibration and additional IMX586 modes remain open.
