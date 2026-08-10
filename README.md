@@ -22,12 +22,12 @@
 
 ## What is this?
 
-Experimental Linux and postmarketOS bring-up for the OnePlus 7T Pro. The
+Experimental Linux and postmarketOS bring-up for the OnePlus 7T Pro. My
 physical test handset is rear-labelled as a European HD1913 with a Qualcomm
 Snapdragon 855+ (SM8150-AC), while its recovery and vendor software identify
 it as HD1911 and expose the `hotdog` project/codename.
 
-The project has two equal goals: become **publishable in postmarketOS** through
+I have two equal goals for this project: make it **publishable in postmarketOS** through
 shared, upstreamable integration instead of a permanent device-specific bring-up
 kernel, and reach **complete hardware support** across the handset, including
 USB-C/dock functionality, cameras, sensors and telephony. See the
@@ -44,7 +44,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 - The focused IMX586 main and S5K3M5 telephoto modules have experimental
   continuous autofocus; AF/AE/AWB convergence and color tuning remain active
   bring-up work.
-- Hardware bring-up is validated on a physical European HD1913 handset.
+- I have validated the hardware bring-up on my physical European HD1913 handset.
 
 ## Current status
 
@@ -72,7 +72,7 @@ USB-C/dock functionality, cameras, sensors and telephony. See the
 
 ## Hardware support
 
-Support status for the tested HD1913 handset.
+Support status for my tested HD1913 handset.
 
 ### 🟢 Working
 
@@ -115,7 +115,7 @@ Support status for the tested HD1913 handset.
 | Cameras | S5K3M5 telephoto capture, userspace and autofocus | The physical sensor, CCI, CSIPHY, CSID, VFE, CAMNOC, SMMU and RAM path capture complete 4208×3120 RAW10 frames. Libcamera 0.7.2 has sensor properties, delay data, a helper and simple-pipeline tuning; automatic exposure moves over live frames and Plasma Camera reaches a ready 4200×3120 viewfinder. The Semco LC898217XC actuator exposes a calibrated V4L2 `focus_absolute` range of 0–400 and produces visibly distinct focus planes. Libcamera `r7` waits for stable exposure, completes coarse/fine continuous autofocus, and selects the visually sharp endpoint on a textured scene. Production color calibration remains open. |
 | Cameras | Sony IMX586 main capture, userspace and autofocus | The main sensor captures complete 4000×3000 RAW10 frames over three-trio C-PHY through CAMSS. Libcamera uses the Sony gain law and OxygenOS control delays; processed runs hold 30 fps with automatic exposure and gain. Revision `r109` selects the handset's Semco second-lens module and validates the complete 0–400 focus range. Libcamera `r4` adds lens-control plumbing plus coarse/fine contrast autofocus: direct capture reaches `AfState=Focused`, selects non-endpoint positions, and Plasma Camera completes continuous autofocus while ready for capture. Production color calibration and additional modes remain open. |
 | Cameras | Sony IMX481 ultra-wide capture and userspace | Revision `r111` binds the physical sensor on CCI1 master 1 and streams complete 4656×3496 RAW10 frames over four-lane D-PHY through CSIPHY3, CSID0 and VFE0. Two consecutive 180-frame processed runs completed at 30 fps without CSID, CAMNOC or SMMU faults. Libcamera `r8` supplies the Sony gain law, black level, control delays and tuning profile. Plasma Camera explicitly selected IMX481, configured a 4648×3496 viewfinder and reached ready-for-capture. Production color calibration and additional modes remain open. |
-| Cameras | Sony IMX471 front capture and pop-up mechanism | Revisions `r112` through `r131` add the sensor, both Hall sensors and the DRV8834 motor path. Libcamera runtime PM automatically extends the camera before streaming and retracts it when released. A bounded Hall-endpoint probe handles the mechanism's endpoint plateau; automatic extension, 60-frame capture at approximately 90 fps and retraction are hardware-validated. The motor cadence matches OxygenOS and is user-validated at the expected speed. Production 3A/color tuning and broader application lifecycle testing remain open. |
+| Cameras | Sony IMX471 front capture and pop-up mechanism | Revisions `r112` through `r131` add the sensor, both Hall sensors and the DRV8834 motor path. Libcamera runtime PM automatically extends the camera before streaming and retracts it when released. A bounded Hall-endpoint probe handles the mechanism's endpoint plateau; automatic extension, 60-frame capture at approximately 90 fps and retraction are hardware-validated. The motor cadence matches OxygenOS and I validated it on my handset at the expected speed. Production 3A/color tuning and broader application lifecycle testing remain open. |
 
 ### 🔴 Broken
 
