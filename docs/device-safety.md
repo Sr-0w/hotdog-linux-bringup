@@ -73,6 +73,12 @@ needs an independently validated reboot-to-fastboot mechanism; the current
 experimental path combines a pre-MMU APSS watchdog with PM8150 PON bootloader
 mode selection.
 
+Every installable image must include `qbootctl` and enable its OpenRC service.
+Once the real root filesystem reaches the default runlevel, the service marks
+the current slot successful with `qbootctl -m`; otherwise seven healthy boots
+can still turn that slot into `unbootable=yes`. See the
+[slot-success evidence](evidence/2026-08-10-ab-slot-success.md).
+
 ### Host-side reset limits
 
 A disconnected USB device cannot receive a USB control request. Disabling its

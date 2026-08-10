@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=17
+pkgrel=18
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -15,6 +15,7 @@ depends="
 	android-tools-avbtool
 	postmarketos-base
 	mkbootimg
+	soc-qcom-qbootctl
 	swclock-offset
 "
 makedepends="devicepkg-dev"

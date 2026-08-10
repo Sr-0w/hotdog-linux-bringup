@@ -1,4 +1,4 @@
-From dcc8d9fbf789142f5838c2639b6e98c7a03f4f6e Mon Sep 17 00:00:00 2001
+From 8550d4a3ccfcba8607238b3c8604faef3a2c15ba Mon Sep 17 00:00:00 2001
 From: Sr-0w <Sr-0w@users.noreply.github.com>
 Date: Mon, 10 Aug 2026 03:50:35 +0200
 Subject: [PATCH] libcamera: software_isp: add contrast autofocus
@@ -7,15 +7,17 @@ Subject: [PATCH] libcamera: software_isp: add contrast autofocus
  .../internal/software_isp/software_isp.h      |   5 +-
  .../internal/software_isp/swisp_stats.h       |   4 +
  include/libcamera/ipa/soft.mojom              |   4 +-
- src/ipa/simple/algorithms/af.cpp              | 231 ++++++++++++++++++
+ src/ipa/simple/algorithms/af.cpp              | 257 ++++++++++++++++++
  src/ipa/simple/algorithms/af.h                |  36 +++
+ src/ipa/simple/algorithms/agc.cpp             |  26 +-
+ src/ipa/simple/algorithms/agc.h               |   3 +-
  src/ipa/simple/algorithms/meson.build         |   1 +
- src/ipa/simple/ipa_context.h                  |  27 ++
+ src/ipa/simple/ipa_context.h                  |  29 ++
  src/ipa/simple/soft_simple.cpp                |   9 +-
  src/libcamera/pipeline/simple/simple.cpp      |  20 +-
  src/libcamera/software_isp/software_isp.cpp   |   5 +-
- src/libcamera/software_isp/swstats_cpu.cpp    |  39 ++-
- 11 files changed, 361 insertions(+), 20 deletions(-)
+ src/libcamera/software_isp/swstats_cpu.cpp    |  43 ++-
+ 13 files changed, 418 insertions(+), 24 deletions(-)
  create mode 100644 src/ipa/simple/algorithms/af.cpp
  create mode 100644 src/ipa/simple/algorithms/af.h
 
@@ -77,10 +79,10 @@ index 77328c5..a6e3ed5 100644
  };
 diff --git a/src/ipa/simple/algorithms/af.cpp b/src/ipa/simple/algorithms/af.cpp
 new file mode 100644
-index 0000000..b9ec07f
+index 0000000..222dd89
 --- /dev/null
 +++ b/src/ipa/simple/algorithms/af.cpp
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,257 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/*
 + * Contrast autofocus for the simple software ISP
@@ -103,6 +105,8 @@ index 0000000..b9ec07f
 +LOG_DEFINE_CATEGORY(IPASoftAf)
 +
 +namespace ipa::soft::algorithms {
++
++static constexpr unsigned int kAeStableSamples = 3;
 +
 +int Af::init(IPAContext &context,
 +	     [[maybe_unused]] const ValueNode &tuningData)
@@ -142,7 +146,9 @@ index 0000000..b9ec07f
 +	auto &af = context.activeState.af;
 +	af.mode = controls::AfModeContinuous;
 +	af.state = controls::AfStateScanning;
-+	startScan(context);
++	af.position = lens->second.def().get<int32_t>();
++	af.scanning = false;
++	af.pendingScan = true;
 +
 +	LOG(IPASoftAf, Info)
 +		<< "Focus range " << context.configuration.focus.min << "-"
@@ -159,6 +165,7 @@ index 0000000..b9ec07f
 +		return;
 +
 +	auto &af = context.activeState.af;
++	af.pendingScan = false;
 +	af.scanning = true;
 +	af.fineScan = false;
 +	af.state = controls::AfStateScanning;
@@ -187,9 +194,12 @@ index 0000000..b9ec07f
 +	if (const auto mode = requestControls.get(controls::AfMode)) {
 +		if (*mode != af.mode) {
 +			af.mode = *mode;
-+			if (af.mode == controls::AfModeContinuous)
-+				startScan(context);
-+			else {
++			if (af.mode == controls::AfModeContinuous) {
++				af.pendingScan = true;
++				af.scanning = false;
++				af.state = controls::AfStateScanning;
++			} else {
++				af.pendingScan = false;
 +				af.scanning = false;
 +				af.state = controls::AfStateIdle;
 +			}
@@ -197,6 +207,8 @@ index 0000000..b9ec07f
 +	}
 +
 +	if (af.mode == controls::AfModeManual) {
++		af.pendingScan = false;
++		af.scanning = false;
 +		if (const auto position = requestControls.get(controls::LensPosition)) {
 +			const float normalized = std::clamp(*position, 0.0f, 1.0f);
 +			const int32_t range = context.configuration.focus.max -
@@ -211,9 +223,13 @@ index 0000000..b9ec07f
 +		return;
 +
 +	if (const auto trigger = requestControls.get(controls::AfTrigger)) {
-+		if (*trigger == controls::AfTriggerStart && !af.scanning)
-+			startScan(context);
-+		else if (*trigger == controls::AfTriggerCancel && af.scanning) {
++		if (*trigger == controls::AfTriggerStart && !af.scanning &&
++		    !af.pendingScan) {
++			af.pendingScan = true;
++			af.state = controls::AfStateScanning;
++		} else if (*trigger == controls::AfTriggerCancel &&
++			   (af.scanning || af.pendingScan)) {
++			af.pendingScan = false;
 +			af.scanning = false;
 +			af.state = controls::AfStateIdle;
 +		}
@@ -228,6 +244,11 @@ index 0000000..b9ec07f
 +		--af.settleSamples;
 +		return;
 +	}
++
++	LOG(IPASoftAf, Debug)
++		<< (af.fineScan ? "Fine" : "Coarse")
++		<< " focus sample at " << af.position
++		<< " (sharpness " << sharpness << ")";
 +
 +	if (sharpness > af.bestSharpness) {
 +		af.bestSharpness = sharpness;
@@ -286,14 +307,21 @@ index 0000000..b9ec07f
 +	auto &af = context.activeState.af;
 +
 +	if (context.configuration.focus.available && stats->valid) {
++		if (af.pendingScan &&
++		    context.activeState.agc.stableSamples >= kAeStableSamples)
++			startScan(context);
++
 +		if (af.scanning) {
 +			processScan(context, stats->sharpness);
 +		} else if (af.mode == controls::AfModeContinuous &&
 +			   af.state == controls::AfStateFocused &&
 +			   !af.settleSamples && af.lockedSharpness &&
 +			   stats->sharpness * 100 < af.lockedSharpness * 65) {
-+			if (++af.lowSharpnessSamples >= 3)
-+				startScan(context);
++			if (++af.lowSharpnessSamples >= 3) {
++				af.pendingScan = true;
++				af.state = controls::AfStateScanning;
++				af.lowSharpnessSamples = 0;
++			}
 +		} else {
 +			af.lowSharpnessSamples = 0;
 +			if (af.settleSamples)
@@ -354,6 +382,85 @@ index 0000000..0e0b7d6
 +} /* namespace ipa::soft::algorithms */
 +
 +} /* namespace libcamera */
+diff --git a/src/ipa/simple/algorithms/agc.cpp b/src/ipa/simple/algorithms/agc.cpp
+index a13a755..4cba0ba 100644
+--- a/src/ipa/simple/algorithms/agc.cpp
++++ b/src/ipa/simple/algorithms/agc.cpp
+@@ -65,15 +65,23 @@ Agc::Agc()
+ {
+ }
+ 
+-void Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext, double exposureMSV)
++bool Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext,
++			 double exposureMSV)
+ {
+ 	int32_t &exposure = frameContext.sensor.exposure;
+ 	double &again = frameContext.sensor.gain;
++	/*
++	 * Compare consecutive requested values, not the delayed sensor values in
++	 * this frame context. At a control limit the latter can trail the active
++	 * request and would keep resetting AE stability indefinitely.
++	 */
++	const int32_t oldExposure = context.activeState.agc.exposure;
++	const double oldAgain = context.activeState.agc.again;
+ 
+ 	double error = kExposureOptimal - exposureMSV;
+ 
+ 	if (std::abs(error) <= kExposureSatisfactory)
+-		return;
++		return false;
+ 
+ 	/*
+ 	 * Compute a proportional correction factor. The sign of the error
+@@ -122,6 +130,8 @@ void Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext, dou
+ 		<< "exposureMSV " << exposureMSV
+ 		<< " error " << error << " factor " << factor
+ 		<< " exp " << exposure << " again " << again;
++
++	return exposure != oldExposure || again != oldAgain;
+ }
+ 
+ void Agc::process(IPAContext &context,
+@@ -142,6 +152,7 @@ void Agc::process(IPAContext &context,
+ 		 */
+ 		context.activeState.agc.exposure = frameContext.sensor.exposure;
+ 		context.activeState.agc.again = frameContext.sensor.gain;
++		context.activeState.agc.stableSamples = 0;
+ 		context.activeState.agc.valid = true;
+ 	}
+ 
+@@ -189,7 +200,16 @@ void Agc::process(IPAContext &context,
+ 	}
+ 
+ 	float exposureMSV = (denom == 0 ? 0 : static_cast<float>(num) / denom);
+-	updateExposure(context, frameContext, exposureMSV);
++	const bool adjusted = updateExposure(context, frameContext, exposureMSV);
++	if (adjusted)
++		context.activeState.agc.stableSamples = 0;
++	else
++		context.activeState.agc.stableSamples = std::min(
++			context.activeState.agc.stableSamples + 1, 100U);
++
++	LOG(IPASoftExposure, Debug)
++		<< "AE stable samples " << context.activeState.agc.stableSamples
++		<< " (adjusted " << adjusted << ")";
+ }
+ 
+ REGISTER_IPA_ALGORITHM(Agc, "Agc")
+diff --git a/src/ipa/simple/algorithms/agc.h b/src/ipa/simple/algorithms/agc.h
+index 112d9f5..c72f158 100644
+--- a/src/ipa/simple/algorithms/agc.h
++++ b/src/ipa/simple/algorithms/agc.h
+@@ -25,7 +25,8 @@ public:
+ 		     ControlList &metadata) override;
+ 
+ private:
+-	void updateExposure(IPAContext &context, IPAFrameContext &frameContext, double exposureMSV);
++	bool updateExposure(IPAContext &context, IPAFrameContext &frameContext,
++			    double exposureMSV);
+ };
+ 
+ } /* namespace ipa::soft::algorithms */
 diff --git a/src/ipa/simple/algorithms/meson.build b/src/ipa/simple/algorithms/meson.build
 index 73c6372..1cd58d5 100644
 --- a/src/ipa/simple/algorithms/meson.build
@@ -367,10 +474,10 @@ index 73c6372..1cd58d5 100644
      'agc.cpp',
      'blc.cpp',
 diff --git a/src/ipa/simple/ipa_context.h b/src/ipa/simple/ipa_context.h
-index 8ccfacb..ecc0581 100644
+index 8ccfacb..a29215b 100644
 --- a/src/ipa/simple/ipa_context.h
 +++ b/src/ipa/simple/ipa_context.h
-@@ -33,6 +33,13 @@ struct IPASessionConfiguration {
+@@ -33,12 +33,20 @@ struct IPASessionConfiguration {
  	struct {
  		std::optional<uint8_t> level;
  	} black;
@@ -384,7 +491,14 @@ index 8ccfacb..ecc0581 100644
  };
  
  struct IPAActiveState {
-@@ -61,6 +68,22 @@ struct IPAActiveState {
+ 	struct {
+ 		int32_t exposure;
+ 		double again;
++		unsigned int stableSamples;
+ 		bool valid;
+ 	} agc;
+ 
+@@ -61,6 +69,23 @@ struct IPAActiveState {
  		std::optional<float> contrast;
  		std::optional<float> saturation;
  	} knobs;
@@ -403,11 +517,12 @@ index 8ccfacb..ecc0581 100644
 +		unsigned int lowSharpnessSamples;
 +		bool scanning;
 +		bool fineScan;
++		bool pendingScan;
 +	} af;
  };
  
  struct IPAFrameContext : public FrameContext {
-@@ -71,6 +94,10 @@ struct IPAFrameContext : public FrameContext {
+@@ -71,6 +96,10 @@ struct IPAFrameContext : public FrameContext {
  		double gain;
  	} sensor;
  
@@ -529,7 +644,7 @@ index c73a16c..703b943 100644
  
  void SoftwareIsp::statsReady(uint32_t frame, uint32_t bufferId)
 diff --git a/src/libcamera/software_isp/swstats_cpu.cpp b/src/libcamera/software_isp/swstats_cpu.cpp
-index 7fb77ce..be44abd 100644
+index 7fb77ce..15171bb 100644
 --- a/src/libcamera/software_isp/swstats_cpu.cpp
 +++ b/src/libcamera/software_isp/swstats_cpu.cpp
 @@ -177,22 +177,32 @@ static constexpr unsigned int kBlueYMul = 29; /* 0.114 * 256 */
@@ -585,7 +700,7 @@ index 7fb77ce..be44abd 100644
  	}
  }
  
-@@ -409,13 +420,17 @@ void SwStatsCpu::finishFrame(uint32_t frame, uint32_t bufferId)
+@@ -409,13 +420,21 @@ void SwStatsCpu::finishFrame(uint32_t frame, uint32_t bufferId)
  	if (valid) {
  		sharedStats_->sum_ = RGB<uint64_t>({ 0, 0, 0 });
  		sharedStats_->yHistogram.fill(0);
@@ -599,7 +714,11 @@ index 7fb77ce..be44abd 100644
  
  		sharedStats_->sum_ >>= sumShift_;
 +		const uint64_t green = sharedStats_->sum_.g();
-+		sharedStats_->sharpness = green ? sharpness * 1000 / green : 0;
++		constexpr uint64_t scale = 1000000;
++		sharedStats_->sharpness = green
++			? (sharpness / green) * scale +
++				(sharpness % green) * scale / green
++			: 0;
  	}
  
  	sharedStats_->valid = valid;

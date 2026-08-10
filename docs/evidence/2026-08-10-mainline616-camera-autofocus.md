@@ -4,8 +4,10 @@ Date: 2026-08-10
 
 ## Result
 
-Libcamera package revision `r4` adds lens-control plumbing and a contrast
-autofocus algorithm to the simple pipeline used by the SM8150 CAMSS port. The
+Libcamera package revision `r4` added lens-control plumbing and a contrast
+autofocus algorithm to the simple pipeline used by the SM8150 CAMSS port.
+Revision `r7` makes autofocus wait for three consecutive stable AGC requests
+before scanning and raises the normalized sharpness precision. The
 Sony IMX586 now advertises `AfMode`, `AfTrigger` and normalized
 `LensPosition` controls. Continuous autofocus is the default, so applications
 that do not yet expose autofocus controls still receive a focused preview.
@@ -18,6 +20,11 @@ path correctly: lens controls are applied independently of frame-start sensor
 controls. It uses exposure-normalized green-channel horizontal edge energy,
 performs a coarse scan followed by a bounded fine scan, waits one statistics
 sample after every move, and publishes standard `AfState` metadata.
+
+The stability test compares consecutive requested exposure/gain values rather
+than delayed values returned in an older frame context. This matters when the
+sensor reaches an exposure or gain limit: the active request is stable even if
+the statistics pipeline still reports an older control value.
 
 ## Hardware validation
 
@@ -61,6 +68,32 @@ algorithm and completed at physical position 320 with sharpness 439. The app
 currently labels the new AF controls as unknown because it has no dedicated
 UI for them, but this does not prevent continuous autofocus from operating.
 
+## Telephoto validation and AGC gating
+
+The first telephoto run with revision `r6` exposed a boundary case rather than
+starting autofocus. The dark scene saturated the sensor at exposure 3018 and
+analogue gain 32, while the delayed frame context kept the AGC stability
+counter at zero. Revision `r7` compares the new request with the previous
+active request. On boot ID `5348118a-9d67-43d1-8eb1-82e4c9c442d8`, the next
+run reached three stable samples and started autofocus immediately afterward.
+
+With the camera facing a textured desk, the S5K3M5/LC898217XC pair produced a
+monotonic coarse response and a bounded fine scan:
+
+```text
+position:       0    50   100   150   200   250   300   350   400
+sharpness:   7259  7653  7575  7692  8029  7958  8100  8377  8766
+Autofocus completed at 400 (sharpness 8878)
+```
+
+Two separate 640x480 manual captures then held the lens at positions 0 and
+400. At 0 the desk seams are visibly defocused; at 400 the same lines are
+separated and sharp. Their respective SHA-256 values are
+`095dd1b5dd59b7da4916426888fa2462a5da461e7b55b547262347a5ae30cdd3`
+and `b885a4f23e7c4f8fd37212beae149267816dabb34f4bb2319c83c55f1d377b3b`.
+This validates automatic focus on both rear modules, while production tuning
+still needs a center-weighted metric and scene-change thresholds.
+
 ## WirePlumber ownership fix
 
 The first post-install test found WirePlumber holding `/dev/media0`, both
@@ -81,14 +114,18 @@ camera descriptor, and both cameras enumerated normally.
 | `libcamera-gstreamer-99990.7.2-r4.apk` | `284b9f7963aab7966a4563f4d3791a46d5a6e21f327d8f7e642584fb8329001e` |
 | `device-oneplus-hotdog-3-r17.apk` | `cf8fa756336cdafd64780ce6f16853f3aaa04c6f580aa019a78c7707053db09c` |
 | `device-oneplus-hotdog-wireplumber-3-r17.apk` | `d5e79206a1a04878133d34737f14f33ca4f0f4b3919e75c58c9744d48238663f` |
+| `libcamera-99990.7.2-r7.apk` | `c99ce970941e67795e4097c913094f3111476e0cac18c5441146f0f59c423641` |
+| `libcamera-ipa-99990.7.2-r7.apk` | `68d7b30b48cd55e0f23fab0b3863575556026029c53ff3879b9644bbbf92624b` |
+| `libcamera-tools-99990.7.2-r7.apk` | `62088a2b11b9963a3bfa056f29d5715f790c86b7c5f28e14dc2f56e75e28ab7f` |
+| `libcamera-gstreamer-99990.7.2-r7.apk` | `78b22ce749beadbe1a527cf43abbfd5e70e5fb12032e70b06b09fb77368e3a42` |
+| `device-oneplus-hotdog-3-r18.apk` | `1feadb3a7c532f956c6191f289462994368f860d2f3036ff9332a8402755cd79` |
 
 The libcamera source passed a native GCC 15 `-Werror` build and a strict
 pmbootstrap aarch64 package build. The package has no upstream Meson tests.
 
 ## Remaining work
 
-Validate the same autofocus path on the telephoto module, calibrate autofocus
-thresholds against more scenes, replace the experimental normalized lens
+Calibrate autofocus thresholds against more scenes, replace the experimental normalized lens
 position with calibrated lens-distance data, and complete production color
 and AWB tuning. The IMX481 ultra-wide and IMX471 pop-up front camera remain to
 be ported.
