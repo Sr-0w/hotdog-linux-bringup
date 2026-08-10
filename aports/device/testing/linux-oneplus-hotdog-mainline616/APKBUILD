@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=135
+pkgrel=136
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -159,6 +159,7 @@ source="
 	0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
 	0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
 	0124-media-qcom-hotdog-popup-fully-seat-camera-after-close.patch
+	0125-arm64-dts-qcom-hotdog-start-the-sensor-dsp.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -335,5 +336,6 @@ c75272b7362f7745793e4295c9d89cb79124abd331dc6e8aafb01166ea4ee6a34a9c803cec6f6099
 051950c25269d0c5d8c51c315ec26dd8fe32e916fcfae7e45c9223c078209ff37e17add88af6588f72a860df1de14b17411986072cb39bce69ce1f80bef79a51  0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
 5e1cecdecc18afad165cb1efd90cda76fce0f18ce7d1bef5f2c5dbc54988508ae717f79c7543affea5e805cb903cb6d9f2265dfd5b0ebe2e9e47449367f49cfa  0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
 5a671dbe537c18fe675f2c636f765f77ec3d6ff4d25195e0bcdbc4d61e5c62d0a68d311ba0336eb04f33e7650d3bfc2b69112c23d08b761e73738f2029c2a8c0  0124-media-qcom-hotdog-popup-fully-seat-camera-after-close.patch
+ed66af54a8e7b281aa2a15752a99d4cccac0bb12034b313acc7da89f5b0ddbe43323112239fbc8014796f1dc19fb2b28db3d02617794cf3ca8231dc483ba35c7  0125-arm64-dts-qcom-hotdog-start-the-sensor-dsp.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
