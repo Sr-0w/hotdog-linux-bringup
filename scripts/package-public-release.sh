@@ -128,7 +128,7 @@ install -m 0644 "$boot" "$boot_asset"
 install -m 0644 "$apk" "$apk_asset"
 root_archive="$outdir/${prefix}-rootfs.img.zst"
 note "compressing rootfs image"
-zstd --no-progress --threads=0 --long=27 -19 --force --output "$root_archive" "$rootfs"
+zstd --no-progress --threads=0 --long=27 -19 --force -o "$root_archive" "$rootfs"
 
 max_asset_size=$((1900 * 1024 * 1024))
 split_rootfs=0
@@ -161,22 +161,22 @@ cat > "$outdir/MANIFEST.md" <<EOF
 # ${version} release manifest
 
 This is an experimental postmarketOS release for the OnePlus 7T Pro HD1913
-(`hotdog`) only. The boot image and rootfs image are an atomic pair.
+(\`hotdog\`) only. The boot image and rootfs image are an atomic pair.
 
 | Property | Value |
 |---|---|
-| Kernel APK | `${apk_version}` |
-| Boot image SHA-256 | `${boot_sha}` |
-| Kernel SHA-256 | `${boot_kernel_sha}` |
-| DTB SHA-256 | `${boot_dtb_sha}` |
-| Rootfs raw SHA-256 | `${root_sha}` |
-| Rootfs raw size | `${rootfs_size}` bytes |
-| pmOS_boot UUID | `${boot_uuid}` |
-| pmOS_root UUID | `${root_uuid}` |
+| Kernel APK | \`${apk_version}\` |
+| Boot image SHA-256 | \`${boot_sha}\` |
+| Kernel SHA-256 | \`${boot_kernel_sha}\` |
+| DTB SHA-256 | \`${boot_dtb_sha}\` |
+| Rootfs raw SHA-256 | \`${root_sha}\` |
+| Rootfs raw size | \`${rootfs_size}\` bytes |
+| pmOS_boot UUID | \`${boot_uuid}\` |
+| pmOS_root UUID | \`${root_uuid}\` |
 
-Run `sha256sum -c SHA256SUMS` before flashing. If the rootfs archive is split,
+Run \`sha256sum -c SHA256SUMS\` before flashing. If the rootfs archive is split,
 reassemble the parts in numeric order before decompressing it. See
-`docs/release-install.md` in the matching source tag for the full procedure.
+\`docs/release-install.md\` in the matching source tag for the full procedure.
 EOF
 
 note "release assets prepared in $outdir"
