@@ -68,7 +68,10 @@ used the Adreno 640 software-ISP path, and moved analogue gain through the same
 16 values from 1.122807x to 5.657459x. Plasma Camera again reported
 `PlasmaCameraManager::setReadyForCapture true`.
 
-Remaining IMX586 work is main-lens actuator integration, production colour and
-AWB calibration, and additional sensor modes. Those limitations do not
-invalidate raw capture, automatic exposure and gain, complete userspace
+Revision `r109` subsequently identifies the handset's Semco second-lens module,
+binds its LC898217XC actuator and validates the complete 0..400 manual-focus
+range. See the [main-camera focus evidence](2026-08-10-mainline616-camera-imx586-focus.md).
+Remaining IMX586 work is automatic focus, production colour and AWB
+calibration, and additional sensor modes. Those limitations do not invalidate
+raw capture, automatic exposure and gain, manual focus, complete userspace
 metadata, or Plasma Camera integration.

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=108
+pkgrel=109
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -133,6 +133,7 @@ source="
 	0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
 	0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
 	0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
+	0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -283,5 +284,6 @@ e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf7
 444cc30b7d3903b2c5b84b39fe232b646a13588c441edca4f7f3bf3308f9a3c6490e40f62b7a5e584a8c892157f13be35c28d45dedfdb4069bc58d4c7be1b387  0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
 049b9b9fe38eb8b18205a1251167e8fb47415dab74b21352a1acad57811976cd6e37e7d95257f6508ff4545814bc4bd53d1af425b481bfa34c28c2ac750d7fc9  0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
 a36e991acb5e31071686898087129b21b3aef1a2cf2aaf7c4d59381e0e90e250b88d2903463749e309670d19ddf273ca82fb6c639cdb649714e19746589926f8  0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
+d008dc6e0401fbf38ccf2ccab882eeee6c06cbe6d38f51a9dbdc5a7e203bc70ef03977377fc756aaaac1bcdecfcc74f208f6d58c82a73663dc2b1e40312f7b71  0099-arm64-dts-qcom-select-semco-imx586-lens.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
