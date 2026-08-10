@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=109
+pkgrel=110
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -134,6 +134,7 @@ source="
 	0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
 	0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
 	0099-arm64-dts-qcom-select-semco-imx586-lens.patch
+	0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -187,7 +188,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-0ce31d4a9bf73eab3a2d7298687fa7a0e02cce3bbb56e7dd7ed1c4a0d088113d32500ffe6856274c3b0500a2a6a859457ff18e6d1743a32f84ca83f0e9415531  config-oneplus-hotdog-mainline616.aarch64
+5fdf5c00e89a6357a9a7959e53f070d267a0b992263ff831e79a6b6376d7227dcd881213a715f4be7accd755ec8dd2761686641ae95fb3cafe30bd38b77765bc  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -285,5 +286,6 @@ e97861defa2c258e36f979b6f732631cef5fc99777d23b9f1b3aee5ba4cf4116f7f988938777fdf7
 049b9b9fe38eb8b18205a1251167e8fb47415dab74b21352a1acad57811976cd6e37e7d95257f6508ff4545814bc4bd53d1af425b481bfa34c28c2ac750d7fc9  0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
 a36e991acb5e31071686898087129b21b3aef1a2cf2aaf7c4d59381e0e90e250b88d2903463749e309670d19ddf273ca82fb6c639cdb649714e19746589926f8  0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
 d008dc6e0401fbf38ccf2ccab882eeee6c06cbe6d38f51a9dbdc5a7e203bc70ef03977377fc756aaaac1bcdecfcc74f208f6d58c82a73663dc2b1e40312f7b71  0099-arm64-dts-qcom-select-semco-imx586-lens.patch
+ed741a179117f7da07413ebdebec608e6b0c0d55b89e9e11f2da73de2ab21d20da81971693258ec0e42e47abf6014017b4dc6fb8c0de16618f3626719a1d80a8  0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
