@@ -142,7 +142,8 @@ contract. Its APK has SHA256
 `b5c8e36f7e9d28d0ee4f433fae14dc16b1b5cdbf5d2d66ab9013d0a0fb7f1f5b`.
 The target driver also compiles with `W=1`, and its binding passes
 `dt_binding_check`. This revision has not yet received a physical vibration
-test and is not hardware-validated.
+test and is not hardware-validated. Its AVB-valid 96 MiB test image has SHA256
+`d32b6e4d3db64926505d12498b92f679d92d33941bf6530828e98b076b09d06e`.
 
 ## Hardware-tested r31/r32 speaker evidence
 
