@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 ## Final objective
 
@@ -102,11 +102,15 @@ any secure-element limitation explicitly documented.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Haptics | AW8697 | No mainline driver/integration is validated yet. |
+| Haptics | AW8697 | Controller identity and wiring are hardware-confirmed. Revision `r143` adds a source-built `FF_RUMBLE` driver and passes the strict package build; vibration and feedbackd remain untested. |
 
-Identify the AW8697 bus, reset, regulators, firmware, and effect interface.
-Implement or adapt the mainline driver, then connect it to feedbackd without
-making vibration dependent on a vendor Android service.
+The controller answers at `0x5a` with chip ID `0x97`; the stock tree identifies
+GPIO 116 as reset, GPIO 24 as interrupt, and the HD1913 as the 170 Hz actuator
+profile. The initial driver uses continuous mode and the normal OxygenOS drive
+limit without requiring proprietary effect firmware. Validate low-strength and
+full-strength pulses, repeated stop/start behavior and input force feedback,
+then connect it to feedbackd without making vibration dependent on a vendor
+Android service.
 
 Exit criterion: notification and user-interface haptics work repeatedly through
 the normal postmarketOS feedback stack.

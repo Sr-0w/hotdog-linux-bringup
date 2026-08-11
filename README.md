@@ -139,7 +139,7 @@ Support status for my tested HD1913 handset.
 | GNSS | Location | Not yet hardware-validated. |
 | Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
 | NFC | NFC / secure-element path | Not yet hardware-validated. |
-| Haptics | AW8697 | No mainline driver/integration is validated yet. |
+| Haptics | AW8697 | Revision `r143` adds a source-built `FF_RUMBLE` driver and the stock-derived bus, reset and interrupt wiring. The strict postmarketOS package build passes; physical vibration and feedbackd validation are still pending. |
 | Range sensor | STMVL53L1 laser rangefinder | Driver/integration work remains. |
 | Fingerprint | In-display fingerprint reader | Plasma/fprintd can provide the userspace authentication path; Hotdog still needs sensor/firmware integration and UDFPS display-illumination coordination. |
 | Fast charging | OnePlus Warp charge | Vendor-dependent path; no mainline hardware support is validated. |

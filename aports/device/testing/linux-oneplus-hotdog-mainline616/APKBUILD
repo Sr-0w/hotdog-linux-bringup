@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=142
+pkgrel=143
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -163,6 +163,8 @@ source="
 	0126-arm64-dts-qcom-hotdog-give-fastrpc-an-addressable-heap.patch
 	0127-arm64-dts-qcom-hotdog-describe-the-nfc-controller.patch
 	0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
+	0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
+	0130-input-add-Awinic-AW8697-haptics-support.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -216,7 +218,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-54ddf1461d94d5878696ff2d5ad86b98649334c243a6bbeacbd595a7fa1c99153e774f5061052594a541f2ec2359a0a4aef996271c3a1daec5d6e651ab65b91e  config-oneplus-hotdog-mainline616.aarch64
+c9c1c6d326115a26385f54471d58ab01f42c07821ec5755614bef7c5f66e94aa5f41ad09f8fdc632c4d103c9487eaf72edb8fbf7c8f274f56e59fb0dfc95a8f9  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -343,5 +345,7 @@ ed66af54a8e7b281aa2a15752a99d4cccac0bb12034b313acc7da89f5b0ddbe43323112239fbc801
 2e295bac3df505d31fc795b9e11411ed855684426705decc94254537cf37efa638d772902e8d72a6fc529715c80fc149f6025ecff7a21815a9236839fa9633a9  0126-arm64-dts-qcom-hotdog-give-fastrpc-an-addressable-heap.patch
 bd1c8494ee67262a81f63a8d79b733e5ef9b79b1bcda4ff7d660970f4246cd6012a056050f9b280d72a9a7275cb94968c66a7ff6090dbd9424717eaec7ea0afa  0127-arm64-dts-qcom-hotdog-describe-the-nfc-controller.patch
 ea929a9aeae29255c4e553b8df2c90a0c295637cb7f6756362b3a5a0c4c3fa58618ca47191531bd465db8381f86b30555db9d08b6d68ea9b0eb67f134d38dbba  0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
+6e436276f61fa342b6401f11e43f92a87b196a7992f5a8cc80be13b4e918189c29814497f3a84ccd5df21c1c806364f2859b4841b83b9be8da0eca52d6070743  0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
+151c1090fd19a3d966ce22e8fde0ac4e894e79dc7ae622b7a5e4452e738b3dd9b994451028dbe8cd07f7644b047248f41a6713781bd62d9188608cec39ea7e34  0130-input-add-Awinic-AW8697-haptics-support.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

@@ -62,6 +62,12 @@ channel. Revision `r32` adds the upper slot-0 amplifier to the same ASoC link.
 Separate synchronized webcam-microphone captures validate the upper speaker on
 the left PCM channel and the lower speaker on the right PCM channel.
 
+Revision `r143` adds the AW8697 haptics controller at the stock-derived I2C
+address and GPIO wiring. A new mainline-style input driver exposes `FF_RUMBLE`
+and uses the HD1913 170 Hz continuous-mode profile without proprietary waveform
+firmware. The driver, DTB, binding schema and strict postmarketOS package build
+pass; physical vibration and feedbackd integration remain pending.
+
 ## Source contract
 
 - Kernel base: ClearStaff Linux 6.16 commit
@@ -118,6 +124,9 @@ the left PCM channel and the lower speaker on the right PCM channel.
   outside an active stream, clock lock is required before amplifier enable,
   and the shared physical reset remains untouched. Both slot-specific speakers
   are hardware-validated with independent acoustic captures on revision `r32`.
+- The AW8697 at I2C address `0x5a` uses stock reset GPIO 116, interrupt GPIO 24
+  and the project-19801 170 Hz actuator profile. Revision `r143` exposes bounded
+  continuous-mode effects through the standard Linux `FF_RUMBLE` interface.
 - The device tree is built entirely from source. No packaged DTB is rewritten
   with `fdtput` or replaced by a prebuilt binary.
 
@@ -125,6 +134,15 @@ the left PCM channel and the lower speaker on the right PCM channel.
 invariant that was present during the successful hardware run, and the exact
 dual-mode panel contract. The package build fails if one of those invariants
 changes.
+
+## Offline-built r143 haptics candidate
+
+The strict `r143` build passed the source, configuration, driver and final-DTB
+contract. Its APK has SHA256
+`b5c8e36f7e9d28d0ee4f433fae14dc16b1b5cdbf5d2d66ab9013d0a0fb7f1f5b`.
+The target driver also compiles with `W=1`, and its binding passes
+`dt_binding_check`. This revision has not yet received a physical vibration
+test and is not hardware-validated.
 
 ## Hardware-tested r31/r32 speaker evidence
 

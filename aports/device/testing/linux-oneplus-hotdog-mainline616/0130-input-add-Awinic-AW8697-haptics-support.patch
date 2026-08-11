@@ -1,0 +1,494 @@
+From 39ae96350d30647de89bc2099a439ff746d7e14b Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 07:44:58 +0200
+Subject: [PATCH 2/2] input: add Awinic AW8697 haptics support
+
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |   8 +
+ drivers/input/misc/Kconfig                    |  13 +
+ drivers/input/misc/Makefile                   |   1 +
+ drivers/input/misc/aw8697-haptics.c           | 417 ++++++++++++++++++
+ 4 files changed, 439 insertions(+)
+ create mode 100644 drivers/input/misc/aw8697-haptics.c
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index d3c2605da..505ccbb75 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -546,6 +546,14 @@ &i2c7 {
+ 	/delete-property/ dma-names;
+ 	clock-frequency = <400000>;
+ 	status = "okay";
++
++	haptics@5a {
++		compatible = "awinic,aw8697";
++		reg = <0x5a>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
++		reset-gpios = <&tlmm 116 GPIO_ACTIVE_LOW>;
++	};
+ };
+ 
+ &qupv3_id_2 {
+diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
+index f5496ca0c..69812961a 100644
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -101,6 +101,19 @@ config INPUT_ARIZONA_HAPTICS
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called arizona-haptics.
+ 
++config INPUT_AW8697_HAPTICS
++	tristate "Awinic AW8697 haptics support"
++	depends on I2C
++	select INPUT_FF_MEMLESS
++	select REGMAP_I2C
++	help
++	  Say Y to enable support for the Awinic AW8697 LRA haptics
++	  controller. The device is exposed through the input force-feedback
++	  interface with rumble intensity control.
++
++	  To compile this driver as a module, choose M here: the module will be
++	  called aw8697-haptics.
++
+ config INPUT_ATC260X_ONKEY
+ 	tristate "Actions Semi ATC260x PMIC ONKEY"
+ 	depends on MFD_ATC260X
+diff --git a/drivers/input/misc/Makefile b/drivers/input/misc/Makefile
+index 6d91804d0..7cca14957 100644
+--- a/drivers/input/misc/Makefile
++++ b/drivers/input/misc/Makefile
+@@ -18,6 +18,7 @@ obj-$(CONFIG_INPUT_ADXL34X_SPI)		+= adxl34x-spi.o
+ obj-$(CONFIG_INPUT_APANEL)		+= apanel.o
+ obj-$(CONFIG_INPUT_ARIEL_PWRBUTTON)	+= ariel-pwrbutton.o
+ obj-$(CONFIG_INPUT_ARIZONA_HAPTICS)	+= arizona-haptics.o
++obj-$(CONFIG_INPUT_AW8697_HAPTICS)	+= aw8697-haptics.o
+ obj-$(CONFIG_INPUT_ATC260X_ONKEY)	+= atc260x-onkey.o
+ obj-$(CONFIG_INPUT_ATI_REMOTE2)		+= ati_remote2.o
+ obj-$(CONFIG_INPUT_ATLAS_BTNS)		+= atlas_btns.o
+diff --git a/drivers/input/misc/aw8697-haptics.c b/drivers/input/misc/aw8697-haptics.c
+new file mode 100644
+index 000000000..2ec6e0b70
+--- /dev/null
++++ b/drivers/input/misc/aw8697-haptics.c
+@@ -0,0 +1,417 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Awinic AW8697 LRA haptics controller
++ *
++ * Register programming is based on the AW8697 driver published by OnePlus.
++ * The input force-feedback interface follows the upstream AW86927 driver.
++ */
++
++#include <linux/bits.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/module.h>
++#include <linux/regmap.h>
++
++#define AW8697_ID_REG			0x00
++#define AW8697_CHIP_ID			0x97
++#define AW8697_SOFT_RESET		0xaa
++
++#define AW8697_SYSINT_REG		0x02
++#define AW8697_SYSINTM_REG		0x03
++#define AW8697_SYSCTRL_REG		0x04
++#define AW8697_SYSCTRL_PLAY_MODE_MASK	GENMASK(3, 2)
++#define AW8697_SYSCTRL_PLAY_MODE_CONT	(2 << 2)
++#define AW8697_SYSCTRL_BST_MODE_MASK	BIT(1)
++#define AW8697_SYSCTRL_WORK_MODE_MASK	BIT(0)
++#define AW8697_SYSCTRL_STANDBY		BIT(0)
++#define AW8697_GO_REG			0x05
++#define AW8697_GO_ENABLE			BIT(0)
++
++#define AW8697_DATCTRL_REG		0x2b
++#define AW8697_DATCTRL_FC_MASK		GENMASK(7, 6)
++#define AW8697_DATCTRL_FC_1000HZ		(3 << 6)
++#define AW8697_DATCTRL_LPF_ENABLE	BIT(5)
++#define AW8697_PWMDBG_REG		0x2e
++#define AW8697_PWMDBG_MODE_MASK		GENMASK(6, 5)
++#define AW8697_PWMDBG_24KHZ		(2 << 5)
++#define AW8697_BSTDBG1_REG		0x31
++#define AW8697_BSTDBG2_REG		0x32
++#define AW8697_BSTDBG3_REG		0x33
++#define AW8697_BSTCFG_REG		0x34
++#define AW8697_BSTCFG_PEAK_MASK		GENMASK(2, 0)
++#define AW8697_BSTCFG_PEAK_3P5A		5
++#define AW8697_ANADBG_REG		0x35
++#define AW8697_ANADBG_IOC_MASK		GENMASK(3, 2)
++#define AW8697_ANADBG_IOC_4P65A		(3 << 2)
++#define AW8697_BST_AUTO_REG		0x47
++#define AW8697_BST_AUTO_AUTOSW		BIT(2)
++
++#define AW8697_GLB_STATE_REG		0x46
++#define AW8697_GLB_STATE_MASK		GENMASK(3, 0)
++#define AW8697_CONT_CTRL_REG		0x48
++#define AW8697_CONT_ZC_ENABLE		BIT(7)
++#define AW8697_CONT_CLOSE_PLAYBACK	BIT(3)
++#define AW8697_CONT_AUTO_BRAKE		BIT(0)
++#define AW8697_F_PRE_H_REG		0x49
++#define AW8697_F_PRE_L_REG		0x4a
++#define AW8697_TD_H_REG			0x4b
++#define AW8697_TD_L_REG			0x4c
++#define AW8697_TSET_REG			0x4d
++#define AW8697_R_SPARE_REG		0x5d
++#define AW8697_ADCTEST_REG		0x66
++#define AW8697_ADCTEST_VBAT_HW_COMP	BIT(6)
++#define AW8697_ZC_THRSH_H_REG		0x72
++#define AW8697_ZC_THRSH_L_REG		0x73
++#define AW8697_BEMF_VTHH_H_REG		0x74
++#define AW8697_BEMF_VTHH_L_REG		0x75
++#define AW8697_BEMF_VTHL_H_REG		0x76
++#define AW8697_BEMF_VTHL_L_REG		0x77
++#define AW8697_BEMF_NUM_REG		0x78
++#define AW8697_BEMF_NUM_BRAKE_MASK	GENMASK(3, 0)
++#define AW8697_TIME_NZC_REG		0x7a
++#define AW8697_DRV_LVL_REG		0x7b
++#define AW8697_DRV_LVL_OV_REG		0x7c
++
++/* OnePlus hotdog uses the 170 Hz actuator profile. */
++#define AW8697_F0_PRE			1700
++#define AW8697_F0_COEFF			260
++#define AW8697_CONT_DRV_LVL_MAX		60
++#define AW8697_CONT_DRV_LVL_OV		125
++#define AW8697_CONT_TD			0x009a
++#define AW8697_CONT_ZC_THR		0x0ff1
++#define AW8697_CONT_BRAKE_COUNT		3
++
++struct aw8697_haptics {
++	struct device *dev;
++	struct input_dev *input;
++	struct regmap *regmap;
++	struct gpio_desc *reset_gpio;
++	struct work_struct play_work;
++	u16 level;
++};
++
++static const struct regmap_config aw8697_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = AW8697_DRV_LVL_OV_REG,
++	.cache_type = REGCACHE_NONE,
++};
++
++static void aw8697_hw_reset(struct aw8697_haptics *haptics)
++{
++	gpiod_set_value_cansleep(haptics->reset_gpio, 1);
++	usleep_range(1000, 2000);
++	gpiod_set_value_cansleep(haptics->reset_gpio, 0);
++	usleep_range(8000, 8500);
++}
++
++static int aw8697_wait_standby(struct aw8697_haptics *haptics)
++{
++	unsigned int value;
++
++	return regmap_read_poll_timeout(haptics->regmap, AW8697_GLB_STATE_REG,
++					value,
++					!(value & AW8697_GLB_STATE_MASK),
++					2000, 120000);
++}
++
++static int aw8697_stop(struct aw8697_haptics *haptics)
++{
++	int error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_GO_REG,
++				   AW8697_GO_ENABLE, 0);
++	if (error)
++		return error;
++
++	error = aw8697_wait_standby(haptics);
++	if (error)
++		dev_warn(haptics->dev,
++			 "playback did not stop cleanly, forcing standby\n");
++
++	return regmap_update_bits(haptics->regmap, AW8697_SYSCTRL_REG,
++				  AW8697_SYSCTRL_WORK_MODE_MASK,
++				  AW8697_SYSCTRL_STANDBY);
++}
++
++static int aw8697_play_continuous(struct aw8697_haptics *haptics)
++{
++	unsigned int sysint;
++	u16 f0_reg = 1000000000U / (AW8697_F0_PRE * AW8697_F0_COEFF);
++	u8 drive_level;
++	int error;
++
++	error = aw8697_stop(haptics);
++	if (error)
++		return error;
++
++	drive_level = DIV_ROUND_UP((u32)haptics->level *
++				   AW8697_CONT_DRV_LVL_MAX, U16_MAX);
++
++	error = regmap_update_bits(haptics->regmap, AW8697_SYSCTRL_REG,
++				   AW8697_SYSCTRL_PLAY_MODE_MASK |
++				   AW8697_SYSCTRL_BST_MODE_MASK |
++				   AW8697_SYSCTRL_WORK_MODE_MASK,
++				   AW8697_SYSCTRL_PLAY_MODE_CONT);
++	if (error)
++		return error;
++
++	/* Reading SYSINT clears any latched interrupt before playback. */
++	regmap_read(haptics->regmap, AW8697_SYSINT_REG, &sysint);
++
++	error = regmap_update_bits(haptics->regmap, AW8697_DATCTRL_REG,
++				   AW8697_DATCTRL_FC_MASK |
++				   AW8697_DATCTRL_LPF_ENABLE,
++				   AW8697_DATCTRL_FC_1000HZ |
++				   AW8697_DATCTRL_LPF_ENABLE);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_CONT_CTRL_REG,
++			     AW8697_CONT_ZC_ENABLE |
++			     AW8697_CONT_CLOSE_PLAYBACK |
++			     AW8697_CONT_AUTO_BRAKE);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_F_PRE_H_REG, f0_reg >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_F_PRE_L_REG, f0_reg);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TD_H_REG, AW8697_CONT_TD >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TD_L_REG, AW8697_CONT_TD);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TSET_REG, 0x12);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_ZC_THRSH_H_REG,
++			     AW8697_CONT_ZC_THR >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_ZC_THRSH_L_REG,
++			     AW8697_CONT_ZC_THR);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHH_H_REG, 0x10);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHH_L_REG, 0x08);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHL_H_REG, 0x03);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHL_L_REG, 0xf8);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BEMF_NUM_REG,
++				   AW8697_BEMF_NUM_BRAKE_MASK,
++				   AW8697_CONT_BRAKE_COUNT);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TIME_NZC_REG, 0x23);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_DRV_LVL_REG, drive_level);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_DRV_LVL_OV_REG,
++			     AW8697_CONT_DRV_LVL_OV);
++	if (error)
++		return error;
++
++	return regmap_update_bits(haptics->regmap, AW8697_GO_REG,
++				  AW8697_GO_ENABLE, AW8697_GO_ENABLE);
++}
++
++static void aw8697_play_work(struct work_struct *work)
++{
++	struct aw8697_haptics *haptics =
++		container_of(work, struct aw8697_haptics, play_work);
++	int error;
++
++	if (haptics->level)
++		error = aw8697_play_continuous(haptics);
++	else
++		error = aw8697_stop(haptics);
++
++	if (error)
++		dev_err(haptics->dev, "failed to update playback: %d\n", error);
++}
++
++static int aw8697_play_effect(struct input_dev *input, void *data,
++			      struct ff_effect *effect)
++{
++	struct aw8697_haptics *haptics = input_get_drvdata(input);
++	u16 level = effect->u.rumble.strong_magnitude;
++
++	if (!level)
++		level = effect->u.rumble.weak_magnitude;
++	if (level == haptics->level)
++		return 0;
++
++	haptics->level = level;
++	schedule_work(&haptics->play_work);
++
++	return 0;
++}
++
++static void aw8697_input_close(struct input_dev *input)
++{
++	struct aw8697_haptics *haptics = input_get_drvdata(input);
++
++	haptics->level = 0;
++	cancel_work_sync(&haptics->play_work);
++	if (aw8697_stop(haptics))
++		dev_warn(haptics->dev, "failed to stop haptics on close\n");
++}
++
++static int aw8697_init(struct aw8697_haptics *haptics)
++{
++	int error;
++
++	error = aw8697_stop(haptics);
++	if (error)
++		return error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_PWMDBG_REG,
++				   AW8697_PWMDBG_MODE_MASK, AW8697_PWMDBG_24KHZ);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG1_REG, 0x30);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG2_REG, 0xeb);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG3_REG, 0xd4);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TSET_REG, 0x12);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_R_SPARE_REG, 0x68);
++	if (error)
++		return error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_ANADBG_REG,
++				   AW8697_ANADBG_IOC_MASK,
++				   AW8697_ANADBG_IOC_4P65A);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BSTCFG_REG,
++				   AW8697_BSTCFG_PEAK_MASK,
++				   AW8697_BSTCFG_PEAK_3P5A);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BST_AUTO_REG,
++				   AW8697_BST_AUTO_AUTOSW, 0);
++	if (error)
++		return error;
++
++	return regmap_update_bits(haptics->regmap, AW8697_ADCTEST_REG,
++				  AW8697_ADCTEST_VBAT_HW_COMP,
++				  AW8697_ADCTEST_VBAT_HW_COMP);
++}
++
++static int aw8697_probe(struct i2c_client *client)
++{
++	struct aw8697_haptics *haptics;
++	unsigned int chip_id;
++	int error;
++
++	haptics = devm_kzalloc(&client->dev, sizeof(*haptics), GFP_KERNEL);
++	if (!haptics)
++		return -ENOMEM;
++
++	haptics->dev = &client->dev;
++	haptics->regmap = devm_regmap_init_i2c(client, &aw8697_regmap_config);
++	if (IS_ERR(haptics->regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(haptics->regmap),
++				     "failed to initialize regmap\n");
++
++	haptics->reset_gpio = devm_gpiod_get(&client->dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(haptics->reset_gpio))
++		return dev_err_probe(&client->dev, PTR_ERR(haptics->reset_gpio),
++				     "failed to request reset GPIO\n");
++
++	aw8697_hw_reset(haptics);
++	error = regmap_read(haptics->regmap, AW8697_ID_REG, &chip_id);
++	if (error)
++		return dev_err_probe(&client->dev, error, "failed to read chip ID\n");
++	if (chip_id != AW8697_CHIP_ID)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unexpected chip ID 0x%02x\n", chip_id);
++
++	error = regmap_write(haptics->regmap, AW8697_ID_REG, AW8697_SOFT_RESET);
++	if (error)
++		return dev_err_probe(&client->dev, error, "software reset failed\n");
++	usleep_range(3000, 3500);
++
++	INIT_WORK(&haptics->play_work, aw8697_play_work);
++	haptics->input = devm_input_allocate_device(&client->dev);
++	if (!haptics->input)
++		return -ENOMEM;
++
++	haptics->input->name = "Awinic AW8697 haptics";
++	haptics->input->close = aw8697_input_close;
++	input_set_drvdata(haptics->input, haptics);
++	input_set_capability(haptics->input, EV_FF, FF_RUMBLE);
++
++	error = input_ff_create_memless(haptics->input, NULL, aw8697_play_effect);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to create force-feedback device\n");
++
++	error = aw8697_init(haptics);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to initialize haptics controller\n");
++
++	i2c_set_clientdata(client, haptics);
++	error = input_register_device(haptics->input);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to register input device\n");
++
++	dev_info(&client->dev, "AW8697 haptics controller detected\n");
++	return 0;
++}
++
++static void aw8697_remove(struct i2c_client *client)
++{
++	struct aw8697_haptics *haptics = i2c_get_clientdata(client);
++
++	haptics->level = 0;
++	cancel_work_sync(&haptics->play_work);
++	aw8697_stop(haptics);
++}
++
++static const struct of_device_id aw8697_of_match[] = {
++	{ .compatible = "awinic,aw8697" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, aw8697_of_match);
++
++static struct i2c_driver aw8697_driver = {
++	.driver = {
++		.name = "aw8697-haptics",
++		.of_match_table = aw8697_of_match,
++	},
++	.probe = aw8697_probe,
++	.remove = aw8697_remove,
++};
++module_i2c_driver(aw8697_driver);
++
++MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_DESCRIPTION("Awinic AW8697 LRA haptics driver");
++MODULE_LICENSE("GPL");
+-- 
+2.54.0
+
