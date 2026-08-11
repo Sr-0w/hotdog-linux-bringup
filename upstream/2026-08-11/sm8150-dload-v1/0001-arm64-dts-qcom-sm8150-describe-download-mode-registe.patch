@@ -1,0 +1,48 @@
+From 2e04e306c00e97f8a242ae8502715e799da6b37b Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Mon, 10 Aug 2026 00:53:49 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150: describe download mode register
+
+The SM8150 SCM node does not describe the TCSR download-mode register.
+Without it, the SCM driver falls back to a firmware call and the
+mode cookie may remain set across a warm reset, causing the next boot to
+enter the Qualcomm crashdump transport.
+
+Describe the TCSR window and point qcom,dload-mode at offset 0x13000,
+matching the layout used by SM8250 and other related Qualcomm platforms.
+
+On a OnePlus 7T Pro this changes software reboot from a reproducible
+05c6:900e transition to six consecutive successful boots.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150.dtsi | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+index 94a3b02cb289..29cdef6b3ee2 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -610,6 +610,7 @@ cpu7_opp20: opp-2841600000 {
+ 	firmware {
+ 		scm: scm {
+ 			compatible = "qcom,scm-sm8150", "qcom,scm";
++			qcom,dload-mode = <&tcsr 0x13000>;
+ 			#reset-cells = <1>;
+ 		};
+ 	};
+@@ -2176,6 +2177,11 @@ tcsr_mutex: hwlock@1f40000 {
+ 			#hwlock-cells = <1>;
+ 		};
+ 
++		tcsr: syscon@1fc0000 {
++			compatible = "qcom,sm8150-tcsr", "syscon";
++			reg = <0x0 0x01fc0000 0x0 0x30000>;
++		};
++
+ 		tcsr_regs_1: syscon@1f60000 {
+ 			compatible = "qcom,sm8150-tcsr", "syscon";
+ 			reg = <0x0 0x01f60000 0x0 0x20000>;
+-- 
+2.54.0
+

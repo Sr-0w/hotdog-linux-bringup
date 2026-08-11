@@ -1,0 +1,36 @@
+From d54d34c014691bdc316aaa02b7a5d2c4f736a52b Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Tue, 11 Aug 2026 21:52:25 +0200
+Subject: [PATCH v1 0/2] arm64: dts: qcom: add OnePlus 7T Pro
+
+Add initial device tree support for the OnePlus 7T Pro (hotdog), tested
+on the European HD1913 variant.
+
+The board description covers the memory layout, RPMh regulators, UFS,
+USB peripheral mode, GPU, WiFi, volume keys, Samsung S6SY761
+touchscreen, ADSP and modem remote processors, and the
+bootloader-provided framebuffer.
+
+Native display, audio, Type-C role switching and the remaining
+peripherals are intentionally left for separate series as their
+dependencies become ready for upstream.
+
+The represented hardware subset has been exercised in the mainline
+development tree. This rebased series builds on linux-next 20260810
+(3d08ff75a47a), passes dtbs_check without diagnostics and passes
+checkpatch --strict apart from the generic MAINTAINERS reminder emitted
+for a new DTS. The file is already covered by the Qualcomm ARM64 device
+tree entry in MAINTAINERS.
+
+Robin Snyders (2):
+  dt-bindings: arm: qcom: add OnePlus 7T Pro
+  arm64: dts: qcom: add OnePlus 7T Pro
+
+ .../devicetree/bindings/arm/qcom.yaml         |   1 +
+ arch/arm64/boot/dts/qcom/Makefile             |   1 +
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 619 ++++++++++++++++++
+ 3 files changed, 621 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+
+-- 
+2.54.0

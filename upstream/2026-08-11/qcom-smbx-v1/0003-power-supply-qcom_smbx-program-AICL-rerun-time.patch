@@ -1,0 +1,45 @@
+From b000ee69b3c43f87edb7e04136056105f4cdf7cd Mon Sep 17 00:00:00 2001
+From: Casey Connolly <casey.connolly@linaro.org>
+Date: Tue, 11 Aug 2026 21:33:08 +0200
+Subject: [PATCH v1 3/3] power: supply: qcom_smbx: program AICL rerun time
+
+The bootloader-provided automatic input current limit rerun interval is
+not a stable software interface. Program a consistent three-second
+interval during probe. This is required at least on SMB5 hardware.
+
+Signed-off-by: Casey Connolly <casey.connolly@linaro.org>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/power/supply/qcom_smbx.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index 09d9e0f95cb5..9e3e240b6813 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -374,6 +374,7 @@ enum smb_generation {
+ 
+ #define AICL_RERUN_TIME_CFG				0x661
+ #define AICL_RERUN_TIME_MASK				GENMASK(1, 0)
++#define AICL_RERUN_TIME_3_SECS				0
+ 
+ #define STAT_CFG					0x690
+ #define STAT_SW_OVERRIDE_VALUE_BIT			BIT(7)
+@@ -1384,6 +1385,14 @@ static int smb_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, chip);
+ 
++	rc = regmap_write_bits(chip->regmap,
++			       chip->base + AICL_RERUN_TIME_CFG,
++			       AICL_RERUN_TIME_MASK,
++			       AICL_RERUN_TIME_3_SECS);
++	if (rc < 0)
++		return dev_err_probe(chip->dev, rc,
++				     "could not set AICL rerun time\n");
++
+ 	if (chip->gen == SMB5) {
+ 		rc = regmap_update_bits(chip->regmap,
+ 					chip->base + CHARGING_ENABLE_CMD,
+-- 
+2.54.0
+

@@ -1,0 +1,6 @@
+Rob Herring <robh@kernel.org>
+Krzysztof Kozlowski <krzk+dt@kernel.org>
+Conor Dooley <conor+dt@kernel.org>
+linux-arm-msm@vger.kernel.org
+devicetree@vger.kernel.org
+linux-kernel@vger.kernel.org

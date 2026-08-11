@@ -1,0 +1,31 @@
+From e39195fd9fac2c2bc369f2a53affbe0308d6d11f Mon Sep 17 00:00:00 2001
+From: Casey Connolly <casey.connolly@linaro.org>
+Date: Tue, 11 Aug 2026 21:33:45 +0200
+Subject: [PATCH v1 1/3] dt-bindings: power: supply: qcom,pmi8998-charger: add
+ SMB5 PMICs
+
+Add compatible strings for PM7250B and PM8150B, which contain the SMB5
+generation of the Qualcomm switch-mode battery charger.
+
+Signed-off-by: Casey Connolly <casey.connolly@linaro.org>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../devicetree/bindings/power/supply/qcom,pmi8998-charger.yaml  | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/power/supply/qcom,pmi8998-charger.yaml b/Documentation/devicetree/bindings/power/supply/qcom,pmi8998-charger.yaml
+index 70f5cd6eaeab..9e200ba3f3a8 100644
+--- a/Documentation/devicetree/bindings/power/supply/qcom,pmi8998-charger.yaml
++++ b/Documentation/devicetree/bindings/power/supply/qcom,pmi8998-charger.yaml
+@@ -12,6 +12,8 @@ maintainers:
+ properties:
+   compatible:
+     enum:
++      - qcom,pm7250b-charger
++      - qcom,pm8150b-charger
+       - qcom,pmi8998-charger
+       - qcom,pm660-charger
+ 
+-- 
+2.54.0
+

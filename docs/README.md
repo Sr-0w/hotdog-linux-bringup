@@ -27,6 +27,8 @@ single developer workstation or a live debugging session.
   direct boot is validated
 - [pmaports-upstreaming.md](pmaports-upstreaming.md): package architecture,
   validation gates, and submission scope
+- [upstream-submissions.md](upstream-submissions.md): prepared Linux patch
+  series, validation state, recipients, and dry-run mail commands
 - [camera-port-plan.md](camera-port-plan.md): extracted SM8150 CAMSS hardware
   map, sensor identities, and the order the camera port has to be done in
 - [repository-layout.md](repository-layout.md): tracked versus local-only state

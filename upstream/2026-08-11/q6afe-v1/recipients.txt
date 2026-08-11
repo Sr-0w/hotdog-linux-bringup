@@ -1,0 +1,9 @@
+Srinivas Kandagatla <srini@kernel.org>
+Liam Girdwood <lgirdwood@gmail.com>
+Jaroslav Kysela <perex@perex.cz>
+Takashi Iwai <tiwai@suse.com>
+Mohammad Rafi Shaik <mohammad.rafi.shaik@oss.qualcomm.com>
+Richard Acayan <mailingradian@gmail.com>
+linux-sound@vger.kernel.org
+linux-arm-msm@vger.kernel.org
+linux-kernel@vger.kernel.org

@@ -1,0 +1,9 @@
+Rob Herring <robh@kernel.org>
+Krzysztof Kozlowski <krzk+dt@kernel.org>
+Conor Dooley <conor+dt@kernel.org>
+Kees Cook <kees@kernel.org>
+Tony Luck <tony.luck@intel.com>
+Guilherme G. Piccoli <gpiccoli@igalia.com>
+linux-arm-msm@vger.kernel.org
+devicetree@vger.kernel.org
+linux-kernel@vger.kernel.org

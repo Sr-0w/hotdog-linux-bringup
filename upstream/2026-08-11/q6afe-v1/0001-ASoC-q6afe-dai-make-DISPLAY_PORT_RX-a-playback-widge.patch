@@ -1,0 +1,37 @@
+From 350ad38f6b17da1848cd7e9d330e8df3e4ad085d Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 7 Aug 2026 19:55:00 +0200
+Subject: [PATCH] ASoC: q6afe-dai: make DISPLAY_PORT_RX a playback widget
+
+DISPLAY_PORT_RX is a receive port, so audio flows into it from a front end
+and out to the display. Every other receive port in this file is declared
+with SND_SOC_DAPM_AIF_IN, while transmit ports use SND_SOC_DAPM_AIF_OUT.
+
+Declaring DISPLAY_PORT_RX as an output reverses the DAPM graph around it
+and prevents a playback path from powering the port. Starting a stream
+then leaves the AFE port stopped.
+
+Declare it as an input like the other receive ports. Also pass NULL for
+the stream name instead of the string "NULL".
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/qdsp6/q6afe-dai.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe-dai.c b/sound/soc/qcom/qdsp6/q6afe-dai.c
+index 920345609d2c..f98ff598c072 100644
+--- a/sound/soc/qcom/qdsp6/q6afe-dai.c
++++ b/sound/soc/qcom/qdsp6/q6afe-dai.c
+@@ -980,7 +980,7 @@ static const struct snd_soc_dapm_widget q6afe_dai_widgets[] = {
+ 						0, SND_SOC_NOPM, 0, 0),
+ 	SND_SOC_DAPM_AIF_OUT("QUIN_TDM_TX_7", NULL,
+ 						0, SND_SOC_NOPM, 0, 0),
+-	SND_SOC_DAPM_AIF_OUT("DISPLAY_PORT_RX", "NULL", 0, SND_SOC_NOPM, 0, 0),
++	SND_SOC_DAPM_AIF_IN("DISPLAY_PORT_RX", NULL, 0, SND_SOC_NOPM, 0, 0),
+ 
+ 	SND_SOC_DAPM_AIF_IN("WSA_CODEC_DMA_RX_0", "NULL",
+ 		0, SND_SOC_NOPM, 0, 0),
+-- 
+2.54.0
+

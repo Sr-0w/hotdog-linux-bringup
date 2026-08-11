@@ -1,0 +1,28 @@
+From 17fd19499fecbbe7a306368f374558161b760172 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Tue, 11 Aug 2026 21:50:56 +0200
+Subject: [PATCH v1 1/2] dt-bindings: arm: qcom: add OnePlus 7T Pro
+
+Document the oneplus,hotdog compatible for the OnePlus 7T Pro,
+which is based on the Qualcomm SM8150 platform.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ Documentation/devicetree/bindings/arm/qcom.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/arm/qcom.yaml b/Documentation/devicetree/bindings/arm/qcom.yaml
+index ff8a35df7862..8bde30219810 100644
+--- a/Documentation/devicetree/bindings/arm/qcom.yaml
++++ b/Documentation/devicetree/bindings/arm/qcom.yaml
+@@ -1092,6 +1092,7 @@ properties:
+       - items:
+           - enum:
+               - microsoft,surface-duo
++              - oneplus,hotdog
+               - qcom,sm8150-hdk
+               - qcom,sm8150-mtp
+               - sony,bahamut-generic
+-- 
+2.54.0
+

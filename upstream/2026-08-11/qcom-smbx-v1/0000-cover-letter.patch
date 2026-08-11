@@ -1,0 +1,33 @@
+From b000ee69b3c43f87edb7e04136056105f4cdf7cd Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Tue, 11 Aug 2026 21:55:56 +0200
+Subject: [PATCH v1 0/3] power: supply: qcom_smbx: add SMB5 support
+
+Add support for the SMB5 charger generation found in PM7250B and
+PM8150B to the existing qcom_smbx driver.
+
+The series extends the binding, selects register layouts and electrical
+limits from per-PMIC match data, initializes SMB5 with charging and USB
+input suspended, and programs a stable AICL rerun interval.
+
+This was tested on a OnePlus 7T Pro (HD1913) with PM8150B. Register
+reads confirmed 4.40 V, 1.50 A and 500 mA limits. A 180-second guarded
+charging trace and a subsequent 600-second runtime trace completed
+without crossing the voltage guard.
+
+The driver was built with LLVM and the binding passed dt_binding_check.
+All three patches pass checkpatch --strict.
+
+Based on linux-next 20260810 (3d08ff75a47a).
+
+Casey Connolly (3):
+  dt-bindings: power: supply: qcom,pmi8998-charger: add SMB5 PMICs
+  power: supply: qcom_smbx: add SMB5 support
+  power: supply: qcom_smbx: program AICL rerun time
+
+ .../power/supply/qcom,pmi8998-charger.yaml    |   2 +
+ drivers/power/supply/qcom_smbx.c              | 521 +++++++++++++++---
+ 2 files changed, 457 insertions(+), 66 deletions(-)
+
+-- 
+2.54.0
