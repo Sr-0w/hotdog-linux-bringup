@@ -4,18 +4,24 @@ The prepared patch sets live under [`upstream/2026-08-11`](../upstream/2026-08-1
 They are based on linux-next 20260810 at `3d08ff75a47a` and use the DCO identity
 `Robin Snyders <robin@snyders.xyz>`.
 
-No patch in this directory has been mailed. The files are immutable submission
-artifacts: revise the source branch and regenerate a complete versioned series
-instead of editing a mailed patch in place.
+The Q6AFE, SM8150 download-mode and Qualcomm SMB5 v1 series were mailed on
+2026-08-11. Their files are immutable submission artifacts: revise the source
+branch and regenerate a complete versioned series instead of editing a mailed
+patch in place. The OnePlus 7T Pro device-tree series has not been mailed.
 
 ## Queue
 
 | Series | Patches | State | Remaining gate |
 | --- | ---: | --- | --- |
-| Q6AFE DisplayPort playback widget | 1 | Send-ready | None |
-| SM8150 download-mode register | 1 | Send-ready | None; six clean hardware reboots were recorded |
-| Qualcomm SMB5 charger support | 3 | Send-ready | None; conservative limits and guarded traces were hardware-validated |
+| Q6AFE DisplayPort playback widget | 1 | [Submitted v1](https://lore.kernel.org/r/20260811-submit-q6afe-display-port-v1-1-3bc8f2f38bdf@snyders.xyz) | Awaiting review |
+| SM8150 download-mode register | 1 | [Submitted v1](https://lore.kernel.org/r/20260811-submit-sm8150-dload-v1-1-1a87eefe6c89@snyders.xyz) | Awaiting review; six clean hardware reboots were recorded |
+| Qualcomm SMB5 charger support | 3 | [Submitted v1](https://lore.kernel.org/r/20260811-submit-qcom-smbx-send-v1-v1-0-feec6cfa123a@snyders.xyz) | Awaiting review; conservative limits and guarded traces were hardware-validated |
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
+
+All submitted messages were sent through the kernel.org `b4` web endpoint,
+signed with the configured patatt key, and copied to
+`Robin Snyders <robin@snyders.xyz>`. The device-tree series remains held back
+until its hardware gate is complete.
 
 The device-tree series intentionally excludes native panel support, audio,
 Type-C role switching, cameras, NFC, haptics and other experimental pieces.
@@ -51,7 +57,7 @@ artifact without carrying unrelated project patches. Verify at minimum:
 Record the exact commit, DTB hash and result in `docs/evidence` before removing
 the preflight hold.
 
-## Dry-run commands
+## Reproduction and dry-run commands
 
 Run from the repository root after configuring `git send-email`. These commands
 only render the messages and recipients; they do not send mail.
@@ -80,9 +86,10 @@ git send-email --dry-run \
   upstream/2026-08-11/oneplus-hotdog-v1/*.patch
 ```
 
-For a real submission, first repeat the dry run and inspect every generated
-header. Then replace `--dry-run` with `--confirm=always`. Send each directory as
-an independent thread; do not combine the four series.
+For a new or revised submission, first repeat the dry run and inspect every
+generated header. Then use the corresponding enrolled `b4` branch so revision
+tracking and links to earlier versions remain intact. Send each directory as an
+independent thread; do not combine the four series.
 
 When posting a revision, regenerate the full series with `--subject-prefix` set
 to the new version, add a cover-letter changelog, and keep the original message
