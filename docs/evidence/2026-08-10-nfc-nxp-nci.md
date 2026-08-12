@@ -234,3 +234,33 @@ driver's IRQ thread treats `-EREMOTEIO` as a hard fault and latches
 first read is genuinely unanswered, or arrives while the driver is still in
 `NXP_NCI_MODE_COLD` where the handler returns `-EREMOTEIO` unconditionally, has
 not been separated yet.
+
+## The power-on is marginal, and the reset destroys the evidence
+
+`0134` prints the driver mode and the latch state next to any failing read, to
+separate a genuinely unanswered read from an interrupt arriving in
+`NXP_NCI_MODE_COLD`. It cannot be read, because the case it was meant to
+diagnose takes the log with it.
+
+Across repeated runs on the same kernel and the same pin group, with no
+configuration blob present, powering the adapter does one of two things:
+
+- fails with `NFC: Read failed with error -121` after four interrupts, and the
+  system stays up; or
+- resets the handset before anything is written to the log.
+
+Both were observed on `r148`, and `r150` with the instrumentation reset before
+printing a single line. So the power-on is marginal rather than deterministic,
+and the reset path leaves nothing behind, exactly as the camera rails did.
+
+That means the next step is not another device-tree variant. It is a channel
+that survives the reset: a serial console on the debug connector, or ramoops
+proven to retain across this particular reset, since `pstore` did not survive
+the camera-rail resets either.
+
+Two things are worth separating while that is set up. The `-121` case is
+recoverable and cheap to reproduce; the driver latches `phy->hard_fault` on it
+and drops every later interrupt, so one marginal read ends the session even when
+the controller is otherwise healthy. Removing that latch, or resetting it on the
+next power cycle, is a small change worth making on its own merits regardless of
+what causes the first failure.

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=149
+pkgrel=150
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -168,6 +168,7 @@ source="
 	0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
 	0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
 	0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
+	0134-NFC-nxp-nci-report-the-mode-behind-a-failed-read.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -353,5 +354,6 @@ ea929a9aeae29255c4e553b8df2c90a0c295637cb7f6756362b3a5a0c4c3fa58618ca47191531bd4
 56fccba21a1f8b0e97dbd3257152ebb18cde4826b5763f7b1ff45465c5a0e5e5531c0cb39086a7fc8d2dc85faf2b5cfa0dd57963b0997c36abdc0efc435731ce  0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
 4fbe4ce1d8bf1b08c1adcf6a58e99dd4ba4dd1c3537c21c5db0a4d57e918abe1cebd78d5ddf6999b1a3befec94164a3f5f9f7297f0cfae7d3c949baab49e55e0  0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
 74cfe97dbaab58d6abd48e13085a7db1cfedf5e5b778bc1aa1fba16590a09161f7993114c98a47dd7f99d941f23c33a90562addef4335ef21f7cfe2e43b4c922  0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
+1b75b738c34c944bfae47aea10bf89d7bd799d332b55f5a93916271f8ea09e3eab60144c1fcc0c6e7adca5d003a3c6fae44ff8153463acfb13e72173efeb9dc1  0134-NFC-nxp-nci-report-the-mode-behind-a-failed-read.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "
