@@ -19,7 +19,7 @@ diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boo
 index 505ccbb..90587d7 100644
 --- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 +++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
-@@ -773,6 +773,18 @@
+@@ -773,6 +773,19 @@
  	reg = <0x0 0x98100000 0x0 0x1400000>;
  };
  
@@ -27,12 +27,13 @@ index 505ccbb..90587d7 100644
 +	status = "okay";
 +
 +	/*
-+	 * The AP has no IPA firmware of its own here, so the modem loads GSI.
-+	 * It is already running by the time this probes, and it answers the
-+	 * setup-ready handshake over SMP2P.
++	 * The stock modem expects the AP to load the IPA firmware, the way
++	 * OxygenOS does, and never raises the setup-ready handshake on its
++	 * own. Load it here.
 +	 */
-+	qcom,gsi-loader = "modem";
++	qcom,gsi-loader = "self";
 +	memory-region = <&ipa_fw_mem>;
++	firmware-name = "qcom/sm8150/oneplus/hotdog/ipa_fws.mbn";
 +};
 +
  &ipa_fw_mem {

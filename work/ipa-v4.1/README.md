@@ -201,3 +201,44 @@ The two values flagged as estimates are still unproven. `core_clock_rate` and
 the interconnect bandwidths did not prevent the driver coming up, but nothing
 has moved traffic yet, so neither is validated. `imem_addr` is likewise
 untested.
+
+## r165: the network device appears
+
+`gsi-loader = "modem"` was the wrong choice, and the interrupt counters said
+so plainly: `ipa-clock-query` and `ipa-setup-ready` were both registered on
+`smp2p-mpss` and both sat at zero. The stock modem never raises them because it
+expects the AP to load the IPA firmware, the way OxygenOS does.
+
+The firmware is on the handset, in the stock vendor partition. `vendor_a.img`
+was already extracted on the host, and `debugfs` reads it without mounting
+anything:
+
+```
+/firmware/ipa_fws.mdt  plus  ipa_fws.b00 .. ipa_fws.b04
+```
+
+Those are merged into a single `ipa_fws.mbn` by walking the ELF program
+headers and writing each segment at its `p_offset`, the same shape as
+`pil-squasher`. The result is 41280 bytes and is installed as
+`qcom/sm8150/oneplus/hotdog/ipa_fws.mbn`, with `qcom,gsi-loader = "self"` and
+a matching `firmware-name`.
+
+That completes the bring-up:
+
+```
+ipa 1e40000.ipa: IPA driver initialized
+ipa 1e40000.ipa: IPA driver setup completed successfully
+ipa 1e40000.ipa: received modem running event
+```
+
+and the network device exists:
+
+```
+lo  rmnet_ipa0  usb0  wlan0
+```
+
+## Packaging note
+
+`ipa_fws.mbn` is installed by hand, exactly as `slpi.mbn` is. The snapshot
+validator refuses binaries in the aports tree, so both need adding to the
+firmware package through whatever path already produces the other blobs.
