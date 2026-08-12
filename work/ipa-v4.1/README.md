@@ -150,3 +150,54 @@ the next measurement, and it needs no guesswork.
 The `channel 4 limited to 256 TREs` line is informational: the command channel
 asks for 512 TREs and the event ring caps it. sdm845 carries the same pair of
 numbers, so this is expected rather than a defect.
+
+## r163 and r164: the driver comes up
+
+**r163.** The 8 KB limit was not the hardware at all. `ipa->mem_size` is set
+from `resource_size()` of the `ipa-shared` range in the device tree, and I had
+copied sc7180's 0x2000, which fits sc7180's map exactly and not ours. Widening
+it to 0x4000 produced the answer that settles the earlier question:
+
+```
+ipa 1e40000.ipa: limiting IPA memory size to 0x00002800
+ipa 1e40000.ipa: IPA driver initialized
+```
+
+The hardware reports 0x2800, exactly the downstream `end_ofst`. The memory map
+extracted from downstream is correct, and both candidate explanations recorded
+above were wrong: the map covers the AP window precisely, and it is this SoC's
+map. Only my device tree window was short.
+
+**r164.** With the map right, probe reached firmware loading and stopped:
+
+```
+Direct firmware load for ipa_fws.mdt failed with error -2
+```
+
+The AP has no IPA firmware on this system and none is packaged. Rather than
+extract it, the loader is handed to the modem, which is already running:
+`qcom,gsi-loader = "modem"`. That is the modern form of the legacy
+`modem-init` property.
+
+The driver then binds:
+
+```
+ipa 1e40000.ipa: IPA driver initialized
+ipa 1e40000.ipa: received modem starting event
+ipa 1e40000.ipa: received modem running event
+```
+
+`/sys/bus/platform/drivers/ipa/1e40000.ipa` exists, so IPA v4.1 is supported on
+this SoC for the first time.
+
+## Where it stops
+
+No `rmnet` netdev yet, and ModemManager still finds no modem. The remoteproc
+notifications arrived, but the IPA-to-modem QMI exchange that follows them has
+produced nothing in the log, and it is that exchange which creates the network
+device. That is the next thing to instrument.
+
+The two values flagged as estimates are still unproven. `core_clock_rate` and
+the interconnect bandwidths did not prevent the driver coming up, but nothing
+has moved traffic yet, so neither is validated. `imem_addr` is likewise
+untested.

@@ -19,12 +19,19 @@ diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boo
 index 505ccbb..90587d7 100644
 --- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 +++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
-@@ -773,6 +773,11 @@
+@@ -773,6 +773,18 @@
  	reg = <0x0 0x98100000 0x0 0x1400000>;
  };
  
 +&ipa {
 +	status = "okay";
++
++	/*
++	 * The AP has no IPA firmware of its own here, so the modem loads GSI.
++	 * It is already running by the time this probes, and it answers the
++	 * setup-ready handshake over SMP2P.
++	 */
++	qcom,gsi-loader = "modem";
 +	memory-region = <&ipa_fw_mem>;
 +};
 +
@@ -64,7 +71,7 @@ index fbcc088..cb30559 100644
 +			iommus = <&apps_smmu 0x520 0x0>,
 +				 <&apps_smmu 0x522 0x0>;
 +			reg = <0 0x01e40000 0 0x7000>,
-+			      <0 0x01e47000 0 0x2000>,
++			      <0 0x01e47000 0 0x4000>,
 +			      <0 0x01e04000 0 0x2c000>;
 +			reg-names = "ipa-reg",
 +				    "ipa-shared",
