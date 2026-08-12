@@ -264,3 +264,49 @@ and drops every later interrupt, so one marginal read ends the session even when
 the controller is otherwise healthy. Removing that latch, or resetting it on the
 next power cycle, is a small change worth making on its own merits regardless of
 what causes the first failure.
+
+## The reset is a Geni I2C wedge, captured through ramoops
+
+The reset does leave evidence after all. `ramoops@a9800000` is described and
+`CONFIG_PSTORE_CONSOLE` is set, and `/sys/fs/pstore/console-ramoops-0` survives
+this reset with the console output that preceded it:
+
+```
+[ 78.112662] geni_i2c a84000.i2c: Timeout abort_m_cmd
+[ 80.630661] geni_i2c a80000.i2c: Timeout abort_m_cmd
+[ 80.633753] power_supply bq27411-0: driver failed to report `status' property: -110
+```
+
+`a84000` is `i2c9`, the NFC bus. The Geni controller times out and then cannot
+even abort the command. Two and a half seconds later `a80000`, which is `i2c8`
+and carries the fuel gauge, times out the same way and the gauge fails with
+`-110`.
+
+Both sit on the same QUPv3 wrapper: `i2c8` is SE0 and `i2c9` is SE1 of wrapper 1.
+So an NFC transaction wedges the serial engine hard enough to take the
+neighbouring engine with it, and the watchdog resets the handset.
+
+That changes the diagnosis entirely. The trigger is neither the configuration
+blob nor the secure-element line, both of which were suspected here in turn: it
+is the I2C transport. The earlier `-121` and the resets are the same fault seen
+at different points, depending on whether the controller happens to recover
+before the wrapper locks up.
+
+Worth noting that this also invalidates an earlier conclusion recorded above,
+that the reset leaves nothing behind. It leaves a complete console log; the
+mistake was checking `dmesg` after the reboot rather than `pstore`.
+
+## What to change next
+
+The bus is described here with `clock-frequency = <400000>` and with `dmas`
+deleted, which forces FIFO mode. Neither was measured against the stock, and
+either could be wrong for this part:
+
+- the NXP NCI read is a two-stage transfer, a header read followed by a payload
+  read, and Geni's handling of that pattern at 400 kHz has not been checked;
+- other buses on this board that needed care, `i2c4` and `i2c8`, both run at
+  100 kHz with DMA deleted, and `i2c9` was given 400 kHz without a reason;
+- the stock device tree's own clock-frequency for this bus has not been read.
+
+Dropping `i2c9` to 100 kHz is the cheapest next test and matches what every
+other troublesome bus on this handset already does.
