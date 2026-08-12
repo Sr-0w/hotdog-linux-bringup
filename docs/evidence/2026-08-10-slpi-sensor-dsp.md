@@ -583,3 +583,40 @@ Two things are missing on the host that would explain an empty registry:
 subsystem services use to find each other, and the sensor service is exactly
 the kind of client that needs it. Getting it running is the next step, before
 any conclusion about whether the SLPI publishes a sensor service at all.
+
+## The sensor service is published
+
+The empty service list had two causes on the host, and both are fixable.
+
+`pd-mapper` was failing with `no pd maps available`. It needs the protection
+domain maps, and they are not in the vendor image; they live on the stock
+`modem` partition, which is still on the handset:
+
+```
+/mnt/modemfw/image/  adspr.jsn adspua.jsn cdspr.jsn modemr.jsn modemuw.jsn
+                     slpir.jsn slpius.jsn
+```
+
+`slpir.jsn` and `slpius.jsn` are the SLPI's. Installed alongside the firmware
+in `/lib/firmware/qcom/sm8150/oneplus/hotdog/`, `pd-mapper` starts and stays
+up.
+
+The second was simpler: no name server. The `qrtr` package was not installed,
+which is also why `qrtr-lookup` was missing and why the helper written to
+replace it saw nothing. `sendto` succeeded and no reply ever came because
+there was nothing to reply.
+
+With both in place the bus lists services across three nodes, and the one that
+matters is there:
+
+```
+Service Version Instance Node Port
+    400       1        0    9   12   Snapdragon Sensor Core service
+```
+
+Node 0 is the modem with its usual thirty-odd services, node 5 carries SLIMbus
+and thermal, and node 9 is the sensor core.
+
+So the DSP is up, attached, served its registry, and publishing the service its
+sensors live behind. What remains for this route is a client that speaks it:
+subscribe to the sensors over QMI service 400 and present them to Linux.
