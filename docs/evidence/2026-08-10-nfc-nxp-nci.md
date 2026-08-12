@@ -507,3 +507,48 @@ had become `/dev/sdd38`. Writing to the stale name created a regular file in
 the `/dev` tmpfs rather than touching any partition, so nothing was damaged,
 but the lesson stands: resolve the target through
 `/dev/disk/by-partlabel/boot_b` on every write, never from a remembered node.
+
+## The host side is complete (r160)
+
+With the FIFO fix and the reference clock in place, everything the handset is
+responsible for now works, and each piece is measured rather than assumed:
+
+```
+nxp-nci_i2c 5-0028: NCI limits: max ctrl packet payload 255
+nxp-nci_i2c 5-0028: applied NCI configuration nxp/pn553-hotdog.nci
+nci: nci_start_poll: NCI discover: im=0x7e tm=0x0 rc=0
+```
+
+All ten commands of the 774-byte configuration apply. The adapter reports
+`Powered: Yes` and offers Felica, MIFARE, Jewel, ISO-DEP and NFC-DEP, which
+covers passports and bank cards. Discovery is accepted for every initiator
+protocol.
+
+The reference clock is live, and the consumer name settles that it is the
+right one:
+
+```
+ln_bb_clk3   enable_count 1   prepare_count 1   19200000   consumer 5-0028
+```
+
+That is `RPMH_LN_BB_CLK3` prepared and enabled on behalf of the NFC controller
+at 19.2 MHz, which is what `qcom,nq-clkreq` on GPIO 113 was asking the platform
+for.
+
+Two of my own detours are worth recording as dead ends so they are not tried
+again. Enabling `gpi_dma1` was the wrong half of the 32-byte problem: forcing
+Geni into FIFO mode is the fix, and adding a live DMA engine nothing uses only
+widens the attack surface, so the change was reverted. And
+`max_ctrl_pkt_payload_len` was a false lead: the controller advertises 255, so
+the 252-byte frames were always legal and no NCI segmentation is needed.
+
+## What is left
+
+No target notification has yet been observed. That is the one remaining
+unknown, and it cannot be resolved without a tag in the field: every host-side
+precondition is now positively confirmed, so the next measurement is simply a
+tag held against the back of the handset while polling.
+
+`/usr/local/bin/nfc-read` does that in one step. It stops neard so it can claim
+the adapter, polls as initiator for a chosen number of seconds, then reports
+the adapter state and any controller activity, and restarts neard afterwards.
