@@ -50,7 +50,7 @@ queue below starts with GNSS after the camera capture milestone.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| GNSS | Location | Engine answers QMI; userspace path blocked behind IPA. |
+| GNSS | Location | Engine answers QMI. The IPA dependency is cleared: `rmnet_ipa0` exists and ModemManager holds a net port. |
 
 The modem's GNSS engine works. With `pd-mapper` started, the LOC service answers
 over QRTR: NMEA types are readable and location sessions start and stop cleanly.
