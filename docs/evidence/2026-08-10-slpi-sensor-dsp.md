@@ -496,3 +496,57 @@ better place to be than where this file started.
 The sensor clock controller was a false trail, and the evidence above supersedes
 it. The block is disabled in the stock tree and the AP never drives it; what
 was missing was the heap assignment, not a clock provider.
+
+## Correction: hexagonrpcd was never exiting
+
+Every earlier note in this file that says `hexagonrpcd` exits is wrong, and the
+mistake was mine rather than the program's. I launched it as
+`nohup ... &` inside `sudo sh -c` over SSH, so it died with the session, and
+the PID check afterwards reported it gone. Run in the foreground it behaves
+correctly:
+
+```
+timeout 90 hexagonrpcd -f /dev/fastrpc-sdsp -R /usr/share/qcom/sm8150/oneplus/hotdog -s
+exit code 143, 1092 RPC calls
+```
+
+143 is SIGTERM, which is the timeout I imposed. It served the domain for the
+full ninety seconds and was still going.
+
+So the host side is finished: the heap is assigned, the domain attaches, the
+registry is served and the conversation runs indefinitely. The refused write of
+`sns_reg_version` and the unmapped `/proc/oppoVersion` node are both tolerated;
+the DSP retries and carries on.
+
+Note that a listener can only be registered once per DSP boot. A second
+`hexagonrpcd` on the same boot fails with `Could not register ADSP default
+listener` and does nothing useful, so each experiment needs a reboot. The SLPI
+also refuses to stop and restart through sysfs, timing out and leaving itself
+offline, so rebooting the handset is the only clean reset.
+
+## Why no IIO devices appear, and what that changes
+
+No sensor surfaces in `/sys/bus/iio` despite all of the above, and the reason
+is structural rather than a bug. The stock device tree describes no sensors at
+all: not by name, and not as children of the SLPI's own I2C buses at
+`0x2680000` through `0x268c000`, which are empty. The DSP learns its parts from
+the registry instead, which is why the registry names `bmi26x_0` and
+`ak0991x_0` while the device tree names nothing.
+
+That leaves two routes, and they are quite different in size.
+
+Bridging the DSP's sensor service to userspace keeps the parts where the vendor
+put them, but needs a client speaking the SSC protocol, which does not exist in
+this stack.
+
+Taking the sensors away from the DSP means describing the SLPI's QUPv3 wrapper
+on the application processor, giving it the sensors' addresses out of the
+registry, and using the mainline IIO drivers that already exist for these
+parts. This is what sibling devices do: on sdm845 handsets the IMU is a plain
+I2C device with a mainline driver, and `hexagonrpcd` is there for other
+reasons.
+
+The second route also puts the sensor clock controller back in scope, with the
+difference that matters: if the AP owns that bus then powering and clocking it
+is legitimately the AP's job, which it was not when I first wrote that driver.
+The driver is still in `work/scc-sm8150/`.
