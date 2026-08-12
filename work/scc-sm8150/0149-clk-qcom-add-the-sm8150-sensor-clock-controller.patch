@@ -1,0 +1,384 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] clk: qcom: add the SM8150 sensor clock controller
+
+The sensor DSP does not share the application processor's serial engines. It
+owns a QUPv3 wrapper of its own, and that wrapper is clocked from a separate
+sensor clock controller which mainline has never described, on any SoC.
+
+Without it the protection domain reaches for registers on an unclocked block.
+The transaction never completes, so no translation fault is reported and the
+interconnect simply stops answering until the watchdog resets the SoC.
+
+The register offsets and parent topology come from the published downstream
+kernel for this generation. They are expressed here in mainline's own form:
+parent_data rather than parent names, no voltage-vote scaffolding, and the six
+identical serial-engine sources and their branches folded into macros. The
+v2 frequency tables are the ones used, matching the compatible the stock
+device tree carries.
+
+The QDSP6SS parent appears in the hardware source map but nothing in these
+frequency tables selects it, so it is left out rather than described without
+being reachable.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/clk/qcom/Kconfig b/drivers/clk/qcom/Kconfig
+index 7d5dac2..75654f6 100644
+--- a/drivers/clk/qcom/Kconfig
++++ b/drivers/clk/qcom/Kconfig
+@@ -1121,6 +1121,14 @@ config SM_GCC_7150
+ 	  Say Y if you want to use peripheral devices such as UART,
+ 	  SPI, I2C, USB, SD/UFS, PCIe etc.
+ 
++config SM_SCC_8150
++	tristate "SM8150 Sensor Clock Controller"
++	depends on ARM64 || COMPILE_TEST
++	help
++	  Support for the sensor clock controller on Qualcomm Technologies, Inc
++	  SM8150 devices. It clocks the serial engines the sensor DSP owns, and
++	  is required for the sensors protection domain to start.
++
+ config SM_GCC_8150
+ 	tristate "SM8150 Global Clock Controller"
+ 	depends on ARM64 || COMPILE_TEST
+diff --git a/drivers/clk/qcom/Makefile b/drivers/clk/qcom/Makefile
+index 96862e9..febaccd 100644
+--- a/drivers/clk/qcom/Makefile
++++ b/drivers/clk/qcom/Makefile
+@@ -143,6 +143,7 @@ obj-$(CONFIG_SM_GCC_6350) += gcc-sm6350.o
+ obj-$(CONFIG_SM_GCC_6375) += gcc-sm6375.o
+ obj-$(CONFIG_SM_GCC_7150) += gcc-sm7150.o
+ obj-$(CONFIG_SM_GCC_8150) += gcc-sm8150.o
++obj-$(CONFIG_SM_SCC_8150) += scc-sm8150.o
+ obj-$(CONFIG_SM_GCC_8250) += gcc-sm8250.o
+ obj-$(CONFIG_SM_GCC_8350) += gcc-sm8350.o
+ obj-$(CONFIG_SM_GCC_8450) += gcc-sm8450.o
+diff --git a/drivers/clk/qcom/scc-sm8150.c b/drivers/clk/qcom/scc-sm8150.c
+new file mode 100644
+index 0000000..4e6a421
+--- /dev/null
++++ b/drivers/clk/qcom/scc-sm8150.c
+@@ -0,0 +1,286 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
++ * Copyright (c) 2026, Robin Snyders
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++
++#include <dt-bindings/clock/qcom,sm8150-scc.h>
++
++#include "clk-alpha-pll.h"
++#include "clk-branch.h"
++#include "clk-rcg.h"
++#include "clk-regmap.h"
++#include "common.h"
++
++enum {
++	DT_BI_TCXO,
++	DT_AON_SLEEP_CLK,
++};
++
++enum {
++	P_AON_SLEEP_CLK,
++	P_SCC_PLL_OUT_EVEN,
++	P_SCC_PLL_OUT_MAIN,
++	P_SSC_BI_TCXO,
++};
++
++static const struct pll_vco trion_vco[] = {
++	{ 249600000, 2000000000, 0 },
++};
++
++static struct clk_alpha_pll scc_pll = {
++	.offset = 0x0,
++	.vco_table = trion_vco,
++	.num_vco = ARRAY_SIZE(trion_vco),
++	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_TRION],
++	.clkr = {
++		.hw.init = &(const struct clk_init_data){
++			.name = "scc_pll",
++			.parent_data = &(const struct clk_parent_data){
++				.index = DT_BI_TCXO,
++			},
++			.num_parents = 1,
++			.ops = &clk_alpha_pll_fixed_trion_ops,
++		},
++	},
++};
++
++static const struct clk_div_table post_div_table_scc_pll_out_even[] = {
++	{ 0x0, 1 },
++	{ 0x1, 2 },
++	{ 0x3, 4 },
++	{ 0x7, 8 },
++	{ }
++};
++
++static struct clk_alpha_pll_postdiv scc_pll_out_even = {
++	.offset = 0x0,
++	.post_div_shift = 8,
++	.post_div_table = post_div_table_scc_pll_out_even,
++	.num_post_div = ARRAY_SIZE(post_div_table_scc_pll_out_even),
++	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_TRION],
++	.width = 4,
++	.clkr.hw.init = &(const struct clk_init_data){
++		.name = "scc_pll_out_even",
++		.parent_hws = (const struct clk_hw*[]){ &scc_pll.clkr.hw },
++		.num_parents = 1,
++		.flags = CLK_SET_RATE_PARENT,
++		.ops = &clk_alpha_pll_postdiv_trion_ops,
++	},
++};
++
++static const struct parent_map scc_parent_map_0[] = {
++	{ P_SSC_BI_TCXO, 0 },
++	{ P_AON_SLEEP_CLK, 1 },
++	{ P_SCC_PLL_OUT_EVEN, 2 },
++	{ P_SSC_BI_TCXO, 3 },
++	{ P_SCC_PLL_OUT_MAIN, 6 },
++};
++
++static const struct clk_parent_data scc_parent_data_0[] = {
++	{ .index = DT_BI_TCXO },
++	{ .index = DT_AON_SLEEP_CLK },
++	{ .hw = &scc_pll_out_even.clkr.hw },
++	{ .index = DT_BI_TCXO },
++	{ .hw = &scc_pll.clkr.hw },
++};
++
++static const struct freq_tbl ftbl_scc_main_rcg_clk_src[] = {
++	F(96000000, P_SCC_PLL_OUT_EVEN, 3, 0, 0),
++	{ }
++};
++
++static struct clk_rcg2 scc_main_rcg_clk_src = {
++	.cmd_rcgr = 0x1000,
++	.mnd_width = 0,
++	.hid_width = 5,
++	.parent_map = scc_parent_map_0,
++	.freq_tbl = ftbl_scc_main_rcg_clk_src,
++	.clkr.hw.init = &(const struct clk_init_data){
++		.name = "scc_main_rcg_clk_src",
++		.parent_data = scc_parent_data_0,
++		.num_parents = ARRAY_SIZE(scc_parent_data_0),
++		.ops = &clk_rcg2_ops,
++	},
++};
++
++static const struct freq_tbl ftbl_scc_qupv3_se_clk_src[] = {
++	F(7372800, P_SCC_PLL_OUT_EVEN, 1, 16, 625),
++	F(14745600, P_SCC_PLL_OUT_EVEN, 1, 32, 625),
++	F(19200000, P_SSC_BI_TCXO, 1, 0, 0),
++	F(29491200, P_SCC_PLL_OUT_EVEN, 1, 64, 625),
++	F(32000000, P_SCC_PLL_OUT_EVEN, 9, 0, 0),
++	F(48000000, P_SCC_PLL_OUT_EVEN, 6, 0, 0),
++	F(64000000, P_SCC_PLL_OUT_EVEN, 4.5, 0, 0),
++	F(96000000, P_SCC_PLL_OUT_MAIN, 6, 0, 0),
++	F(100000000, P_SCC_PLL_OUT_MAIN, 1, 25, 144),
++	F(102400000, P_SCC_PLL_OUT_MAIN, 1, 8, 45),
++	F(112000000, P_SCC_PLL_OUT_MAIN, 1, 7, 36),
++	F(117964800, P_SCC_PLL_OUT_MAIN, 1, 128, 625),
++	F(120000000, P_SCC_PLL_OUT_MAIN, 1, 5, 24),
++	F(128000000, P_SCC_PLL_OUT_MAIN, 4.5, 0, 0),
++	F(144000000, P_SCC_PLL_OUT_MAIN, 4, 0, 0),
++	F(192000000, P_SCC_PLL_OUT_MAIN, 3, 0, 0),
++	{ }
++};
++
++#define SCC_SE_RCG(_name, _cmd_rcgr)					\
++	static struct clk_rcg2 _name = {				\
++		.cmd_rcgr = _cmd_rcgr,					\
++		.mnd_width = 16,					\
++		.hid_width = 5,						\
++		.parent_map = scc_parent_map_0,				\
++		.freq_tbl = ftbl_scc_qupv3_se_clk_src,			\
++		.clkr.hw.init = &(const struct clk_init_data){		\
++			.name = #_name,					\
++			.parent_data = scc_parent_data_0,		\
++			.num_parents = ARRAY_SIZE(scc_parent_data_0),	\
++			.ops = &clk_rcg2_ops,				\
++		},							\
++	}
++
++SCC_SE_RCG(scc_qupv3_se0_clk_src, 0x2004);
++SCC_SE_RCG(scc_qupv3_se1_clk_src, 0x3004);
++SCC_SE_RCG(scc_qupv3_se2_clk_src, 0x4004);
++SCC_SE_RCG(scc_qupv3_se3_clk_src, 0xb004);
++SCC_SE_RCG(scc_qupv3_se4_clk_src, 0xc004);
++SCC_SE_RCG(scc_qupv3_se5_clk_src, 0xd004);
++
++#define SCC_BRANCH(_name, _halt, _bit, _parent)				\
++	static struct clk_branch _name = {				\
++		.halt_reg = _halt,					\
++		.halt_check = BRANCH_HALT_VOTED,			\
++		.clkr = {						\
++			.enable_reg = 0x21000,				\
++			.enable_mask = BIT(_bit),			\
++			.hw.init = &(const struct clk_init_data){	\
++				.name = #_name,				\
++				.parent_hws = (const struct clk_hw*[]){	\
++					&_parent.clkr.hw,		\
++				},					\
++				.num_parents = 1,			\
++				.flags = CLK_SET_RATE_PARENT,		\
++				.ops = &clk_branch2_ops,		\
++			},						\
++		},							\
++	}
++
++SCC_BRANCH(scc_qupv3_2xcore_clk, 0x5008, 10, scc_main_rcg_clk_src);
++SCC_BRANCH(scc_qupv3_core_clk, 0x5010, 11, scc_main_rcg_clk_src);
++SCC_BRANCH(scc_qupv3_se0_clk, 0x2130, 3, scc_qupv3_se0_clk_src);
++SCC_BRANCH(scc_qupv3_se1_clk, 0x3130, 4, scc_qupv3_se1_clk_src);
++SCC_BRANCH(scc_qupv3_se2_clk, 0x4130, 5, scc_qupv3_se2_clk_src);
++SCC_BRANCH(scc_qupv3_se3_clk, 0xb130, 6, scc_qupv3_se3_clk_src);
++SCC_BRANCH(scc_qupv3_se4_clk, 0xc130, 7, scc_qupv3_se4_clk_src);
++SCC_BRANCH(scc_qupv3_se5_clk, 0xd130, 8, scc_qupv3_se5_clk_src);
++
++static struct clk_branch scc_qupv3_m_hclk_clk = {
++	.halt_reg = 0x9064,
++	.halt_check = BRANCH_HALT_VOTED,
++	.clkr = {
++		.enable_reg = 0x21000,
++		.enable_mask = BIT(1),
++		.hw.init = &(const struct clk_init_data){
++			.name = "scc_qupv3_m_hclk_clk",
++			.ops = &clk_branch2_ops,
++		},
++	},
++};
++
++static struct clk_branch scc_qupv3_s_hclk_clk = {
++	.halt_reg = 0x9060,
++	.halt_check = BRANCH_HALT_VOTED,
++	.clkr = {
++		.enable_reg = 0x21000,
++		.enable_mask = BIT(0),
++		.hw.init = &(const struct clk_init_data){
++			.name = "scc_qupv3_s_hclk_clk",
++			.ops = &clk_branch2_ops,
++		},
++	},
++};
++
++static struct clk_regmap *scc_sm8150_clocks[] = {
++	[SCC_MAIN_RCG_CLK_SRC] = &scc_main_rcg_clk_src.clkr,
++	[SCC_PLL] = &scc_pll.clkr,
++	[SCC_PLL_OUT_EVEN] = &scc_pll_out_even.clkr,
++	[SCC_QUPV3_2XCORE_CLK] = &scc_qupv3_2xcore_clk.clkr,
++	[SCC_QUPV3_CORE_CLK] = &scc_qupv3_core_clk.clkr,
++	[SCC_QUPV3_M_HCLK_CLK] = &scc_qupv3_m_hclk_clk.clkr,
++	[SCC_QUPV3_S_HCLK_CLK] = &scc_qupv3_s_hclk_clk.clkr,
++	[SCC_QUPV3_SE0_CLK] = &scc_qupv3_se0_clk.clkr,
++	[SCC_QUPV3_SE0_CLK_SRC] = &scc_qupv3_se0_clk_src.clkr,
++	[SCC_QUPV3_SE1_CLK] = &scc_qupv3_se1_clk.clkr,
++	[SCC_QUPV3_SE1_CLK_SRC] = &scc_qupv3_se1_clk_src.clkr,
++	[SCC_QUPV3_SE2_CLK] = &scc_qupv3_se2_clk.clkr,
++	[SCC_QUPV3_SE2_CLK_SRC] = &scc_qupv3_se2_clk_src.clkr,
++	[SCC_QUPV3_SE3_CLK] = &scc_qupv3_se3_clk.clkr,
++	[SCC_QUPV3_SE3_CLK_SRC] = &scc_qupv3_se3_clk_src.clkr,
++	[SCC_QUPV3_SE4_CLK] = &scc_qupv3_se4_clk.clkr,
++	[SCC_QUPV3_SE4_CLK_SRC] = &scc_qupv3_se4_clk_src.clkr,
++	[SCC_QUPV3_SE5_CLK] = &scc_qupv3_se5_clk.clkr,
++	[SCC_QUPV3_SE5_CLK_SRC] = &scc_qupv3_se5_clk_src.clkr,
++};
++
++static const struct regmap_config scc_sm8150_regmap_config = {
++	.reg_bits	= 32,
++	.reg_stride	= 4,
++	.val_bits	= 32,
++	.max_register	= 0x23000,
++	.fast_io	= true,
++};
++
++static const struct qcom_cc_desc scc_sm8150_desc = {
++	.config = &scc_sm8150_regmap_config,
++	.clks = scc_sm8150_clocks,
++	.num_clks = ARRAY_SIZE(scc_sm8150_clocks),
++};
++
++static const struct alpha_pll_config scc_pll_config = {
++	.l = 0x1e,
++	.alpha = 0x0,
++	.config_ctl_val = 0x20485699,
++	.config_ctl_hi_val = 0x00002267,
++	.config_ctl_hi1_val = 0x00000024,
++	.user_ctl_val = 0x00000100,
++	.user_ctl_hi_val = 0x00000805,
++	.user_ctl_hi1_val = 0x000000d0,
++};
++
++static const struct of_device_id scc_sm8150_match_table[] = {
++	{ .compatible = "qcom,sm8150-scc" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, scc_sm8150_match_table);
++
++static int scc_sm8150_probe(struct platform_device *pdev)
++{
++	struct regmap *regmap;
++
++	regmap = qcom_cc_map(pdev, &scc_sm8150_desc);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	clk_trion_pll_configure(&scc_pll, regmap, &scc_pll_config);
++
++	return qcom_cc_really_probe(&pdev->dev, &scc_sm8150_desc, regmap);
++}
++
++static struct platform_driver scc_sm8150_driver = {
++	.probe = scc_sm8150_probe,
++	.driver = {
++		.name = "scc-sm8150",
++		.of_match_table = scc_sm8150_match_table,
++	},
++};
++
++module_platform_driver(scc_sm8150_driver);
++
++MODULE_DESCRIPTION("QTI SCC SM8150 Driver");
++MODULE_LICENSE("GPL");
+diff --git a/include/dt-bindings/clock/qcom,sm8150-scc.h b/include/dt-bindings/clock/qcom,sm8150-scc.h
+new file mode 100644
+index 0000000..03d9ebe
+--- /dev/null
++++ b/include/dt-bindings/clock/qcom,sm8150-scc.h
+@@ -0,0 +1,30 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++/*
++ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
++ * Copyright (c) 2026, Robin Snyders
++ */
++
++#ifndef _DT_BINDINGS_CLK_QCOM_SM8150_SCC_H
++#define _DT_BINDINGS_CLK_QCOM_SM8150_SCC_H
++
++#define SCC_MAIN_RCG_CLK_SRC		0
++#define SCC_PLL				1
++#define SCC_PLL_OUT_EVEN		2
++#define SCC_QUPV3_2XCORE_CLK		3
++#define SCC_QUPV3_CORE_CLK		4
++#define SCC_QUPV3_M_HCLK_CLK		5
++#define SCC_QUPV3_S_HCLK_CLK		6
++#define SCC_QUPV3_SE0_CLK		7
++#define SCC_QUPV3_SE0_CLK_SRC		8
++#define SCC_QUPV3_SE1_CLK		9
++#define SCC_QUPV3_SE1_CLK_SRC		10
++#define SCC_QUPV3_SE2_CLK		11
++#define SCC_QUPV3_SE2_CLK_SRC		12
++#define SCC_QUPV3_SE3_CLK		13
++#define SCC_QUPV3_SE3_CLK_SRC		14
++#define SCC_QUPV3_SE4_CLK		15
++#define SCC_QUPV3_SE4_CLK_SRC		16
++#define SCC_QUPV3_SE5_CLK		17
++#define SCC_QUPV3_SE5_CLK_SRC		18
++
++#endif
