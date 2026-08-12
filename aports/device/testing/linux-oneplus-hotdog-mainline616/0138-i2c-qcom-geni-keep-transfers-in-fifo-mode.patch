@@ -1,0 +1,44 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] i2c: qcom-geni: keep transfers in FIFO mode
+
+Diagnostic patch.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index 13889f5..4737029 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -415,6 +415,13 @@ static void geni_i2c_tx_msg_cleanup(struct geni_i2c_dev *gi2c,
+ 	}
+ }
+ 
++/*
++ * Diagnostic: SE-DMA wedges this SM8150 serial engine on transfers of 32
++ * bytes and above, which is exactly where the driver switches away from
++ * FIFO. Raise the threshold so every transfer stays in FIFO mode.
++ */
++#define GENI_I2C_DMA_THRESHOLD	65536
++
+ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 				u32 m_param)
+ {
+@@ -425,7 +432,7 @@ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = i2c_get_dma_safe_msg_buf(msg, GENI_I2C_DMA_THRESHOLD);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -464,7 +471,7 @@ static int geni_i2c_tx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = i2c_get_dma_safe_msg_buf(msg, GENI_I2C_DMA_THRESHOLD);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else

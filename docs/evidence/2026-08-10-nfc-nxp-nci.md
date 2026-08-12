@@ -408,3 +408,48 @@ larger than that to be segmented across packets with `PBF` set on all but the
 last, and neither `nci_send_cmd()` nor the nxp-nci phy segments. Reading the
 value the PN553 advertises is the next measurement, and it is directly
 available from the `CORE_INIT` response the driver already receives.
+
+## The real cause: SE-DMA on this serial engine (r156)
+
+`max_ctrl_pkt_payload_len` was measured, and it is 255. A 249-byte payload is
+therefore entirely legal and the segmentation theory was wrong. The limit was
+the transport.
+
+The Geni I2C driver switches away from FIFO at exactly 32 bytes:
+
+```c
+dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
+if (dma_buf)
+	geni_se_select_mode(se, GENI_SE_DMA);
+else
+	geni_se_select_mode(se, GENI_SE_FIFO);
+```
+
+That is precisely where the configuration broke. Every command that succeeded
+was 8 or 18 bytes on the wire; the first one to fail was 252. A bus-level probe
+put the threshold between 16 and 32 bytes, and the 32-byte attempt wedged the
+controller badly enough to reset the handset.
+
+Restoring GPI DMA in r154 was inert, and the reason is visible in the failure
+itself: `abort_m_cmd` belongs to the non-GPI path, so `gpi_mode` was never
+true and the SE-DMA path was in use throughout.
+
+`0138` raises the threshold so every transfer stays in FIFO mode. The result:
+
+```
+nxp-nci_i2c 5-0028: NCI limits: max ctrl packet payload 255
+nxp-nci_i2c 5-0028: applied NCI configuration nxp/pn553-hotdog.nci
+```
+
+All ten commands apply, the adapter powers up, `Powered` is true, polling
+starts and stays true, and the handset does not reset. The NFC transport,
+the proprietary activation and the full 774-byte platform configuration are
+all working.
+
+`0138` is a diagnostic in its present form: it forces FIFO for every Geni I2C
+bus on the SoC rather than only this one. What it proves is the defect. The
+upstream-shaped fix is to find why SE-DMA fails on this serial engine, and the
+fallback is a per-controller quirk rather than a global threshold.
+
+What is not yet demonstrated is reading a tag. Discovery runs without error and
+no target has entered the field during the test window.
