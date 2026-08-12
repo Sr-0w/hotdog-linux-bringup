@@ -1,0 +1,51 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] misc: fastrpc: strip the session id for the sensors domain
+
+Buffers handed to the DSP carry the session identifier in bits 32 and above,
+and the DSP is expected to strip it. The sensors protection domain on this
+SoC does not: it faults on the address verbatim.
+
+  buffer dma 0xfffff000 size 0x204, sid 1
+  invoke handle 1 sc 0x10000 pd 2 sid 1 addr 0x1fffff000
+  arm-smmu: Unhandled context fault: iova=0x1fffff000, SID=0x5a1
+
+The mapping is at 0xfffff000 and the transaction went to the right context
+bank, so only the folded identifier is wrong. Send the address that is
+actually mapped.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index 3789235..ec1ad67 100644
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -445,6 +445,8 @@ static int fastrpc_buf_alloc(struct fastrpc_user *fl, struct device *dev,
+ 	buf = *obuf;
+ 
+ 	if (fl->sctx && fl->sctx->sid)
++		dev_info(dev, "buffer dma 0x%llx size 0x%zx, sid %d\n",
++			 buf->phys, buf->size, fl->sctx->sid);
+ 		buf->phys += ((u64)fl->sctx->sid << 32);
+ 
+ 	return 0;
+@@ -1124,8 +1126,19 @@ static int fastrpc_invoke_send(struct fastrpc_session_ctx *sctx,
+ 	msg->ctx = ctx->ctxid | fl->pd;
+ 	msg->handle = handle;
+ 	msg->sc = ctx->sc;
++	/*
++	 * The sensors protection domain uses this address without stripping
++	 * the session identifier the allocator folded into its upper bits,
++	 * so hand it the mapping that actually exists.
++	 */
+ 	msg->addr = ctx->buf ? ctx->buf->phys : 0;
++	if (fl->pd == SENSORS_PD)
++		msg->addr = FASTRPC_PHYS(msg->addr);
+ 	msg->size = roundup(ctx->msg_sz, PAGE_SIZE);
++
++	dev_info(sctx->dev,
++		 "invoke handle %u sc 0x%x pd %d sid %d addr 0x%llx size 0x%x\n",
++		 handle, ctx->sc, fl->pd, sctx->sid, msg->addr, msg->size);
+ 	fastrpc_context_get(ctx);
+ 
+ 	ret = rpmsg_send(cctx->rpdev->ept, (void *)msg, sizeof(*msg));

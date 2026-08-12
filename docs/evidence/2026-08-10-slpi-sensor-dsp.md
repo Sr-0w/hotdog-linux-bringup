@@ -282,3 +282,37 @@ region, the reservations match.
 
 So the DSP is not being handed a differently placed carveout. The fault is in
 what the attach packet points at, not in where the firmware lives.
+
+## The fault address, measured (r167 and r168)
+
+Instrumenting the invoke path settled it in one boot. `fastrpc_buf_alloc()`
+folds the session identifier into the buffer address:
+
+```c
+buf->phys += ((u64)fl->sctx->sid << 32);
+```
+
+and `fastrpc_invoke_send()` passes that value to the DSP as `msg->addr`. The
+identifier comes from the `reg` property of the context bank node, so
+`compute-cb@1` gives sid 1. The trace shows exactly what that produces:
+
+```
+buffer dma 0xfffff000 size 0x204, sid 1
+invoke handle 1 sc 0x10000 pd 2 sid 1 addr 0x1fffff000 size 0x1000
+arm-smmu: Unhandled context fault: iova=0x1fffff000, SID=0x5a1
+```
+
+The buffer is mapped at `0xfffff000`. The host sends `0x1fffff000`. The DSP
+uses that verbatim, so it reaches for an address one bit above the mapping.
+The transaction arrives in the right context bank, which is why only the
+folded identifier is wrong rather than the session.
+
+Sending the address that is actually mapped, for the sensors domain only,
+removes the fault entirely. r168 shows the invoke at `0xfffff000` with no
+context fault and no `sensor_process` crash following it, where every previous
+run faulted within microseconds.
+
+The handset still resets shortly afterwards and the console log ends on
+unrelated DPU frame-done timeouts, so the cause of that reset is not captured
+and is the next thing to chase. But the SMMU fault that had blocked every
+attempt since this file was started is gone.
