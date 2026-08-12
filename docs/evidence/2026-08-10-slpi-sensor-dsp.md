@@ -550,3 +550,36 @@ The second route also puts the sensor clock controller back in scope, with the
 difference that matters: if the AP owns that bus then powering and clocking it
 is legitimately the AP's job, which it was not when I first wrote that driver.
 The driver is still in `work/scc-sm8150/`.
+
+## Route (a): bridging the sensor service, first findings
+
+Taking the DSP's sensors to userspace means talking to the sensor service the
+SLPI exposes, and the first question is whether it registers at all.
+
+`qrtr-lookup` is not packaged here, so `helpers/qrtr-services.py` asks the name
+server directly. Two details cost time and are worth recording: Python knows
+`AF_QIPCRTR` but cannot marshal its addresses, so the socket calls go through
+ctypes with a hand-built `sockaddr_qrtr`; and `bind()` rejects a node of zero,
+because the kernel requires the caller's own node id. Here that is node 1.
+
+With the domain attached and `hexagonrpcd` serving, the bus answers but lists
+nothing:
+
+```
+local node 1 port 16398
+total: 0
+```
+
+Probing nodes directly with `qmicli` shows which exist: node 0 is the modem and
+answers `--dms-get-ids` with the IMEI, nodes 1 and 5 exist but carry no DMS,
+and 2, 3, 4 and 6 are absent.
+
+Two things are missing on the host that would explain an empty registry:
+
+- no name server process is running
+- `pd-mapper` is in the failed state
+
+`pd-mapper` matters directly. It serves the protection-domain lookups that
+subsystem services use to find each other, and the sensor service is exactly
+the kind of client that needs it. Getting it running is the next step, before
+any conclusion about whether the SLPI publishes a sensor service at all.
