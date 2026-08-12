@@ -97,3 +97,56 @@ they are the most likely first failures:
 The interconnect bandwidths are still sdm845's. The stock node carries five
 performance cases across four paths, so real figures can be derived once the
 driver runs.
+
+## First hardware runs: r161 and r162
+
+The driver reaches the handset and each run fails further along than the last,
+which is what makes the errors useful.
+
+**r161.** `platform 1e40000.ipa: Adding to iommu group 4`, so the node, its
+streams and the match entry are all correct, then:
+
+```
+ipa 1e40000.ipa: empty memory region 11
+ipa 1e40000.ipa: probe with driver ipa failed with error -22
+```
+
+That was my error. `ipa_mem_valid_one()` rejects a region whose size and canary
+count are both zero, and I had transcribed downstream's zero-sized `apps_hdr`
+literally. Mainline marks `IPA_MEM_AP_HEADER` optional and neither the v3.5.1
+nor the v4.2 data file declares it at all. Removed in r162.
+
+**r162.** Past that check, into the hardware:
+
+```
+ipa 1e40000.ipa: channel 4 limited to 256 TREs
+ipa 1e40000.ipa: region 14 ends beyond memory limit (0x00002000)
+```
+
+The driver read the IPA SRAM size from the hardware and got 8 KB. The
+downstream partition runs to `end_ofst = 0x2800`, which is 10 KB.
+
+The register read is not in doubt: `IPA_SHARED_MEM_SIZE` sits at 0x54 in every
+downstream version, declared once at v3.0 and inherited, and mainline's v4.2
+file uses 0x54 as well. So the handset is telling us its AP-visible shared
+memory is 8 KB.
+
+That leaves a real question rather than a typo, and it should be settled rather
+than guessed. Two candidates:
+
+- `ipa_4_1_mem_part` may cover more than the AP window. The last two regions,
+  `modem` ending at 0x23fc and `uc_descriptor_ram` at 0x2400, are the ones that
+  overflow, and the uC descriptor RAM in particular is plausibly addressed
+  outside the shared window rather than inside it. For comparison, sdm845's
+  mainline map ends at exactly 0x2000 with its uC event ring as the last
+  region.
+- the downstream v4.1 row may be shared with a different SoC of the same IPA
+  generation whose SRAM is larger.
+
+Reading the `SHARED_MEM_SIZE` register directly on the handset, and comparing
+`ofst_start` against the reported base address, will distinguish these. That is
+the next measurement, and it needs no guesswork.
+
+The `channel 4 limited to 256 TREs` line is informational: the command channel
+asks for 512 TREs and the event ring caps it. sdm845 carries the same pair of
+numbers, so this is expected rather than a defect.

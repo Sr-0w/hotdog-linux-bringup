@@ -41,7 +41,7 @@ new file mode 100644
 index 0000000..f0d1cfd
 --- /dev/null
 +++ b/drivers/net/ipa/data/ipa_data-v4.1.c
-@@ -0,0 +1,355 @@
+@@ -0,0 +1,354 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
 +/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
@@ -334,7 +334,6 @@ index 0000000..f0d1cfd
 +	{ .id = IPA_MEM_V6_ROUTE_HASHED,   .offset = 0x0588, .size = 0x0078, .canary_count = 2, },
 +	{ .id = IPA_MEM_V6_ROUTE,          .offset = 0x0608, .size = 0x0078, .canary_count = 2, },
 +	{ .id = IPA_MEM_MODEM_HEADER,      .offset = 0x0688, .size = 0x0140, .canary_count = 2, },
-+	{ .id = IPA_MEM_AP_HEADER,         .offset = 0x07c8, .size = 0x0000, .canary_count = 0, },
 +	{ .id = IPA_MEM_MODEM_PROC_CTX,    .offset = 0x07d0, .size = 0x0200, .canary_count = 2, },
 +	{ .id = IPA_MEM_AP_PROC_CTX,       .offset = 0x09d0, .size = 0x0200, .canary_count = 0, },
 +	{ .id = IPA_MEM_PDN_CONFIG,        .offset = 0x0bd8, .size = 0x0050, .canary_count = 2, },
