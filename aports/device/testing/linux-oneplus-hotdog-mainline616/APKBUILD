@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=165
+pkgrel=166
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -180,6 +180,7 @@ source="
 	0144-net-ipa-add-IPA-v4.1-platform-data.patch
 	0145-net-ipa-add-IPA-v4.1-register-definitions.patch
 	0146-arm64-dts-qcom-sm8150-describe-the-ipa.patch
+	0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"

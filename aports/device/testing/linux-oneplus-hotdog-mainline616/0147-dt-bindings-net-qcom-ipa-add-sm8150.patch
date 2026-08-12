@@ -1,0 +1,21 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] dt-bindings: net: qcom,ipa: add SM8150
+
+SM8150 carries IPA v4.1. Add its compatible so device trees describing it
+validate.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/Documentation/devicetree/bindings/net/qcom,ipa.yaml b/Documentation/devicetree/bindings/net/qcom,ipa.yaml
+index b4a7991..98ec534 100644
+--- a/Documentation/devicetree/bindings/net/qcom,ipa.yaml
++++ b/Documentation/devicetree/bindings/net/qcom,ipa.yaml
+@@ -49,6 +49,7 @@ properties:
+           - qcom,sc7180-ipa
+           - qcom,sc7280-ipa
+           - qcom,sdm845-ipa
++          - qcom,sm8150-ipa
+           - qcom,sdx55-ipa
+           - qcom,sdx65-ipa
+           - qcom,sm6350-ipa
