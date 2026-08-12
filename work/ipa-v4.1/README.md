@@ -73,3 +73,27 @@ at 0x1e04000 inside it. Mainline wants three ranges named `ipa-reg`,
 `ipa-shared` and `gsi`, so the node is rewritten against the v4.1 register
 layout rather than copied. It also needs the modem SMP2P entries, the
 interconnects, and the two firmware reservations the board already carries.
+
+## Status: implemented, untested
+
+Revisions `0144` through `0146` are in the kernel aport and `r161` builds
+clean. `ipa.ko` is produced, and the compiled device tree carries the node
+enabled, with `memory-region` resolved to `ipa_fw_mem`, streams 0x520 and
+0x522, the SMP2P entries and both interrupts.
+
+Nothing here has touched hardware. The first run will exercise, in order:
+whether the driver probes at all, whether GSI initialises, whether the modem
+answers the setup-ready handshake, and whether `rmnet` appears for
+ModemManager to use.
+
+Two values in the platform data are judgements rather than extractions, and
+they are the most likely first failures:
+
+- `imem_addr` is 0x146a8000. sdm845 uses 0x146bd000 and this needs confirming
+  against the SM8150 IMEM layout.
+- `core_clock_rate` is 100 MHz. The stock tree votes through the legacy MSM
+  bus scaling and never states a rate, so this is an estimate.
+
+The interconnect bandwidths are still sdm845's. The stock node carries five
+performance cases across four paths, so real figures can be derived once the
+driver runs.

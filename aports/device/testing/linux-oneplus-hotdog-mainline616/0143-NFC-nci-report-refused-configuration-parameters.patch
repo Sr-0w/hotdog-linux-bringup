@@ -1,0 +1,45 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] NFC: nci: report refused configuration parameters
+
+CORE_SET_CONFIG_RSP carries a status byte followed by the identifiers of any
+parameters the controller refused. nci_core_set_config_rsp_packet() reads only
+the status, so a configuration can be reported as applied while individual
+settings were dropped and left at their defaults. On a handset that is the
+difference between an RF front end that is tuned for the board and one that is
+not, and nothing in the log distinguishes the two.
+
+Log the refused identifiers. The parameters are printed byte by byte because
+proprietary identifiers are two bytes wide and the response gives no way to
+tell the widths apart.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/net/nfc/nci/rsp.c b/net/nfc/nci/rsp.c
+index 9eeb862..f49ed4a 100644
+--- a/net/nfc/nci/rsp.c
++++ b/net/nfc/nci/rsp.c
+@@ -169,6 +169,23 @@ static void nci_core_set_config_rsp_packet(struct nci_dev *ndev,
+ 
+ 	pr_debug("status 0x%x\n", rsp->status);
+ 
++	/*
++	 * A controller may accept the command and still refuse individual
++	 * parameters, listing them here. Nothing else reports that, so a
++	 * configuration can appear to apply while leaving settings at their
++	 * defaults.
++	 */
++	if (skb->len > 1 && rsp->num_params) {
++		unsigned int i, n = skb->len - 2;
++
++		if (n > rsp->num_params)
++			n = rsp->num_params;
++
++		for (i = 0; i < n; i++)
++			pr_warn("NCI: config parameter byte 0x%02x refused\n",
++				rsp->params_id[i]);
++	}
++
+ 	nci_req_complete(ndev, rsp->status);
+ }
+ 
