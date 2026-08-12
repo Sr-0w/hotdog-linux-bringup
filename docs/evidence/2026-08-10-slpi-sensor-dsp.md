@@ -266,3 +266,19 @@ Find the reservation the stock tree makes for SLPI. The downstream kernel is
 not in this checkout, so this needs the OxygenOS device tree or the downstream
 source, and the specific question is which reserved region backs the sensors
 PD and where it sits. Everything else on the path is confirmed working.
+
+### The reserved-memory map is not the cause
+
+The FastRPC pool caps its `alloc-ranges` at 4 GB while the fault lands at
+`0x1fffff000`, which made the reservations the obvious suspect. They are
+correct.
+
+The node names in the generated tree are misleading and cost me a wrong first
+reading: `memory@97300000` is the SLPI carveout, but its `reg` places it at
+`0x98100000` for 20 MB, which is exactly stock's `pil_slpi_region`. The same
+holds across the window, `memory@96e00000` sitting at stock's
+`pil_video_region` address. Comparing the live stock device tree region by
+region, the reservations match.
+
+So the DSP is not being handed a differently placed carveout. The fault is in
+what the attach packet points at, not in where the firmware lives.
