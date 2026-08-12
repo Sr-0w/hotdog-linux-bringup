@@ -6,6 +6,10 @@ Scope: automated Sashiko review of the submitted SM8150 download-mode patch
 and Qualcomm SMB5 charger v1 series. No human maintainer reply had arrived at
 the time of this audit.
 
+This is the initial audit record. The final disposition, revised source audit,
+tests and public Message-IDs are recorded in
+[the 2026-08-12 follow-up](2026-08-12-upstream-follow-up.md).
+
 ## Result
 
 The bot reported six unique findings. Five are valid and one is a false
