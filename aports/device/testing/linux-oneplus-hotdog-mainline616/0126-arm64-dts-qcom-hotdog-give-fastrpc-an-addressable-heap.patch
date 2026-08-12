@@ -25,7 +25,7 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 
 --- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
 +++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
-@@ -583,11 +583,37 @@
+@@ -583,11 +583,48 @@
  	status = "okay";
  };
  
@@ -56,6 +56,17 @@ Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
 +	glink-edge {
 +		fastrpc {
 +			memory-region = <&fastrpc_mem>;
++
++			/*
++			 * The sensor DSP holds no rights over the heap unless it
++			 * is assigned to it. Without this the hypervisor refuses
++			 * its accesses, and a refused access stalls the
++			 * interconnect rather than faulting.
++			 *
++			 * HLOS, SSC_Q6 and ADSP_Q6, matching what the downstream
++			 * driver assigns this range to.
++			 */
++			qcom,vmids = <0x3 0x5 0x6>;
 +		};
 +	};
 +};

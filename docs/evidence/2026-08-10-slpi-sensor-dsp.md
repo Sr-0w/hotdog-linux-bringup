@@ -400,3 +400,53 @@ transcribing, and add the node.
 Whether the AP must also describe the QUPv3 wrapper and pin controller is a
 separate question to settle once the clocks exist. Stock disables both, which
 suggests the clocks alone may be enough.
+
+## The heap was never assigned to the DSP (r172)
+
+The clock controller was a false trail. The answer was in the hypervisor, and
+the downstream driver states it plainly. `adsprpc.c` assigns the FastRPC range
+before the DSP may touch it:
+
+```c
+int srcVM[1]  = { VMID_HLOS };
+int destVM[3] = { VMID_HLOS, VMID_SSC_Q6, VMID_ADSP_Q6 };
+hyp_assign_phys(range.addr, range.size, srcVM, 1, destVM, destVMperm, 3);
+```
+
+Mainline reads the same thing from `qcom,vmids` and builds its `vmperms` with
+RWX, but our node declared none, so `vmcount` was zero and no assignment ever
+happened. The sensor domain held no rights over the heap at all.
+
+That explains the signature exactly, including the part that never fit. A
+hypervisor refusal is not a translation fault, so the SMMU reports nothing;
+the transaction simply never completes, the interconnect stops answering, and
+the watchdog resets the SoC. It also explains why correcting the address made
+things worse: with a wrong address the DSP faulted early and harmlessly, and
+with the right one it reached memory it had no permission to touch.
+
+Adding `qcom,vmids = <0x3 0x5 0x6>` changes everything:
+
+```
+invoke handle 1   pd 2 sid 1 addr 0xfee00000
+invoke handle 0   pd 2 sid 1 addr 0xfee00000
+invoke handle 3   pd 2 sid 1 addr 0xfee01000
+... dozens more
+```
+
+The attach completes and the protection domain holds a conversation. SLPI stays
+`running` indefinitely where it previously died within four seconds. No SMMU
+fault, no crash, no reset.
+
+## What it asks for now
+
+`hexagonrpcd` exits because the DSP requests files the host does not serve:
+
+```
+/mnt/vendor/persist/sensors/registry/sns_reg_config
+/sys/devices/soc0/hw_platform
+/sys/devices/soc0/platform_subtype
+```
+
+The first is the sensor registry from the stock `persist` partition, which is
+still on the handset. The other two are SoC identification nodes that Android
+exposes and mainline does not. Serving all three is what remains.
