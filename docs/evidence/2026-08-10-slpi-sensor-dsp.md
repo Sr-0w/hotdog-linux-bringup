@@ -211,3 +211,58 @@ The vendor's own SLPI userspace is on the handset, in the `dsp` partition under
 `sdsp`: `fastrpc_shell_2`, `libchre_slpi_skel.so`, and the CHRE drivers. The
 sensor registry that the stock sensor stack reads is a separate matter and lives
 in the vendor partition.
+
+## Attaching the sensors PD, reproduced exactly (r160)
+
+`hexagonrpcd` is packaged and installed, the SLPI firmware is in place, and the
+DSP's own files are served: `/usr/share/qcom/sdsp` holds 17 of them, including
+`fastrpc_shell_2` and `map_SSC_SLPI_USER_AAAAAAAAQ.txt`. All three remote
+processors are running, and `/dev/fastrpc-sdsp` exists.
+
+Attaching still kills the DSP, reproducibly and identically whether the file
+root is left at its default or pointed at `/usr/share/qcom/sdsp`:
+
+```
+Starting hexagonrpcd (INIT_ATTACH_SNS) on /dev/fastrpc-sdsp
+Could not attach to FastRPC node: Broken pipe
+```
+
+The kernel shows what happens on the far side, in this order:
+
+```
+arm-smmu 15000000.iommu: Unhandled context fault: fsr=0x402, iova=0x1fffff000,
+                         fsynr=0x330001, cbfrsynra=0x5a1, cb=11
+arm-smmu 15000000.iommu: FSR = [Format=2 TF], SID=0x5a1
+PDM: service 'sensor_process' crash: 'EX:sensor_process:0x1:frpck_0_0:0x58:PC=0xb218da68'
+qcom_q6v5_pas 2400000.remoteproc: fatal error received
+remoteproc remoteproc0: handling crash #1 in slpi
+```
+
+The SMMU fault comes first and the process crash follows, so the DSP is the
+one making an unmapped access, not the host. `SID=0x5a1` is `compute-cb@1`,
+the first FastRPC context bank, and `frpck_0_0` places the fault inside the
+handling of the very FastRPC packet that `INIT_ATTACH_SNS` sends. The
+`sensor_process` service therefore exists and is reached; it faults while
+servicing the attach.
+
+The host side of that attach carries almost nothing. `fastrpc_init_attach()`
+sends a single 4-byte `client_id` to `FASTRPC_INIT_HANDLE` and maps no
+buffers, which means the address the DSP reaches for is not one the host just
+handed it. It is an address the DSP expects to already be mapped.
+
+That is the useful part of the signature. `0x1fffff000` is the last page below
+8 GB, and the FastRPC pool this board reserves caps its `alloc-ranges` at
+`0xffffffff`, so nothing the driver can allocate ever lands in that context
+bank at that address. The description is missing a region the DSP takes for
+granted rather than getting a mapping wrong.
+
+The node itself is otherwise correct: `qcom,non-secure-domain` is set, a
+`memory-region` is attached, and the three context banks carry SIDs 0x5a1
+through 0x5a3.
+
+### Next
+
+Find the reservation the stock tree makes for SLPI. The downstream kernel is
+not in this checkout, so this needs the OxygenOS device tree or the downstream
+source, and the specific question is which reserved region backs the sensors
+PD and where it sits. Everything else on the path is confirmed working.
