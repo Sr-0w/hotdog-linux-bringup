@@ -174,3 +174,30 @@ have to be decided rather than copied:
   0x34000 with `gsi-base` at 0x1e04000 inside it. Mainline wants three ranges
   named `ipa-reg`, `ipa-shared` and `gsi`, so the node has to be rewritten
   against the v4.1 register layout rather than copied.
+
+## The radio works, proven without a SIM
+
+ModemManager leaves the modem in `failed` with `power state: off` once it sees
+no card, and refuses to enable it from there. QMI reaches past that. Setting
+the operating mode directly brings the radio up:
+
+```
+qmicli -d qrtr://0 --dms-set-operating-mode=online
+qmicli -d qrtr://0 --nas-get-serving-system
+	Registration state: 'not-registered-searching'
+	Radio interfaces: 'gsm'
+```
+
+and a scan finds real networks:
+
+| MCC/MNC | Operator | Status |
+| --- | --- | --- |
+| 206/20 | BASE | available, seen on LTE and GSM |
+| 206/1 | Proximus | available, GSM |
+| 206/10 | OBE | **current-serving** |
+
+MCC 206 is Belgium. The modem swept the bands, identified three operators,
+distinguished the radio access technologies, and camped on a cell.
+
+That exercises transmit, receive, cell search and network identification with
+no card present. What a SIM adds is registration, not radio.
