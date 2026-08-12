@@ -310,3 +310,42 @@ either could be wrong for this part:
 
 Dropping `i2c9` to 100 kHz is the cheapest next test and matches what every
 other troublesome bus on this handset already does.
+
+## 100 kHz fixes the transport
+
+`i2c9` was described here at 400 kHz, chosen without a reason, while every other
+bus on this handset that needed care runs at 100 kHz. Dropping it to 100 kHz
+removes the Geni wedge entirely.
+
+The surviving console after the change shows a completely different failure:
+
+```
+[ 81.098123] nci: __nci_request: wait_for_completion_interruptible_timeout failed 0
+[ 81.098177] nxp-nci_i2c 5-0028: NCI configuration command failed at offset 34: -110
+```
+
+No `Timeout abort_m_cmd`, no neighbouring serial engine dying, no fuel gauge
+failure. The transport carries NCI, the driver reaches `post_setup`, and the
+configuration is applied until one specific command is not answered.
+
+So the bus speed was the transport fault, and what is left is a protocol
+question about one command in the blob rather than a controller that cannot be
+reached.
+
+The reset in this run came from elsewhere:
+
+```
+Bluetooth: hci0: command 0x0c52 tx timeout
+Bluetooth: hci0: crash the soc to collect controller dump
+```
+
+The Bluetooth controller timed out and deliberately crashed the SoC to produce a
+dump. Whether the NFC activity provoked that, or the two are independent, is not
+established, but it is not the Geni wedge that was resetting the handset before.
+
+## Next
+
+The failing command sits at offset 34 in the configuration blob. That offset,
+and the command at it, are directly readable from the generated file, and the
+extractor that produced it is reproducible. This is now a question of which
+`CORE_SET_CONFIG` the controller refuses, not of whether it can be talked to.
