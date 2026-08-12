@@ -507,37 +507,3 @@ had become `/dev/sdd38`. Writing to the stale name created a regular file in
 the `/dev` tmpfs rather than touching any partition, so nothing was damaged,
 but the lesson stands: resolve the target through
 `/dev/disk/by-partlabel/boot_b` on every write, never from a remembered node.
-
-## The threshold is 32 bytes, and it is a disabled DMA controller (r155)
-
-The size hypothesis was right but the cause was not `max_ctrl_pkt_payload_len`.
-The Qualcomm Geni I2C driver picks its transfer mode by length:
-
-```c
-dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
-if (dma_buf) geni_se_select_mode(se, GENI_SE_DMA);
-else         geni_se_select_mode(se, GENI_SE_FIFO);
-```
-
-Below 32 bytes it uses the FIFO, at or above it uses DMA. Every command that
-succeeded was 8 or 18 bytes on the wire, and the first one to fail is 252. The
-split falls exactly on that boundary, which is a much better fit than anything
-in the NCI layer: `plen` is a `u8`, so 249 is a legal payload, and the PN553
-answers the small commands without complaint.
-
-So the failure is the DMA path, and the reason it fails was in the description
-all along. `i2c9` at `a84000` carries
-
-```
-dmas = <&gpi_dma1 0 1 QCOM_GPI_I2C>, <&gpi_dma1 1 1 QCOM_GPI_I2C>;
-```
-
-and `gpi_dma1` is `status = "disabled"` in `sm8150.dtsi`. The board already
-enables `gpi_dma2` for its own reasons, but never enabled `gpi_dma1`.
-
-That also explains why r154 changed nothing. Restoring the `dmas` property
-pointed the bus at a controller that is not there, so the driver could not
-acquire GPI channels and fell back to the same SE-DMA path that was already
-failing. The r154 restoration was inert, exactly as the log showed.
-
-r155 enables `gpi_dma1`, which is the missing half of r154's change.
