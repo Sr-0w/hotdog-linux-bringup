@@ -127,6 +127,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:HiFi.conf | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
+		device/testing/firmware-oneplus-hotdog:pn553-hotdog.nci | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:config-sm8150.aarch64 | \
 		device/testing/linux-postmarketos-sm8150-staging:0001-arm64-dts-qcom-add-oneplus-hotdog.patch | \
@@ -181,9 +182,12 @@ validate_snapshot_tree() {
 				die "binary artifact is not allowed in snapshots: $rel/$snapshot_path"
 				;;
 		esac
-		if [ "$rel:$snapshot_path" = "device/testing/linux-oneplus-hotdog-lineage414:stock-hotdog-dtbpack.dtb" ]; then
-			continue
-		fi
+		case "$rel:$snapshot_path" in
+			device/testing/linux-oneplus-hotdog-lineage414:stock-hotdog-dtbpack.dtb | \
+			device/testing/firmware-oneplus-hotdog:pn553-hotdog.nci)
+				continue
+				;;
+		esac
 		mime="$(file -b --mime-type "$path")"
 		case "$mime" in
 			text/*|application/mbox)

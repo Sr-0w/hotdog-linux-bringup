@@ -1,6 +1,6 @@
 pkgname=firmware-oneplus-hotdog
 pkgver=20241212
-pkgrel=0
+pkgrel=4
 pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
 url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
 arch="aarch64"
@@ -14,12 +14,16 @@ subpackages="
 	$pkgname-bluetooth:bluetooth
 	$pkgname-cdsp:cdsp
 	$pkgname-modem:modem
+	$pkgname-nfc:nfc
 	$pkgname-venus:venus
 	$pkgname-wlan:wlan
 "
 
 _commit="5e5c534784a848bc39a02c421cc5273d79678fb3"
-source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+source="
+	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
+	pn553-hotdog.nci
+"
 builddir="$srcdir/$pkgname-$_commit"
 _fwdir="/usr/lib/firmware/qcom/sm8150/oneplus/hotdog"
 
@@ -65,6 +69,13 @@ modem() {
 	install -Dm644 "$builddir"/modem.mbn -t "$subpkgdir/$_fwdir/"
 }
 
+nfc() {
+	pkgdesc="OnePlus hotdog NFC configuration firmware"
+
+	install -Dm644 "$srcdir"/pn553-hotdog.nci -t \
+		"$subpkgdir/usr/lib/firmware/nxp/"
+}
+
 venus() {
 	pkgdesc="OnePlus hotdog Venus firmware"
 
@@ -83,4 +94,5 @@ wlan() {
 
 sha512sums="
 e4db4f210d04588cf66a86f3b45d06c5afedc7eb41cbd69954d7a8140b7e0b39c34eff91368c02c687f65291b45696955a3be39794401193abd76f473640a98d  firmware-oneplus-hotdog-5e5c534784a848bc39a02c421cc5273d79678fb3.tar.gz
+14d84a9b5ee36f16954d7e8801afed7c7a2b8a6c56d853b3046e448bb5b3b2256ff1738826e8e3a55564aeb6ca904e19e60fbb8679530de99877aea1faedd2dc  pn553-hotdog.nci
 "

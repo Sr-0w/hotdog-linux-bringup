@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=143
+pkgrel=149
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -165,6 +165,9 @@ source="
 	0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
 	0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
 	0130-input-add-Awinic-AW8697-haptics-support.patch
+	0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
+	0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
+	0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -347,5 +350,8 @@ bd1c8494ee67262a81f63a8d79b733e5ef9b79b1bcda4ff7d660970f4246cd6012a056050f9b280d
 ea929a9aeae29255c4e553b8df2c90a0c295637cb7f6756362b3a5a0c4c3fa58618ca47191531bd465db8381f86b30555db9d08b6d68ea9b0eb67f134d38dbba  0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
 6e436276f61fa342b6401f11e43f92a87b196a7992f5a8cc80be13b4e918189c29814497f3a84ccd5df21c1c806364f2859b4841b83b9be8da0eca52d6070743  0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
 151c1090fd19a3d966ce22e8fde0ac4e894e79dc7ae622b7a5e4452e738b3dd9b994451028dbe8cd07f7644b047248f41a6713781bd62d9188608cec39ea7e34  0130-input-add-Awinic-AW8697-haptics-support.patch
+56fccba21a1f8b0e97dbd3257152ebb18cde4826b5763f7b1ff45465c5a0e5e5531c0cb39086a7fc8d2dc85faf2b5cfa0dd57963b0997c36abdc0efc435731ce  0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
+4fbe4ce1d8bf1b08c1adcf6a58e99dd4ba4dd1c3537c21c5db0a4d57e918abe1cebd78d5ddf6999b1a3befec94164a3f5f9f7297f0cfae7d3c949baab49e55e0  0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
+74cfe97dbaab58d6abd48e13085a7db1cfedf5e5b778bc1aa1fba16590a09161f7993114c98a47dd7f99d941f23c33a90562addef4335ef21f7cfe2e43b4c922  0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
 702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
 "

@@ -90,7 +90,7 @@ repeated boots.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| NFC | NFC / secure-element path | Not yet hardware-validated. |
+| NFC | NFC / secure-element path | PN553 controller, board RF configuration and polling are hardware-validated; tag discovery and secure-element support remain open. |
 
 Identify the controller and bus, package only redistributable firmware, bring up
 reader mode, and document the secure-element and payment limitations separately.
