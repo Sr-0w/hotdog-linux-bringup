@@ -349,3 +349,62 @@ The failing command sits at offset 34 in the configuration blob. That offset,
 and the command at it, are directly readable from the generated file, and the
 extractor that produced it is reproducible. This is now a question of which
 `CORE_SET_CONFIG` the controller refuses, not of whether it can be talked to.
+
+## The proprietary set-mode response, and what it unblocked (r153)
+
+The configuration stopped at offset 0, the very first command, with `-110`.
+The kernel said why, one line earlier:
+
+```
+nci: nci_rsp_packet: unsupported rsp opcode 0xf02
+nxp-nci_i2c 5-0028: NCI configuration command failed at offset 0: -110
+```
+
+The controller answered `2F 02` correctly. The NCI core dispatches proprietary
+responses through `nci_prop_rsp_packet()`, which matches the opcode against the
+driver's `prop_ops` table; nxp-nci declared none, so `nci_rsp_packet()` logged
+the opcode, freed the skb and jumped to `end:` without ever calling
+`nci_req_complete()`. The pending request then waited out the full
+`NCI_CMD_TIMEOUT` and aborted the whole configuration.
+
+`0136` registers the opcode with a response handler that completes the request
+with the status the controller reported, the way `fdp` and `nfcmrvl` already do.
+On r153 the failure moved from offset 0 to offset 29, which is the proof the
+handler works: offsets 0, 3 and 11 now all succeed.
+
+Along the way the blob itself was misread twice, and both corrections matter.
+The device was still carrying a stale 286-byte file while the repository held
+the correct 774-byte one, which is why "offset 34" in the r152 log matched no
+command boundary at all. And the payloads do not use one-byte parameter ids:
+NXP uses extended two-byte ids in the `0xAn` range. With that rule every one of
+the ten commands decodes to exactly its stated length, so the file is sound.
+
+## Where it stops now: a size threshold on the bus
+
+r153 and r154 both stop at the same place:
+
+```
+geni_i2c a84000.i2c: Timeout abort_m_cmd
+nxp-nci_i2c 5-0028: NCI configuration command failed at offset 29: -110
+```
+
+Offset 29 is the first large command: 249 bytes of payload, 252 on the wire.
+Everything that succeeded before it was 8 or 18 bytes. `nxp_nci_i2c_write()`
+hands the whole frame to a single `i2c_master_send()`, and
+`NXP_NCI_I2C_MAX_PAYLOAD` only chunks firmware download, not control packets.
+
+Restoring GPI DMA on `i2c9` was tried in r154 and changed nothing: the same
+timeout at the same offset. That rules out the DMA description, and it means
+r154's restoration is inert rather than a fix.
+
+Splitting the command at parameter boundaries is not a complete answer either.
+Offset 29 holds 29 parameters whose largest is 9 bytes and would split freely,
+but offset 300 is a single 213-byte parameter that cannot be divided at all.
+
+The remaining explanation that fits every observation is
+`max_ctrl_pkt_payload_size`, which the controller reports in its `CORE_INIT`
+response and which nothing in this path honours. NCI allows a control message
+larger than that to be segmented across packets with `PBF` set on all but the
+last, and neither `nci_send_cmd()` nor the nxp-nci phy segments. Reading the
+value the PN553 advertises is the next measurement, and it is directly
+available from the `CORE_INIT` response the driver already receives.

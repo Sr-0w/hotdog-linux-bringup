@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=152
+pkgrel=154
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -170,6 +170,7 @@ source="
 	0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
 	0134-NFC-nxp-nci-report-the-mode-behind-a-failed-read.patch
 	0135-NFC-nxp-nci-do-not-let-one-marginal-read-end-the-session.patch
+	0136-NFC-nxp-nci-handle-the-proprietary-set-mode-response.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"

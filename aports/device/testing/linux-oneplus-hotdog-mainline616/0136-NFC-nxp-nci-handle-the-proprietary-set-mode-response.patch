@@ -1,0 +1,80 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] NFC: nxp-nci: handle the proprietary set-mode response
+
+The NXP platform configuration begins with a proprietary command,
+2F 02, that selects the controller operating mode. The controller
+answers it correctly, but nci_rsp_packet() dispatches proprietary
+responses through nci_prop_rsp_packet(), which needs a matching entry
+in the driver's prop_ops table. nxp-nci declared none, so the response
+was logged as an unsupported opcode, the skb was freed and the pending
+request was never completed:
+
+  nci: nci_rsp_packet: unsupported rsp opcode 0xf02
+  nxp-nci_i2c 5-0028: NCI configuration command failed at offset 0: -110
+
+Every such command therefore cost a full NCI_CMD_TIMEOUT and then
+aborted the configuration, leaving the controller in its default mode.
+
+Register the opcode with a response handler that completes the request
+with the status the controller reported, the same way fdp and nfcmrvl
+handle their own proprietary responses. While here, give the opcode a
+name instead of open-coding 0x0f02.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/nfc/nxp-nci/core.c b/drivers/nfc/nxp-nci/core.c
+index ffddc80..bb15606 100644
+--- a/drivers/nfc/nxp-nci/core.c
++++ b/drivers/nfc/nxp-nci/core.c
+@@ -32,6 +32,7 @@
+ 
+ #define NXP_NCI_RF_PLL_UNLOCKED_NTF nci_opcode_pack(NCI_GID_RF_MGMT, 0x21)
+ #define NXP_NCI_RF_TXLDO_ERROR_NTF nci_opcode_pack(NCI_GID_RF_MGMT, 0x23)
++#define NXP_NCI_SET_MODE_CMD nci_opcode_pack(NCI_GID_PROPRIETARY, 0x02)
+ 
+ static int nxp_nci_open(struct nci_dev *ndev)
+ {
+@@ -125,6 +126,23 @@ static const struct nci_driver_ops nxp_nci_core_ops[] = {
+ 	},
+ };
+ 
++static int nxp_nci_set_mode_rsp_packet(struct nci_dev *ndev,
++				       struct sk_buff *skb)
++{
++	__u8 status = skb->len ? skb->data[0] : NCI_STATUS_SYNTAX_ERROR;
++
++	nci_req_complete(ndev, status);
++
++	return 0;
++}
++
++static const struct nci_driver_ops nxp_nci_prop_ops[] = {
++	{
++		.opcode = NXP_NCI_SET_MODE_CMD,
++		.rsp = nxp_nci_set_mode_rsp_packet,
++	},
++};
++
+ static int nxp_nci_apply_config(struct nci_dev *ndev)
+ {
+ 	struct nxp_nci_info *info = nci_get_drvdata(ndev);
+@@ -169,7 +187,8 @@ static int nxp_nci_apply_config(struct nci_dev *ndev)
+ 		}
+ 
+ 		opcode = nci_opcode(frame);
+-		if (opcode != NCI_OP_CORE_SET_CONFIG_CMD && opcode != 0x0f02) {
++		if (opcode != NCI_OP_CORE_SET_CONFIG_CMD &&
++		    opcode != NXP_NCI_SET_MODE_CMD) {
+ 			r = -EINVAL;
+ 			goto invalid_config;
+ 		}
+@@ -207,6 +226,8 @@ static const struct nci_ops nxp_nci_ops = {
+ 	.fw_download = nxp_nci_fw_download,
+ 	.core_ops = nxp_nci_core_ops,
+ 	.n_core_ops = ARRAY_SIZE(nxp_nci_core_ops),
++	.prop_ops = nxp_nci_prop_ops,
++	.n_prop_ops = ARRAY_SIZE(nxp_nci_prop_ops),
+ };
+ 
+ int nxp_nci_probe(void *phy_id, struct device *pdev,

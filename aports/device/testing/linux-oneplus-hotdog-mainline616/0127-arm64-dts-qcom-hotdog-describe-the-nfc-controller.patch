@@ -48,7 +48,7 @@ on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
  	cam0_vana_default: cam0-vana-default-state {
  		pins = "gpio11";
  		function = "gpio";
-@@ -504,6 +528,38 @@
+@@ -504,6 +528,36 @@
  	};
  };
  
@@ -64,8 +64,6 @@ on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
 + * the reset seen when the RF field comes up.
 + */
 +&i2c9 {
-+	/delete-property/ dmas;
-+	/delete-property/ dma-names;
 +	clock-frequency = <100000>;
 +	status = "okay";
 +
