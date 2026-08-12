@@ -347,3 +347,56 @@ of which the mainline device tree describes yet.
 Worth noting for whoever picks this up: the original faulting behaviour is the
 safe one to experiment with, because the handset survives it. Both corrected
 addresses require a reset to recover.
+
+## What the protection domain reaches for: an undescribed clock controller
+
+Following the reframing above, the question became what the sensor domain
+touches once it starts. The stock device tree answers it.
+
+The SLPI does not share the application processor's serial engines. It has its
+own QUPv3 wrapper, `qcom,qupv3_3_geni_se@26c0000`, carrying serial engines 20
+through 23 with their I2C buses at `0x2680000` and `0x268c000`, and its own
+pin controller at `0x2b40000`. Mainline's `sm8150.dtsi` describes three QUPv3
+wrappers, at `0x8c0000`, `0xac0000` and `0xcc0000`. It does not describe this
+fourth one, nor the pin controller.
+
+That alone is not the answer, because the stock node is `status = "disabled"`
+too, with `qcom,subsys-name = "slpi"`: the AP leaves it alone on OxygenOS as
+well, and the DSP drives it. What matters is what it is clocked from:
+
+```
+qcom,qupv3_3_geni_se@26c0000
+	clock-names = "corex", "core2x";
+	clocks = <&scc 4>, <&scc 3>;
+```
+
+and that provider is
+
+```
+qcom,scc@2b10000
+	compatible = "qcom,scc-sm8150-v2";
+	reg = <0x2b10000 0x30000>;
+```
+
+the sensor clock controller. Mainline has no driver for it and no node at that
+address. `drivers/clk/qcom` carries `lpasscc` and `nsscc` variants, which are
+different blocks entirely; there is no `scc` for any SoC.
+
+This fits every observation. The access that stalls is a register write to a
+peripheral, not a DMA transfer, which is why no translation fault is ever
+reported. An unclocked block on the interconnect never returns, which is why
+the bus stops answering and the display is the first thing to notice. And it
+only happens once the message address is correct, because until then the DSP
+faulted before reaching this point.
+
+### The work
+
+The downstream kernel carries `drivers/clk/qcom/scc-sm8150.c`, 745 lines
+describing 25 clocks. That is the shape of the missing piece, and the same
+approach that worked for IPA applies: take the register offsets and parent
+topology, express them in mainline's `clk_regmap` idiom rather than
+transcribing, and add the node.
+
+Whether the AP must also describe the QUPv3 wrapper and pin controller is a
+separate question to settle once the clocks exist. Stock disables both, which
+suggests the clocks alone may be enough.
