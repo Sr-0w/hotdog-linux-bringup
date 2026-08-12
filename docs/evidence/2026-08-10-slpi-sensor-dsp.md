@@ -316,3 +316,34 @@ The handset still resets shortly afterwards and the console log ends on
 unrelated DPU frame-done timeouts, so the cause of that reset is not captured
 and is the next thing to chase. But the SMMU fault that had blocked every
 attempt since this file was started is gone.
+
+## Three addresses, one stall: the fault was a symptom, not the cause
+
+Two more runs turned the diagnosis around. Feeding the sensors domain an
+address it can genuinely reach does not fix anything; it makes things worse.
+
+| Address sent | Outcome |
+| --- | --- |
+| `0x1fffff000`, the IOVA with the session id folded in | clean SMMU translation fault, `sensor_process` crashes, SLPI recovers, handset survives |
+| `0xfffff000`, the IOVA that is actually mapped | no fault at all, interconnect stalls, watchdog resets the SoC |
+| `0xfee00000`, the base of the reserved pool | no fault at all, interconnect stalls, watchdog resets the SoC |
+
+In both of the working-address cases the console records the invoke, then DPU
+frame-done timeouts within 50 to 900 ms, then nothing. The display stalling is
+the visible edge of a bus that has stopped answering, and no translation fault
+is reported because the access the DSP makes is legal.
+
+So the SMMU fault that this file has chased from the start was never the
+blocker. It was the DSP being stopped early, before it could do the thing that
+actually hangs the machine. Correcting the address lets it proceed, and what
+it does next is what needs finding.
+
+That reframes the search. The question is no longer where the message buffer
+lives. It is what the sensor protection domain touches once it starts, and the
+candidates are the resources the SLPI owns rather than anything in FastRPC:
+its own I2C buses, the sensor supply rails, and the clocks behind them, none
+of which the mainline device tree describes yet.
+
+Worth noting for whoever picks this up: the original faulting behaviour is the
+safe one to experiment with, because the handset survives it. Both corrected
+addresses require a reset to recover.

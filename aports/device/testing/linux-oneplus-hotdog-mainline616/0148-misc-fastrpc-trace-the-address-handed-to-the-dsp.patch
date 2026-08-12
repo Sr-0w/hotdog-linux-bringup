@@ -1,51 +1,46 @@
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 12 Aug 2026 00:00:00 +0200
-Subject: [PATCH] misc: fastrpc: strip the session id for the sensors domain
+Subject: [PATCH] misc: fastrpc: allocate sensors messages from the reserved pool
 
-Buffers handed to the DSP carry the session identifier in bits 32 and above,
-and the DSP is expected to strip it. The sensors protection domain on this
-SoC does not: it faults on the address verbatim.
+The sensors protection domain does not reach the message buffer through its
+SMMU context bank. Given a mapped buffer it addressed memory that was not
+there: first faulting cleanly on the session identifier folded into the upper
+bits, then, once that was corrected, stalling the interconnect for several
+seconds until the watchdog reset the SoC. Neither run produced a translation
+fault at the corrected address, which is what a context-bank access would
+have produced.
 
-  buffer dma 0xfffff000 size 0x204, sid 1
-  invoke handle 1 sc 0x10000 pd 2 sid 1 addr 0x1fffff000
-  arm-smmu: Unhandled context fault: iova=0x1fffff000, SID=0x5a1
-
-The mapping is at 0xfffff000 and the transaction went to the right context
-bank, so only the folded identifier is wrong. Send the address that is
-actually mapped.
+Allocate its messages from the reserved pool instead, the same way domains
+without a session already do.
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
 diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
-index 3789235..ec1ad67 100644
+index 3789235..31527f5 100644
 --- a/drivers/misc/fastrpc.c
 +++ b/drivers/misc/fastrpc.c
-@@ -445,6 +445,8 @@ static int fastrpc_buf_alloc(struct fastrpc_user *fl, struct device *dev,
- 	buf = *obuf;
+@@ -954,7 +954,13 @@ static int fastrpc_get_args(u32 kernel, struct fastrpc_invoke_ctx *ctx)
  
- 	if (fl->sctx && fl->sctx->sid)
-+		dev_info(dev, "buffer dma 0x%llx size 0x%zx, sid %d\n",
-+			 buf->phys, buf->size, fl->sctx->sid);
- 		buf->phys += ((u64)fl->sctx->sid << 32);
+ 	ctx->msg_sz = pkt_size;
  
- 	return 0;
-@@ -1124,8 +1126,19 @@ static int fastrpc_invoke_send(struct fastrpc_session_ctx *sctx,
- 	msg->ctx = ctx->ctxid | fl->pd;
- 	msg->handle = handle;
- 	msg->sc = ctx->sc;
+-	if (ctx->fl->sctx->sid)
 +	/*
-+	 * The sensors protection domain uses this address without stripping
-+	 * the session identifier the allocator folded into its upper bits,
-+	 * so hand it the mapping that actually exists.
++	 * The sensors domain reaches the message buffer directly rather than
++	 * through its context bank, so it needs one from the reserved pool.
++	 * A context-bank mapping leaves it addressing memory that is not
++	 * there, which stalls the interconnect rather than faulting.
 +	 */
++	if (ctx->fl->sctx->sid && ctx->fl->pd != SENSORS_PD)
+ 		err = fastrpc_buf_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+ 	else
+ 		err = fastrpc_remote_heap_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+@@ -1126,6 +1132,9 @@ static int fastrpc_invoke_send(struct fastrpc_session_ctx *sctx,
+ 	msg->sc = ctx->sc;
  	msg->addr = ctx->buf ? ctx->buf->phys : 0;
-+	if (fl->pd == SENSORS_PD)
-+		msg->addr = FASTRPC_PHYS(msg->addr);
  	msg->size = roundup(ctx->msg_sz, PAGE_SIZE);
 +
-+	dev_info(sctx->dev,
-+		 "invoke handle %u sc 0x%x pd %d sid %d addr 0x%llx size 0x%x\n",
-+		 handle, ctx->sc, fl->pd, sctx->sid, msg->addr, msg->size);
++	dev_info(sctx->dev, "invoke handle %u pd %d sid %d addr 0x%llx\n",
++		 handle, fl->pd, sctx->sid, msg->addr);
  	fastrpc_context_get(ctx);
  
  	ret = rpmsg_send(cctx->rpdev->ept, (void *)msg, sizeof(*msg));
