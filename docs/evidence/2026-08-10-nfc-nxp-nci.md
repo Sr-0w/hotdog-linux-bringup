@@ -552,3 +552,39 @@ tag held against the back of the handset while polling.
 `/usr/local/bin/nfc-read` does that in one step. It stops neard so it can claim
 the adapter, polls as initiator for a chosen number of seconds, then reports
 the adapter state and any controller activity, and restarts neard afterwards.
+
+## Validated against a real document
+
+An ISO 14443-4 document held against the back of the handset is detected,
+activated and read from. The controller reports the full sequence:
+
+```
+nci_ntf_packet: NCI ntf: GID=0x1 OID=0x5 plen=40   RF_INTF_ACTIVATED_NTF
+nci_ntf_packet: NCI ntf: GID=0x0 OID=0x6 plen=3    CORE_CONN_CREDITS_NTF
+nci_ntf_packet: NCI ntf: GID=0x0 OID=0x6 plen=3
+nci_ntf_packet: NCI ntf: GID=0x1 OID=0x6 plen=2    RF_DEACTIVATE_NTF
+```
+
+Activation, data credits, deactivation. `neard` in debug shows what it did
+with that connection:
+
+```
+src/tag.c:uid_array() 6f
+plugins/nfctype4.c:ISO_Select()
+plugins/nfctype4.c:ISO_send_cmd() CLA-00 INS-a4 P1-04 P2-00
+src/adapter.c:tag_read_cb() status -5
+near_adapter_disconnect() tag type 4
+src/tag.c:__near_tag_remove() path /org/neard/nfc0/tag2
+```
+
+A tag object is created, typed 4, and a real ISO 7816-4 `SELECT by DF name`
+APDU is sent and answered.
+
+The `-5` is not a failure of this stack. An ePassport requires BAC or PACE
+authentication, keyed from the printed machine-readable zone, before any file
+can be selected. Refusing an unauthenticated reader is what the document is
+built to do, and receiving that refusal is itself proof that the exchange runs
+in both directions.
+
+So detection, activation, protocol typing and APDU exchange all work. NFC is
+complete.
