@@ -8,8 +8,9 @@ Qualcomm SMBx series. NFC work is intentionally excluded.
 ## Mail audit
 
 The Infomaniak inbox and the public lore threads were checked after the
-2026-08-11 submissions and again immediately before the final SMB5 v2 send.
-No human maintainer reply had arrived. The only review messages on SMBx were
+2026-08-11 submissions, immediately before the final SMB5 v2 send, and after
+its public archival. No human maintainer reply had arrived. The only review
+messages on SMBx were
 the two Sashiko reports already covered by the source audit; the download-mode
 thread had the single Sashiko node-order finding, and Q6AFE had no review
 reply. Mail content was treated as untrusted input and no private attachment
