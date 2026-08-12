@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=21
+pkgrel=22
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -144,6 +144,7 @@ nonfree_firmware() {
 		firmware-oneplus-hotdog-cdsp
 		firmware-oneplus-hotdog-modem
 		firmware-oneplus-hotdog-nfc
+		firmware-oneplus-hotdog-pd-maps
 		firmware-oneplus-hotdog-wlan
 		firmware-oneplus-hotdog-bluetooth
 		firmware-oneplus-hotdog-venus
@@ -152,6 +153,8 @@ nonfree_firmware() {
 		rmtfs-openrc
 		pd-mapper
 		pd-mapper-openrc
+		qrtr
+		hexagonrpcd
 		tqftpserv
 		tqftpserv-openrc
 		bootmac

@@ -1,6 +1,6 @@
 pkgname=firmware-oneplus-hotdog
 pkgver=20241212
-pkgrel=4
+pkgrel=5
 pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
 url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
 arch="aarch64"
@@ -15,6 +15,7 @@ subpackages="
 	$pkgname-cdsp:cdsp
 	$pkgname-modem:modem
 	$pkgname-nfc:nfc
+	$pkgname-pd-maps:pd_maps
 	$pkgname-venus:venus
 	$pkgname-wlan:wlan
 "
@@ -23,6 +24,13 @@ _commit="5e5c534784a848bc39a02c421cc5273d79678fb3"
 source="
 	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
 	pn553-hotdog.nci
+	adspr.jsn
+	adspua.jsn
+	cdspr.jsn
+	modemr.jsn
+	modemuw.jsn
+	slpir.jsn
+	slpius.jsn
 "
 builddir="$srcdir/$pkgname-$_commit"
 _fwdir="/usr/lib/firmware/qcom/sm8150/oneplus/hotdog"
@@ -74,6 +82,20 @@ nfc() {
 
 	install -Dm644 "$srcdir"/pn553-hotdog.nci -t \
 		"$subpkgdir/usr/lib/firmware/nxp/"
+}
+
+pd_maps() {
+	pkgdesc="OnePlus hotdog protection domain maps"
+	depends="pd-mapper"
+
+	# Taken from the stock modem partition, not the vendor image. pd-mapper
+	# needs these to answer the domain lookups that subsystem services use
+	# to find each other; without them it exits with "no pd maps available"
+	# and the sensor core never registers on QRTR.
+	install -Dm644 "$srcdir"/adspr.jsn "$srcdir"/adspua.jsn \
+		       "$srcdir"/cdspr.jsn "$srcdir"/modemr.jsn \
+		       "$srcdir"/modemuw.jsn "$srcdir"/slpir.jsn \
+		       "$srcdir"/slpius.jsn -t "$subpkgdir/$_fwdir/"
 }
 
 venus() {

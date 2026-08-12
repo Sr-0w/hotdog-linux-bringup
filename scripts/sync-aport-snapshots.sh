@@ -128,6 +128,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
 		device/testing/firmware-oneplus-hotdog:pn553-hotdog.nci | \
+		device/testing/firmware-oneplus-hotdog:*.jsn | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:config-sm8150.aarch64 | \
 		device/testing/linux-postmarketos-sm8150-staging:0001-arm64-dts-qcom-add-oneplus-hotdog.patch | \
@@ -190,7 +191,7 @@ validate_snapshot_tree() {
 		esac
 		mime="$(file -b --mime-type "$path")"
 		case "$mime" in
-			text/*|application/mbox)
+			text/*|application/json|application/mbox)
 				;;
 			*)
 				die "snapshot file is not text: $rel/$snapshot_path ($mime)"
