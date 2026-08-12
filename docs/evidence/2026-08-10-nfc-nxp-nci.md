@@ -453,3 +453,57 @@ fallback is a per-controller quirk rather than a global threshold.
 
 What is not yet demonstrated is reading a tag. Discovery runs without error and
 no target has entered the field during the test window.
+
+## Discovery is accepted, the field never appears (r158)
+
+With the transport fixed, the remaining question was whether the controller
+refuses discovery, accepts it without lighting the field, or sees a target and
+fails to report it. `0140` instruments `nci_start_poll()` and the notification
+dispatcher to settle that. The answer is unambiguous:
+
+```
+nci: nci_start_poll: NCI discover: im=0x7e tm=0x0 rc=0
+```
+
+`rc=0` means the controller accepted `RF_DISCOVER` for every initiator
+protocol. Over the following 35 seconds, with a passport lying against the
+back of the handset, the notification tracer printed nothing at all. So the
+controller executes commands correctly and never reports a target.
+
+Two explanations were tested and eliminated.
+
+The proprietary `2F 02` set-mode command is not responsible. Removing it from
+the blob entirely, leaving 771 bytes, and rebooting produced exactly the same
+behaviour.
+
+A missing regulator is not responsible either. The downstream node for this
+board carries no supply at all:
+
+```dts
+compatible = "qcom,nq-nci";
+reg = <0x28>;
+qcom,nq-irq = <&tlmm 47 0x00>;
+qcom,nq-ven = <&tlmm 41 0x00>;
+qcom,nq-firm = <&tlmm 48 0x00>;
+qcom,nq-clkreq = <&tlmm 113 0x00>;
+```
+
+That node is worth reading twice, because it confirms the pin mapping in this
+port is correct on every line: interrupt 47, enable 41, firmware 48, clock
+request 113 all match what the device tree here already describes.
+
+What it also shows is the one thing this port does not answer: `nq-clkreq`.
+That line is an output from the controller asking the platform for its
+reference clock. The downstream driver watches it; nothing in the mainline
+path does. A PN553 without its reference can run its digital side and speak
+NCI perfectly while being unable to synthesise the 13.56 MHz carrier, which
+is precisely the shape of what is observed. That is the next thing to chase.
+
+## A process correction
+
+The flash helper had `/dev/sde38` written into it from an earlier session.
+Device node numbering is not stable across reboots, and by this point `boot_b`
+had become `/dev/sdd38`. Writing to the stale name created a regular file in
+the `/dev` tmpfs rather than touching any partition, so nothing was damaged,
+but the lesson stands: resolve the target through
+`/dev/disk/by-partlabel/boot_b` on every write, never from a remembered node.
