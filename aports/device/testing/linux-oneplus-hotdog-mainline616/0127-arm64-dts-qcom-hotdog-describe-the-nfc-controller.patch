@@ -48,7 +48,7 @@ on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
  	cam0_vana_default: cam0-vana-default-state {
  		pins = "gpio11";
  		function = "gpio";
-@@ -504,6 +528,36 @@
+@@ -504,6 +528,40 @@
  	};
  };
  
@@ -63,6 +63,10 @@ on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
 + * secure element on this system, and powering it is one of the candidates for
 + * the reset seen when the RF field comes up.
 + */
++&gpi_dma1 {
++	status = "okay";
++};
++
 +&i2c9 {
 +	clock-frequency = <100000>;
 +	status = "okay";

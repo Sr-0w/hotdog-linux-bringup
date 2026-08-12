@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=158
+pkgrel=159
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -175,6 +175,8 @@ source="
 	0138-i2c-qcom-geni-keep-transfers-in-fifo-mode.patch
 	0139-arm64-dts-qcom-hotdog-describe-the-camera-flash.patch
 	0140-NFC-nci-trace-discovery-and-notifications.patch
+	0141-NFC-nxp-nci-take-an-optional-reference-clock.patch
+	0142-arm64-dts-qcom-hotdog-feed-the-nfc-reference-clock.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
