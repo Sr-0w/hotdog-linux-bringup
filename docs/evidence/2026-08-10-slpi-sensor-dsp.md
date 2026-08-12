@@ -620,3 +620,42 @@ and thermal, and node 9 is the sensor core.
 So the DSP is up, attached, served its registry, and publishing the service its
 sensors live behind. What remains for this route is a client that speaks it:
 subscribe to the sensors over QMI service 400 and present them to Linux.
+
+## A client for the sensor service
+
+`helpers/ssc-client.py` speaks to service 400. It finds the service through
+`qrtr-lookup`, binds an `AF_QIPCRTR` socket, and sends a QMI request carrying a
+protobuf `sns_client_request_msg`, which is how this service works: QMI
+envelope, protobuf payload.
+
+The transport is proven. A request reaches the sensor core and it answers:
+
+```
+sensor core at node 9 port 12
+bound to node 1 port 16399
+sent 52 bytes asking for 'accel'
+reply txn=1 msg=0x0020 tlvs={2: 4}
+  result: failure, error 19
+```
+
+That is a well-formed QMI response to our transaction, so the socket, the
+addressing, the envelope and the service are all correct. What the service
+rejects is the content.
+
+The request is a SUID lookup: ask the well-known lookup sensor for the
+identifiers of sensors providing a named data type, then subscribe to those.
+It is encoded as `sns_client_request_msg { suid, msg_id = 512, request }` with
+the payload nested inside `sns_std_request` alongside a suspend config. An
+earlier version put the payload beside that structure rather than inside it,
+which was wrong and is fixed; the error did not change, so the nesting was not
+the cause.
+
+Error 19 is what remains to explain. Worth checking next, in rough order of
+likelihood: whether the lookup SUID constant is right for this generation,
+whether the service expects the client to register before issuing requests, and
+whether `sns_suid_req` on this version requires the `default_only` field that
+is currently omitted.
+
+The helper is small and readable, and every layer below the protobuf content is
+verified working, so this is a question of getting one message right rather
+than of building a stack.
