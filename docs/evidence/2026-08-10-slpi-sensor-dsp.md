@@ -450,3 +450,49 @@ fault, no crash, no reset.
 The first is the sensor registry from the stock `persist` partition, which is
 still on the handset. The other two are SoC identification nodes that Android
 exposes and mainline does not. Serving all three is what remains.
+
+## Feeding the domain: 1092 calls
+
+With the heap assigned, the remaining work is serving the DSP its files, and
+the layout is a pmaports convention rather than something to derive. Sibling
+devices state it in a `hexagonrpcd.confd`:
+
+```
+device-oneplus-fajita:  hexagonrpcd_fw_dir="/usr/share/qcom/sdm845/OnePlus/oneplus6"
+device-xiaomi-elish:    hexagonrpcd_fw_dir="/usr/share/qcom/sm8250/xiaomi/elish/"
+firmware-google-sargo:  /usr/share/qcom/sdm670/Google/sargo/sensors/registry
+```
+
+So the root is configured per device and passed as `-R`, with the DSP binaries
+under `dsp/sdsp/` and the sensor registry under `sensors/registry`. I had been
+passing the wrong root throughout.
+
+The registry itself is on the handset, on the stock `persist` partition:
+`/persist/sensors/registry/registry`, 438 entries. Reading it names the parts
+this handset actually carries, `bmi26x_0` for the IMU and `ak0991x_0` for the
+magnetometer.
+
+Laid out correctly, the conversation goes from 42 calls to **1092**. The domain
+attaches, reads its registry and works.
+
+## The two things still in the way
+
+```
+Tried to open /persist/sensors/registry/registry/../sns_reg_version for writing
+Could not open /proc/oppoVersion/modemType
+```
+
+The first is not a missing file. `hexagonrpcd` finds it and refuses, because it
+serves read-only; the DSP wants to update the registry version and retries
+forever. The second is an OPPO-specific proc node that the file service does
+not map, and putting a copy under the served root does not satisfy it, so its
+path handling differs from the registry's.
+
+Both are `hexagonrpcd` questions rather than kernel ones, which is a much
+better place to be than where this file started.
+
+## Correction on the clock controller
+
+The sensor clock controller was a false trail, and the evidence above supersedes
+it. The block is disabled in the stock tree and the AP never drives it; what
+was missing was the heap assignment, not a clock provider.
