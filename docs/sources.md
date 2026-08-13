@@ -1,41 +1,48 @@
 # Source trees
 
-External repositories are cloned under the ignored `src/` directory. They are
-not vendored into this repository.
+Last reviewed: 2026-08-13
 
-## Primary sources
+External repositories live under ignored `src/` paths and are never vendored.
+Every published result records an exact commit; branch names alone are not
+reproducible identities.
+
+## Primary upstream targets
 
 | Source | Role |
 |---|---|
-| [postmarketOS pmbootstrap](https://gitlab.postmarketos.org/postmarketOS/pmbootstrap) | Build and image tooling. |
-| [postmarketOS pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) | Official packages and Qualcomm SM8150 kernel packaging. |
-| [sm8150-linux-mainline pmaports](https://github.com/sm8150-linux-mainline/pmaports) | Existing SM8150 device ports and hotdog packaging reference. |
-| [postmarketOS Qualcomm SM8150 Linux](https://gitlab.postmarketos.org/soc/qualcomm-sm8150/linux) | Pinned Linux 6.17 K1 source and exact hotdog DTB reproduction. |
-| [OnePlus SM8150 kernel](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150) | Vendor kernel and hardware descriptions. |
-| [LineageOS hotdog device tree](https://github.com/LineageOS/android_device_oneplus_hotdog) | Android partition, firmware, and device configuration reference. |
-| [LineageOS SM8150 kernel](https://github.com/LineageOS/android_kernel_oneplus_sm8150) | Working downstream kernel reference. |
-| [Linux mainline](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git) | Upstream target and comparison base. |
+| [Linux mainline](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git) | Final kernel, driver, binding and Hotdog DTS target. Use the relevant maintainer tree when requested by `MAINTAINERS`. |
+| [Linux next](https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git) | Integration and regression validation before or during review. |
+| [postmarketOS pmbootstrap](https://gitlab.postmarketos.org/postmarketOS/pmbootstrap) | Image and package build tooling. |
+| [postmarketOS pmaports](https://gitlab.postmarketos.org/postmarketOS/pmaports) | Device, firmware and shared Qualcomm kernel packages. |
+| [postmarketOS Qualcomm SM8150 Linux](https://gitlab.postmarketos.org/soc/qualcomm-sm8150/linux) | SM8150 integration reference and historical K1 6.17 source. |
+| [Mesa](https://gitlab.freedesktop.org/mesa/mesa) | Freedreno/Turnip userspace. |
+| [libcamera](https://git.libcamera.org/libcamera/libcamera.git/) | Camera pipeline and controls. |
+| [linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git) | Redistributable firmware upstream where licensing permits. |
+| [UBports](https://gitlab.com/ubports) | Ubuntu Touch rootfs, packaging, recovery, OTA and system integration target. |
+| [Lomiri](https://gitlab.com/ubports/development/core/lomiri) | Native Lomiri/Mir userspace target for the no-Halium path. |
 
-## Additional references
+## Hardware reference sources
 
-The following projects informed boot and display investigation but are not the
-project target:
+| Source | Use and limitation |
+|---|---|
+| [OnePlus SM8150 kernel](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8150) | GPL vendor wiring, power sequence and driver reference; Android 4.14 code is not loadable into mainline unchanged. |
+| [LineageOS hotdog device tree](https://github.com/LineageOS/android_device_oneplus_hotdog) | Partition, firmware and userspace configuration reference. |
+| [LineageOS SM8150 kernel](https://github.com/LineageOS/android_kernel_oneplus_sm8150) | Downstream comparison and rescue reference only. |
+| [ClearStaff Hotdog Linux](https://github.com/ClearStaff/linux-sm8150-mainline-hotdog) | Hardware-validated Linux 6.16 bring-up baseline being cleaned for upstream. |
+| [sm8150-linux-mainline pmaports](https://github.com/sm8150-linux-mainline/pmaports) | Existing SM8150 packaging and device reference. |
+| [BotchedRPR Halium kernel](https://github.com/BotchedRPR/hotdog-halium-kernel) | Historical comparison only; Halium is not a project endpoint. |
 
-- [BotchedRPR/hotdog-halium-kernel](https://github.com/BotchedRPR/hotdog-halium-kernel)
-- [ClearStaff/linux-sm8150-mainline-hotdog](https://github.com/ClearStaff/linux-sm8150-mainline-hotdog)
-- postmarketOS device wiki pages for `oneplus-hotdog`
-
-The goal remains a pmaports-compatible postmarketOS port, not a permanent
-Halium or vendor-kernel distribution.
+OxygenOS partitions may supply firmware and calibration at runtime when the
+licence and upstream Linux ABI permit. Kernel modules built for Android 4.14,
+Android HALs and private binaries are never treated as mainline drivers.
 
 ## Bootstrap behavior
-
-`scripts/bootstrap-sources.sh` clones or fetches the common repositories. It
-does not reset local branches or discard local changes.
 
 ```bash
 ./scripts/bootstrap-sources.sh --sm8150-k1
 ```
 
-Record source commits whenever publishing a hardware result. A branch name
-alone is not sufficient evidence because these trees move independently.
+Add `--kernel-mainline` or `--linux-next` when preparing upstream work. The
+script fetches/clones without resetting local branches or discarding changes.
+Ubuntu Touch/Lomiri source bootstrap will be added only after the phase-15
+architecture is agreed; do not introduce a private Halium replacement.

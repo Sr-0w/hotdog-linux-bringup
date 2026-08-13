@@ -1,8 +1,10 @@
 # Hardware enablement roadmap
 
+Last updated: 2026-08-13
+
 This roadmap follows the
 [direct-boot completion criteria](direct-boot.md#completion-criteria). The
-accepted 6.16 `r6` pmaports baseline starts directly from the OnePlus
+accepted 6.16 package line (currently `6.16.0-r176`) starts directly from the OnePlus
 bootloader without the downstream kexec bridge, mounts the postmarketOS root
 read-write, and retains USB NCM, USB ACM, SSH, the S6SY761 touchscreen, and the
 Adreno 640 render path. It also registers Power, Volume Down, and Volume Up as
@@ -10,6 +12,26 @@ separate input devices. The current support claims are recorded in the
 [hardware status matrix](status.md). Earlier K1 workarounds remain historical
 diagnostic evidence in the [mainline bring-up record](mainline-bringup.md) and
 the [K1 evidence record](evidence/2026-07-11-mainline-k1.md).
+
+The numbered sections below preserve the detailed early experiments. Their
+`r4`-`r32` identities are accepted milestones, not the current package tip.
+New work must start from the current package-shaped baseline and re-run the
+relevant regression controls.
+
+## Current hardware frontier
+
+| Area | Proven by 2026-08-13 | Next clean gate |
+|---|---|---|
+| Cameras | All four capture through libcamera; rear focus and automatic pop-up lifecycle work. | Recovery, camera quality, full controls, video, flash/OIS and upstream media review. |
+| IPA / modem / GNSS | IPA v4.1 creates `rmnet_ipa0`; modem QMI and LOC sessions answer without a SIM. | Standard location/mobile-data services, SIM/data/SMS/calls and upstream IPA acceptance. |
+| NFC | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. | Clean down/up lifecycle, HCE and secure-element scope. |
+| Haptics | AW8697 driver builds and physical vibration is confirmed. | Range/repetition, feedbackd, suspend and upstream driver review. |
+| Sensors | SLPI, FastRPC, writable registry, SSC requests and ULog forensics run. Both firmware sets expose only infrastructure SUIDs and reject QUP1/QUP2-to-EBI1 ICB routes. | Run the downstream 4.14 plus stock-DTBO control, correct the isolated platform/DSP fault, then expose standard IIO devices/events. |
+| Charging | Fuel gauge and guarded SMB5 v3 charge/VBUS transitions pass. | Termination, JEITA/thermal, low battery, fast charge and suspend. |
+| System stability | Direct boot, RAM/UFS pressure, A/B marking and clean reboot work. | Touch/display suspend, UFS ICE, full SMMU cleanup and long-duration tests. |
+
+The complete closure order, including Ubuntu Touch/Lomiri, is maintained in
+[roadmap.md](roadmap.md).
 
 For every experiment below:
 
@@ -269,32 +291,22 @@ physical endpoint behind its own independently validated route.
 
 ## 10. USB host mode
 
-**Proven current state.** USB 2 peripheral mode is proven through NCM, ACM,
-and SSH. The K1 DTS forces `dr_mode = "peripheral"`, limits DWC3 to high speed,
-and disables the QMP USB3/DisplayPort PHY. Host mode, VBUS sourcing, Type-C role
-switching, SuperSpeed, and docks are unvalidated; see
-[mainline bring-up](mainline-bringup.md#7-usb-gadget) and the
-[status matrix](status.md#mainline-support-matrix).
+**Proven current state.** The PM8150B Type-C block now exposes a dual-role port,
+negotiates PD, switches to host behind a powered dock and retains sink power.
+The QMP combo PHY provides USB 3 at 5 Gbit/s and DisplayPort. A USB3 hub,
+Realtek Ethernet adapter and storage device enumerate, and Plasma drives an
+external monitor correctly at 2560x1440@60. Direct peripheral NCM/SSH remains
+the recovery path. See [USB role evidence](evidence/2026-08-07-mainline616-usb-role.md).
 
-**Hypothesis.** The DWC3 core and high-speed PHY can operate as a fixed USB 2
-host before Type-C role switching, VBUS control, QMP PHY, or SuperSpeed support
-is introduced.
+**Remaining validation.** Source VBUS safely for an unpowered peripheral,
+exercise HID/Ethernet/storage and hotplug combinations, recover peripheral mode
+after every host test, validate four-lane/alternate DP contracts and prune
+modes that exceed link bandwidth. Complete DP audio and docked suspend only
+after the corresponding audio and power work is ready.
 
-**Single-variable experiment.** Change only DWC3 `dr_mode` from `peripheral`
-to `host`, retaining the high-speed limit and HS PHY. Use an externally powered
-USB 2 hub and one known low-power device so VBUS sourcing is not part of the
-test.
-
-**Success criteria.** The host controller registers, enumerates the known USB
-2 device, and sustains data transfer without controller reset or SMMU fault.
-Final USB completion requires separately validated Type-C role switching,
-VBUS sourcing, peripheral recovery, QMP PHY/SuperSpeed, and representative
-docks.
-
-**Risks and fallback.** Fixed host mode removes the USB gadget, NCM, ACM, and
-SSH recovery channel. Run it only after an independent console or proven
-automatic restore path exists. Restore the peripheral-mode DTB after the test;
-do not enable QMP, role switching, and VBUS in the same experiment.
+**Risks and fallback.** Role or VBUS mistakes can remove USB recovery or apply
+unsafe power. Use a powered dock until source behavior is proven, keep SSH and a
+known-good boot slot, and change only one role/power/PHY property per test.
 
 ## Upstream readiness
 

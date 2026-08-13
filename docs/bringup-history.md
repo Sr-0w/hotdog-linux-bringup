@@ -1,9 +1,48 @@
 # Bring-up history and validation narrative
 
+Last updated: 2026-08-13
+
 This document contains the detailed project-status narrative, boot-path notes,
 recovery experiments, and validated mainline fixes that were previously kept in
 the repository root `README.md`. The root README intentionally stays focused on
 the current support state and navigation.
+
+## Current checkpoint — 2026-08-13
+
+The July boot investigation is complete: the active reference now direct-boots
+Linux 6.16 from ABL into a writable postmarketOS/Plasma system. Since the
+four-camera milestone described later in this file, the project has also:
+
+- fixed clean software reboot and automatic A/B success marking;
+- validated the IMX481 ultra-wide and the automatic Hall-bounded IMX471 pop-up
+  lifecycle, completing initial capture from all four cameras;
+- proven QMI GNSS sessions, then added SM8150 IPA v4.1 platform data so
+  `rmnet_ipa0` exists and ModemManager holds a net port;
+- powered and configured PN553/NCI, then detected, activated and typed a real
+  ISO 14443-4 document and completed bidirectional ISO 7816-4 APDU exchange;
+  its unauthenticated BAC/PACE refusal is expected, while clean lifecycle,
+  HCE and secure-element scope remain incomplete;
+- identified AW8697, added a mainline-style force-feedback driver and confirmed
+  physical vibration;
+- booted SLPI, completed FastRPC attachment, writable registry service, SSC
+  requests and ULog forensics; physical sensors remain broken because both
+  tested firmware sets reject the QUP1/QUP2-to-EBI1 ICB routes with
+  `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`;
+- validated the upstream-shaped SMB5 v3 charger candidate over guarded charge
+  windows and host/physical VBUS transitions;
+- published the first Linux upstream series and recorded review follow-up.
+
+Evidence: [GNSS](evidence/2026-08-10-gnss-qmi-loc.md),
+[NFC](evidence/2026-08-10-nfc-nxp-nci.md),
+[SLPI](evidence/2026-08-10-slpi-sensor-dsp.md),
+[haptics](evidence/2026-08-11-haptics-aw8697.md),
+[IPA](evidence/2026-08-12-ipa-v41-scope.md),
+[upstream follow-up](evidence/2026-08-12-upstream-follow-up.md),
+[SMB5](evidence/2026-08-13-smb5-v3-hardware-validation.md) and
+[Hexagon writes](evidence/2026-08-13-hexagonrpcd-write.md).
+
+The [timeline](roadmap.md#timeline-and-current-position) is the compact visual
+summary; [status.md](status.md) is authoritative for current limitations.
 
 ## Project status
 

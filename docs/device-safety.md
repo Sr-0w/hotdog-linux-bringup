@@ -1,5 +1,7 @@
 # Device safety
 
+Last reviewed: 2026-08-13
+
 This project performs low-level boot experiments. Read this document before
 running any script that uses ADB, fastboot, EDL, or raw block devices.
 
@@ -43,9 +45,14 @@ export PMOS_PASSWORD='<postmarketOS-password>'
 
 ## Partition-write policy
 
-The mainline kexec launcher does not write a mainline image to a partition.
-Bridge testing may update `boot_b`, and the relevant wrappers explicitly refuse
-to target another partition.
+The active direct-mainline flow writes a validated AVB image to one explicit
+A/B boot slot and may stage a root image only through a separately reviewed
+installer helper. Resolve the target by partition label and current slot,
+record its pre-write hash, verify the candidate offline, read the complete
+partition back, and compare the full SHA-256 before rebooting.
+
+Historical kexec tests did not persist the mainline payload, while bridge tests
+could update `boot_b`. Those scripts are not the current release procedure.
 
 Never modify `super`, `vbmeta`, `dtbo`, or both boot slots merely to reproduce a
 mainline experiment. An explicit DTBO experiment must pin both candidate and
@@ -112,8 +119,8 @@ can validate its exact kernel and command line before requesting fastboot:
 
 ```bash
 scripts/rescue-pmos-to-fastboot-when-visible.sh \
-  --expected-kernel-prefix '6.17.0-sm8150' \
-  --expected-cmdline-token 'rdinit=/hotdog-mainline-wrapper'
+  --expected-kernel-prefix '6.16.0-sm8150' \
+  --expected-cmdline-token 'iommu.passthrough=0'
 ```
 
 This watcher does not flash partitions. Pair it with the prearmed fastboot

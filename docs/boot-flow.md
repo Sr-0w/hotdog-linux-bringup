@@ -1,75 +1,79 @@
 # Boot architecture
 
-## Why a bridge is used
+Last updated: 2026-08-13
 
-Directly booting the current Linux 6.17 Image through the OnePlus bootloader
-has not produced the same reliable result as entering it through kexec. The
-downstream 4.14 kernel already has working storage, USB, and enough display
-support to provide a controlled launch environment.
+## Current supported path
 
-The bridge separates two questions:
-
-1. Can the OnePlus bootloader start the known downstream environment?
-2. Can that environment transfer control to the mainline kernel?
-
-The second path is now proven.
-
-## Runtime sequence
+The physical HD1913 now boots the mainline-oriented Linux 6.16 reference stack
+directly. The downstream 4.14 bridge and kexec are not executed.
 
 ```mermaid
 sequenceDiagram
-    participant BL as OnePlus bootloader
-    participant DS as Linux 4.14 bridge
-    participant ML as Linux 6.17
-    participant IR as pmOS initramfs
-    participant RF as pmOS rootfs
+    participant BL as OnePlus ABL bootloader
+    participant K as Linux 6.16 Image + Hotdog DTB
+    participant IR as standard pmOS initramfs
+    participant RF as writable pmOS rootfs
+    participant UI as OpenRC + Plasma Mobile
 
-    BL->>DS: boot boot_b
-    DS->>DS: expose USB SSH and stage artifacts
-    DS->>ML: kexec Image + DTB + initramfs
-    ML->>IR: start wrapper
-    IR->>IR: wait for hardware probes
-    IR->>IR: discover UFS and nested GPT
-    IR->>RF: mount /dev/loop1 and switch_root
-    RF->>RF: start OpenRC, NCM, ACM and SSH
+    BL->>K: load header-v2 boot image from active A/B slot
+    K->>IR: start PID 1 with UFS, DRM and USB available
+    IR->>IR: discover split pmOS filesystems
+    IR->>RF: mount root read-write and switch_root
+    RF->>UI: start services, NCM/ACM, SSH and graphical session
+    UI->>BL: mark slot successful through qbootctl
 ```
 
-## Persistent recovery behavior
+Validated properties include direct kernel entry, native UFS, writable root,
+USB NCM/SSH, native DRM, accelerated Plasma Mobile, clean reboot and A/B success
+marking. The current laboratory installation maps a split image from `super`;
+the final pmaports installer must replace that layout without changing the
+kernel/DTB hardware contract.
 
-The downstream bridge remains in `boot_b`. Mainline is loaded only into RAM.
-If mainline resets, the bootloader starts the bridge again. Rescue watchers can
-also restore a known image if fastboot or recovery becomes visible.
+## Boot artifact contract
 
-This design limits persistent writes during mainline experiments, but it is
-not a substitute for verified stock partition backups.
+- Android boot header version 2
+- arm64 Linux `Image`, source-built Hotdog DTB and external initramfs
+- 4096-byte page size
+- 96 MiB `boot` partition envelope with the validated AVB footer contract
+- command line below the observed 511-character ABL limit
+- matched kernel modules, firmware packages and DTB from the same build
 
-## Mainline launcher
+The exact validated identities are versioned in
+[package evidence](evidence/2026-08-03-mainline616-pmaports.md) and the
+[Alpha release record](evidence/2026-08-10-v0.1.0-alpha.1.md), rather than
+hard-coded here as if one historical hash were permanently current.
 
-`scripts/test-mainline617-pmos-full.sh` is the public entry point for the
-validated cycle. It:
+## Recovery and A/B behavior
 
-1. checks the kernel, DTB, initramfs, and restore-image hashes
-2. calls `scripts/test-mainline-via-kexec.sh`
-3. verifies root access and `CONFIG_KEXEC` in the bridge
-4. uploads and hash-checks the artifacts on the phone
-5. loads the mainline kernel without writing a mainline image to a partition
-6. arms the rescue watcher
-7. executes kexec and waits for a new SSH boot ID
+Every candidate is written only after offline validation and complete readback.
+A known-good slot/image, fastboot, pstore/ramoops and bounded Qualcomm crashdump
+capture remain available. The tested ABL must not be trusted to fall back when
+retry count reaches zero; successful boots must run `qbootctl` and recovery
+must be independently supervised. See [device safety](device-safety.md).
 
-The default 120-second settle period is part of the current validated contract.
-Changing it makes the artifact set experimental again.
+## Historical bridge path
 
-## End state
-
-On success:
+The earlier investigation used:
 
 ```text
-kernel: 6.17.0-sm8150
-root:   /dev/loop1, ext4, read-write
-boot:   /dev/loop0, ext2
-USB:    NCM + ACM
-SSH:    user@172.16.42.1
+OnePlus bootloader -> downstream Linux 4.14 -> kexec Linux 6.17 K1
 ```
 
-The panel may be black even when the system has fully booted. USB SSH is the
-current source of truth for userspace success.
+That path proved mainline userspace, provided early USB recovery and enabled
+controlled comparison, but it is now historical. Its scripts and evidence are
+retained for regression analysis only and must not become a dependency of a
+release, pmaports submission or Ubuntu Touch port.
+
+## Final shared-kernel path
+
+The kernel endpoint is one upstream Hotdog implementation consumed by both
+distributions:
+
+```text
+OnePlus bootloader -> upstream Linux + Hotdog DTB -> postmarketOS -> Plasma Mobile
+OnePlus bootloader -> same Linux Image + DTB -> Ubuntu Touch -> Lomiri
+```
+
+Distribution-specific initramfs and userspace are allowed. Halium, Android
+kernel modules, Android HALs, `libhybris`, binary DT mutation and kexec are not
+part of the final hardware path.

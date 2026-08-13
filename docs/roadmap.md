@@ -136,10 +136,10 @@ timeline
       2026-08-10 : All four cameras and automatic pop-up lifecycle
                  : Clean reboot, A/B success marking and Alpha 1
     section Current frontier
-      2026-08-12 : IPA v4.1 and rmnet_ipa0, NFC target detection and physical haptics
+      2026-08-12 : IPA v4.1 and rmnet_ipa0, NFC APDU exchange and physical haptics
                  : Modem responds without SIM and SLPI sensor service is published
       2026-08-13 : YOU ARE HERE — SMB5 v3 validated
-                 : Active work on SLPI sensor registry and standard sensor exposure
+                 : SLPI QUP-to-EBI1 route failure isolated; downstream control is next
                  : Mainline review follow-up and partial/broken closure remain active
     section Remaining hardware and upstream
       Next : Finish sensors, GNSS integration, NFC lifecycle and haptics userspace
@@ -165,7 +165,7 @@ timeline
 | 2026-08-07 | The handset microphone, dual-role USB-C, powered-dock host mode, SuperSpeed, DisplayPort video, corrected volume keys and fuel gauge reach hardware validation. | [Microphone](evidence/2026-08-07-mainline616-microphone.md), [USB role](evidence/2026-08-07-mainline616-usb-role.md), [hardware survey](evidence/2026-08-07-mainline616-remaining-hardware.md) |
 | 2026-08-09 to 2026-08-10 | Telephoto, main, ultra-wide and front cameras capture through libcamera; rear focus works; the pop-up camera extends and retracts automatically around capture. | [Telephoto](evidence/2026-08-09-mainline616-camera-telephoto.md), [IMX586](evidence/2026-08-09-mainline616-camera-imx586.md), [autofocus](evidence/2026-08-10-mainline616-camera-autofocus.md), [IMX481](evidence/2026-08-10-mainline616-camera-imx481.md), [IMX471/pop-up](evidence/2026-08-10-mainline616-camera-imx471-popup.md) |
 | 2026-08-10 | Clean software reboot passes six cycles, slot success is marked correctly, GNSS QMI sessions work at engine level and the first public Alpha pair boots on the HD1913. | [Reboot](evidence/2026-08-10-mainline616-software-reboot.md), [A/B](evidence/2026-08-10-ab-slot-success.md), [GNSS](evidence/2026-08-10-gnss-qmi-loc.md), [Alpha 1](evidence/2026-08-10-v0.1.0-alpha.1.md) |
-| 2026-08-11 to 2026-08-12 | Initial upstream series are published and audited; IPA v4.1 creates `rmnet_ipa0`; NFC detects a real ISO 14443-4 target, although payload reading remains incomplete; AW8697 vibrates on hardware; modem services answer without a SIM; SLPI publishes the Snapdragon Sensor Core service. | [Upstream follow-up](evidence/2026-08-12-upstream-follow-up.md), [IPA scope](evidence/2026-08-12-ipa-v41-scope.md), [NFC](evidence/2026-08-10-nfc-nxp-nci.md), [haptics](evidence/2026-08-11-haptics-aw8697.md), [SLPI](evidence/2026-08-10-slpi-sensor-dsp.md) |
+| 2026-08-11 to 2026-08-12 | Initial upstream series are published and audited; IPA v4.1 creates `rmnet_ipa0`; NFC detects, activates and types a real ISO 14443-4 document and exchanges bidirectional APDUs; AW8697 vibrates on hardware; modem services answer without a SIM; SLPI publishes the Snapdragon Sensor Core service. | [Upstream follow-up](evidence/2026-08-12-upstream-follow-up.md), [IPA scope](evidence/2026-08-12-ipa-v41-scope.md), [NFC](evidence/2026-08-10-nfc-nxp-nci.md), [haptics](evidence/2026-08-11-haptics-aw8697.md), [SLPI](evidence/2026-08-10-slpi-sensor-dsp.md) |
 | 2026-08-13 | The upstream-oriented SMB5 v3 candidate passes guarded charge and VBUS transition tests; writable Hexagon file service and sensor-registry work advance the active SLPI bring-up. | [SMB5 v3](evidence/2026-08-13-smb5-v3-hardware-validation.md), [Hexagon writes](evidence/2026-08-13-hexagonrpcd-write.md) |
 
 ### Current checkpoint
@@ -174,8 +174,9 @@ The project is past basic boot and broad peripheral discovery. A useful
 mainline postmarketOS/Plasma system exists, but it is not yet a complete or
 upstream-clean phone. The active engineering frontier on 2026-08-13 is:
 
-- completing SLPI/SSC sensor discovery and exposing real motion, orientation,
-  light and proximity data through standard Linux interfaces;
+- running the downstream 4.14 plus stock-DTBO control for the isolated SLPI
+  QUP1/QUP2-to-EBI1 route rejection, then exposing real sensor data through
+  standard Linux interfaces;
 - turning the new IPA/rmnet foundation into normal GNSS and mobile-data
   services, then validating the modem with a SIM;
 - closing every incomplete baseline item in phase 0, especially suspend,
@@ -209,12 +210,13 @@ The following are currently working or hardware-validated:
 - automatic IMX471 pop-up extension, capture, and retraction;
 - the SM8150 IPA v4.1 path and `rmnet_ipa0`, with modem QMI services answering
   on a handset that currently has no SIM inserted;
-- GNSS engine sessions over QMI and real NFC target detection, while their
-  complete standard userspace paths remain unfinished;
+- GNSS engine sessions over QMI, whose complete standard location path remains
+  unfinished, plus working NFC reader/APDU exchange with lifecycle, HCE and
+  secure-element scope still open;
 - physical AW8697 vibration and the guarded SMB5 v3 charge/VBUS candidate;
-- SLPI boot, FastRPC attachment, writable sensor-registry service and the
-  published Snapdragon Sensor Core service, before individual sensors are
-  exposed.
+- SLPI boot, FastRPC attachment, writable sensor-registry service, SSC requests
+  and ULog forensics; physical sensors remain broken at the identified
+  QUP1/QUP2-to-EBI1 ICB route rejection.
 
 The remaining support gaps are tracked explicitly in
 the [hardware status matrix](status.md). Camera capture is working, but AF/AE/AWB
@@ -284,13 +286,14 @@ location stack after boot and resume.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Sensors | Motion / rotation / proximity | SLPI boots, FastRPC attaches, writable registry requests work and the Snapdragon Sensor Core service is published. Individual physical sensors are not exposed yet. |
+| Sensors | Motion / rotation / proximity | SLPI boots and the host/DSP plumbing works end to end, but only infrastructure SUIDs appear. Both current and OxygenOS 10 firmware reject QUP1/QUP2-to-EBI1 with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; physical sensors are broken. |
 
-Finish the SSC protocol discovery from the now-running sensor domain, enumerate
-the physical sensor SUIDs and attributes, add the smallest maintainable bridge
-to standard IIO interfaces, and integrate orientation, proximity, light and
-motion into Plasma Mobile. Preserve the packaged protection-domain maps,
-firmware and registry service without depending on an Android sensor HAL.
+Run the current firmware and sensor userspace on the known downstream 4.14
+kernel with stock DTBO. Success isolates a host-kernel/platform difference;
+the same rejection moves the fault into DSP configuration. Correct that
+boundary, enumerate the LSM6DSM, MMC5603x and TCS3701 SUIDs and attributes,
+add the smallest maintainable bridge to standard IIO interfaces, and integrate
+orientation, proximity, light and motion without an Android sensor HAL.
 
 Exit criterion: accelerometer, gyroscope, magnetometer, light, proximity, and
 the relevant motion events work through standard Linux interfaces and survive
@@ -300,11 +303,11 @@ repeated boots.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| NFC | NFC / secure-element path | PN553 controller, board RF configuration, polling and detection of a real ISO 14443-4 target are hardware-validated; payload reading, clean lifecycle and secure-element support remain open. |
+| NFC | NFC / secure-element path | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. The document's unauthenticated BAC/PACE refusal is expected; clean lifecycle, HCE and secure-element scope remain open. |
 
-Complete target payload exchange and reader-mode userspace, fix explicit
-down/up recovery without reboot, package only redistributable configuration,
-and document secure-element and payment limitations separately.
+Fix explicit down/up recovery without reboot, validate common tag types,
+package only redistributable configuration, and document HCE, secure-element
+and payment limitations separately.
 
 Exit criterion: NFC tag detection and reader operation work in userspace, with
 any secure-element limitation explicitly documented.

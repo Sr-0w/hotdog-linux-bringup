@@ -1,10 +1,24 @@
 # Direct mainline boot
 
-The immediate project milestone is to boot the validated mainline payload
-directly from the OnePlus bootloader, without first running the downstream
-4.14 kernel.
+Last updated: 2026-08-13
 
-## Known baseline
+## Current accepted result
+
+Direct boot is complete at the bring-up level. A package-built Linux 6.16
+header-v2 image starts from the OnePlus bootloader, reaches PID 1, mounts the
+writable postmarketOS root, exposes native DRM and USB networking, starts
+accelerated Plasma Mobile, reboots cleanly and marks its A/B slot successful.
+No downstream kernel or kexec bridge executes. See the
+[package evidence](evidence/2026-08-03-mainline616-pmaports.md),
+[public-image evidence](evidence/2026-08-05-mainline616-public-image.md),
+[Alpha 1](evidence/2026-08-10-v0.1.0-alpha.1.md) and
+[A/B evidence](evidence/2026-08-10-ab-slot-success.md).
+
+The D-series and K1 sections below preserve the investigation that produced
+this result. They are not the current validation queue; current work starts
+from the package-shaped 6.16 baseline in [status.md](status.md).
+
+## Historical known baseline
 
 The following payload reaches the installed postmarketOS root filesystem when
 loaded by kexec from the downstream bridge:
@@ -473,45 +487,32 @@ deferred until the early checkpoint ladder identifies D9's first failing stage.
 
 ## pmaports integration target
 
-The D1 header-v2 candidate maps to `deviceinfo_header_version="2"`, a 4096-byte
-page, and the base, kernel, ramdisk, tags, and DTB offsets listed above. Its
-persistent return to fastboot means those fields are not yet a validated
-direct-boot contract. Kernel arguments are supplied by `kernel-cmdline.conf`,
-currently containing
-`clk_ignore_unused`, rather than the deprecated `deviceinfo_kernel_cmdline`
-field. The final device package must use
-`deviceinfo_flash_fastboot_partition_rootfs="super"` rather than the legacy
-`deviceinfo_flash_fastboot_partition_system` spelling.
-
-The migrated metadata passes `dint` as a structural check. That result does
-not establish display support: `deviceinfo_drm` must remain absent until the
-mainline DRM, DSI, panel, and userspace path is validated at runtime.
-
-The downstream 4.14 bridge belongs only in the downstream/rescue package path.
-The publishable testing package must consume the maintained SM8150 mainline
-kernel package and generate its boot image through the normal pmaports flow.
+The header-v2, 4096-byte page and Hotdog offsets are now hardware-validated.
+`kernel-cmdline.conf` supplies kernel arguments and the device package generates
+the fixed-size AVB envelope through `boot-deploy`. DRM capability, direct UFS,
+USB, touch, GPU and Plasma are validated. The final submission must migrate
+this contract to a current shared SM8150 kernel and a normal installation
+layout; the device-specific 6.16 package and nested GPT remain references.
 
 ## Recovery requirement
 
-Temporary `fastboot boot` remains useful only as a packaging and loader
-control. The raw D1 artifact is not the persistent test image and must not be
-flashed. The persistent downstream no-paint bridge remains the recovery image
-and the pinned launcher restores it whenever the recovery path appears.
-
-The historical K1-compatible Qualcomm watchdog module was validated after
-mainline userspace, but that result does not validate the r4 or D1-wdt built-in
-driver. A later K1 kexec control with the PM8150 PON bootloader mapping proved
-that `RESTART2(bootloader)` can return directly to fastboot. This property is
-not yet part of the publishable package DTB. Direct-boot recovery must not rely
-on A/B retry exhaustion: the tested ABL kept the failed B slot active at retry
-count zero and stopped at the red failure screen.
+A known-good slot/image, full partition readback, fastboot, pstore/ramoops and
+guarded crashdump collection must be ready before each candidate. Successful
+images mark their slot with `qbootctl`. Never rely on A/B retry exhaustion: the
+tested ABL can keep a failed slot selected at retry count zero and stop at the
+red failure screen. See [device safety](device-safety.md).
 
 ## Completion criteria
 
-The direct-boot milestone is complete when a pmaports-generated boot image:
+The bring-up milestone has passed criteria 1-3 and normal software reboot.
+Final submission completion requires a pmaports-generated boot image that:
 
 1. starts Linux mainline directly from the bootloader;
 2. mounts the installed postmarketOS root filesystem read-write;
 3. exposes USB NCM, USB ACM, and SSH;
-4. can reboot to bootloader and recovery without a physical reset;
-5. reproduces from tracked pmaports packages without local binary payloads.
+4. can reboot to system, bootloader and recovery without a physical reset;
+5. reproduces from clean tracked packages without local binary payloads;
+6. installs, upgrades, rolls back and recovers through supported pmaports
+   workflows rather than the laboratory nested-GPT deployment;
+7. uses the shared current SM8150 kernel with all required source changes
+   reviewable and suitable work submitted upstream.

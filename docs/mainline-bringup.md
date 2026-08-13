@@ -2,15 +2,19 @@
 
 > This document preserves the earlier Linux 6.17/kexec and V33 localization
 > history. The current direct-pmaports status is tracked in
-> [status.md](status.md); exact Linux 6.16 `r4` now boots with USB SSH and
-> hardware-validated S6SY761 multitouch.
+> [status.md](status.md). As of 2026-08-13 the direct Linux 6.16 package line
+> also provides accelerated Plasma, Wi-Fi/Bluetooth, internal audio, USB-C/DP,
+> all four cameras, IPA/rmnet, NFC target detection, haptics and the active
+> SLPI sensor service. The older `r4` statement is historical.
+
+Last reviewed: 2026-08-13
 
 This document records the minimum set of changes that produced a real
 postmarketOS userspace under Linux 6.17 on the OnePlus 7T Pro HD1913.
 
-The current result is a bring-up checkpoint. Several changes deliberately
-bypass broken providers and are not suitable for upstreaming in their present
-form.
+The fixes below explain the boot breakthrough. Several deliberately bypass
+broken providers and remain unsuitable for upstreaming; the maintained cleanup
+and subsystem submission tracks are in [roadmap.md](roadmap.md).
 
 ## Direct-boot milestone: V33
 
@@ -28,8 +32,10 @@ configuration. Every other boot component remained byte-identical, and UFS
 then completed initialization. See
 [the V33 hardware record](evidence/2026-08-03-direct-mainline-rootfs.md).
 
-Direct DWC3 remains unresolved: the rootfs has no inherited `ttyGS0`, so NCM,
-ACM, and SSH are still available only through the historical bridge path.
+At the V33 checkpoint direct DWC3 remained unresolved. V41/V43 and the later
+pmaports image subsequently attached DWC3 to the translated Apps SMMU domain;
+direct NCM and SSH are now validated. The sentence above is retained only to
+explain the ordering of the historical fixes.
 
 ## Boot result
 

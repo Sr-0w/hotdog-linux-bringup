@@ -1,7 +1,13 @@
 # Host setup
 
+Last reviewed: 2026-08-13
+
 The tooling was developed on Gentoo Linux, but most scripts use standard Linux
 utilities and can be adapted to other distributions.
+
+The active build target is the direct Linux 6.16 pmaports-shaped stack. The
+`--sm8150-k1` bootstrap still fetches historical comparison sources, but K1 and
+kexec are no longer the normal hardware path.
 
 ## Required tools
 
@@ -17,6 +23,9 @@ Core requirements include:
 - Zig and QEMU user-mode AArch64 support for building and validating static
   rescue helpers
 - ShellCheck for script validation
+- kernel contribution tools used by the affected subsystem, including Clang or
+  GCC cross-compilers, sparse, `b4`, `git send-email`, `yamllint` and
+  Devicetree schema dependencies
 
 Run the repository check to identify missing commands:
 
@@ -129,3 +138,14 @@ Review interface names and NetworkManager behavior before installing it.
 
 Both commands are offline checks and should complete before a phone operation
 is attempted.
+
+For the current package flow also run:
+
+```bash
+./scripts/validate-public-tree.sh
+./scripts/validate-current-candidates.sh
+```
+
+`hotdog.env`, pmbootstrap state, QDL captures, OxygenOS dumps and generated
+artifacts are machine-private. Only sanitized evidence and reproducible source
+inputs may be committed.
