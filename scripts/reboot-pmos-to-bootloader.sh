@@ -114,7 +114,9 @@ fastboot_present() {
 main() {
   local helper_sha=""
   local remote_helper="/tmp/hotdog-reboot-mode"
+  local remote_upload_command=""
   local remote_command=""
+  local root_command=""
   local deadline=0
   local token=""
   local checks=""
@@ -156,7 +158,7 @@ main() {
   for token in "${EXPECTED_SOURCE_CMDLINE_TOKENS[@]}"; do
     checks+=" case \" \$cmdline \" in *$(remote_quote " $token ")*) ;; *) exit 7 ;; esac;"
   done
-  remote_command="set -e; cat > $(remote_quote "$remote_helper"); chmod 700 $(remote_quote "$remote_helper"); test \"\$(sha256sum $(remote_quote "$remote_helper") | awk '{ print \$1 }')\" = $(remote_quote "$helper_sha"); $checks sudo -n id; printf 'HOTDOG_BOOTLOADER_DISPATCH=%s\\n' $(remote_quote "$EXPECTED_SOURCE_BOOT_ID"); sudo -n $(remote_quote "$remote_helper") $(remote_quote "$MODE")"
+  remote_upload_command="set -e; cat > $(remote_quote "$remote_helper"); chmod 700 $(remote_quote "$remote_helper"); test \"\$(sha256sum $(remote_quote "$remote_helper") | awk '{ print \$1 }')\" = $(remote_quote "$helper_sha")"
   timeout "$REBOOT_COMMAND_TIMEOUT_SEC" sshpass -p "$PMOS_PASSWORD" ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile="$run_dir/known_hosts" \
@@ -164,8 +166,22 @@ main() {
     -o PreferredAuthentications=password \
     -o PubkeyAuthentication=no \
     "$PMOS_USER@$PMOS_HOST" \
-    "$remote_command" \
-    < "$HELPER" 2>&1 | tee "$run_dir/reboot-command.txt" || true
+    "$remote_upload_command" \
+    < "$HELPER" > "$run_dir/helper-upload.txt" 2>&1 ||
+    die "Could not upload and verify reboot helper" 5
+
+  root_command="printf 'HOTDOG_BOOTLOADER_DISPATCH=%s\\n' $(remote_quote "$EXPECTED_SOURCE_BOOT_ID"); exec $(remote_quote "$remote_helper") $(remote_quote "$MODE")"
+  remote_command="set -e; $checks exec sudo -S -p '' sh -c $(remote_quote "$root_command")"
+  printf '%s\n' "$PMOS_PASSWORD" |
+    timeout "$REBOOT_COMMAND_TIMEOUT_SEC" sshpass -p "$PMOS_PASSWORD" ssh \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile="$run_dir/known_hosts" \
+      -o ConnectTimeout=2 \
+      -o PreferredAuthentications=password \
+      -o PubkeyAuthentication=no \
+      "$PMOS_USER@$PMOS_HOST" \
+      "$remote_command" \
+      2>&1 | tee "$run_dir/reboot-command.txt" || true
 
   phone_lock_release || true
   deadline=$((SECONDS + WAIT_SEC))
