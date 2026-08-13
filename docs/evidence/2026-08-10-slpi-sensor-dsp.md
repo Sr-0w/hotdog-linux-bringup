@@ -659,3 +659,59 @@ is currently omitted.
 The helper is small and readable, and every layer below the protobuf content is
 verified working, so this is a question of getting one message right rather
 than of building a stack.
+
+## Error 19 fixed: the payload is a counted array
+
+`QMI_ERR_ARG_TOO_LONG`. The payload in `sns_client_req_msg_v01` is a
+variable-length array, so the QMI encoding puts a `uint16` count inside the
+TLV before the bytes. The client was writing the protobuf straight into the
+TLV value, so the service read the head of the protobuf as that count:
+
+```
+0a 14 ...   ->  0x140a = 5130, against a maximum of 1000
+```
+
+Which is exactly what it complained about. With the count prefix the service
+accepts the request:
+
+```
+reply txn=1 msg=0x0020 tlvs={2: 4, 16: 8, 17: 4}
+  result: ok, error 0
+  tlv 0x10: 1701000000000000     client id
+  tlv 0x11: 00000000
+```
+
+The client id increments across runs, so the front end is alive and allocating.
+
+Two further corrections were made while chasing the missing answer, both real
+even though neither changed the outcome. The listen loop treated a receive
+timeout as the end of the conversation, so it only ever waited five seconds
+when the answer to a lookup arrives asynchronously as an indication. And
+`sns_std_suspend_config.client_proc_type` was set to 1, which is the SSC
+itself; APSS is 0, and asking as the SSC would have had any answer delivered
+to the DSP rather than to us.
+
+## Where it stops, measured rather than guessed
+
+No indication ever arrives. Counting FastRPC traffic across a request says why
+it is not worth looking for one:
+
+```
+calls before: 1092
+calls after:  1092   delta 0
+```
+
+The sensor domain is alive and working on this boot, having made those 1092
+calls reading its registry, and `hexagonrpcd` is still serving. But a request
+that the QMI front end accepts produces no DSP activity at all.
+
+So the message is well-formed enough for QMI and does not reach the sensor
+logic behind it. The front end lives in the SLPI's root protection domain and
+the sensors live in the sensor domain, and something between the two is not
+carrying this request.
+
+What to establish next, in order: whether the lookup SUID constant
+(0xABABABABABABABAB twice) is right for this generation, since a wrong SUID
+would be silently dropped exactly like this; and whether the service expects
+a registration or handshake message before it will route requests to a
+domain.

@@ -106,7 +106,12 @@ def read_varint(raw, i):
 # -------------------------------------------------------------------- qmi
 
 def qmi_request(txn, msg_id, payload):
-    tlv = b"\x01" + struct.pack("<H", len(payload)) + payload
+    # The payload is a variable-length array in the QMI definition, so the
+    # TLV value carries its own uint16 count before the bytes. Without that
+    # the service reads the head of the protobuf as a length and rejects the
+    # message as too long.
+    value = struct.pack("<H", len(payload)) + payload
+    tlv = b"\x01" + struct.pack("<H", len(value)) + value
     return struct.pack("<BHHH", 0, txn, msg_id, len(tlv)) + tlv
 
 
@@ -164,10 +169,12 @@ def main():
     print("bound to node %d port %d" % (me.sq_node, me.sq_port))
 
     # sns_suid_req { data_type = <name>, register_updates = false }
-    suid_req = pb_bytes(1, want) + pb_uint(2, 0)
+    suid_req = pb_bytes(1, want) + pb_uint(2, 1)
 
     # sns_std_suspend_config { client_proc_type = APSS, delivery_type = WAKEUP }
-    susp = pb_uint(1, 1) + pb_uint(2, 1)
+    # APSS is 0 in the enum; 1 is the SSC itself, which would have the answer
+    # delivered to the DSP rather than to us.
+    susp = pb_uint(1, 0) + pb_uint(2, 0)
 
     # sns_std_request { susp_config, payload }
     std_req = pb_bytes(1, susp) + pb_bytes(2, suid_req)
@@ -186,14 +193,16 @@ def main():
     print("sent %d bytes asking for '%s'" % (len(pkt), want.decode()))
 
     libc.setsockopt(fd, socket.SOL_SOCKET, socket.SO_RCVTIMEO,
-                    struct.pack("qq", 5, 0), 16)
+                    struct.pack("qq", 1, 0), 16)
 
-    rx = ctypes.create_string_buffer(4096)
-    end = time.time() + 8
+    rx = ctypes.create_string_buffer(65536)
+    end = time.time() + 25
     while time.time() < end:
-        n = libc.recvfrom(fd, rx, 4096, 0, None, None)
+        n = libc.recvfrom(fd, rx, 65536, 0, None, None)
         if n <= 0:
-            break
+            # a receive timeout is not the end: the reply is immediate but the
+            # indication carrying the answer arrives later
+            continue
         raw = rx.raw[:n]
         split = qmi_split(raw)
         if split is None:
@@ -206,6 +215,8 @@ def main():
             if t == 0x02 and len(v) >= 4:
                 res, err = struct.unpack_from("<HH", v, 0)
                 print("  result: %s, error %d" % ("ok" if res == 0 else "failure", err))
+            elif t in (0x10, 0x11):
+                print("  tlv 0x%02x: %s" % (t, v.hex()))
             elif t == 0x01:
                 fields = parse(v)
                 print("  payload fields: %s" % sorted(fields))
