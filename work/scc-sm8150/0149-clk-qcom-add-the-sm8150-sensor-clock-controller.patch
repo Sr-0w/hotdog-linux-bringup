@@ -56,10 +56,10 @@ index 96862e9..febaccd 100644
  obj-$(CONFIG_SM_GCC_8450) += gcc-sm8450.o
 diff --git a/drivers/clk/qcom/scc-sm8150.c b/drivers/clk/qcom/scc-sm8150.c
 new file mode 100644
-index 0000000..4e6a421
+index 0000000..47b7f54
 --- /dev/null
 +++ b/drivers/clk/qcom/scc-sm8150.c
-@@ -0,0 +1,286 @@
+@@ -0,0 +1,279 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2019, The Linux Foundation. All rights reserved.
@@ -304,17 +304,6 @@ index 0000000..4e6a421
 +	.num_clks = ARRAY_SIZE(scc_sm8150_clocks),
 +};
 +
-+static const struct alpha_pll_config scc_pll_config = {
-+	.l = 0x1e,
-+	.alpha = 0x0,
-+	.config_ctl_val = 0x20485699,
-+	.config_ctl_hi_val = 0x00002267,
-+	.config_ctl_hi1_val = 0x00000024,
-+	.user_ctl_val = 0x00000100,
-+	.user_ctl_hi_val = 0x00000805,
-+	.user_ctl_hi1_val = 0x000000d0,
-+};
-+
 +static const struct of_device_id scc_sm8150_match_table[] = {
 +	{ .compatible = "qcom,sm8150-scc" },
 +	{ }
@@ -329,8 +318,12 @@ index 0000000..4e6a421
 +	if (IS_ERR(regmap))
 +		return PTR_ERR(regmap);
 +
-+	clk_trion_pll_configure(&scc_pll, regmap, &scc_pll_config);
-+
++	/*
++	 * The PLL is configured by the sensor DSP's own firmware. Writing it
++	 * from here is unnecessary and unsafe: at probe the island may not be
++	 * powered, and a register access to an unpowered block on this SoC
++	 * stalls the interconnect rather than faulting.
++	 */
 +	return qcom_cc_really_probe(&pdev->dev, &scc_sm8150_desc, regmap);
 +}
 +

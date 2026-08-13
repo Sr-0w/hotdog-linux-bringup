@@ -8,10 +8,10 @@ engines it owns.
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
 diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi
-index fbcc088..43bce60 100644
+index fbcc088..70e5b37 100644
 --- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
 +++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
-@@ -2078,6 +2078,14 @@
+@@ -2078,6 +2078,22 @@
  			status = "disabled";
  		};
  
@@ -20,6 +20,14 @@ index fbcc088..43bce60 100644
 +			reg = <0 0x02b10000 0 0x30000>;
 +			clocks = <&rpmhcc RPMH_CXO_CLK>,
 +				 <&sleep_clk>;
++
++			/*
++			 * The sensor island. Holding it keeps the block answering
++			 * whenever this driver touches a register; the sensor DSP
++			 * votes the same domain for its own use.
++			 */
++			power-domains = <&rpmhpd SM8150_LCX>;
++
 +			#clock-cells = <1>;
 +		};
 +
