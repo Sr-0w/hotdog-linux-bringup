@@ -1,7 +1,7 @@
 # Maintainer: Robin Snyders <robin@snyders.xyz>
 pkgname=hexagonrpcd
 pkgver=0.4.0
-pkgrel=10
+pkgrel=11
 pkgdesc="FastRPC server for Qualcomm DSPs, with writable file service"
 url="https://github.com/linux-msm/hexagonrpc"
 arch="all"
@@ -17,6 +17,7 @@ source="
 	$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz
 	0001-serve-writable-files.patch
 	0002-implement-fremove.patch
+	0003-raise-listener-input-limit.patch
 "
 builddir="$srcdir/hexagonrpc-$pkgver"
 
@@ -37,4 +38,5 @@ sha512sums="
 18ebe4beeed97018243bec5043b8395c07c76f1174085e41a32648fd481485076fefffa091700ca1f72163687405456e5537aa538bc4f08fecacb3f83e3a82d8  hexagonrpcd-0.4.0.tar.gz
 3f68545472952eadddb2c4be252292205fef59ef0c79fd48182484f1d97a98261831401f461dd06e791af2a7e9fad3d86e5787a818bb2eedb2fd14ff92fce80b  0001-serve-writable-files.patch
 b10b98cb28763b8c5c6b83799f1bc0ef83c9a75c25767f0fbe72c2f79145143d0f4000c8c21cf34d6dd75174ede93ad874de2d21d7847d28be5d848a809520b1  0002-implement-fremove.patch
+0511d5acf5c45e81324fb64eeb1db230e6c566e3c21c052c3cdcd0b78e30cd397bb25f2cacabf62ccde835b5407b2c4743d6e90a4568e012bfdb5a2734597b7a  0003-raise-listener-input-limit.patch
 "
