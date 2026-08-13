@@ -873,12 +873,113 @@ the ring. The next capture must happen immediately after the sensor process
 starts, before those transactions are overwritten. Until that capture exists,
 the NACKs must not be attributed to any fitted hotdog sensor.
 
+## OxygenOS 10 firmware reproduces the same transport failure
+
+The HD1913 OxygenOS 10.0.13 EU unbrick image was decrypted locally and its
+`NON-HLOS.bin` sparse FAT image extracted. Reassembling `slpi.mdt` and
+`slpi.b00` through `slpi.b20` at their ELF program-header offsets produced:
+
+```
+source NON-HLOS.bin sha256:
+7920f87d8544d17efbe93ec9d7365190a43016eb9d286b1361de5fc96ca6a7b9
+
+reassembled slpi-oos10.0.13.mbn:
+size:   6,263,044 bytes
+sha256: 1b17eb7bd003af9092e074645d88b92474a1cf3c2ad97356bdd3b36430c8e249
+image:  SLPI.HY.2.2-00083-SM8150AZL-1
+```
+
+This is a genuinely different image from the firmware normally used by the
+port (`SLPI.HY.2.2-00121-SM8150AZL-1`, sha256
+`2022ea3bebe093b8910ad2369b3cf339214ebc2709cd852bcd5c58d39fb2cc26`).
+It was installed only for a controlled remoteproc restart. The old image
+booted, then its sensor process watchdog fired during initialisation with:
+
+```
+qmi_decode_string_elem: String len 128 >= Max Len 65
+USER-PD DOG detects stalled initialization, triage with IMAGE OWNER
+```
+
+Its coredump is preserved locally:
+
+```
+logs/2026-08-13-sensors-slpi-oos10-comparison/01-slpi-oos10-stalled-init.elf
+size:   20,956,178 bytes
+sha256: 4b6afcb4a2c980688d6a325986e75145d6e54f9f4311b243666eb45c1fccf038
+```
+
+Most importantly, the OxygenOS 10 ULogs reproduce the same failures as the
+newer firmware:
+
+```
+npa_create_sync_client("/icb/arbiter", "I2C_QUP_DDR", NPA_CLIENT_VECTOR)
+FAILED ... resource "/icb/arbiter" failed client create (error: 4)
+npa_create_sync_client("/icb/arbiter", "SPI_QUP_DDR", NPA_CLIENT_VECTOR)
+FAILED ... resource "/icb/arbiter" failed client create (error: 4)
+spi_plat_init: npa_create_sync_client_ex failed
+```
+
+The original firmware was restored and its hash rechecked before restarting
+the SLPI. Firmware-version mismatch is therefore eliminated: the missing
+condition is in the platform environment presented to both firmware builds.
+
+## Mainline drops the SLPI proxy power votes
+
+The downstream SM8150 SLPI node describes `vdd_cx` and `vdd_mx` and sets
+`qcom,keep-proxy-regs-on`. Mainline represents the same resources as the `lcx`
+and `lmx` RPMh power domains, but the generic PAS handover callback releases
+all proxy power domains. Runtime evidence on the validated `#177` kernel makes
+the mismatch visible:
+
+```
+/sys/class/remoteproc/remoteproc0/state: running
+
+/sys/kernel/debug/pm_genpd/pm_genpd_summary:
+lcx  off-0   genpd:0:2400000.remoteproc suspended
+lmx  off-0   genpd:1:2400000.remoteproc suspended
+```
+
+An isolated diagnostic kept the SM8150 SLPI `lcx`/`lmx` votes after handover
+and released them on remoteproc stop. It was built on the exact validated SMB5
+v3 source tree as `#178-slpi-pds-r176`:
+
+```
+Image sha256:
+ed2fb2f5e116b28a3c4fedded7e5a0eea2b1b661d051f16dd4ec039b0185de02
+
+AVB boot image sha256:
+b7d32ecbebf3878548f5beadff08ba4fb470e3c0e8b80425dee9aa53b7c9ed32
+```
+
+The phone booted normally and the intended runtime state was confirmed:
+
+```
+lcx  on   genpd:0:2400000.remoteproc active
+lmx  on   genpd:1:2400000.remoteproc active
+```
+
+SSC service 400 still returned no SUID for `accel`, `gyro`, `mag`,
+`proximity`, `ambient_light`, `pressure`, `sensor_temperature`, or `dae`.
+A 20,885,487-byte coredump was captured with sha256
+`7e45ca33719fd6fd9715608f54f8c77fcfb865b7c2fe9ab9864a55f7b23c712f`.
+Its retained transport rings still contain the six known I2C NACK sequences,
+but the early NPA client-creation records had already rolled out. Releasing
+the dump left SLPI offline, and its attempted recovery timed out while the
+rest of Linux remained reachable.
+
+The diagnostic therefore failed its hardware gate and was removed from the
+shipped patch series. The handset was restored to the exact validated
+`#177-smb5-v3-ba989060` image (sha256
+`7ac65591ecda2adf00efb3a35134ef6872a0cf044c73698a1b6785532ecf6e6d`),
+with SLPI running again. Host-side proxy-domain retention is not the missing
+condition that makes the physical sensor drivers publish their SUIDs.
+
 ## Current boundary
 
 The host and DSP plumbing is now validated end to end: firmware boot, FastRPC,
 the writable file server, registry regeneration, QRTR, SSC requests and ULog
 forensics all work. Physical sensors remain **not working** because their
-drivers do not publish SUIDs. The next evidence gate is an early coredump that
-shows whether the three fitted devices are probed, followed by a reduced
-stock-registry experiment only if that capture shows unrelated probes crowding
-out or aborting initialisation.
+drivers do not publish SUIDs. Firmware-version mismatch, missing sensor-rail
+votes, and dropped host proxy-domain votes are ruled out. The next work must
+identify why the SLPI-side `/icb/arbiter` rejects the I2C and SPI QUP clients,
+then repeat the early coredump and physical-SUID gate.
