@@ -983,3 +983,34 @@ drivers do not publish SUIDs. Firmware-version mismatch, missing sensor-rail
 votes, and dropped host proxy-domain votes are ruled out. The next work must
 identify why the SLPI-side `/icb/arbiter` rejects the I2C and SPI QUP clients,
 then repeat the early coredump and physical-SUID gate.
+
+## The rejected ICB routes are now identified exactly
+
+The ICB implementation source establishes that client-creation error `4` is
+`ICBARB_ERROR_NO_ROUTE_TO_SLAVE`: `ul_get_route()` returned no route for at
+least one requested master/slave pair. This is not a generic allocation or
+initialisation error.
+
+Reverse engineering the two callers in the captured sensor user PD locates
+their constant 16-byte route vectors. I2C and SPI both pass the same two
+`ICBArb_MasterSlaveType` entries:
+
+```
+master 0x29 -> slave 0
+master 0x27 -> slave 0
+```
+
+The Qualcomm ICB ABI maps these values to:
+
+```
+ICBID_MASTER_QUP_1 -> ICBID_SLAVE_EBI1
+ICBID_MASTER_QUP_2 -> ICBID_SLAVE_EBI1
+```
+
+So both serial transports fail to acquire their QUP-to-DDR paths. The two
+independent firmware versions request identical routes and fail identically.
+The next discriminating control is to run the current firmware and sensor
+userspace on the known downstream 4.14 kernel and stock DTBO. A success there
+would isolate a host-kernel/platform difference; the same rejection there
+would move the investigation back inside the DSP configuration rather than
+mainline.
