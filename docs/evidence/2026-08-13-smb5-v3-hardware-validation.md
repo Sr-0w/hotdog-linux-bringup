@@ -4,12 +4,10 @@ Date: 2026-08-13
 
 ## Status
 
-Validation is in progress. The exact v3 charger implementation builds and
-boots on the OnePlus 7T Pro, and the 180-second and 600-second guarded charge
-runs passed. A host-side USB deauthorization/re-authorization cycle also
-passed. A physical cable disconnect/reconnect remains required before the
-candidate can be declared publishable because host deauthorization does not
-remove VBUS.
+Validation passed. The exact v3 charger implementation builds and boots on the
+OnePlus 7T Pro. The 180-second and 600-second guarded charge runs, a host-side
+USB deauthorization/re-authorization cycle, and a physical VBUS cable cycle
+all passed. No SMB5-scoped warning, error, oops or lockdep report occurred.
 
 ## Candidate identity
 
@@ -111,6 +109,29 @@ This validates USB gadget teardown and reprobe, but it is not evidence for a
 charger detach/attach notification: the host-side authorization switch leaves
 VBUS asserted, so `online=1` was expected throughout.
 
+## Physical VBUS cycle
+
+The USB-C cable was physically disconnected for approximately 14 seconds. The
+host recorded the device and CDC NCM interface disappearing at 12:36:26 and a
+fresh SuperSpeed enumeration at 12:36:40. This was a real cable cycle, not the
+host authorization mechanism described above.
+
+The phone remained on the same boot and its Type-C controller recorded two
+`tx_sig` interrupts at boot times 1568 and 1569 seconds, coincident with the
+reconnection. USB networking and SSH recovered automatically. The first state
+read after reconnect was:
+
+```text
+pm8150b-charger online=1 status=Charging health=Good
+voltage_now=4779232 current_now=477505 current_max=500000
+```
+
+Seven samples over the following 60 seconds all remained `online=1`,
+`Charging` and `Good`. Input voltage stayed between 4,777,152 and 4,780,272 uV,
+input current between 476,855 and 478,805 uA, and battery temperature between
+36.8 and 36.9 C. A final complete-dmesg audit found no SMB5-scoped fatal
+match.
+
 ## Evidence paths
 
 Build and runtime evidence is under
@@ -126,13 +147,15 @@ Build and runtime evidence is under
 - `33-post-charge-dmesg-complete.txt` and
   `34-post-charge-smb5-audit.txt`;
 - `35-host-usb-deauthorize-cycle.txt`, `36-post-host-usb-cycle.txt` and
-  `37-host-usb-kernel-events.txt`.
+  `37-host-usb-kernel-events.txt`;
+- `38-physical-vbus-host-events.txt`, `39-physical-vbus-post-reconnect.txt`,
+  `40-physical-vbus-post-reconnect-60s.txt`,
+  `41-physical-vbus-final-dmesg.txt` and
+  `42-physical-vbus-smb5-audit.txt`.
 
-## Remaining gates
+## Optional test not performed
 
-- Observe a physical USB cable disconnect and reconnect, then confirm charger
-  notifications and power-supply state recovery.
-- Suspend/resume is optional for this gate and is not currently practical:
+- Suspend/resume was optional for this gate and is not currently practical:
   the development image deliberately disables sleep because this hardware
   port cannot yet guarantee remote wake or preserve USB networking while
   suspended.
