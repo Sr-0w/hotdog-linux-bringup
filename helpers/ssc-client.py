@@ -18,7 +18,8 @@ SSC_SERVICE = 400
 
 # QMI message ids for the sensor client service
 SNS_CLIENT_REQ = 0x0020
-SNS_CLIENT_IND = 0x0021
+SNS_CLIENT_IND_SMALL = 0x0021
+SNS_CLIENT_IND_LARGE = 0x0022
 
 # The SUID of the lookup sensor is fixed and known; every other identifier is
 # discovered through it.
@@ -111,8 +112,10 @@ def qmi_request(txn, msg_id, payload):
     # the service reads the head of the protobuf as a length and rejects the
     # message as too long.
     value = struct.pack("<H", len(payload)) + payload
-    tlv = b"\x01" + struct.pack("<H", len(value)) + value
-    return struct.pack("<BHHH", 0, txn, msg_id, len(tlv)) + tlv
+    report_type = b"\x10\x01\x00\x01"  # QMI_SSC_REPORT_TYPE_LARGE
+    data = b"\x01" + struct.pack("<H", len(value)) + value
+    tlvs = report_type + data
+    return struct.pack("<BHHH", 0, txn, msg_id, len(tlvs)) + tlvs
 
 
 def qmi_split(buf):
@@ -168,21 +171,22 @@ def main():
     libc.getsockname(fd, ctypes.byref(me), ctypes.byref(ln))
     print("bound to node %d port %d" % (me.sq_node, me.sq_port))
 
-    # sns_suid_req { data_type = <name>, register_updates = false }
-    suid_req = pb_bytes(1, want) + pb_uint(2, 1)
+    # sns_suid_req { data_type, enable_updates = false,
+    #                only_default_values = false }
+    # An empty data type asks the SUID sensor for its complete catalogue.
+    suid_req = pb_bytes(1, want) + pb_uint(2, 0) + pb_uint(3, 0)
 
-    # sns_std_suspend_config { client_proc_type = APSS, delivery_type = WAKEUP }
-    # APSS is 0 in the enum; 1 is the SSC itself, which would have the answer
-    # delivered to the DSP rather than to us.
-    susp = pb_uint(1, 0) + pb_uint(2, 0)
+    # SscClientConfig { processor = APSS, suspend_mode = WAKEUP }
+    config = pb_uint(1, 1) + pb_uint(2, 0)
 
-    # sns_std_request { susp_config, payload }
-    std_req = pb_bytes(1, susp) + pb_bytes(2, suid_req)
+    # SscClientRequestBody { msg = suid_req }
+    request = pb_bytes(2, suid_req)
 
-    # sns_client_request_msg { suid, msg_id, request }
+    # SscClientRequest { uid, fixed32 msg_id, config, request }
     body = (pb_bytes(1, suid_msg(*SUID_LOOKUP))
-            + pb_uint(2, 512)                       # SNS_SUID_MSGID_SNS_SUID_REQ
-            + pb_bytes(3, std_req))
+            + field(2, 5, struct.pack("<I", 512))
+            + pb_bytes(3, config)
+            + pb_bytes(4, request))
 
     pkt = qmi_request(1, SNS_CLIENT_REQ, body)
     dst = SockaddrQrtr(AF_QIPCRTR, node, port)
@@ -197,6 +201,7 @@ def main():
 
     rx = ctypes.create_string_buffer(65536)
     end = time.time() + 25
+    answered = False
     while time.time() < end:
         n = libc.recvfrom(fd, rx, 65536, 0, None, None)
         if n <= 0:
@@ -213,19 +218,46 @@ def main():
         print("reply txn=%d msg=0x%04x tlvs=%s"
               % (txn, msg_id, {k: len(v) for k, v in tlvs.items()}))
         for t, v in tlvs.items():
-            if t == 0x02 and len(v) >= 4:
+            if (t == 0x02 and msg_id not in (SNS_CLIENT_IND_SMALL,
+                                             SNS_CLIENT_IND_LARGE)
+                    and len(v) >= 4):
                 res, err = struct.unpack_from("<HH", v, 0)
                 print("  result: %s, error %d" % ("ok" if res == 0 else "failure", err))
             elif t in (0x10, 0x11):
                 print("  tlv 0x%02x: %s" % (t, v.hex()))
-            elif t == 0x01:
-                fields = parse(v)
-                print("  payload fields: %s" % sorted(fields))
-                for suid in fields.get(1, []):
-                    if isinstance(suid, bytes):
-                        s = parse(suid)
-                        if 1 in s and 2 in s:
-                            print("  SUID %016x%016x" % (s[2][0], s[1][0]))
+            elif t == 0x02 and msg_id in (SNS_CLIENT_IND_SMALL,
+                                          SNS_CLIENT_IND_LARGE):
+                # QMI represents the protobuf as a counted byte array.
+                if len(v) < 2:
+                    continue
+                count = struct.unpack_from("<H", v, 0)[0]
+                response = parse(v[2:2 + count])
+                for response_body in response.get(2, []):
+                    if not isinstance(response_body, bytes):
+                        continue
+                    body_fields = parse(response_body)
+                    if body_fields.get(1, [None])[0] != 768:
+                        continue
+                    for payload in body_fields.get(3, []):
+                        if not isinstance(payload, bytes):
+                            continue
+                        suid_response = parse(payload)
+                        data_type = suid_response.get(1, [b""])[0]
+                        if isinstance(data_type, bytes):
+                            data_type = data_type.decode(errors="replace")
+                        suids = []
+                        for raw_suid in suid_response.get(2, []):
+                            if not isinstance(raw_suid, bytes):
+                                continue
+                            decoded = parse(raw_suid)
+                            if 1 in decoded and 2 in decoded:
+                                suids.append("%016x%016x" %
+                                             (decoded[2][0], decoded[1][0]))
+                        print("  data-type %r: %s" %
+                              (data_type, ", ".join(suids) or "no SUID"))
+                        answered = True
+        if answered:
+            break
     print("done")
 
 
