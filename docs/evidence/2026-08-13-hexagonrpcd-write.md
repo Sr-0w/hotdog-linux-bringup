@@ -118,3 +118,39 @@ The sensor lookup still returns no indication. The specific blocker is that the
 sensor framework has not finished initialising, and the evidence for that is
 the sequence of files it is still working through rather than anything in the
 QMI exchange, which is accepted and answered correctly every time.
+
+## File creation, and every request now served
+
+The DSP creates files under the directories it is served, so `mapped_openat`
+takes a create flag plumbed from the open mode in `apps_std_fopen_with_env`
+through `hexagonfs_openat` and the `openat` operation. Non-creating callers
+pass false.
+
+That alone was not enough, because the parent was a virtual directory with two
+fixed children and nothing can be created in one. `/persist/sensors/registry`
+is now mapped to `<root>/sensors/` as a whole, which gives the DSP a real
+directory holding `registry/`, `sns_reg_version`, `sns_reg.conf` and room for
+the numbered files it wants. `/sys/project_info` is mapped as well.
+
+The result is that nothing is missing any more:
+
+```
+manquants: 0
+```
+
+Every path the DSP has asked for across all of these runs is served: the
+registry and its 438 entries, the version stamp it writes, `sns_reg_config`
+taken from the vendor image, the socinfo attributes under `<root>/socinfo`,
+`/proc/oppoVersion`, `/sys/project_info`, and `file1` and `file2`, which exist
+on neither the stock persist partition nor the vendor image because the DSP
+makes them itself.
+
+`hexagonrpcd` also runs on the ADSP domain alongside the sensor one, in case
+the sensor framework depended on it. It does not change the outcome.
+
+## Blocker
+
+With every requested file served, the QMI exchange accepted and answered, and
+the lookup SUID confirmed against the vendor library, the sensor framework
+still publishes no sensors and answers no SUID lookup, and what it is waiting
+on is not visible from the host side.
