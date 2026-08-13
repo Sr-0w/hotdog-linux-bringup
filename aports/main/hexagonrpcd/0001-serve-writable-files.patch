@@ -190,3 +190,100 @@ index 2fbbdb1..35441e1 100644
  HEXAGONRPC_DEFINE_REMOTE_METHOD(9, apps_std_fseek, 3, 0, 0, 0)
  HEXAGONRPC_DEFINE_REMOTE_METHOD(19, apps_std_fopen_with_env, 0, 4, 1, 0)
  HEXAGONRPC_DEFINE_REMOTE_METHOD(26, apps_std_opendir, 0, 1, 2, 0)
+diff --git a/hexagonrpcd/listener.c b/hexagonrpcd/listener.c
+index e298688..b78a522 100644
+--- a/hexagonrpcd/listener.c
++++ b/hexagonrpcd/listener.c
+@@ -312,8 +312,24 @@ int run_fastrpc_listener(int fd,
+ 		ret = invoke_requested_procedure(n_ifaces, ifaces,
+ 						 handle, sc, &result,
+ 						 decoded, &returned);
+-		if (ret)
+-			break;
++		/*
++		 * A method we do not implement is the DSP's problem, not ours.
++		 * The error is already in `result` and goes back on the next
++		 * pass, so keep serving instead of tearing down the whole file
++		 * service over one unknown call.
++		 */
++		if (ret) {
++			ret = 0;
++			returned = NULL;
++			n_outbufs = 0;
++
++			if (decoded != NULL) {
++				iobuf_free(REMOTE_SCALARS_INBUFS(sc), decoded);
++				decoded = NULL;
++			}
++
++			continue;
++		}
+ 
+ 		if (decoded != NULL)
+ 			iobuf_free(REMOTE_SCALARS_INBUFS(sc), decoded);
+diff --git a/hexagonrpcd/rpcd_builder.c b/hexagonrpcd/rpcd_builder.c
+index d374958..62c8864 100644
+--- a/hexagonrpcd/rpcd_builder.c
++++ b/hexagonrpcd/rpcd_builder.c
+@@ -31,6 +31,8 @@
+ #define SENSORS_CONFIG		"/sensors/config/"
+ #define SENSORS_REGISTRY	"/sensors/registry/"
+ #define SNS_REG_CONFIG		"/sensors/sns_reg.conf"
++#define SNS_REG_VERSION		"/sensors/sns_reg_version"
++#define OPPO_VERSION		"/oppoVersion/"
+ #define SYSFS_SOCINFO		"/socinfo/"
+ 
+ static struct hexagonfs_dirent *hfs_mkdir(const char *name, size_t n_ents, ...)
+@@ -120,7 +122,10 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 	acdbdata = malloc(n_prefix + strlen(ACDBDATA) + 1);
+ 	sns_cfg = malloc(n_prefix + strlen(SENSORS_CONFIG) + 1);
+ 	sns_reg = malloc(n_prefix + strlen(SENSORS_REGISTRY) + 1);
++	char *sns_reg_version, *oppo_version;
+ 	sns_reg_config = malloc(n_prefix + strlen(SNS_REG_CONFIG) + 1);
++	sns_reg_version = malloc(n_prefix + strlen(SNS_REG_VERSION) + 1);
++	oppo_version = malloc(n_prefix + strlen(OPPO_VERSION) + 1);
+ 	socinfo = malloc(n_prefix + strlen(SYSFS_SOCINFO) + 1);
+ 
+ 	dsp_libs = malloc(n_prefix + strlen(DSP_LIBS) + strlen(dsp) + 1);
+@@ -145,6 +150,16 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 		strcat(sns_reg_config, SNS_REG_CONFIG);
+ 	}
+ 
++	if (sns_reg_version != NULL) {
++		strcpy(sns_reg_version, prefix);
++		strcat(sns_reg_version, SNS_REG_VERSION);
++	}
++
++	if (oppo_version != NULL) {
++		strcpy(oppo_version, prefix);
++		strcat(oppo_version, OPPO_VERSION);
++	}
++
+ 	if (socinfo != NULL) {
+ 		strcpy(socinfo, prefix);
+ 		strcat(socinfo, SYSFS_SOCINFO);
+@@ -162,8 +177,10 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 	 */
+ 	persist_dir = hfs_mkdir("persist", 1,
+ 				hfs_mkdir("sensors", 1,
+-					hfs_mkdir("registry", 1,
+-						hfs_map("registry", sns_reg)
++					hfs_mkdir("registry", 2,
++						hfs_map("registry", sns_reg),
++						hfs_map_or_empty("sns_reg_version",
++								 sns_reg_version)
+ 					)
+ 				)
+ 		      );
+@@ -182,7 +199,10 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 				)
+ 			);
+ 
+-	return hfs_mkdir("/", 6,
++	return hfs_mkdir("/", 7,
++			hfs_mkdir("proc", 1,
++				hfs_map_or_empty("oppoVersion", oppo_version)
++			),
+ 			hfs_mkdir("mnt", 1,
+ 				hfs_mkdir("vendor", 1,
+ 					persist_dir

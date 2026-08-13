@@ -63,3 +63,58 @@ from the build directory; it passes when run by hand against this build.
 Built, packaged and installed. Whether it unblocks the sensors is not yet
 shown: the QMI service still accepts requests and allocates client ids without
 any sensor answering a lookup.
+
+## The served tree is built in code, not mounted
+
+A long detour was caused by assuming `-R` is a chroot. It is not.
+`rpcd_builder.c` builds a virtual tree with fixed mount points, and the paths
+the DSP uses map to quite different places under the root:
+
+| Path the DSP opens | Backed by |
+| --- | --- |
+| `/persist/sensors/registry/registry` | `<root>/sensors/registry/` |
+| `/vendor/etc/sensors/sns_reg_config` | `<root>/sensors/sns_reg.conf` |
+| `/vendor/etc/sensors/config` | `<root>/sensors/config/` |
+| `/sys/devices/soc0` | `<root>/socinfo/` |
+| `/usr/lib/qcom/adsp` | `<root>/dsp/<dsp>/` |
+| `/vendor/etc/acdbdata` | `<root>/acdb/` |
+
+Files placed anywhere else are invisible, which is why copies under
+`<root>/sys/devices/soc0` were never found no matter how correct they looked.
+
+Two entries the DSP needs were missing from that tree entirely and are added
+here: `sns_reg_version` beside the registry, which is the file it writes, and
+`/proc/oppoVersion`, which it polls.
+
+## One unknown method should not end the service
+
+With the version stamp writable the DSP progresses further and calls apps_std
+method 24, which nothing implements. The listener treated that as fatal and
+tore down the whole file service:
+
+```
+Unsupported method: 24 (18020000)
+```
+
+The error result is already returned to the DSP on the following pass, so
+failing the call and continuing is both correct and what the DSP expects. With
+that change the service survives, the domain completes its 1092-call registry
+read, and the unknown method is logged once instead of being terminal.
+
+## Where it stands
+
+Every file the DSP asked for at the start is now served, and it has moved on to
+asking for different ones:
+
+```
+/mnt/vendor/persist/sensors/registry/file<N>
+/sys/project_info/project_name
+```
+
+The numbered files are ones it wants to create, which the mapped backend does
+not do: it opens existing paths and has no `O_CREAT`. That is the next piece.
+
+The sensor lookup still returns no indication. The specific blocker is that the
+sensor framework has not finished initialising, and the evidence for that is
+the sequence of files it is still working through rather than anything in the
+QMI exchange, which is accepted and answered correctly every time.
