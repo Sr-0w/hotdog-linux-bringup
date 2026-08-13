@@ -93,38 +93,109 @@ or a kexec bridge.
 Support claims are evidence-based: an offline build, prepared DT change or
 successful probe alone is never marked as hardware support.
 
-## Support overview
+## Hardware support
 
-This compact table mirrors the authoritative [support matrix](docs/status.md).
-“Partial” means that the listed foundation works but the complete phone
-function or its stability contract does not yet pass.
+The detailed tables are intentionally kept here as a quick historical and
+current reference for the tested HD1913. A subsystem can have one validated
+function under **Working** and a broader integration or stability item under
+**Partial**. The authoritative consolidated view remains
+[docs/status.md](docs/status.md).
 
-| Area | State | Current boundary |
-|---|:---:|---|
-| Direct boot and writable rootfs | Working | Mainline-oriented Linux 6.16 starts directly from ABL and reaches normal userspace. |
-| GPU | Working | Adreno 640, GMU, Freedreno/Turnip, Vulkan and accelerated scanout work. |
-| UFS storage | Partial | Normal I/O works; UFS ICE and longer suspend/stress coverage remain. |
-| A/B, recovery and USB device mode | Partial | Clean reboot and success marking work; complete recovery modes and interactive ACM remain. |
-| Internal display | Partial | 60 Hz is stable and 90 Hz is selectable; wake/blank and suspend reliability remain. |
-| Touch and keys | Partial | Touch plus Power/Volume work; resume, wake, full slot and alert-slider coverage remain. |
-| Wi-Fi and Bluetooth | Partial | Association, Internet reachability, scanning and HID work; identity, audio, coexistence and suspend remain. |
-| Audio | Partial | Both speakers and handset microphone work; earpiece, other microphones, headset, call, Bluetooth and DP audio remain. |
-| USB-C host and dock | Partial | Powered host, USB 3, storage, Ethernet enumeration and DP video work; source VBUS, broader hotplug, DP audio and suspend remain. |
-| Battery and charging | Partial | Fuel gauge and guarded SMB5 v3 charging/VBUS tests pass; termination, JEITA, low battery, fast charge and suspend remain. |
-| Cameras | Partial | All four capture, rear focus and pop-up lifecycle work; recovery, complete 3A/color, video, flash sync, OIS and broad apps remain. |
-| IPA / rmnet | Working locally | `rmnet_ipa0` exists; upstream acceptance and SIM data validation remain. |
-| Modem and telephony | Partial | MPSS/QMI services respond; SIM registration, data, SMS, calls and IMS remain. |
-| GNSS | Partial | QMI LOC sessions work; standard location-service integration, real fixes, A-GPS and suspend policy remain. |
-| NFC | Partial | Reader discovery and bidirectional APDU exchange work; lifecycle recovery, HCE and secure-element scope remain. |
-| Haptics | Partial | Physical vibration works; range, repetition, feedbackd/Lomiri integration and suspend remain. |
-| Camera flash | Partial | Both channels pass electrical torch/strobe tests; visible-light validation, current calibration and camera sync remain. |
-| SLPI infrastructure | Partial | Host/DSP plumbing works and only infrastructure SUIDs are published. |
-| Motion, light and proximity sensors | Broken | Both tested firmware sets reject QUP1/QUP2-to-EBI1 routes with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`. |
-| System suspend | Broken | `pm_test=freezer` passes, but S6SY761 resume fails during device suspend. |
-| Range sensor and fingerprint | Not yet supported | Driver, firmware, calibration and userspace integration remain. |
-| Ubuntu Touch / Lomiri | Not yet supported | Native architecture, rootfs boot, packaging, recovery/OTA and Lomiri session remain roadmap phases. |
+### 🟢 Working
 
-No subsystem is currently classified as known impossible.
+| Subsystem | Function | Notes |
+|---|---|---|
+| Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`; no downstream kernel or kexec bridge executes. |
+| Boot | Persistent postmarketOS rootfs / OpenRC / SSH | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
+| Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
+| Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
+| Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
+| Display | Internal panel 1440×3120 at 60 Hz | Native DPU/DSI/DSC KMS scanout is stable in graphical userspace. |
+| GPU | Adreno 640 / GMU / Turnip | Vulkan workloads, `kmscube`, Weston and Plasma Mobile use accelerated rendering without observed GPU/GMU/IOMMU faults. |
+| Input | S6SY761 touchscreen | Touch, drag, pressure, multitouch and graphical orientation are hardware-validated while the device is awake. |
+| Input | Power key | PM8150 PON power-key input and physical button interaction are hardware-validated. |
+| Input | Volume Down | The corrected PM8150 GPIO7 mapping is physically tested and functional. |
+| Input | Volume Up | PM8150 GPIO6 / `KEY_VOLUMEUP` is physically tested and functional. |
+| USB | USB gadget / NCM networking | Stable host ping and SSH at `172.16.42.1` through the translated DWC3 SMMU path. |
+| USB-C | Type-C dual role and USB-PD detection | Type-C partner/PD state is exposed and device/sink negotiation works. |
+| USB-C | Host mode through powered dock | xHCI, a hub and attached devices enumerate while the handset remains a power sink. |
+| USB-C | USB 3 SuperSpeed | Dock hub and RTL8153 enumerate at 5 Gbit/s. |
+| USB-C | USB mass storage | A SanDisk device enumerates, mounts and reads through the dock. |
+| DisplayPort | External video at 2560×1440@60 | Plasma reaches the external monitor with correct image while the internal panel remains active. |
+| Audio | Internal stereo speakers | Both TFA9874 speaker channels are independently hardware-validated through the packaged UCM path. |
+| Audio | Handset microphone | AMIC4 with MIC BIAS1 is acoustically validated from the packaged profile and confirmed by listening. |
+| Wi-Fi | WCN3990 association and IPv4 connectivity | Both bands scan, NetworkManager associates and basic external IPv4 reachability is validated. |
+| Bluetooth | HID connectivity | BlueZ scans and connects to a real HID device. |
+| Cameras | Four-sensor capture | S5K3M5 telephoto, IMX586 main, IMX481 ultra-wide and IMX471 front sensors capture through libcamera. |
+| Cameras | Rear autofocus | The main and telephoto actuators expose calibrated focus control and produce distinct focus planes; experimental continuous autofocus completes. |
+| Cameras | IMX471 pop-up lifecycle | Hall-bounded automatic extension, capture and retraction work at the expected cadence. |
+| IPA | SM8150 IPA v4.1 / `rmnet_ipa0` | The AP loads `ipa_fws`, IPA starts and creates `rmnet_ipa0`; this remains a local validation until the generic changes are accepted upstream. |
+| Modem | MPSS remote processor / QRTR services | MPSS, RMTFS, QRTR, PD mapper and QMI services run; ModemManager enumerates the modem and reads its IMEI. |
+| GNSS | QMI LOC engine sessions | The LOC service reports capabilities and accepts start/stop session requests. |
+| NFC | PN553 reader and ISO-DEP exchange | A real ISO 14443-4 document is detected, activated, typed and exchanges bidirectional ISO 7816-4 APDUs. The ePassport BAC/PACE refusal is expected. |
+| Haptics | AW8697 linear resonant actuator | The source-built `FF_RUMBLE` driver completes timed effects and physical vibration is confirmed by hand. |
+| Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
+
+### 🟡 Partial
+
+| Subsystem | Function | Notes |
+|---|---|---|
+| Boot | Reboot modes / recovery integration | Clean normal reboot and A/B marking work; direct recovery selection, all reboot modes and the final installer rollback flow remain incomplete. |
+| Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
+| Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work, but wake/blank-unblank reliability is not acceptable yet. |
+| USB | USB ACM serial | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
+| USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
+| Wi-Fi | Power management / stable factory identity | Basic data works; sustained throughput, AP/roaming, suspend and factory-address handling remain. |
+| Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
+| Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
+| Power | SMB5 charging | The upstream-shaped v3 candidate passed guarded 180-second and 600-second charge runs, host authorization and a physical VBUS cycle. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
+| Cameras | S5K3M5 telephoto | 4208×3120 RAW10 capture, userspace processing and experimental autofocus work; production 3A/color and broader modes remain. |
+| Cameras | Sony IMX586 main | 4000×3000 RAW10 capture, processed 30 fps and experimental autofocus work; production color, touch focus and additional modes remain. |
+| Cameras | Sony IMX481 ultra-wide | 4656×3496 RAW10 and processed 30 fps runs work; production color and additional modes remain. |
+| Cameras | Sony IMX471 front | Automatic pop-up capture works; production 3A/color and broader application/recovery testing remain. |
+| Camera flash | Dual PM8150L flash | Both channels register and pass electrical torch/strobe tests without a fault; visible-light confirmation, stock-current calibration and camera synchronization remain. |
+| Mobile data | IPA / rmnet / RF integration | The modem scans operators and camps without a SIM; SIM registration, LTE data and upstream IPA acceptance remain. |
+| Telephony | SIM, SMS, calls and IMS | QMI services answer, but SIM/PIN handling, registration, data, SMS, calls and IMS are unvalidated. |
+| GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
+| NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
+| Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
+| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests and ULog forensics work; only infrastructure SUIDs are published. |
+
+### 🔴 Broken
+
+| Subsystem | Function | Notes |
+|---|---|---|
+| Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
+| DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
+| DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
+| Power | System suspend / s2idle | `pm_test=freezer` passes, but the device stage fails because S6SY761 returns zeroes during resume. |
+| Sensors | Motion / rotation / light / proximity | LSM6DSM, MMC5603x and TCS3701 publish no physical SUID. Both tested firmware sets reject QUP1/QUP2-to-EBI1 with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; the downstream 4.14 plus stock-DTBO control is next. |
+
+### ⚪ Not yet supported
+
+| Subsystem | Function | Notes |
+|---|---|---|
+| Input | Three-position Alert Slider | The ring/vibrate/silent switch is not described, exposed or hardware-validated. |
+| USB-C | Source VBUS for an unpowered peripheral | Not yet hardware-tested. |
+| Audio | Earpiece | Not yet brought up or validated. |
+| Audio | Headset and other headphone paths | Routing and detection are not hardware-validated. |
+| Audio | Other microphones, EC and NR | Remaining analogue/digital microphones and voice-processing policy remain open. |
+| Range sensor | STMVL53L1 laser rangefinder | Wiring, calibration, driver and standard proximity/range integration remain. |
+| Fingerprint | In-display fingerprint reader | Transport, firmware/TEE dependency, UDFPS illumination and fprintd integration remain. |
+| Fast charging | OnePlus Warp charge | Vendor-dependent path; no mainline hardware support is validated. |
+| Ubuntu Touch / Lomiri | Native no-Halium system | Architecture agreement, rootfs boot, packaging, recovery/OTA, Mir/Lomiri and all hardware services remain roadmap phases. |
+
+### ⚫ Impossible
+
+_None currently identified._
+
+| State | Meaning |
+|:---:|---|
+| 🟢 | The specific function is hardware-validated. |
+| 🟡 | A useful foundation works, but coverage or integration is incomplete. |
+| 🔴 | The attempted normal path fails reproducibly. |
+| ⚪ | No usable standard interface has been validated yet. |
+| ⚫ | Known impossible. |
 
 ## Where the project is now
 
