@@ -204,6 +204,7 @@ def main():
             # indication carrying the answer arrives later
             continue
         raw = rx.raw[:n]
+        print("  <- %d octets: %s" % (n, raw[:48].hex()))
         split = qmi_split(raw)
         if split is None:
             print("short packet: %s" % raw.hex())

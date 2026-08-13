@@ -715,3 +715,55 @@ What to establish next, in order: whether the lookup SUID constant
 would be silently dropped exactly like this; and whether the service expects
 a registration or handshake message before it will route requests to a
 domain.
+
+## What is eliminated, and a correction to my own reasoning
+
+The lookup SUID is right. `libsns_api.so`, pulled out of the stock vendor
+image, carries exactly sixteen bytes of `0xAB` at offset 10400 and exports
+`sns_suid_sensor_suid_low_default` and `sns_suid_sensor_suid_high_default`.
+The constant this client uses is the one the vendor library uses.
+
+The target is right. `qrtr-lookup` shows exactly one registration of service
+400, instance 0 on node 9 port 12, and that is what the client addresses.
+Instance 90 in the protection domain maps belongs to the service registry
+notification service, not to the sensor core.
+
+The framing is right. The service answers with a well-formed response, and
+dumping every byte that arrives on the socket over twenty-five seconds shows
+that response and nothing else:
+
+```
+<- 32 octets: 0201002000190002040000000000100800190100000000000011040000000000
+   type 2 (response), txn 1, msg 0x0020
+   result ok, client id 0x119
+```
+
+And a correction. An earlier note here counted FastRPC invocations across a
+request, found no change, and concluded the sensor logic never saw the
+message. That measurement was worthless for the question: the instrumentation
+counts `fastrpc_invoke_send`, and the sensor QMI path runs over GLINK and
+QRTR, not FastRPC. Those counters were never going to move. The conclusion
+drawn from it should be disregarded.
+
+## The likeliest remaining cause, and it reopens something closed
+
+The QMI front end accepts requests and allocates client ids, but no sensor
+answers a lookup. The simplest explanation left is that the sensor framework
+never finished starting, and there is a candidate reason already recorded in
+this file and wrongly dismissed:
+
+```
+Tried to open /persist/sensors/registry/registry/../sns_reg_version for writing
+```
+
+`hexagonrpcd` serves read-only and refuses that write, and the DSP retries it
+forever. It was noted as tolerated because nothing crashed. Tolerated is not
+the same as harmless: if the framework cannot stamp its registry version it
+may never declare itself initialised, which would leave exactly this
+signature, a live service with no sensors behind it.
+
+So write support in `hexagonrpcd` is back on the list, and it is a real piece
+of work rather than a flag. `struct hexagonfs_file_ops` has no write
+operation at all, `apps_std_fopen_with_env` rejects the `w` and `a` modes
+outright, and the `apps_std` method table has no `fwrite` entry, so the
+interface definition for it has to be established as well.
