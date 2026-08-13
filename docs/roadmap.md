@@ -109,6 +109,84 @@ non-working or partially working areas.
 | postmarketOS/Plasma | Clean pmaports install, upgrade and recovery plus udev, firmware, networking, telephony, audio, camera, sensors, power, feedback, localization, application confinement and Plasma Mobile work without manual bring-up commands. |
 | Ubuntu Touch/Lomiri | Clean native install, recovery and OTA plus systemd/udev, Mir/Lomiri, graphics, input, networking, telephony, audio, cameras, sensors, power, feedback, location, application confinement and updates work on the same mainline kernel without Halium. |
 
+## Timeline and current position
+
+This timeline records validated project milestones, not merely commits or
+successful builds. Future entries are dependency-ordered stages, not calendar
+promises. The detailed limitations of every completed milestone remain in
+`status.md` and the linked evidence records.
+
+```mermaid
+timeline
+    title OnePlus 7T Pro mainline bring-up — validated progress and remaining path
+    section Boot foundation
+      2026-07-09 : Bring-up workspace and guarded recovery baseline
+      2026-07-11 : Mainline kexec userspace and reproducible kernel package
+      2026-07-15 : Direct-entry failure isolated to kernel initialization
+      2026-07-30 : Direct mainline reaches PID 1 and initramfs
+      2026-08-01 : Native UFS path brought up
+    section Usable mainline phone
+      2026-08-03 : OnePlus bootloader to Linux 6.16 to writable postmarketOS
+                 : Native display, USB NCM, SSH and exact pmaports image validated
+      2026-08-04 : Touch, Adreno 640, Plasma Mobile, Wi-Fi and Bluetooth validated
+      2026-08-05 : Full RAM reservations survive pressure and clean public image boots
+                 : Dynamic 60/90 Hz and both internal speakers validated
+      2026-08-07 : Handset microphone, USB-C host, USB 3, DisplayPort and fuel gauge
+      2026-08-09 : Telephoto and main-camera capture plus focus
+      2026-08-10 : All four cameras and automatic pop-up lifecycle
+                 : Clean reboot, A/B success marking and Alpha 1
+    section Current frontier
+      2026-08-12 : IPA v4.1 and rmnet_ipa0, NFC target detection and physical haptics
+                 : Modem responds without SIM and SLPI sensor service is published
+      2026-08-13 : YOU ARE HERE — SMB5 v3 validated
+                 : Active work on SLPI sensor registry and standard sensor exposure
+                 : Mainline review follow-up and partial/broken closure remain active
+    section Remaining hardware and upstream
+      Next : Finish sensors, GNSS integration, NFC lifecycle and haptics userspace
+      Then : Telephony, audio endpoints, suspend, charging, dock and camera quality
+      Then : Fingerprint, security, UFS ICE and complete SoC/SMMU cleanup
+      Then : Upstream Linux acceptance and clean pmaports release
+    section Native Ubuntu Touch
+      After shared kernel : Agree mainline-native UBports architecture
+      Then : Boot Ubuntu Touch directly on the same Image and DTB
+      Then : Enable Lomiri and every hardware service without Halium
+      Final : Cross-distribution acceptance with every real function Working and Stable
+```
+
+### Completed milestone ledger
+
+| Date | Validated milestone | Evidence |
+|---|---|---|
+| 2026-07-11 to 2026-07-30 | Kexec reference userspace, guarded direct-entry diagnostics, kernel initialization bisection, direct PID 1 and initramfs handoff. | [K1 userspace](evidence/2026-07-15-k1-kexec-userspace.md), [direct PID 1](evidence/2026-07-30-direct-pid1.md) |
+| 2026-08-01 | Native UFS calibration and direct storage path established. | [Native UFS](evidence/2026-07-31-direct-native-ufs.md) |
+| 2026-08-03 | The OnePlus bootloader directly starts the mainline-oriented kernel; writable postmarketOS root, native display, USB networking, SSH and package-generated image all pass on hardware. | [Rootfs](evidence/2026-08-03-direct-mainline-rootfs.md), [USB](evidence/2026-08-03-direct-mainline-usb.md), [pmaports image](evidence/2026-08-03-mainline616-pmaports.md), [display](evidence/2026-08-03-native-display.md) |
+| 2026-08-04 | S6SY761 touch, Adreno 640/Turnip, accelerated Plasma Mobile, WCN3990 Wi-Fi, Bluetooth HID and a physical 90 Hz mode pass their initial hardware tests. | [Touch](evidence/2026-08-04-mainline616-touchscreen.md), [GPU](evidence/2026-08-04-mainline616-gpu.md), [graphics](evidence/2026-08-04-mainline616-graphical-userspace.md), [Wi-Fi](evidence/2026-08-04-mainline616-wifi-mpss.md), [Bluetooth](evidence/2026-08-04-mainline616-bluetooth.md), [90 Hz](evidence/2026-08-04-mainline616-display-90hz.md) |
+| 2026-08-05 | Correct stock-owned RAM reservations survive the former pressure crash; a clean public image boots; dynamic refresh, WCD9340/ADSP and both internal speakers work. | [RAM/UFS pressure](evidence/2026-08-05-mainline616-flatpak-ufs.md), [public image](evidence/2026-08-05-mainline616-public-image.md), [dynamic refresh](evidence/2026-08-05-mainline616-dynamic-refresh.md), [speakers](evidence/2026-08-05-mainline616-internal-speakers.md) |
+| 2026-08-07 | The handset microphone, dual-role USB-C, powered-dock host mode, SuperSpeed, DisplayPort video, corrected volume keys and fuel gauge reach hardware validation. | [Microphone](evidence/2026-08-07-mainline616-microphone.md), [USB role](evidence/2026-08-07-mainline616-usb-role.md), [hardware survey](evidence/2026-08-07-mainline616-remaining-hardware.md) |
+| 2026-08-09 to 2026-08-10 | Telephoto, main, ultra-wide and front cameras capture through libcamera; rear focus works; the pop-up camera extends and retracts automatically around capture. | [Telephoto](evidence/2026-08-09-mainline616-camera-telephoto.md), [IMX586](evidence/2026-08-09-mainline616-camera-imx586.md), [autofocus](evidence/2026-08-10-mainline616-camera-autofocus.md), [IMX481](evidence/2026-08-10-mainline616-camera-imx481.md), [IMX471/pop-up](evidence/2026-08-10-mainline616-camera-imx471-popup.md) |
+| 2026-08-10 | Clean software reboot passes six cycles, slot success is marked correctly, GNSS QMI sessions work at engine level and the first public Alpha pair boots on the HD1913. | [Reboot](evidence/2026-08-10-mainline616-software-reboot.md), [A/B](evidence/2026-08-10-ab-slot-success.md), [GNSS](evidence/2026-08-10-gnss-qmi-loc.md), [Alpha 1](evidence/2026-08-10-v0.1.0-alpha.1.md) |
+| 2026-08-11 to 2026-08-12 | Initial upstream series are published and audited; IPA v4.1 creates `rmnet_ipa0`; NFC detects a real ISO 14443-4 target, although payload reading remains incomplete; AW8697 vibrates on hardware; modem services answer without a SIM; SLPI publishes the Snapdragon Sensor Core service. | [Upstream follow-up](evidence/2026-08-12-upstream-follow-up.md), [IPA scope](evidence/2026-08-12-ipa-v41-scope.md), [NFC](evidence/2026-08-10-nfc-nxp-nci.md), [haptics](evidence/2026-08-11-haptics-aw8697.md), [SLPI](evidence/2026-08-10-slpi-sensor-dsp.md) |
+| 2026-08-13 | The upstream-oriented SMB5 v3 candidate passes guarded charge and VBUS transition tests; writable Hexagon file service and sensor-registry work advance the active SLPI bring-up. | [SMB5 v3](evidence/2026-08-13-smb5-v3-hardware-validation.md), [Hexagon writes](evidence/2026-08-13-hexagonrpcd-write.md) |
+
+### Current checkpoint
+
+The project is past basic boot and broad peripheral discovery. A useful
+mainline postmarketOS/Plasma system exists, but it is not yet a complete or
+upstream-clean phone. The active engineering frontier on 2026-08-13 is:
+
+- completing SLPI/SSC sensor discovery and exposing real motion, orientation,
+  light and proximity data through standard Linux interfaces;
+- turning the new IPA/rmnet foundation into normal GNSS and mobile-data
+  services, then validating the modem with a SIM;
+- closing every incomplete baseline item in phase 0, especially suspend,
+  UFS ICE, display resume, remaining audio endpoints and dock behavior;
+- revising and submitting the Linux patch tracks until maintainer acceptance.
+
+Ubuntu Touch/Lomiri without Halium is an explicit final objective, but no
+Ubuntu Touch image or Lomiri session has been implemented or validated yet.
+Its work begins at phase 15 after the shared-kernel contract is sufficiently
+stable to avoid creating a second device-specific kernel stack.
+
 ## Current state
 
 The public Linux 6.16 reference stack already direct-boots the physical HD1913
@@ -128,7 +206,15 @@ The following are currently working or hardware-validated:
 - USB-C host mode, USB 3, and DisplayPort video output;
 - battery fuel-gauge reporting;
 - capture from all four cameras through libcamera and Plasma Camera;
-- automatic IMX471 pop-up extension, capture, and retraction.
+- automatic IMX471 pop-up extension, capture, and retraction;
+- the SM8150 IPA v4.1 path and `rmnet_ipa0`, with modem QMI services answering
+  on a handset that currently has no SIM inserted;
+- GNSS engine sessions over QMI and real NFC target detection, while their
+  complete standard userspace paths remain unfinished;
+- physical AW8697 vibration and the guarded SMB5 v3 charge/VBUS candidate;
+- SLPI boot, FastRPC attachment, writable sensor-registry service and the
+  published Snapdragon Sensor Core service, before individual sensors are
+  exposed.
 
 The remaining support gaps are tracked explicitly in
 the [hardware status matrix](status.md). Camera capture is working, but AF/AE/AWB
@@ -182,16 +268,13 @@ over QRTR: NMEA types are readable and location sessions start and stop cleanly.
 The rest of the modem answers too, reporting its revision, signal strength, and
 that no SIM is inserted.
 
-What is missing is the bridge to a location service, and it is not GNSS-specific.
-`gnss-share` has only serial and ModemManager backends, ModemManager discards the
-modem with `Failed to find a net port in the QMI modem`, and that net port is
-`rmnet` over IPA. Upstream IPA has no SM8150 support and neither mainline nor
-`linux-next` carries data for it.
-
-So GNSS is not independent: it sits behind the same IPA work as mobile data.
-Either port IPA for SM8150, which unlocks data, ModemManager, and GNSS together
-and is the change that belongs upstream, or add a QMI backend to `gnss-share`,
-which is smaller but GNSS-only. See the
+The former IPA blocker is now cleared locally: the SM8150 IPA v4.1 platform
+data, binding and device description bring up `rmnet_ipa0`, and ModemManager
+holds the net port. What remains is to turn the working QMI location engine and
+rmnet transport into the standard location-service path, validate real fixes
+and application coordinates, and upstream the generic IPA support. A direct
+QMI backend for `gnss-share` remains an alternative only if the normal modem
+integration cannot provide location cleanly. See the
 [GNSS QMI evidence](evidence/2026-08-10-gnss-qmi-loc.md).
 
 Exit criterion: a repeatable fix is available through the normal postmarketOS
@@ -201,11 +284,13 @@ location stack after boot and resume.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Sensors | Motion / rotation / proximity | Mainline integration remains to be implemented and hardware-tested. |
+| Sensors | Motion / rotation / proximity | SLPI boots, FastRPC attaches, writable registry requests work and the Snapdragon Sensor Core service is published. Individual physical sensors are not exposed yet. |
 
-Identify the sensor hub and individual sensors, add the required mainline
-drivers and firmware, expose IIO events, and integrate orientation, proximity,
-and motion into Plasma Mobile.
+Finish the SSC protocol discovery from the now-running sensor domain, enumerate
+the physical sensor SUIDs and attributes, add the smallest maintainable bridge
+to standard IIO interfaces, and integrate orientation, proximity, light and
+motion into Plasma Mobile. Preserve the packaged protection-domain maps,
+firmware and registry service without depending on an Android sensor HAL.
 
 Exit criterion: accelerometer, gyroscope, magnetometer, light, proximity, and
 the relevant motion events work through standard Linux interfaces and survive
@@ -215,10 +300,11 @@ repeated boots.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| NFC | NFC / secure-element path | PN553 controller, board RF configuration and polling are hardware-validated; tag discovery and secure-element support remain open. |
+| NFC | NFC / secure-element path | PN553 controller, board RF configuration, polling and detection of a real ISO 14443-4 target are hardware-validated; payload reading, clean lifecycle and secure-element support remain open. |
 
-Identify the controller and bus, package only redistributable firmware, bring up
-reader mode, and document the secure-element and payment limitations separately.
+Complete target payload exchange and reader-mode userspace, fix explicit
+down/up recovery without reboot, package only redistributable configuration,
+and document secure-element and payment limitations separately.
 
 Exit criterion: NFC tag detection and reader operation work in userspace, with
 any secure-element limitation explicitly documented.
@@ -227,15 +313,15 @@ any secure-element limitation explicitly documented.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Haptics | AW8697 | Controller identity and wiring are hardware-confirmed. Revision `r143` adds a source-built `FF_RUMBLE` driver and passes the strict package build; vibration and feedbackd remain untested. |
+| Haptics | AW8697 | Controller identity, wiring, source-built `FF_RUMBLE` driver and physical vibration are hardware-confirmed; feedbackd and full behavior validation remain open. |
 
 The controller answers at `0x5a` with chip ID `0x97`; the stock tree identifies
 GPIO 116 as reset, GPIO 24 as interrupt, and the HD1913 as the 170 Hz actuator
 profile. The initial driver uses continuous mode and the normal OxygenOS drive
-limit without requiring proprietary effect firmware. Validate low-strength and
-full-strength pulses, repeated stop/start behavior and input force feedback,
-then connect it to feedbackd without making vibration dependent on a vendor
-Android service.
+limit without requiring proprietary effect firmware. Physical vibration now
+passes; next validate low-strength and full-strength pulses, repeated
+stop/start behavior and input force feedback, then connect it to feedbackd
+without making vibration dependent on a vendor Android service.
 
 Exit criterion: notification and user-interface haptics work repeatedly through
 the normal postmarketOS feedback stack.
@@ -270,8 +356,9 @@ proven and documented rather than hidden behind an Android HAL.
 
 ### 7. Telephony and mobile data
 
-The MPSS and QRTR/RMTFS foundations are present, but the actual modem service is
-not yet hardware-validated.
+MPSS, QRTR/RMTFS, IPA v4.1 and `rmnet_ipa0` are present. The modem reports its
+revision and signal state through QMI on hardware, but the tested phone has no
+SIM inserted, so registration, data, SMS and calls are not yet validated.
 
 Complete the modem path in this order:
 
@@ -304,9 +391,12 @@ power-down and conservative gain defaults.
 
 ### 9. Power, charging, thermal, and suspend/resume
 
-The fuel gauge and conservative charger limits are working, but charging policy,
-thermal behavior, and full suspend remain incomplete. The touchscreen resume
-failure currently blocks reliable system suspend.
+The fuel gauge and conservative charger limits are working. The upstream-shaped
+SMB5 v3 candidate also passes guarded 180-second and 600-second charge runs,
+host USB authorization changes and a physical VBUS cable cycle. Charge
+termination, low-battery behavior, thermal policy and full suspend remain
+incomplete, and the touchscreen resume failure currently blocks reliable
+system suspend.
 
 Complete this phase in dependency order:
 
@@ -394,6 +484,9 @@ Every submitted series must, where relevant:
 
 - be based on the tree requested by the subsystem maintainer and contain
   `Signed-off-by` trailers under the Developer's Certificate of Origin;
+- follow the current kernel disclosure rules for advanced coding tools,
+  including an accurate `Assisted-by` trailer when such a tool contributed to
+  a submitted patch;
 - keep binding, generic driver, SoC integration and board DTS changes in a
   reviewable dependency order, with binding patches before their users;
 - pass `scripts/checkpatch.pl`, `make W=1`, applicable GCC and LLVM builds,
