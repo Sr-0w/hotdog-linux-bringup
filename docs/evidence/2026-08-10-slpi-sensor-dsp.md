@@ -767,3 +767,118 @@ of work rather than a flag. `struct hexagonfs_file_ops` has no write
 operation at all, `apps_std_fopen_with_env` rejects the `w` and `a` modes
 outright, and the `apps_std` method table has no `fwrite` entry, so the
 interface definition for it has to be established as well.
+
+## The file server is now complete enough for registry regeneration
+
+The missing file operations were implemented in stages. `hexagonrpcd` now
+accepts registry payload writes, creates files and directories, removes stale
+files, renames temporary files into place and serves every requested file. The
+relevant project commits are:
+
+```
+e1d5b3b hexagonrpcd: support DSP registry renames
+7ade110 hexagonrpcd: accept sensor registry payloads
+3d14a02 hexagonrpcd: implement DSP file removal
+cc5bd07 hexagonrpcd: create files, and serve every request
+```
+
+Starting from an empty generated registry produced 438 files, 1,169 writes and
+65 renames. This closes the earlier hypothesis that a read-only registry kept
+the framework from initialising. It does not: after successful regeneration,
+the SSC still returns only infrastructure SUIDs (`suid`, `registry`, `timer`,
+`interrupt`, `async_com_port`, `resampler`, and `diag_sensor`). Requests for
+`accel`, `gyro`, `mag`, `proximity`, `ambient_light`, `pressure`,
+`sensor_temperature`, and `dae` return no physical SUID.
+
+The selected stock descriptions identify the handset parts and transports:
+
+| Part | Function | Transport |
+| --- | --- | --- |
+| LSM6DSM | accelerometer and gyroscope | SPI instance 2, 9.6 MHz, IRQ 132 |
+| MMC5603x | magnetometer | I2C instance 1, address `0x30`, 400 kHz |
+| TCS3701 | ambient light and proximity | I2C instance 3, address `0x39`, IRQ 117 |
+
+The generated files preserve those values. The stock configuration directory
+also contains descriptions for many parts not fitted to hotdog, so a NACK from
+an arbitrary probe is not by itself evidence that one of these three devices
+failed.
+
+## QDSSC tracing is present but detailed entities are disabled
+
+The SLPI publishes Qualcomm Debug Subsystem Control as QMI service 51 for both
+the sensor root and user protection domains. `helpers/qdssc-client.py` queries
+these endpoints and defaults to read-only operation. Global software tracing
+can be enabled, but this firmware returns QMI error 94 (`NOT_SUPPORTED`) for
+the detailed TDS, ULog, profiling, and DIAG entity controls. The encoding was
+checked against Qualcomm's generated service source: entity id and state are
+both four-byte TLVs, so error 94 is a firmware response rather than a malformed
+request.
+
+CoreSight ETR and STM were also armed. The resulting 80-byte trace contained
+only the empty-stream barrier and no sensor data. This path therefore cannot
+explain the missing physical SUIDs on this firmware build.
+
+## A controlled SLPI coredump exposes the firmware's own ULogs
+
+Triggering the SLPI watchdog produced a complete 20-segment ELF32 remoteproc
+coredump while the main Linux kernel remained alive:
+
+```
+logs/2026-08-13-sensors-registry-regeneration/03-slpi-devcoredump.elf
+size:   20,885,487 bytes
+sha256: 72766b3659e2212034b1d6b6edb05abc354b483daf74000d5d8defecc0ce2cf6
+```
+
+Releasing the devcoredump caused the existing recovery policy to reboot the
+handset. It returned on the same `#177-smb5-v3-ba989060` kernel and republished
+SSC service 400, so the capture did not leave the SLPI or phone damaged.
+
+`helpers/slpi-ulog-coredump.py` parses the ELF load segments, locates Qualcomm
+ULog v4 headers, reconstructs wrapped RAM rings, and decodes printf records. It
+does not guess image relocations: they must be supplied explicitly. The capture
+contains 51 valid logs, including `I2C`, `I2C_error`, `SPI`, `SPI_error`,
+`gpi_err`, and `PMIC Log`. Reproduction commands are:
+
+```sh
+helpers/slpi-ulog-coredump.py DUMP --list
+helpers/slpi-ulog-coredump.py DUMP --log I2C \
+  --relocation I2C=0x185c5000
+helpers/slpi-ulog-coredump.py DUMP --log I2C_error \
+  --relocation I2C_error=0x185c5000
+helpers/slpi-ulog-coredump.py DUMP --log 'PMIC Log' \
+  --relocation 'PMIC Log=0x18e00000'
+```
+
+The error ring records six failed transactions. Each consists of `ERROR nack`,
+two `ERROR DMA EVT OTHER during data phase` callbacks, and a cancellation. The
+first three use context `0xb0028f20`; the last three use `0xb0028f98`.
+
+The PMIC ring establishes ordering that kernel logs could not show:
+
+```
+592345176 sensor_vddio MId=2
+592433921 sensor_vdd   MId=2
+594276495 first I2C NACK
+594392710 sensor_vdd   MId=0
+594653863 sensor_vddio MId=0
+```
+
+Both sensor rails are therefore requested and active well before the first
+NACK. Missing regulator votes are eliminated as the immediate cause.
+
+The surviving 4 KiB I2C ring contains the final probes at addresses `0x2c` and
+`0x28`. It contains no confirmable transaction to the fitted MMC5603x at
+`0x30` or TCS3701 at `0x39`; the much earlier startup traffic has rolled out of
+the ring. The next capture must happen immediately after the sensor process
+starts, before those transactions are overwritten. Until that capture exists,
+the NACKs must not be attributed to any fitted hotdog sensor.
+
+## Current boundary
+
+The host and DSP plumbing is now validated end to end: firmware boot, FastRPC,
+the writable file server, registry regeneration, QRTR, SSC requests and ULog
+forensics all work. Physical sensors remain **not working** because their
+drivers do not publish SUIDs. The next evidence gate is an early coredump that
+shows whether the three fitted devices are probed, followed by a reduced
+stock-registry experiment only if that capture shows unrelated probes crowding
+out or aborting initialisation.
