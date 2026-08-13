@@ -45,6 +45,8 @@ snapshot_rels=(
 	"device/testing/linux-oneplus-hotdog-lineage414"
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
+	"main/hexagonrpcd"
+	"temp/iio-sensor-proxy"
 	"temp/libcamera"
 )
 selected_rels=()
@@ -150,6 +152,11 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0003-power-supply-idtp9418-include-gpio-consumer.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:0004-arm64-dts-qcom-add-oneplus-hotdog.patch | \
 		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh | \
+		main/hexagonrpcd:APKBUILD | \
+		main/hexagonrpcd:*.patch | \
+		temp/iio-sensor-proxy:APKBUILD | \
+		temp/iio-sensor-proxy:*.patch | \
+		temp/iio-sensor-proxy:*.initd | \
 		temp/libcamera:APKBUILD | \
 		temp/libcamera:*.patch | \
 		temp/libcamera:*.yaml | \

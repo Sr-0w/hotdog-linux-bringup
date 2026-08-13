@@ -1,7 +1,7 @@
 # Maintainer: Robin Snyders <robin@snyders.xyz>
 pkgname=hexagonrpcd
 pkgver=0.4.0
-pkgrel=8
+pkgrel=10
 pkgdesc="FastRPC server for Qualcomm DSPs, with writable file service"
 url="https://github.com/linux-msm/hexagonrpc"
 arch="all"
@@ -16,11 +16,12 @@ subpackages="$pkgname-dev $pkgname-doc libhexagonrpc:_lib"
 source="
 	$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz
 	0001-serve-writable-files.patch
+	0002-implement-fremove.patch
 "
 builddir="$srcdir/hexagonrpc-$pkgver"
 
 build() {
-	abuild-meson . output
+	abuild-meson -Dc_args=-DHEXAGONRPC_VERBOSE . output
 	meson compile -C output
 }
 
@@ -34,5 +35,6 @@ _lib() {
 }
 sha512sums="
 18ebe4beeed97018243bec5043b8395c07c76f1174085e41a32648fd481485076fefffa091700ca1f72163687405456e5537aa538bc4f08fecacb3f83e3a82d8  hexagonrpcd-0.4.0.tar.gz
-1bf9600667747061e1d4bde2cf419dc9e7567ac409afccbe1025f074510d2cd17bd80dd69de9d4df83df24f64e0cb0a6c669176cc5251c0938658601f89d0c9e  0001-serve-writable-files.patch
+3f68545472952eadddb2c4be252292205fef59ef0c79fd48182484f1d97a98261831401f461dd06e791af2a7e9fad3d86e5787a818bb2eedb2fd14ff92fce80b  0001-serve-writable-files.patch
+b10b98cb28763b8c5c6b83799f1bc0ef83c9a75c25767f0fbe72c2f79145143d0f4000c8c21cf34d6dd75174ede93ad874de2d21d7847d28be5d848a809520b1  0002-implement-fremove.patch
 "
