@@ -1,0 +1,38 @@
+# Maintainer: Robin Snyders <robin@snyders.xyz>
+pkgname=hexagonrpcd
+pkgver=0.4.0
+pkgrel=4
+pkgdesc="FastRPC server for Qualcomm DSPs, with writable file service"
+url="https://github.com/linux-msm/hexagonrpc"
+arch="all"
+license="GPL-3.0-or-later"
+makedepends="meson linux-headers"
+
+# The hexagonfs test takes its sample file by a path relative to the source
+# tree and meson runs it from the build directory, so it cannot find it here.
+# The test passes when run by hand against this build.
+options="!check"
+subpackages="$pkgname-dev $pkgname-doc libhexagonrpc:_lib"
+source="
+	$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz
+	0001-serve-writable-files.patch
+"
+builddir="$srcdir/hexagonrpc-$pkgver"
+
+build() {
+	abuild-meson . output
+	meson compile -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+}
+
+_lib() {
+	pkgdesc="FastRPC library for Qualcomm DSPs"
+	amove usr/lib/libhexagonrpc.so.*
+}
+sha512sums="
+18ebe4beeed97018243bec5043b8395c07c76f1174085e41a32648fd481485076fefffa091700ca1f72163687405456e5537aa538bc4f08fecacb3f83e3a82d8  hexagonrpcd-0.4.0.tar.gz
+1bf9600667747061e1d4bde2cf419dc9e7567ac409afccbe1025f074510d2cd17bd80dd69de9d4df83df24f64e0cb0a6c669176cc5251c0938658601f89d0c9e  0001-serve-writable-files.patch
+"
