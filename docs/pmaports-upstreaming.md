@@ -7,8 +7,8 @@ Last updated: 2026-08-13
 The normal package flow now produces a hardware-booted direct Linux image,
 writable rootfs, accelerated Plasma session, automatic AVB envelope and A/B
 success marking. The development snapshots are currently
-`linux-oneplus-hotdog-mainline616` `6.16.0-r176`,
-`device-oneplus-hotdog` `3-r22` and
+`linux-oneplus-hotdog-mainline616` `6.16.0-r177`,
+`device-oneplus-hotdog` `3-r23` and
 `firmware-oneplus-hotdog` `20241212-r5`.
 
 The port is still not submission-ready. Current blockers are:

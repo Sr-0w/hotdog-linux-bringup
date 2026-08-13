@@ -406,6 +406,8 @@ qup2=$soc/geniqup@cc0000
 gpi0=$soc/dma-controller@800000
 gpi2=$soc/dma-controller@c00000
 i2c4=$qup0/i2c@890000
+i2c8=$qup/i2c@a80000
+bq27411=$i2c8/fuel-gauge@55
 fsa4480=$i2c4/typec-mux@42
 fsa4480_endpoint=$fsa4480/port/endpoint
 tfa9874_top=$i2c4/audio-codec@34
@@ -898,8 +900,6 @@ expect_value battery-termination-current 310000 \
 	fdtget -tu "$dtb" "$battery" charge-term-current-microamp
 battery_phandle=$(fdtget -tx "$dtb" "$battery" phandle) ||
 	die "missing battery phandle"
-charger_phandle=$(fdtget -tx "$dtb" "$pm8150b_charger" phandle) ||
-	die "missing PM8150B charger phandle"
 expect_value charger-compatible qcom,pm8150b-charger \
 	fdtget -ts "$dtb" "$pm8150b_charger" compatible
 expect_value charger-status okay fdtget -ts "$dtb" "$pm8150b_charger" status
@@ -907,11 +907,14 @@ expect_value charger-battery "$battery_phandle" \
 	fdtget -tx "$dtb" "$pm8150b_charger" monitored-battery
 expect_value fuel-gauge-compatible qcom,pm8150b-fg \
 	fdtget -ts "$dtb" "$pm8150b_fg" compatible
-expect_value fuel-gauge-status okay fdtget -ts "$dtb" "$pm8150b_fg" status
-expect_value fuel-gauge-battery "$battery_phandle" \
+expect_value fuel-gauge-status disabled fdtget -ts "$dtb" "$pm8150b_fg" status
+expect_absent fuel-gauge-battery \
 	fdtget -tx "$dtb" "$pm8150b_fg" monitored-battery
-expect_value fuel-gauge-charger "$charger_phandle" \
+expect_absent fuel-gauge-charger \
 	fdtget -tx "$dtb" "$pm8150b_fg" power-supplies
+expect_value external-fuel-gauge-compatible ti,bq27411 \
+	fdtget -ts "$dtb" "$bq27411" compatible
+expect_value external-fuel-gauge-status okay fdtget -ts "$dtb" "$i2c8" status
 
 expect_value gpu-status okay fdtget -ts "$dtb" "$gpu" status
 expect_value gpu-compatible 'qcom,adreno-640.1 qcom,adreno' \

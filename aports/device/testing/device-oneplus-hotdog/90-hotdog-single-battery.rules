@@ -1,5 +1,0 @@
-# The PM8150B charger exposes its own coarse state-of-charge estimate as a
-# second battery. Now that the BQ27411 fuel gauge is described, that estimate
-# is redundant and shows up as a duplicate indicator that disagrees with the
-# gauge by a percent or two. Keep the gauge, hide the charger's estimate.
-SUBSYSTEM=="power_supply", KERNEL=="qcom-battery", ENV{UPOWER_IGNORE}="1"

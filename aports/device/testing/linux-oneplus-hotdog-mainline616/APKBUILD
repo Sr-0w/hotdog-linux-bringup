@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=176
+pkgrel=177
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -182,6 +182,7 @@ source="
 	0146-arm64-dts-qcom-sm8150-describe-the-ipa.patch
 	0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
 	0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
+	0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -381,5 +382,6 @@ cbba23a302209890f06884dce26c792dc71af8a8817b6ab85898a474b9aea0d736dfaf9a08411d41
 a12b5913ea88c27c34baca3fc6b2acb48d300a00d8c0fea953bc44f52e1041d59ae4379ace06c4c0e36f03cd4e9bfb8f2c94513aa2913cd282ca729bc9bc1ed2  0146-arm64-dts-qcom-sm8150-describe-the-ipa.patch
 faa2c5e1aa584c1d62af04fe3eef33e9edecdcb12364473f99e3168a55fb62e167e4b241295e75ce6ba288d950b7508c95fcb69364431a19c69f86d87cafa1b6  0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
 b9c5234565df4d3bcaa2527d9aa8bbe9dc03875d984fe45cbca4b785204eecf1a425fc4ee43211cd9704ba29905cf7875f6adf793c1fd0f8cbbe7fed1c29f6b7  0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
-702bfe477878aa9a897751a834192828f182800db3eca692ea0b8670277267d2c0eb5287627223fc18cc52d30fba6bc99575a16d57430d3a5e5ef5225130e181  validate-mainline616-build.sh
+a518a9ca2c05750d70642522bddc9e1f6e696bc1119f003d2693db2786183a9d3a5cbb3c4757e3c8de9e53563304485fc953b92e7fbea1c6c5661c508a06c0f0  0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
+4157b11eb8c60a567343f8452d29d8c30f2b7e30cef8a5789eefddad123ad8a85f77c9b4736eae469435c5f9d1a9e335811822bd20ab3dd27995cdcf9d9d6c78  validate-mainline616-build.sh
 "

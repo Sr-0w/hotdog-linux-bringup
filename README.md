@@ -53,8 +53,8 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r176` |
-| Device package | `device-oneplus-hotdog` `3-r22` |
+| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r177` |
+| Device package | `device-oneplus-hotdog` `3-r23` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r5` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |

@@ -4,7 +4,7 @@ Last updated: 2026-08-13
 
 This roadmap follows the
 [direct-boot completion criteria](direct-boot.md#completion-criteria). The
-accepted 6.16 package line (currently `6.16.0-r176`) starts directly from the OnePlus
+accepted 6.16 package line (currently `6.16.0-r177`) starts directly from the OnePlus
 bootloader without the downstream kexec bridge, mounts the postmarketOS root
 read-write, and retains USB NCM, USB ACM, SSH, the S6SY761 touchscreen, and the
 Adreno 640 render path. It also registers Power, Volume Down, and Volume Up as

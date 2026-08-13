@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=22
+pkgrel=23
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -28,7 +28,6 @@ source="
 	51-qcom-sm8150.lua
 	90-hotdog-bringup-doas.conf
 	90-hotdog-camera.conf
-	90-hotdog-single-battery.rules
 	postprocess-boot-avb.sh
 	hotdog-no-sleep.initd
 	hotdog-plasma-no-sleep
@@ -56,8 +55,6 @@ package() {
 		"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"
 	install -Dm644 "$srcdir/hotdog.conf" \
 		"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"
-	install -Dm644 "$srcdir/90-hotdog-single-battery.rules" \
-		"$pkgdir/usr/lib/udev/rules.d/90-hotdog-single-battery.rules"
 	install -Dm755 "$srcdir/postprocess-boot-avb.sh" \
 		"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"
 }
@@ -180,7 +177,6 @@ e827bb5e870adbd8ea3c19d85bef975f40c2b863620e80c850bc5fe67a65dba7a88a67d4237f9bc9
 d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270cd77d5384ac1fcdc9c6ea46e314c3b88db26bfc8d86fdadce  51-qcom-sm8150.lua
 7743ff21c39fc4991cec30ba61edf5b261d44d33a0693cd6f3021da7374c430a8c6bf4bd3619bb5ff48fe5fa41fd01eb8c40ad2a162ddc4869ef8d37901779b5  90-hotdog-bringup-doas.conf
 7b1c01a079a372a6258652914d95b95ace6431271f8fa4fd8a9d975aff31ee12e28e5bb1b5bf61019b334863e64fc0928dfec328ba423795053c98da94e29051  90-hotdog-camera.conf
-db5da5123383e14d168eb0c80073a98dc8b9b796dc6fdbfca70ed12e82ae96df1090ef643b9e430543514d4340735d7a81350dff446f06efd8da6e3ac5f11bbe  90-hotdog-single-battery.rules
 19335cacba66016775e9cae6905e4f3d2ed5e7795764b2ac8f8886f2aaa36cbe36f761b4c4888bbce18fc870bacd514229cbcfce6a1c307b36a8a4991d688e94  postprocess-boot-avb.sh
 050412dd86b9b7f9de40110ce84289108f19c197488b3cf5f3c5804d43dd0c98ea268bf4657480402ecf5c8b2c4bf3c309dddfd6da1c05a7796c0dbd1617e9cd  hotdog-no-sleep.initd
 b13ecd7055ea6090f3de8bafed14682f9d34a4203bcd499798d0752a706bb144c2b3b9323d3a1755006ebaea4ad052e638cc5b5bc41de339de2a9186c45e52c5  hotdog-plasma-no-sleep

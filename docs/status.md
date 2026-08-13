@@ -14,8 +14,8 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Device | OnePlus 7T Pro, rear label HD1913; recovery reports HD1911 |
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
-| Active kernel line | Mainline-oriented Linux 6.16 reference package, currently `linux-oneplus-hotdog-mainline616` `6.16.0-r176` |
-| Device package | `device-oneplus-hotdog` `3-r22` |
+| Active kernel line | Mainline-oriented Linux 6.16 reference package, currently `linux-oneplus-hotdog-mainline616` `6.16.0-r177` |
+| Device package | `device-oneplus-hotdog` `3-r23` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r5` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
 | Boot path | OnePlus ABL -> Linux 6.16 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |

@@ -26,7 +26,7 @@ These paths are ignored and must not be added with `git add -f`.
 The active direct-boot package flow produces and validates:
 
 1. the Linux 6.16 arm64 `Image` from
-   `linux-oneplus-hotdog-mainline616` (currently `6.16.0-r176`);
+   `linux-oneplus-hotdog-mainline616` (currently `6.16.0-r177`);
 2. the source-built Hotdog DTB from the same package revision;
 3. matching modules and `firmware-oneplus-hotdog` payloads;
 4. the standard postmarketOS initramfs and split boot/root filesystems;
