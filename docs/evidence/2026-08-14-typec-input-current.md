@@ -105,6 +105,51 @@ The charger must not depend on TCPM in a way that creates a device-link cycle.
 The previously tested `power-supplies` dependency did so and is not a viable
 upstream design.
 
+## Complete-system 900 mA validation
+
+A follow-up kernel candidate connected the active DWC3 gadget to the SMB5
+power supply for test purposes and exposed `INPUT_CURRENT_LIMIT`. This is a
+test-only integration: the `usb-psy-name` property used by that candidate is
+not a documented upstream binding and is not part of the proposed SMB5
+series.
+
+The complete Plasma Mobile system initially remained at 100 mA because its
+configfs gadget configuration retained the kernel default `MaxPower=2`.
+Changing `configs/c.1/MaxPower` to 900 and reauthorizing the host device caused
+DWC3 to publish 900 mA and SMB5 to program the same limit:
+
+- kernel: `6.16.0-sm8150 #178-smb5-dwc3-icl-v1`;
+- kernel commit: `7f22ba7c6f3b38542683a91c5931f95a064f3a90`;
+- kernel tree: `d6d647860bb627a5ee97040a1764df8c26b2aada`;
+- partition image SHA-256:
+  `ad5e2337aea89f7b61c9ecdc28e45b07cf2dd287a9c80f27c04fbfc97dfc4155`;
+- gadget speed: SuperSpeed;
+- gadget and charger limits: 900000 uA;
+- measured input current: approximately 876-877 mA;
+- measured input voltage: approximately 4.62 V.
+
+A guarded 180-second run passed first. A subsequent 600-second run completed
+all 61 samples with `online=1`, `status=Charging`, `health=Good`, an input
+limit of 900000 uA and a maximum reported thermal-zone temperature below
+41 degrees C. The OLED remained in `FB_BLANK_POWERDOWN` (`fb0/blank=4`) for
+the entire long run while USB networking and SSH remained available. The
+fuel gauge reported positive charging current around 0.74 A during the run.
+
+This isolates the complete-system policy gap from the SMB5 register logic.
+The generic postmarketOS fix is to let a device specify a configfs
+`MaxPower` value before binding the UDC. Hotdog sets 900 mA; the composite
+gadget core still caps the request to 500 mA at USB 2 speed and 900 mA at
+SuperSpeed.
+
+The first persistence image (`maxpower-v2`) accidentally replaced the modern
+`postmarketos-initramfs 3.12.0-r0` helper with the historical 3.4.6 helper
+from the old local pmaports checkout. It enumerated NCM but did not configure
+the phone-side IP address and is rejected. The corrected `maxpower-v3` image
+starts from the exact validated 3.12.0 ramdisk and adds only the optional
+`MaxPower` write plus the Hotdog value. Its partition image SHA-256 is
+`8d0ed0705b8377cee9cfe1c58b2e0a3ead2ac84d9632bbe274cbe04c3d24d552`;
+hardware validation is pending.
+
 ## Raw evidence
 
 Raw logs are retained locally under:
@@ -130,6 +175,15 @@ Important files include:
 - `trace-usb-host-authorized-cycle.txt`
 - `downstream-source-evidence.txt`
 - `deep-dive-artifact-hashes.txt`
+
+The 900 mA follow-up is under
+`logs/2026-08-14-smb5-dwc3-icl-v1/`, notably:
+
+- `22-charge-900ma-180s.txt`;
+- `23-charge-900ma-600s.txt`;
+- `24-pmaports-maxpower-package-build.log`;
+- `28-flash-maxpower-v2-boot-b.log`;
+- `29-reboot-maxpower-v2-monitor.log`.
 
 The complete raw logs are intentionally excluded from Git because they may
 contain device-specific data.
