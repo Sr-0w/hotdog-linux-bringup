@@ -470,16 +470,18 @@ validate_hotdog_plasma_apps_contract() {
 	done
 	[ "$(grep -c '^AutoSuspendAction=0$' "$powerdevil_config")" -eq 3 ] ||
 		die "automatic suspend must be disabled for all three PowerDevil profiles"
-	[ "$(grep -c '^TurnOffDisplayWhenIdle=false$' "$powerdevil_config")" -eq 6 ] ||
-		die "display blanking must be disabled for all three PowerDevil profiles"
+	[ "$(grep -c '^TurnOffDisplayWhenIdle=true$' "$powerdevil_config")" -eq 6 ] ||
+		die "display blanking must be enabled for all three PowerDevil profiles"
+	[ "$(grep -c '^TurnOffDisplayIdleTimeoutSec=120$' "$powerdevil_config")" -eq 6 ] ||
+		die "display blanking must use the validated two-minute timeout"
 	grep -q -- '--key Autolock false$' "$session_policy" ||
 		die "automatic screen locking must be disabled"
 	grep -q -- '--key LockOnResume false$' "$session_policy" ||
 		die "screen locking on resume must be disabled"
 	grep -q '^command="/usr/bin/elogind-inhibit"$' "$inhibitor_service" ||
 		die "suspend inhibitor does not invoke elogind-inhibit"
-	grep -q '^command_args="--what=idle:sleep ' "$inhibitor_service" ||
-		die "suspend inhibitor must block both idle and sleep"
+	grep -q '^command_args="--what=sleep ' "$inhibitor_service" ||
+		die "suspend inhibitor must block sleep without blocking display idle"
 	grep -q '^rc-update add hotdog-no-sleep default$' "$inhibitor_install" ||
 		die "Plasma Mobile package does not enable the suspend inhibitor"
 }

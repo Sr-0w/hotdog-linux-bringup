@@ -1,70 +1,70 @@
-# Automatic suspend, dimming, and display blanking are disabled until the
-# display and USB wake paths are reliable.
+# Keep system suspend disabled until every wake path is reliable, but blank the
+# OLED after two idle minutes. KWin DPMS does not suspend USB or networking.
 [AC][DPMSControl]
-idleTime=0
+idleTime=120
 lockBeforeTurnOff=false
-turnOffOnIdleTimeout=false
+turnOffOnIdleTimeout=true
 
 [AC][DimDisplay]
 idleTime=0
 
 [AC][Display]
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayWhenIdle=true
 
 [AC][DisplayAndBrightness]
 DimDisplayIdleTimeoutSec=0
 DimDisplayWhenIdle=false
 LockBeforeTurnOffDisplay=false
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayIdleTimeoutWhenLockedSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayIdleTimeoutWhenLockedSec=120
+TurnOffDisplayWhenIdle=true
 
 [AC][SuspendAndShutdown]
 AutoSuspendAction=0
 
 [Battery][DPMSControl]
-idleTime=0
+idleTime=120
 lockBeforeTurnOff=false
-turnOffOnIdleTimeout=false
+turnOffOnIdleTimeout=true
 
 [Battery][DimDisplay]
 idleTime=0
 
 [Battery][Display]
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayWhenIdle=true
 
 [Battery][DisplayAndBrightness]
 DimDisplayIdleTimeoutSec=0
 DimDisplayWhenIdle=false
 LockBeforeTurnOffDisplay=false
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayIdleTimeoutWhenLockedSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayIdleTimeoutWhenLockedSec=120
+TurnOffDisplayWhenIdle=true
 
 [Battery][SuspendAndShutdown]
 AutoSuspendAction=0
 
 [LowBattery][DPMSControl]
-idleTime=0
+idleTime=120
 lockBeforeTurnOff=false
-turnOffOnIdleTimeout=false
+turnOffOnIdleTimeout=true
 
 [LowBattery][DimDisplay]
 idleTime=0
 
 [LowBattery][Display]
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayWhenIdle=true
 
 [LowBattery][DisplayAndBrightness]
 DimDisplayIdleTimeoutSec=0
 DimDisplayWhenIdle=false
 LockBeforeTurnOffDisplay=false
-TurnOffDisplayIdleTimeoutSec=0
-TurnOffDisplayIdleTimeoutWhenLockedSec=0
-TurnOffDisplayWhenIdle=false
+TurnOffDisplayIdleTimeoutSec=120
+TurnOffDisplayIdleTimeoutWhenLockedSec=120
+TurnOffDisplayWhenIdle=true
 
 [LowBattery][SuspendAndShutdown]
 AutoSuspendAction=0

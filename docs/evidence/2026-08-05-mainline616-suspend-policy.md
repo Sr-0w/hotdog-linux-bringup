@@ -62,9 +62,41 @@ device-oneplus-hotdog-plasma-mobile-apps-3-r20.apk
 816e060b7ce106ecbe90dac5e2b69fccbba50f3e901e9f9d659ca6b4635cb24d
 ```
 
-This is a temporary bring-up reliability policy. Explicit suspend testing
-requires stopping `hotdog-no-sleep` first; ordinary operation intentionally
-offers no automatic path into suspend or display blanking.
+This was the initial temporary bring-up reliability policy. Explicit suspend
+testing still requires stopping `hotdog-no-sleep` first. The display-only path
+was subsequently validated and enabled as described below; automatic system
+suspend remains blocked.
+
+## Display-only idle retest
+
+On 2026-08-14, KWin DPMS was tested independently from system suspend on the
+full Plasma Mobile image running `6.16.0-sm8150 #177-smb5-v3-ba989060`.
+`kscreen-doctor --dpms off` reported `DSI-1: off` for the complete 50-second
+observation. All ten five-second samples retained the same USB device, ping,
+SSH access, boot ID, online charger and readable power-supply properties. The
+screen was then restored with `kscreen-doctor --dpms on` without a reboot.
+
+The raw host monitor is retained outside Git under:
+
+```text
+logs/display-dpms-usb-ssh-20260814-223230/monitor.log
+```
+
+Device package `3-r24` therefore enables display-only idle blanking after 120
+seconds for the `AC`, `Battery` and `LowBattery` profiles. It continues to
+disable automatic suspend and screen locking. The `hotdog-no-sleep` inhibitor
+now blocks only `sleep`, rather than `idle:sleep`, so PowerDevil can blank the
+OLED while USB networking and SSH remain available. The policy and updated
+inhibitor were also installed on the running full image; its display was left
+in DPMS off with the original boot ID
+`ab9a6a1a-b612-43fc-93e9-b0c29e425776`.
+
+The complete Plasma Mobile policy subpackage was rebuilt successfully:
+
+```text
+device-oneplus-hotdog-plasma-mobile-apps-3-r24.apk
+sha256 db8ace51bb358584046c69d34aa4588413d7e285be65072804d7e44419059d96
+```
 
 ## Remaining work
 
@@ -74,4 +106,4 @@ offers no automatic path into suspend or display blanking.
   suspend/resume cycles;
 - determine which wake sources can resume the SoC without the physical power
   key;
-- remove the conservative default once unattended resume is reliable.
+- remove the system-suspend inhibitor once unattended resume is reliable.

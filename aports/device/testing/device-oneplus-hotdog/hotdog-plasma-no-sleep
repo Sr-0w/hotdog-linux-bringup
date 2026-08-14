@@ -3,18 +3,18 @@
 set -eu
 
 for profile in AC Battery LowBattery; do
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key idleTime 0
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key idleTime 120
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key lockBeforeTurnOff false
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key turnOffOnIdleTimeout false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DPMSControl --key turnOffOnIdleTimeout true
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group DimDisplay --key idleTime 0
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayIdleTimeoutSec 0
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayWhenIdle false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayIdleTimeoutSec 120
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group Display --key TurnOffDisplayWhenIdle true
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key DimDisplayIdleTimeoutSec 0
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key DimDisplayWhenIdle false
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key LockBeforeTurnOffDisplay false
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutSec 0
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutWhenLockedSec 0
-	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayWhenIdle false
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutSec 120
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayIdleTimeoutWhenLockedSec 120
+	kwriteconfig6 --file powerdevilrc --group "$profile" --group DisplayAndBrightness --key TurnOffDisplayWhenIdle true
 	kwriteconfig6 --file powerdevilrc --group "$profile" --group SuspendAndShutdown --key AutoSuspendAction 0
 done
 
