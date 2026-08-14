@@ -42,9 +42,29 @@ while retaining the same postmarketOS userspace and cable:
 - `main/current_max`: 500000 uA
 - Measured USB input current: 475-478 mA
 
-The USB gadget descriptor requested 896 mA at SuperSpeed, but the downstream
-DWC3 driver logged `Could not get usb psy`. The enumeration result therefore
-did not reach the charger power supply in this postmarketOS configuration.
+The host-visible SuperSpeed gadget descriptor requested 896 mA. An early-boot
+capture, started before networking, established the complete sequence:
+
+- at 4.446 s, APSD classified the source as SDP and the Oplus policy requested
+  500 mA;
+- at 4.590 s, DWC3 propagated the pre-configuration 100 mA limit;
+- at 4.917 s, after `USB_STATE=CONFIGURED`, DWC3 propagated 900 mA without a
+  `power_supply_set_property()` error;
+- the charger nevertheless remained programmed for 500 mA.
+
+The downstream source explains the mismatch. The built charger implementation
+is `drivers/power/oplus/charger_ic/oplus_battery_msm8150Q.c`, not the disabled
+`drivers/power/supply/qcom/qpnp-smb5.c` object. Its Oplus-specific branch in
+`set_sdp_current()` clears `CFG_USB3P0_SEL_BIT` for every request above 150 mA,
+thereby mapping both 500 mA and 900 mA requests to the USB2 500 mA hardware
+mode. The relevant downstream source identity is commit
+`6ecfabed032b68a8f0a0fd003cf5fbfb6d672acb`, tree
+`eff960af12c7f7f4770320805522b9a61b1f1052`.
+
+Filtered SPMI tracing agrees with the source: enumeration changed
+`USBIN_ICL_OPTIONS_REG` (`0x1366`) and the ICL override registers, but did not
+program `USBIN_CURRENT_LIMIT_CFG_REG` (`0x1370`). The resulting USB input
+current stayed at approximately 476 mA.
 
 During a passive 180-second sample window, with no power-supply writes:
 
@@ -63,10 +83,15 @@ using that property alone as a charge/discharge verdict.
 ## Interpretation
 
 This is a kernel-plus-DTBO control, not a complete OxygenOS Android control.
-Android's gadget userspace may establish a downstream `usb-psy` path or cast
-additional votes that postmarketOS does not. The result therefore establishes
-what the downstream kernel negotiates with the current complete postmarketOS
-image, not every behavior of stock OxygenOS.
+It establishes the downstream kernel's behavior with the complete
+postmarketOS image and the same PC port and cable, but it does not establish
+the policy selected by stock Android userspace or by a proprietary VOOC
+charger.
+
+The stock DT describes source-specific policy limits of 500 mA for USB SDP,
+1500 mA for CDP, 2000 mA for DCP, and 3000 mA for PD. It also provides a
+1.8 A generic USB ICL hardware cap. These are policy ceilings, not permission
+to draw that current before the corresponding source capability is known.
 
 The mainline implementation should keep detection ownership separated:
 
@@ -86,6 +111,10 @@ Raw logs are retained locally under:
 
 `logs/downstream414-stockdtbo-control-2026-08-14-212457/`
 
+The deeper boot, source and SPMI capture is retained under:
+
+`logs/downstream414-stockdtbo-deep-dive-2026-08-14-214416/`
+
 Important files include:
 
 - `downstream-baseline.txt`
@@ -96,6 +125,11 @@ Important files include:
 - `mainline-upload-hashes.txt`
 - `mainline-restore-readback.txt`
 - `mainline-restored-runtime.txt`
+- `kmsg-initial-raw.log`
+- `kmsg-boot-2s-to-6s.log`
+- `trace-usb-host-authorized-cycle.txt`
+- `downstream-source-evidence.txt`
+- `deep-dive-artifact-hashes.txt`
 
 The complete raw logs are intentionally excluded from Git because they may
 contain device-specific data.
