@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=177
+pkgrel=178
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -183,6 +183,11 @@ source="
 	0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
 	0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
 	0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
+	0150-power-supply-qcom-smbx-rerun-AICL-after-ICL-changes.patch
+	0151-power-supply-qcom-smbx-select-USB3-SDP-current.patch
+	0152-power-supply-qcom-smbx-expose-input-current-limit.patch
+	0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
+	0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -236,7 +241,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-9afc86f4f6599c91da3ea527c1bc70330d62cb55942ff879fe38bd4d79a4b255d2ecc47e75c330684b9ac250516a8ef98cd2c4b9f902bb44380947dda7da0212  config-oneplus-hotdog-mainline616.aarch64
+d5b81bce30380d83edfe9efcb7c6d8c63e615a63f1334a24b7e445f2e5eead921593e4e129dc6a7321a779f9a193db74a5d964f03b0fe5bd337a2f267671ae95  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -383,5 +388,10 @@ a12b5913ea88c27c34baca3fc6b2acb48d300a00d8c0fea953bc44f52e1041d59ae4379ace06c4c0
 faa2c5e1aa584c1d62af04fe3eef33e9edecdcb12364473f99e3168a55fb62e167e4b241295e75ce6ba288d950b7508c95fcb69364431a19c69f86d87cafa1b6  0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
 b9c5234565df4d3bcaa2527d9aa8bbe9dc03875d984fe45cbca4b785204eecf1a425fc4ee43211cd9704ba29905cf7875f6adf793c1fd0f8cbbe7fed1c29f6b7  0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
 a518a9ca2c05750d70642522bddc9e1f6e696bc1119f003d2693db2786183a9d3a5cbb3c4757e3c8de9e53563304485fc953b92e7fbea1c6c5661c508a06c0f0  0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
+3b127f3305552d7732d29e31ddcaef425403d5e6f66fff46fea0ffcdf1d21ee6b59ffb1070fa02668bf8bb69c6859df4b0fdc4e86b8b28085c2daad8db9cd1c5  0150-power-supply-qcom-smbx-rerun-AICL-after-ICL-changes.patch
+6d0efe53aca4151fd9f9a6ebfbf4057f5a3a707c552dcd1749cad4a240fa7d4a88138518fe4c091265a5e542f832bc8706d961e35526dda023cbda56a2ca4591  0151-power-supply-qcom-smbx-select-USB3-SDP-current.patch
+32df8a22c04c97f98be7cf9c15f81788961f8cf79b599887cd99252db61ad39907d1c494c853acaa223b64ee0993b1235068fc91612ec45d082f2c844e47c724  0152-power-supply-qcom-smbx-expose-input-current-limit.patch
+ef627f849a19f47bd0adca0e80727a0e5f4370f94e3ed81634fd7380707e1069577c1b9fceb00870b9e04f83cf0c8fe7708bf812bd645fb75b5205ecc0d9a273  0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
+97f2d38ab45b699ec2de073ddf78f79bbdeefa9b6a06e2c84ebf14960f1107e3aabbd2067ce6d51de7c6a3085d191dd6db1cdee05f0a8161af9e80d8b8495ce8  0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
 4157b11eb8c60a567343f8452d29d8c30f2b7e30cef8a5789eefddad123ad8a85f77c9b4736eae469435c5f9d1a9e335811822bd20ab3dd27995cdcf9d9d6c78  validate-mainline616-build.sh
 "

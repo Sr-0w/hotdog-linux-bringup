@@ -5,7 +5,7 @@ The immutable submission artifacts live under
 [`upstream/2026-08-12`](../upstream/2026-08-12). They use the DCO identity
 `Robin Snyders <robin@snyders.xyz>`.
 
-Q6AFE v1, SM8150 download-mode v1/v2, the Qualcomm SMB5 v1/v2 series and its
+Q6AFE v1, SM8150 download-mode v1/v2, the Qualcomm SMB5 v1/v2/v3 series and its
 five-patch SMB2 prerequisite series have been mailed. Their files are
 immutable submission artifacts: revise the source branch and regenerate a
 complete versioned series instead of editing a mailed patch in place. The
@@ -18,7 +18,7 @@ OnePlus 7T Pro device-tree series has not been mailed.
 | Q6AFE DisplayPort playback widget | 1 | [v1 withdrawn](https://lore.kernel.org/r/178648858640.3471590.18184750436169014545.q6afe-withdrawal-resend@snyders.xyz) | Do not send the unsupported runtime claim as v2 |
 | SM8150 download-mode register | 1 | [Submitted v2](https://lore.kernel.org/r/20260811-submit-sm8150-dload-v2-1-fb688ac4896b@snyders.xyz) | Awaiting review; no unresolved finding |
 | Qualcomm SMB2 fixes | 5 | [Submitted v1](https://lore.kernel.org/r/20260812-qcom-smbx-fixes-v1-0-eb48246be599@snyders.xyz) | Awaiting review |
-| Qualcomm SMB5 charger support | 2 | [Submitted v2](https://lore.kernel.org/r/20260812-submit-qcom-smbx-send-v1-v2-0-f504b8f9bfad@snyders.xyz) | Awaiting review; depends on the five SMB2 fixes |
+| Qualcomm SMB5 charger support | 2 | [Submitted v3](https://lore.kernel.org/r/20260813-submit-qcom-smbx-send-v1-v3-0-27be0091d7c7@snyders.xyz) | Awaiting review; exact tree passed charge and physical VBUS gates; depends on the five SMB2 fixes |
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
 
 All submitted messages were sent through the kernel.org `b4` web endpoint,
@@ -59,9 +59,9 @@ are in [the 2026-08-12 follow-up](evidence/2026-08-12-upstream-follow-up.md).
   DTB;
 - the five SMB2 fixes apply cleanly to power-supply `for-next` and pass ARM64
   LLVM `W=1`, Sparse, strict checkpatch and `git diff --check`;
-- SMB5 v2 is based on power-supply `for-next` `99b38cda3f4c`; plain `git am`
-  of the five public prerequisites plus both v2 patches yields tree
-  `254850550db64e8c100994cdbfe6f9cc3f35807f`, identical to the sent tree;
+- SMB5 v3 is based on power-supply `for-next` `99b38cda3f4c`; replaying the
+  five public prerequisites plus both v3 patches yields the validated tree
+  `face07e87b8b06d4d93e0d8d598e13a64d72f255`;
 - the final SMB5 driver passes ARM64 LLVM `W=1` and Sparse without a driver
   warning, the binding passes targeted `dt_binding_check`, and both patches
   pass strict checkpatch with zero diagnostics;

@@ -87,6 +87,8 @@ or a kexec bridge.
 - The source-built AW8697 force-feedback driver produces physical vibration.
 - The upstream-shaped SMB5 v3 candidate passed guarded 180-second and
   600-second charging runs, host authorization and a physical VBUS cycle.
+- The complete Plasma image also passed a guarded 180-second SuperSpeed run at
+  a 900 mA input limit, with rising battery voltage and health `Good`.
 - SLPI boot, FastRPC, writable Hexagon service, registry regeneration, QRTR,
   SSC requests and ULog forensics work end to end.
 
@@ -148,7 +150,7 @@ function under **Working** and a broader integration or stability item under
 | Wi-Fi | Power management / stable factory identity | Basic data works; sustained throughput, AP/roaming, suspend and factory-address handling remain. |
 | Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
 | Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
-| Power | SMB5 charging | The upstream-shaped v3 candidate passed guarded 180-second and 600-second charge runs, host authorization and a physical VBUS cycle. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
+| Power | SMB5 charging | The exact v3 candidate passed guarded 180-second and 600-second runs plus a physical VBUS cycle. The complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
 | Cameras | S5K3M5 telephoto | 4208×3120 RAW10 capture, userspace processing and experimental autofocus work; production 3A/color and broader modes remain. |
 | Cameras | Sony IMX586 main | 4000×3000 RAW10 capture, processed 30 fps and experimental autofocus work; production color, touch focus and additional modes remain. |
 | Cameras | Sony IMX481 ultra-wide | 4656×3496 RAW10 and processed 30 fps runs work; production color and additional modes remain. |

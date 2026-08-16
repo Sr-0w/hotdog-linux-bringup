@@ -1,0 +1,55 @@
+From 9ffe670eb56c66f24b4ee07374e3005633c6c595 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 14 Aug 2026 08:00:26 +0200
+Subject: [PATCH] power: supply: qcom_smbx: select USB3 SDP current
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/power/supply/qcom_smbx.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index b45e223552d5..bc51ac5524ec 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -368,6 +368,7 @@ enum smb_generation {
+ #define STAT_IRQ_PULSING_EN_BIT				BIT(0)
+ 
+ #define SDP_CURRENT_UA					500000
++#define USB3_SDP_CURRENT_UA				900000
+ #define CDP_CURRENT_UA					1500000
+ #define DCP_CURRENT_UA					1500000
+ #define CURRENT_MAX_UA					DCP_CURRENT_UA
+@@ -679,6 +680,20 @@ static int smb_rerun_aicl(struct smb_chip *chip)
+ 				  RERUN_AICL_BIT, RERUN_AICL_BIT);
+ }
+ 
++static int smb_select_smb5_icl_mode(struct smb_chip *chip, unsigned int val)
++{
++	unsigned int mode = 0;
++
++	if (val == SDP_CURRENT_UA)
++		mode = USB51_MODE_BIT;
++	else if (val == USB3_SDP_CURRENT_UA)
++		mode = CFG_USB3P0_SEL_BIT | USB51_MODE_BIT;
++
++	return regmap_update_bits(chip->regmap,
++				  chip->base + USBIN_ICL_OPTIONS,
++				  CFG_USB3P0_SEL_BIT | USB51_MODE_BIT, mode);
++}
++
+ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
+ {
+ 	unsigned char val_raw;
+@@ -691,6 +706,11 @@ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
+ 		return -EINVAL;
+ 	}
+ 	val_raw = val / chip->icl_step_ua;
++	if (chip->gen == SMB5) {
++		rc = smb_select_smb5_icl_mode(chip, val);
++		if (rc < 0)
++			return rc;
++	}
+ 
+ 	rc = regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
+ 			  val_raw);

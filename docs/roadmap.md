@@ -396,7 +396,9 @@ power-down and conservative gain defaults.
 
 The fuel gauge and conservative charger limits are working. The upstream-shaped
 SMB5 v3 candidate also passes guarded 180-second and 600-second charge runs,
-host USB authorization changes and a physical VBUS cable cycle. Charge
+host USB authorization changes and a physical VBUS cable cycle. The complete
+Plasma image additionally passes a guarded 180-second run at a 900 mA
+SuperSpeed input limit with rising battery voltage. Charge
 termination, low-battery behavior, thermal policy and full suspend remain
 incomplete, and the touchscreen resume failure currently blocks reliable
 system suspend.
