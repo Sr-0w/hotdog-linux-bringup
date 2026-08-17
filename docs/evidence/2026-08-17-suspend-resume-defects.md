@@ -427,6 +427,44 @@ tells the modem that the application processors are going to sleep, and the
 outbound SMP2P channel that downstream uses for exactly that carries only the
 "stop" bit here.
 
+
+## The stock device tree refutes the sleep-notification hypothesis
+
+The OxygenOS device tree is still on the phone, in `boot_a`, and it does carry
+the sleepstate mechanism that mainline lacks:
+
+```dts
+qcom,smp2p_sleepstate {
+        compatible = "qcom,smp2p-sleepstate";
+        qcom,smem-states = <&sleepstate_out 0>;
+        interrupt-names = "smp2p-sleepstate-in";
+};
+```
+
+Resolving the phandles places both entries on a node with
+`qcom,remote-pid = <0x03>`, that is the sensor DSP, with entry names
+`sleepstate` and `sleepstate_see`. Nothing equivalent exists for the modem at
+`remote-pid = <1>`.
+
+So the stock firmware does not tell the modem that the application processors
+are going to sleep either. Mainline is not missing a handshake the modem needs,
+and the leading remaining hypothesis is refuted.
+
+What the stock tree does carry, and mainline does not, is a separate component:
+
+```dts
+system_pm {
+        compatible = "qcom,system-pm";
+        mboxes = <&apps_rsc 0>;
+};
+```
+
+Downstream this driver coordinates entry into sleep with RPMh over the RSC
+mailbox, programming the sleep and wake vote sets and publishing the expected
+wake time. Mainline covers the same ground differently, through `rpmh-rsc` and
+the psci cpuidle domain. Comparing what each actually programs into the RSC is
+the next avenue, and the last structural difference found so far.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
