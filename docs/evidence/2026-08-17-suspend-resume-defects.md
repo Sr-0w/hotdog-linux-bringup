@@ -45,29 +45,38 @@ happen.
 The modem recovers on its own (`crash #1`, then `modem is now up`), so this is
 reproducible on demand and non-destructive.
 
-## The watchdog fires during suspend, not on resume
+## Watchdog timing: unresolved, and printk timestamps cannot settle it
 
-This is the correction that reframes the whole problem.
+An earlier revision of this file claimed the watchdog fires 4.46 s *into*
+s2idle and therefore that this is a suspend defect rather than a resume
+defect. That claim is withdrawn: it was derived from `dmesg` timestamps, and
+those do not measure sleep on this platform.
 
-An unplugged run (`pm8150b-charger status=Discharging online=0`) with IPA
-active and `rmnet_ipa0` up produced a full-length sleep, and the timings are
-unambiguous:
+Measured directly, with markers written to `/dev/kmsg` either side of a cycle:
 
 ```text
-[2509.500] PM: suspend entry (s2idle)
-[2513.958] qcom_q6v5_pas 4080000.remoteproc: watchdog received: SFR Init
-[2543.708] PM: suspend exit
+delta wall clock   = 21 s
+delta /proc/uptime = 21.15 s
+MARQUEUR-AVANT [339.549985]
+MARQUEUR-APRES [340.332915]   -> 0.78 s of printk time
 ```
 
-The MPSS watchdog fires **4.46 s after the AP enters s2idle**, while the AP is
-still asleep, and the crash is merely *handled* at resume
-(`handling crash #2`). Every earlier observation placed it "0.6 to 0.8 s after
-resume" because those cycles were already truncated, so the crash and the
-resume coincided. The 16 August campaign was therefore chasing a resume defect
-that is actually a suspend defect.
+The printk clock freezes across `s2idle` while the monotonic clock keeps
+running, so any duration derived from `dmesg` across a suspend is wrong by
+whatever the sleep lasted.
 
-The open question is no longer why the modem dies on wake, but what the modem
-stops receiving 4.5 s after the AP goes to sleep.
+What survives is message *ordering*, which is unaffected by the clock scale,
+and it is not consistent between runs:
+
+| run | watchdog logged |
+|---|---|
+| unplugged, IPA forced active | before `PM: suspend exit` |
+| plugged, IPA in autosuspend, 3 cycles | after `PM: suspend exit`, ~0.79 s later |
+
+So the watchdog is not reliably on one side of the resume boundary, and the
+question of where in the cycle the modem dies is open. Settling it needs a
+timebase that survives suspend: `/proc/uptime` sampling around the cycle, or
+the modem's own SFR timestamp, not kernel log timestamps.
 
 ## Cycle truncation is caused by the modem, not the charger
 
@@ -173,10 +182,10 @@ systematic; both depend on a prior state that has not yet been isolated.
 
 ## Current gate
 
-The blocking item is the MPSS watchdog, and it is now a suspend defect rather
-than a resume defect: the modem raises `SFR Init: wdog or kernel error
-suspected` 4.46 s into `s2idle`, with IPA active and `ipa-clock-query` never
-firing.
+The blocking item is the MPSS watchdog. It reproduces on every cycle where the
+modem is running, including with IPA left in normal autosuspend, so it is not
+an artefact of forcing IPA active. Its position relative to resume is not yet
+established, see above.
 
 The natural suspect is what the AP stops servicing once asleep — GLINK, SMP2P,
 RPM votes or a shared resource the MPSS firmware expects to remain available.
