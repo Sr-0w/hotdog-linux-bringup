@@ -346,6 +346,54 @@ Short repeated cycles produce one crash each. So the failure is bound to the
 transition into sleep, not to the suspended state itself, and the phone does
 sleep and wake correctly apart from it.
 
+
+## Why Wi-Fi never comes back, and what fixing it needs
+
+Wi-Fi loss after resume is a consequence of the modem crash, through two
+distinct failures.
+
+**Stale MSA ownership.** `ath10k_qmi_map_msa_permission()` always asks the
+hypervisor to move the MSA regions away from HLOS, but those regions are also
+assigned to `MSS_MSA`, and a modem restart returns them without the WLAN side
+being told. The next assignment is rejected:
+
+```text
+qcom_scm firmware:scm: Assign memory protection call failed -22
+ath10k_snoc 18800000.wifi: failed to assign msa map permissions: -22
+```
+
+Reclaiming the region and retrying once removes this failure; after the change
+no `-22` appears on any cycle.
+
+**Recovery races the modem restart.** This is the one that still breaks Wi-Fi.
+The WLAN firmware goes down with the modem, and the resume path tries to bring
+it back while the modem is still restarting, so every QMI exchange times out:
+
+```text
+71.653  ath10k_snoc: failed to send qmi mode: -110
+71.653  ath10k_snoc: failed to enable wcn3990: -110
+71.653  ath10k_snoc: Could not init hif: -110
+71.792  ath10k_snoc: firmware crashed!
+72.218  ipa 1e40000.ipa: received modem running event      <- modem only up here
+```
+
+Reloading `ath10k_snoc` by hand once the modem is up always restores Wi-Fi, so
+the hardware and firmware are fine; only the ordering is wrong.
+
+An attempt to fix this from the modem SSR notifier, by deferring recovery to
+`QCOM_SSR_AFTER_POWERUP`, was written and reverted. It fires at the right
+moment but cannot work from there:
+
+```text
+72.230  ath10k_snoc: cannot restart a device that hasn't been started
+```
+
+`ath10k_core_start_recovery()` requires a started device, and by then the
+resume attempt has already failed and left it unstarted. The fix has to keep
+the resume path from failing in the first place, or re-enter the QMI bring-up
+rather than the recovery path. That needs a closer look at how the WLAN QMI
+server re-arrives after a modem restart.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
