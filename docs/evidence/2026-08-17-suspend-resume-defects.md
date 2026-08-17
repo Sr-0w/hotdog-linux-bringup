@@ -256,6 +256,49 @@ The camera pop-up motor driver issues i2c transactions during suspend after the
 GENI controller has released its resources, failing with `-EACCES` on both the
 operation and its recovery path. The USB PHY does not reach L2.
 
+
+## The modem dies 4.4 s into the sleep, and it is deterministic
+
+Arming the watchdog interrupt as a wakeup source removed the last measurement
+ambiguity. The interrupt is no longer masked for the duration of the cycle, so
+its arrival time is the time the modem actually failed.
+
+```text
+[50.267] PM: suspend entry (s2idle)
+[54.698] qcom_q6v5_pas 4080000.remoteproc: watchdog received: SFR Init
+[84.054] PM: suspend exit
+```
+
+The modem raises its watchdog roughly 4.4 s after suspend entry, while the
+application processors are still asleep. The system does not abort s2idle on
+it: the crash is handled, the modem is recovered, and the sleep continues.
+
+Eight consecutive `pm_test=devices` cycles in a fixed configuration produced a
+watchdog on all eight, so the failure is deterministic and cheap to reproduce.
+
+Two things follow from the timing. The device suspend callbacks all complete in
+324 ms, so nothing that runs at 4.4 s is a callback: the modem is timing out
+waiting for something rather than reacting to an event. And the ADSP, which is
+suspended under exactly the same conditions, never raises its watchdog
+(`q6v5 wdog` for lpass stays at zero), so this is specific to the modem.
+
+The consistent 4.4 s and the strings recovered from the ramdump
+(`FATAL: LARGE ISLAND ENTRY LATENCY DETECTED`, `USLEEP FATAL ERROR CALLED`)
+point at the modem failing its own low-power entry rather than being starved of
+a service. That remains a hypothesis: those strings are format templates in the
+firmware image and were not observed as emitted messages.
+
+## Eliminated by measurement
+
+| hypothesis | how it was refuted |
+|---|---|
+| userspace freeze starves rmtfs and friends | `pm_test=freezer` is clean over 5 s and 15 s |
+| deep cpuidle collapses a rail the modem needs | watchdog on all 3 cycles with `cpu-sleep-0-0` disabled |
+| the charger truncates the cycle | a plugged cycle slept 33.8 s |
+| `rmnet_ipa0` being up is required | watchdog reproduces with the interface down |
+| forcing IPA runtime-active is required | watchdog reproduces with IPA in normal autosuspend |
+| the IPA suspend stub from 16 August | reverting to upstream behaviour changes nothing |
+
 ## Current gate
 
 The blocking item is now the Bluetooth suspend timeout, which aborts the cycle
