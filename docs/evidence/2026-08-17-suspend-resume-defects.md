@@ -6,8 +6,8 @@ Date: 2026-08-17
 
 Suspend/resume remains broken. The `ipa-clock-query` hypothesis carried over
 from 16 August is refuted. A real `s2idle` cycle now completes and returns, but
-four distinct subsystems fail to come back correctly, and the test methodology
-itself was found to be confounded by the charger.
+the modem raises its watchdog while the AP is still asleep, and several
+subsystems fail to come back correctly.
 
 ## Refuted: the IPA clock-query hypothesis
 
@@ -34,8 +34,9 @@ failure exactly:
 [1111.751] remoteproc remoteproc1: remote processor modem is now up
 ```
 
-The watchdog fires 0.6 s after resume, matching the 0.79 s signature recorded on
-16 August. Decisively, the `ipa-clock-query` interrupt counter reads **0 both
+That cycle was truncated to 0.55 s, so the watchdog appeared to follow the
+resume; the unplugged measurement below shows it actually fires during the
+sleep. Decisively, the `ipa-clock-query` interrupt counter reads **0 both
 before and after** the cycle, with IPA active. The modem never issues a clock
 query at all, so the mechanism the patch protects does not occur. The
 hypothesis is not merely ineffective, it describes an event that does not
@@ -116,8 +117,9 @@ cci_resume+0x3c/0x80 [i2c_qcom_cci]
 Failed to enable clk 'camnoc_axi': -16
 ```
 
-`-EBUSY` on `camnoc_axi` during `cci_resume`, reproducible on every cycle. This
-is adjacent to the `lc898217xc` synchronous-resume change made on 16 August.
+`-EBUSY` on `camnoc_axi` during `cci_resume`. Seen on the truncated cycles but
+not on either unplugged cycle, so it is not systematic. This is adjacent to the
+`lc898217xc` synchronous-resume change made on 16 August.
 
 ## Defect 3: the elogind session is not reactivated
 
