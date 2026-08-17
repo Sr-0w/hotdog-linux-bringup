@@ -50,3 +50,14 @@ The known-good slot-B image is the Alpha-rootfs r109 image with SHA-256
 It embeds boot/root UUIDs `0ab55a28-43d8-4cb8-b181-165a5d3fb56d` and
 `7349e861-b909-462f-b866-c597d6a115d6`. A byte-for-byte readback of the
 96 MiB `boot_b` partition produced the same digest before reboot.
+
+## Regression, 2026-08-17
+
+The packaging described above was correct but never reached the device. Every
+complete image built afterwards reused a rootfs frozen on 10 August with
+`device-oneplus-hotdog-3-r16`, which predates the `pkgrel=18` that introduced
+the `soc-qcom-qbootctl` dependency. `qbootctl` was therefore absent from the
+running system for a week, no boot marked its slot successful, and on 16 August
+slot B reached `slot-unbootable:b: yes` and stopped booting.
+
+See [A/B retry regression](2026-08-17-ab-slot-retry-regression.md).

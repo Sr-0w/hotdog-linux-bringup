@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-13
+Last updated: 2026-08-17
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -39,20 +39,20 @@ State meanings:
 |---|---|---|
 | Direct kernel entry | Working | ABL directly starts the package-generated Linux 6.16 image; no downstream kernel or kexec bridge executes. |
 | Rootfs / OpenRC / Plasma | Working | Writable split pmOS filesystems, `switch_root`, OpenRC, NetworkManager, SSH and accelerated Plasma Mobile boot automatically. The laboratory nested-GPT deployment is not the final installer layout. |
-| A/B success and reboot | Working | `qbootctl` marks the active slot successful; six clean software reboot cycles returned to pmOS. Direct recovery-mode selection and final installer rollback still need completion. |
+| A/B success and reboot | Working | `qbootctl` marks the active slot successful; six clean software reboot cycles returned to pmOS. This regressed silently between 10 and 17 August because the complete images reused a rootfs predating the fix, and retry exhaustion left slot B unbootable; see [A/B retry regression](evidence/2026-08-17-ab-slot-retry-regression.md). The running rootfs is repaired, the image pipeline is not. Direct recovery-mode selection and final installer rollback still need completion. |
 | UFS and RAM map | Working | UFS survives raw/random I/O, a multi-gigabyte Flatpak deployment and the former pressure reproducer after completing the stock reserved-memory union. |
 | UFS ICE | Broken | UFS boots only without the ICE dependency; clock, power, probe-order and SMMU integration remain. |
 | Apps SMMU | Partial | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; complete client coverage and removal of all temporary bypasses remain. |
 | USB device / recovery | Partial | NCM networking and SSH are stable and ACM enumerates. Interactive ACM, all reboot modes and the final non-laboratory recovery flow remain. |
-| Internal display | Partial | Correct 1440x3120 KMS, fixed 60 Hz and selectable 90 Hz work. A 90 Hz wake produced DSI status errors and abnormal scanout; blank/unblank and suspend reliability remain. |
+| Internal display | Partial | Correct 1440x3120 KMS, fixed 60 Hz and selectable 90 Hz work. Spontaneous DSI transport error bursts drain all four HS lanes and desynchronise the DSC stream into unreadable noise, with no driver recovery path; a panel re-init clears it. Not caused by brightness, input or compositor load. See [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md). |
 | GPU | Working | Adreno 640, GMU, Freedreno/Turnip, Vulkan, `kmscube`, Weston and Plasma scanout work. Sustained mixed load and suspend/resume remain stability gates. |
-| Touch and keys | Partial | S6SY761 touch plus Power, Volume Up and Volume Down work in Plasma. Touch resume, wake behavior, all contact slots and alert slider remain. |
-| Wi-Fi | Partial | WCN3990 scans and associates on both bands with Internet reachability. Factory MAC, sustained throughput, AP/roaming and suspend remain. |
+| Touch and keys | Partial | S6SY761 touch plus Power, Volume Up and Volume Down work in Plasma. After a suspend cycle all input is lost, from two independent causes: the elogind session on `seat0` stays inactive so the compositor holds no input device, and `s6sy761_resume()` never re-enables sensing. Both are diagnosed and the driver bug is patched; all contact slots and alert slider remain. |
+| Wi-Fi | Partial | WCN3990 scans and associates on both bands with Internet reachability. The controller does not survive resume: `failed to enable wcn3990: -110` and a `ieee80211_reconfig` warning. Factory MAC, sustained throughput and AP/roaming remain. |
 | Bluetooth | Partial | BlueZ scanning and real HID connections work. Repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
 | Audio | Partial | Both internal speakers and the handset microphone work through packaged UCM. Earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio, capture controls and protection telemetry remain. |
 | USB-C host / dock | Partial | Dual-role Type-C, powered host mode, USB 3, storage, Ethernet enumeration and DisplayPort video at 2560x1440@60 work. Unpowered VBUS, broader HID/hotplug, DP mode pruning, DP audio and docked suspend remain. |
 | Battery / SMB5 charging | Partial | Fuel gauge works. The exact SMB5 v3 candidate passed guarded 180 s and 600 s runs plus a physical VBUS cycle. A complete Plasma image also passed 180 s at a 900 mA SuperSpeed input limit with rising battery voltage. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
-| Thermal / suspend | Broken | `pm_test=freezer` passes, but device suspend fails because S6SY761 returns zeroes during resume. Full `s2idle`, wake sources, low idle drain and thermal throttling remain. |
+| Thermal / suspend | Broken | A real `s2idle` cycle now enters and returns. The MPSS watchdog still fires ~0.6 s after resume whenever IPA is active; the `ipa-clock-query` hypothesis is refuted, since that interrupt never fires at all. Wi-Fi, camera CCI, the elogind session and S6SY761 sensing each fail to restore. Test cycles are truncated to ~0.55 s by charger wakeups while USB is attached. See [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md). |
 | Cameras | Partial | All four physical sensors capture through libcamera; rear focus and the Hall-bounded automatic IMX471 pop-up lifecycle work. CAMSS recovery, full AE/AWB/AF convergence, touch focus, production color, video/flash/OIS and broader apps remain. |
 | Camera flash | Partial | Both PM8150L channels register and pass electrical torch/strobe tests without a reported fault. Visible-light confirmation, stock-current calibration and camera synchronization remain. |
 | IPA / rmnet | Working locally | New SM8150 IPA v4.1 data and binding bring up `rmnet_ipa0`; generic upstream acceptance and SIM data testing remain. |
@@ -87,10 +87,17 @@ State meanings:
 - [IPA v4.1 scope](evidence/2026-08-12-ipa-v41-scope.md),
   [SMB5 v3](evidence/2026-08-13-smb5-v3-hardware-validation.md) and
   [Hexagon writable service](evidence/2026-08-13-hexagonrpcd-write.md)
+- [SMB5 900 mA complete image](evidence/2026-08-16-smb5-complete-900ma.md),
+  [A/B retry regression](evidence/2026-08-17-ab-slot-retry-regression.md),
+  [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md) and
+  [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md)
 
 ## Current checkpoint
 
-The active frontier is the downstream-4.14 SLPI route control, normal
-GNSS/mobile-data integration and upstream revision work. In parallel, phase 0 of the
+The active frontier is suspend/resume, which is the widest open gate: a real
+`s2idle` cycle returns, but the MPSS watchdog, Wi-Fi, camera CCI, the elogind
+session and touch sensing each fail on resume, and charger wakeups truncate
+test cycles while USB is attached. Alongside it sit the downstream-4.14 SLPI
+route control, normal GNSS/mobile-data integration and upstream revision work. In parallel, phase 0 of the
 [roadmap](roadmap.md) requires every partial/broken row above to reach Working
 and Stable. Historical experiment details are evidence, not pending tasks.

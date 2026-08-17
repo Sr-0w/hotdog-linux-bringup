@@ -20,6 +20,8 @@ OnePlus 7T Pro device-tree series has not been mailed.
 | Qualcomm SMB2 fixes | 5 | [Submitted v1](https://lore.kernel.org/r/20260812-qcom-smbx-fixes-v1-0-eb48246be599@snyders.xyz) | Awaiting review |
 | Qualcomm SMB5 charger support | 2 | [Submitted v3](https://lore.kernel.org/r/20260813-submit-qcom-smbx-send-v1-v3-0-27be0091d7c7@snyders.xyz) | Awaiting review; exact tree passed charge and physical VBUS gates; depends on the five SMB2 fixes |
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
+| S6SY761 resume sensing | 1 | Local, `checkpatch --strict` clean | Confirm on a second suspend cycle after the next flash, then send standalone; it is an upstream driver bug, not device-specific |
+| DSI raw FIFO/timeout reporting | 1 | Local, `checkpatch --strict` clean | Diagnostic-only improvement; decide whether to send alone or with the eventual DSI transport fix |
 
 All submitted messages were sent through the kernel.org `b4` web endpoint,
 signed with the configured patatt key, and copied to
