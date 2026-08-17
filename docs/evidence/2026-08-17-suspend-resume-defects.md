@@ -530,6 +530,32 @@ which closes the last two candidates reachable at runtime. GLINK was already
 correct, and neither `qcom_hwspinlock`, `llcc-qcom` nor `qcom_aoss` defines any
 suspend callback.
 
+
+## It is the first island entry after the transition that fails
+
+The modem's own low-power counter refines the picture. Over a 56 s sleep it
+records 13 entries, over a 26 s sleep 7, so roughly one every four seconds,
+which is the same interval as the watchdog delay. Only one of them fails, and
+the 2.5 hour sleep produced exactly one crash as well.
+
+So the modem completes island entries perfectly well while the application
+processors stay asleep. What it cannot survive is the first attempt after the
+transition. The suspended state is not the problem; entering it is.
+
+The natural explanation is an exchange left in flight when the AP suspends:
+frozen userspace plus masked interrupts means a request the modem is waiting on
+never completes, its island entry cannot proceed, and the latency guard fires.
+After the crash the modem restarts with nothing outstanding, which is why the
+following entries succeed.
+
+Testing that by stopping the modem's userspace daemons cleanly does not work:
+killing `rmtfs` crashes the modem immediately, before any suspend, and the
+kernel then refuses to suspend at all with `Resource busy`. The modem depends
+on rmtfs for its filesystem, so it can be frozen with its connection intact,
+which it tolerates for at least 15 s, but not disconnected. Distinguishing the
+two cases needs instrumentation of the QMI and GLINK traffic across the
+transition rather than removing the daemons.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
