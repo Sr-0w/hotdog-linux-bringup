@@ -394,6 +394,39 @@ the resume path from failing in the first place, or re-enter the QMI bring-up
 rather than the recovery path. That needs a closer look at how the WLAN QMI
 server re-arrives after a modem restart.
 
+
+## The application processor holds nothing the modem needs
+
+The modem node carries one power domain the ADSP does not:
+
+```text
+modem : power-domains = <&rpmhpd SM8150_CX>, <&rpmhpd SM8150_MSS>
+adsp  : power-domains = <&rpmhpd SM8150_CX>
+```
+
+That asymmetry looked like it could explain why the modem dies at suspend and
+the ADSP does not, but the live state rules it out. After the PAS handover the
+application processor has released everything:
+
+```text
+mss    off-0    performance 0
+    genpd:1:4080000.remoteproc    suspended    0    SW
+cx     off-0    performance 0
+```
+
+The modem is running while the AP's votes for both `CX` and `MSS` sit at zero,
+because past handover the modem drives its own resources through its own RPMh
+master. So suspending the AP cannot withdraw power, clocks or corners from the
+modem: there is nothing left to withdraw.
+
+Together with the earlier results this closes the AP-side search. The freeze is
+harmless, no Qualcomm driver acts at suspend, every removable driver has been
+removed, the CPU idle state is irrelevant, and the AP holds no resources on the
+modem's behalf. What remains is the contract between the two: mainline never
+tells the modem that the application processors are going to sleep, and the
+outbound SMP2P channel that downstream uses for exactly that carries only the
+"stop" bit here.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
