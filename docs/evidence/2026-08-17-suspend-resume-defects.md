@@ -465,6 +465,38 @@ wake time. Mainline covers the same ground differently, through `rpmh-rsc` and
 the psci cpuidle domain. Comparing what each actually programs into the RSC is
 the next avenue, and the last structural difference found so far.
 
+
+## What the subsystem sleep counters show
+
+`/sys/kernel/debug/qcom_stats` exposes each subsystem's low-power entries and
+settles two questions at once.
+
+Across a 56 s suspend that produced one watchdog:
+
+```text
+delta: modem=13  adsp=0  aosd=0  cxsd=0  ddr=0
+```
+
+The modem enters and leaves its own low-power state thirteen times while the
+application processors sleep, and one of those transitions fails. The ADSP does
+not transition at all, which is why it survives the same cycle: it never
+attempts the manoeuvre that kills the modem. This fits the firmware strings
+recovered from the ramdump, `LARGE ISLAND ENTRY LATENCY DETECTED` and
+`USLEEP FATAL ERROR CALLED`. The modem is not being denied a service by the AP;
+it is failing its own island entry.
+
+The second result is independent and matters for the wider goal.
+`aosd`, `cxsd` and `ddr` all stay at zero, on this cycle and since boot. The SoC
+never reaches AOSS deep sleep, never collapses the CX rail and never puts DDR
+into self-refresh, even during s2idle. Suspend as it stands therefore saves
+very little power, which is consistent with the missing `qcom,system-pm`
+coordination noted above: nothing programs the RPMh sleep sets that would let
+those states be entered.
+
+So there are two distinct problems behind "suspend does not work": the modem
+fails its own low-power entry while the AP is asleep, and the AP's sleep never
+reaches the states that would make it worth entering.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
