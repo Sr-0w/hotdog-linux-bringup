@@ -180,12 +180,91 @@ Two defects recorded earlier did not appear on either unplugged cycle:
 `Active=yes` across both cycles, so no input was lost. Neither is therefore
 systematic; both depend on a prior state that has not yet been isolated.
 
+
+## The suspend cycle is aborted by the Bluetooth driver
+
+A single cycle from a clean boot, with no prior modem crash, shows the actual
+failure for the first time. Earlier runs buried it under accumulated state.
+
+```text
+[122.220] PM: suspend entry (s2idle)
+[125.521] Bluetooth: hci0: SSR or FW download time out
+[125.521] hci_uart_qca serial0-0: PM: dpm_run_callback(): qca_suspend [hci_uart] returns -110
+[125.522] hci_uart_qca serial0-0: PM: failed to suspend: error -110
+[125.657] PM: Some devices failed to suspend, or early wake event detected
+[126.165] PM: suspend exit
+[131.556] qcom_q6v5_pas 4080000.remoteproc: watchdog received: SFR Init
+```
+
+`qca_suspend()` times out after roughly 3.3 s and the whole cycle is abandoned:
+measured sleep was 3.9 s against a 20 s alarm. The modem watchdog follows the
+aborted cycle rather than preceding it.
+
+The controller is dead from boot: `hci0` is `DOWN` with a locally administered
+address `02:00:97:A6:3F:B2`, meaning no firmware was ever downloaded, and 13
+Bluetooth errors are logged before the first suspend is attempted.
+
+This reframes the modem watchdog as a probable consequence of a half-completed
+suspend rather than an independent defect, and it explains the truncated
+cycles that were previously blamed on the charger and then on modem state.
+It is not yet proven: removing Bluetooth to confirm has not been achieved, see
+below.
+
+## Removing hci_uart panics the kernel
+
+Attempting to unload the driver to run the control experiment crashed the
+device. The `oops=panic` command line turned it into a panic and the platform
+rebooted.
+
+```text
+Internal error: Oops: 0000000096000005 [#1] SMP
+Comm: rmmod
+pc : tty_set_termios+0x28/0x3dc
+lr : ttyport_set_baudrate+0x74/0xa0
+Call trace:
+  tty_set_termios
+  ttyport_set_baudrate
+  serdev_device_set_baudrate
+  qca_power_shutdown           [hci_uart]
+  qca_serdev_remove            [hci_uart]
+  serdev_drv_remove
+  device_release_driver_internal
+  driver_unregister
+  qca_deinit                   [hci_uart]
+  __arm64_sys_delete_module
+Kernel panic - not syncing: Oops: Fatal exception
+```
+
+`qca_power_shutdown()` calls `serdev_device_set_baudrate()` on a port whose tty
+is already gone. This is a second, independent bug in the same driver, and it
+blocks the obvious way of testing the first one. A control experiment must
+instead blacklist the module at boot.
+
+The full log is kept at
+`build/2026-08-17-modem-dumps/ramoops/panic-rmmod-hci_uart.txt`. It carries
+single-bit corruption because this ramoops region has no ECC.
+
+## Two further defects seen in the suspend path
+
+```text
+dwc3-qcom-legacy a6f8800.usb: port-1 HS-PHY not in L2
+geni_i2c 884000.i2c: error turning SE resources:-13
+oneplus-hotdog-popup-motor camera-popup: automatic open failed (-13), close recovery failed (-13)
+```
+
+The camera pop-up motor driver issues i2c transactions during suspend after the
+GENI controller has released its resources, failing with `-EACCES` on both the
+operation and its recovery path. The USB PHY does not reach L2.
+
 ## Current gate
 
-The blocking item is the MPSS watchdog. It reproduces on every cycle where the
-modem is running, including with IPA left in normal autosuspend, so it is not
-an artefact of forcing IPA active. Its position relative to resume is not yet
-established, see above.
+The blocking item is now the Bluetooth suspend timeout, which aborts the cycle
+before it can complete. The MPSS watchdog reproduces on every cycle, but it
+follows the aborted suspend and may well be a consequence of it.
+
+The next step is a control run with `hci_uart` blacklisted at boot rather than
+unloaded at runtime, to establish whether a cycle that is allowed to complete
+still kills the modem.
 
 The natural suspect is what the AP stops servicing once asleep — GLINK, SMP2P,
 RPM votes or a shared resource the MPSS firmware expects to remain available.
