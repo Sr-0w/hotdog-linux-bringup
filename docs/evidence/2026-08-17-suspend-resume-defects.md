@@ -497,6 +497,39 @@ So there are two distinct problems behind "suspend does not work": the modem
 fails its own low-power entry while the AP is asleep, and the AP's sleep never
 reaches the states that would make it worth entering.
 
+
+## The noirq phase is where the difference lies, but not through any interrupt tested
+
+`pm_test=freezer` is clean over three consecutive cycles and `pm_test=devices`
+fails on every one, so the failure lives in the device suspend phase. Within it
+the `noirq` sub-phase is the only step that changes anything the modem can
+observe, since no driver's suspend callback acts: it masks every interrupt not
+marked `IRQF_NO_SUSPEND` or armed as a wakeup.
+
+The two channels the modem uses are handled differently upstream:
+
+```c
+/* qcom_glink_smem.c, kept alive across suspend */
+devm_request_irq(..., IRQF_NO_SUSPEND | IRQF_NO_AUTOEN, "glink-smem", smem);
+
+/* smp2p.c, masked unless userspace opts in */
+devm_request_threaded_irq(..., IRQF_ONESHOT, NULL, (void *)smp2p);
+```
+
+SMP2P is only wakeup-capable, disabled by default, with the driver leaving the
+choice to userspace. Enabling it changes nothing:
+
+| configuration | sleep | watchdog | modem island entries |
+|---|---|---|---|
+| reference | 56.4 s | yes | 13 |
+| `smp2p-mpss` wakeup enabled | 56.4 s | yes | 13 |
+| `ipa` module fully unloaded | 26.3 s | yes | 7 |
+
+So the modem is not waiting on an SMP2P signal, and IPA is not involved at all,
+which closes the last two candidates reachable at runtime. GLINK was already
+correct, and neither `qcom_hwspinlock`, `llcc-qcom` nor `qcom_aoss` defines any
+suspend callback.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
