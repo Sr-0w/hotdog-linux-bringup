@@ -299,15 +299,66 @@ firmware image and were not observed as emitted messages.
 | forcing IPA runtime-active is required | watchdog reproduces with IPA in normal autosuspend |
 | the IPA suspend stub from 16 August | reverting to upstream behaviour changes nothing |
 
+
+## What the modem death is not
+
+With the watchdog interrupt armed as a wakeup and the alarm verified before
+every cycle, each candidate below was removed and the cycle repeated. The
+modem watchdog survived all of them.
+
+| removed | sleep length | watchdog |
+|---|---|---|
+| nothing (reference) | 55.9 s | yes |
+| `ath10k_snoc` (Wi-Fi) | 26.2 s | yes |
+| `ath10k_snoc` + `hotdog_popup_motor` | 26.3 s | yes |
+| `hci_uart` (Bluetooth, blacklisted at boot) | full cycle | yes |
+| `lc898217xc` + pop-up motor | 5 s gate | yes |
+| deep cpuidle disabled | 5 s gate | yes, 3/3 |
+
+Both radios on the WCN3990 are therefore ruled out for the modem crash, as are
+the camera actuator, the pop-up motor and the CPU idle state. Every Qualcomm
+driver in soc, rpmsg, remoteproc and interconnect was also checked for system
+suspend callbacks: there are none, so nothing in that stack acts at suspend.
+
+After all removals the last message before the crash is
+`dwc3-qcom-legacy a6f8800.usb: port-1 HS-PHY not in L2`, 1.1 s ahead of the
+watchdog.
+
+## Wi-Fi explains the slow wake, and the pop-up motor explains the i2c errors
+
+Two side findings that stand on their own.
+
+Removing `ath10k_snoc` halves the cycle: 55.9 s with it, 26.2 s without, against
+a 25 s alarm. The extra 30 s is `ath10k` timing out on resume
+(`failed to send qmi mode: -110`, `Could not init hif: -110`). That is the
+delay a user feels when waking the phone after a long sleep.
+
+Removing `hotdog_popup_motor` removes the
+`geni_i2c 884000.i2c: error turning SE resources:-13` pair and the motor's own
+`-EACCES` failures from the suspend path. Those errors come from that driver
+issuing i2c transactions after the GENI controller has released its resources.
+
+## The crash happens once per suspend entry, not continuously
+
+A real 2.5 hour sleep produced exactly one modem crash, 4.6 s after suspend
+entry, after which the modem recovered and stayed up for the rest of the sleep.
+Short repeated cycles produce one crash each. So the failure is bound to the
+transition into sleep, not to the suspended state itself, and the phone does
+sleep and wake correctly apart from it.
+
 ## Current gate
 
-The blocking item is now the Bluetooth suspend timeout, which aborts the cycle
-before it can complete. The MPSS watchdog reproduces on every cycle, but it
-follows the aborted suspend and may well be a consequence of it.
+Two defects remain in the way of a clean cycle.
 
-The next step is a control run with `hci_uart` blacklisted at boot rather than
-unloaded at runtime, to establish whether a cycle that is allowed to complete
-still kills the modem.
+The modem raises its watchdog 4.4 to 4.6 s into every suspend entry. Every
+AP-side candidate tried so far has been eliminated, and mainline has no
+AP-to-modem sleep notification at all: the outbound SMP2P channel exists
+(`modem_smp2p_out`) but only bit 0 is used, for "stop". Downstream Qualcomm
+carries a sleepstate driver that toggles a bit around suspend. That gap is the
+most plausible remaining explanation and the next thing to investigate.
+
+Wi-Fi does not survive resume and has to be reloaded, which also costs about
+30 s of wake latency.
 
 The natural suspect is what the AP stops servicing once asleep — GLINK, SMP2P,
 RPM votes or a shared resource the MPSS firmware expects to remain available.
