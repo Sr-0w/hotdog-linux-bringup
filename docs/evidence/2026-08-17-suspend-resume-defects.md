@@ -44,22 +44,46 @@ happen.
 The modem recovers on its own (`crash #1`, then `modem is now up`), so this is
 reproducible on demand and non-destructive.
 
-## Confounder: the charger aborts s2idle
+## The watchdog fires during suspend, not on resume
 
-The cycle above slept for 0.55 s despite an RTC alarm armed at 25 s. Wakeup
-source accounting explains it:
+This is the correction that reframes the whole problem.
+
+An unplugged run (`pm8150b-charger status=Discharging online=0`) with IPA
+active and `rmnet_ipa0` up produced a full-length sleep, and the timings are
+unambiguous:
 
 ```text
-pm8150b-charger                 active_count=78
-c440000.spmi:pmic@0:rtc@6000    active_count=46
-4080000.remoteproc              active_count=1   max_time=450ms
+[2509.500] PM: suspend entry (s2idle)
+[2513.958] qcom_q6v5_pas 4080000.remoteproc: watchdog received: SFR Init
+[2543.708] PM: suspend exit
 ```
 
-The SMB5 charger raises wakeup events continuously while the phone is attached
-to host USB, cutting `s2idle` short. This matters retroactively: the entire
-16 August suspend campaign ran on a phone plugged in and charging, so its cycles
-were being truncated to fractions of a second rather than exercising a real
-sleep. Results from that campaign should be re-read with that in mind.
+The MPSS watchdog fires **4.46 s after the AP enters s2idle**, while the AP is
+still asleep, and the crash is merely *handled* at resume
+(`handling crash #2`). Every earlier observation placed it "0.6 to 0.8 s after
+resume" because those cycles were already truncated, so the crash and the
+resume coincided. The 16 August campaign was therefore chasing a resume defect
+that is actually a suspend defect.
+
+The open question is no longer why the modem dies on wake, but what the modem
+stops receiving 4.5 s after the AP goes to sleep.
+
+## Cycle truncation is caused by the modem, not the charger
+
+An earlier reading blamed the SMB5 charger for cutting `s2idle` to 0.55 s,
+based on its wakeup-source count while attached to host USB. The unplugged run
+refutes that:
+
+| cycle | charger | sleep length | preceded by |
+|---|---|---|---|
+| plugged | attached | 0.55 s | normal operation |
+| unplugged 1 | detached | 34.2 s | normal operation |
+| unplugged 2 | detached | 0.571 s | modem crash + recovery |
+
+Unplugged cycle 2 is truncated just as badly as the plugged cycle, so the
+charger is not the discriminating factor. What separates the two unplugged
+cycles is that the second follows a modem crash and its automatic recovery.
+The modem state, not the charger, governs whether the AP can stay asleep.
 
 `rtcwake -m mem -s N` does not arm the alarm on this device. Writing
 `/sys/class/rtc/rtc0/wakealarm` directly does, and the value must be read back
@@ -74,6 +98,16 @@ ath10k_snoc 18800000.wifi: Could not init hif: -110
 Hardware became unavailable upon resume.
 WARNING: CPU: 1 PID: 249 at net/mac80211/util.c:1818 ieee80211_reconfig+0x480/0x10c4 [mac80211]
 ```
+
+Reproduced unplugged, so it is not an artefact of the charger. `wlan0` goes
+from `UP` to `DOWN` across the cycle and stays down.
+
+The controller is not left in an unrecoverable state: `rmmod ath10k_snoc`
+followed by `modprobe ath10k_snoc` brings it back, reloads the firmware and
+reassociates without a reboot. Note that the reload also re-triggers
+`invalid MAC address; choosing random`, so the station address and the DHCP
+lease change each time. The driver's resume path, not the hardware, is what
+fails.
 
 ## Defect 2: camera CCI fails to restore its clock
 
@@ -128,9 +162,22 @@ whenever something keeps the input device open across the sleep.
 
 Fixed by `Input: s6sy761 - re-enable sensing on system resume`.
 
+## Not reproduced on the unplugged run
+
+Two defects recorded earlier did not appear on either unplugged cycle:
+`cci_resume` reported no `camnoc_axi` failure, and the elogind session stayed
+`Active=yes` across both cycles, so no input was lost. Neither is therefore
+systematic; both depend on a prior state that has not yet been isolated.
+
 ## Current gate
 
-The blocking item is the MPSS watchdog with IPA active. The next useful
-measurement is a cycle with the USB cable detached, so that `s2idle` runs for
-its full duration instead of aborting in half a second, to establish whether the
-watchdog is a genuine resume defect or an artefact of truncated cycles.
+The blocking item is the MPSS watchdog, and it is now a suspend defect rather
+than a resume defect: the modem raises `SFR Init: wdog or kernel error
+suspected` 4.46 s into `s2idle`, with IPA active and `ipa-clock-query` never
+firing.
+
+The natural suspect is what the AP stops servicing once asleep — GLINK, SMP2P,
+RPM votes or a shared resource the MPSS firmware expects to remain available.
+The next useful measurement is the state of the modem links immediately before
+suspend entry, and identification of what the modem is waiting on inside that
+4.5 second window.
