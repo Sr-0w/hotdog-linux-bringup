@@ -691,9 +691,39 @@ platform, while `pm_test=devices` reproduces the modem watchdog in five seconds
 without a real sleep, so without the UFS and DPU exposure. Tracing work should
 use the latter.
 
+
+## The failure is a timing race, not a fixed condition
+
+The instrumented kernel changed the failure rate, which is itself the most
+useful thing it produced.
+
+On `#186`, without any tracing compiled in, `pm_test=devices` crashed the modem
+on eight consecutive cycles. On `#188`, which carries ftrace, tracing and
+dynamic debug, the same test gives a mix: two clean cycles, then one crash.
+Enabling `device_pm_callback_start` tracing on top of that produced a clean
+cycle as well.
+
+Nothing about the modem, the devices or the suspend path changed between those
+runs; only the amount of work the kernel does while suspending. So the modem
+does not fail because of a condition that is either present or absent, it
+fails a race, and slowing the suspend path down widens the window it needs.
+
+That reframes what a fix would look like. It is not a missing handshake, a
+withdrawn resource or an unanswered message, all of which have been ruled out
+by measurement. It is an ordering or timing constraint inside the device
+suspend phase that the modem's island entry depends on, and which mainline
+happens to violate most of the time on this platform.
+
+It also explains why every removal experiment came back negative: taking a
+driver out changes the timing as much as it changes the configuration, so a
+clean cycle after a removal never proved the removed driver was responsible.
+Several of those results should be re-read as timing noise rather than
+eliminations, which is why they are reported here with their cycle counts.
+
 ## Current gate
 
-Two defects remain in the way of a clean cycle.
+Two defects remain in the way of a clean cycle, and the modem one is now
+understood to be a race rather than a fixed condition.
 
 The modem raises its watchdog 4.4 to 4.6 s into every suspend entry. Every
 AP-side candidate tried so far has been eliminated, and mainline has no
