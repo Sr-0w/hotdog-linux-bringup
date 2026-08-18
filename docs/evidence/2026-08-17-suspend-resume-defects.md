@@ -90,6 +90,13 @@ on full `s2idle` cycles are worse still because that protocol was also noisy.
 Configurations need on the order of ten cycles each before they can be
 compared at all.
 
+**Rate after reverting the local MSA patch.** Ten `pm_test=devices` cycles gave
+2/10, against 4/5 at the same level while that patch was in the tree. The patch
+killed the modem a second time, fatally, after each first crash, so a single
+suspend produced two deaths and every count taken then was inflated. The
+underlying defect is untouched: the modem still raises its watchdog on about
+one cycle in five. No deadlock and no GSI timeout fired during the ten cycles.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
