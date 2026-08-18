@@ -762,9 +762,25 @@ stock tree and mainline: `qcom,system-pm`, which downstream uses to coordinate
 sleep entry with RPMh over the RSC mailbox, and which mainline has no
 counterpart for on this platform.
 
-The next step is therefore to compare what the apps RSC is left holding across
-`dpm_suspend` against what downstream programs, rather than to keep removing
-drivers.
+That comparison was then made against the source, and it weakens the
+hypothesis rather than confirming it.
+
+The apps RSC on this platform does carry a `CONTROL_TCS`, so
+`rpmh_rsc_write_next_wakeup()` is live and does write the maximum wakeup value
+when `system_state == SYSTEM_SUSPEND`, where downstream's `system_pm` would
+publish a real deadline. But that function is only reached from `rpmh_flush()`,
+which is only called from the `cpu_pm` notifier, which only fires when the CPUs
+actually enter idle.
+
+Under `pm_test=devices` the kernel busy-waits with `mdelay`, so no `cpu_pm`
+event occurs, nothing is written to the RSC at all, and the modem still dies.
+If anything the AP leaving RPMh alone should make the modem's own transactions
+faster, not slower.
+
+So the sleep-set and wakeup programming are not what breaks the modem, and the
+RPMh explanation only survives if the slowdown comes from somewhere other than
+what the AP programs. The mechanism behind the modem's latency budget being
+exceeded is still unidentified.
 
 ## Current gate
 
