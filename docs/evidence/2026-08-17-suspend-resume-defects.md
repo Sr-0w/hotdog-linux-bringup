@@ -58,7 +58,15 @@ transition rests on that artefact; treat those conclusions as unsupported.
   `ieee80211 phy0 [resume]` takes 30.371 s, and no other callback in the cycle
   exceeds 0.18 s.
 - Wi-Fi never returning: the MSA reassignment is rejected after the modem
-  restarts, and the recovery races the modem coming back up.
+  restarts. `ath10k_qmi_map_msa_permission()` moves the regions from HLOS to
+  `MSS_MSA` and `WLAN`, so it only succeeds while HLOS owns them, and the
+  reclaim that restores that ownership hangs off the WLFW service leaving
+  QRTR, which a crashing modem does not reliably produce. Fixed by reclaiming
+  from the subsystem restart notifier on `QCOM_SSR_AFTER_SHUTDOWN` instead,
+  the one point where the modem is known to be down; see
+  `wifi: ath10k: reclaim the MSA regions when the modem goes down`. The
+  assignment is now tracked so the reclaim is idempotent, since either path
+  can reach it first.
 - Platform resets: modem crash, then MSA failure, then a DPU frame-done
   timeout that ends the boot.
 
