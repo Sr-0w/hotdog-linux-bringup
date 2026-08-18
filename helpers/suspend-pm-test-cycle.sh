@@ -49,13 +49,29 @@ attendre_modem() {
 
 morts=0
 n=0
+refus=0
 while [ "$n" -lt "$N" ]; do
 	attendre_modem || { echo "REFUS: le modem ne revient pas, arret apres $n cycles"; break; }
 	W0=$(wd)
-	echo "$NIVEAU" > /sys/power/pm_test
-	echo mem > /sys/power/state
+	echo "$NIVEAU" > /sys/power/pm_test 2>/dev/null
+
+	# /sys/power/state rend EBUSY quand un evenement de reveil est deja en
+	# attente. Ce n'est pas un cycle : il ne faut ni le compter ni s'arreter,
+	# sinon une serie de dix se termine au deuxieme.
+	if ! echo mem > /sys/power/state 2>/dev/null; then
+		echo none > /sys/power/pm_test 2>/dev/null
+		refus=$((refus+1))
+		if [ "$refus" -ge 10 ]; then
+			echo "REFUS: /sys/power/state occupe dix fois de suite, arret"
+			break
+		fi
+		sleep 5
+		continue
+	fi
+	refus=0
+
 	sleep 3
-	echo none > /sys/power/pm_test
+	echo none > /sys/power/pm_test 2>/dev/null
 	W1=$(wd)
 	n=$((n+1))
 	if [ "$W1" != "$W0" ]; then
