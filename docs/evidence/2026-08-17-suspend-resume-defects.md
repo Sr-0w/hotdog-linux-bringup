@@ -556,6 +556,59 @@ which it tolerates for at least 15 s, but not disconnected. Distinguishing the
 two cases needs instrumentation of the QMI and GLINK traffic across the
 transition rather than removing the daemons.
 
+
+## Tracing settles it: the modem dies with no traffic at all
+
+A kernel built with ftrace and the `qcom_glink`, `qcom_smp2p` and `qrtr`
+tracepoints answers the in-flight-transaction question directly.
+
+A 60 second control capture with the phone simply idle records **zero events**:
+there is no background AP-to-modem traffic at all. A suspend cycle, by
+contrast, showed a burst of IPCRTR exchanges with the modem and two
+`qrtr_ns_message: del-client from 0:-2` right at the transition, which looked
+like the trigger.
+
+It is not. A later cycle recorded, between the markers:
+
+```text
+del-client pendant le cycle     : 0
+echanges modem pendant le cycle : 0
+WATCHDOG                        : 1
+```
+
+The modem raises its watchdog after a cycle in which the application processor
+exchanged nothing with it whatsoever. No GLINK command, no QRTR message, no
+SMP2P bit. That refutes the in-flight-transaction hypothesis and the QRTR
+client-deletion hypothesis together, and it rules out communication as a cause
+entirely: the modem is not waiting on the AP, because the AP said nothing.
+
+The only SMP2P activity in the whole capture is the crash being reported at
+resume:
+
+```text
+smp2p_notify_in: smp2p-mpss: slave-kernel: status:0x6 val:0x0
+smp2p_ssr_ack:   smp2p-mpss: SSR detected
+```
+
+## A separate UFS failure, exposed by the instrumented kernel
+
+The tracing kernel also surfaced a distinct and more dangerous defect. On one
+resume the storage controller failed to leave its low-power link state:
+
+```text
+ufshcd-qcom 1d84000.ufshc: ufshcd_uic_hibern8_exit: hibern8 exit failed. ret = -110
+ufshcd-qcom 1d84000.ufshc: ufshcd_ungate_work: hibern8 exit failed -110
+[drm:dpu_encoder_frame_done_timeout:2715] [dpu error]enc33 frame done timeout
+ufshcd-qcom 1d84000.ufshc: ufshcd_err_handler started; HBA state eh_fatal; link is broken
+```
+
+Losing the UFS link costs the rootfs and the platform resets, which is very
+likely what left the phone stuck at an earlier boot with the USB gadget up and
+no service listening. This kernel carries `CONFIG_FUNCTION_TRACER`, whose
+instrumentation changes timing everywhere, so the failure may be provoked by
+the instrument rather than latent. The diagnostic kernel is being rebuilt
+without it to tell the two apart.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
