@@ -720,6 +720,52 @@ clean cycle after a removal never proved the removed driver was responsible.
 Several of those results should be re-read as timing noise rather than
 eliminations, which is why they are reported here with their cycle counts.
 
+
+## The modem's own sleep machine, from the ramdump
+
+The string table around `LARGE ISLAND ENTRY LATENCY DETECTED` describes the
+firmware's low-power state machine and finally explains what the failure means:
+
+```text
+Set RPMh wakeup (match: 0x%llx)
+Latency budget updated (Value: 0x%x)
+Hard deadline (Expiry: 0x%llx, Type: %u, Obj: 0x%x)
+Threshold set (Deadline: 0x%llx)
+Begin island mgr entry
+Kernel island entry canceled
+Kernel island entry failure (Status: %d)
+Island entry done
+FATAL: LARGE ISLAND ENTRY LATENCY DETECTED
+```
+
+The modem computes a latency budget and a hard deadline for entering island
+mode, and declares a fatal error when the entry overruns them. Crucially it
+programs an **RPMh wakeup** as part of that entry, so its own sleep transition
+depends on RPMh transactions completing in time.
+
+RPMh is shared infrastructure: every master on the SoC arbitrates through it.
+That gives a mechanism which fits every result gathered so far, including the
+ones that refuted the earlier hypotheses:
+
+- it needs no AP-to-modem traffic, and none was observed on the failing cycle;
+- it needs no power vote to be withdrawn, and the AP holds none after handover;
+- it needs no driver to act at suspend, and none does;
+- it produces a fixed delay, because the deadline is fixed;
+- it is sensitive to how long the AP stays in the suspended device state, which
+  matches `freezer` being clean and `devices` failing;
+- and it explains why the ADSP survives: the counters show the ADSP does not
+  attempt a low-power transition during these cycles, while the modem attempts
+  one every four seconds.
+
+It also points at the one structural difference already identified between the
+stock tree and mainline: `qcom,system-pm`, which downstream uses to coordinate
+sleep entry with RPMh over the RSC mailbox, and which mainline has no
+counterpart for on this platform.
+
+The next step is therefore to compare what the apps RSC is left holding across
+`dpm_suspend` against what downstream programs, rather than to keep removing
+drivers.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle, and the modem one is now
