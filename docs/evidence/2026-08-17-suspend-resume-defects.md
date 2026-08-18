@@ -662,6 +662,35 @@ This is a genuine defect in the SMB5 path and worth fixing on its own, but it
 is not the cause of the modem crash: disabling the charger's wakeup source
 leaves the watchdog and the cycle duration unchanged.
 
+
+## The reset cascade
+
+Two platform resets during testing share one ending. The log stops immediately
+after the same sequence:
+
+```text
+modem crashed event
+ath10k_snoc: firmware crashed!
+remoteproc remoteproc1: remote processor modem is now up
+qcom_scm firmware:scm: Assign memory protection call failed -22
+ath10k_snoc: failed to assign msa map permissions: -22
+[drm:dpu_encoder_frame_done_timeout:2715] [dpu error]enc33 frame done timeout
+```
+
+The modem crash takes the WLAN firmware with it, the MSA reassignment fails,
+and then the display pipeline misses a frame-done and the platform resets. The
+DPU timeout is what actually ends the boot, which ties this back to the DSI
+transport failures recorded separately.
+
+A third reset earlier left the phone with the USB gadget answering pings but
+no service listening, which fits a rootfs that never mounted after the UFS
+hibern8 exit failure above.
+
+Practical consequence for the method: real `s2idle` cycles risk the whole
+platform, while `pm_test=devices` reproduces the modem watchdog in five seconds
+without a real sleep, so without the UFS and DPU exposure. Tracing work should
+use the latter.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
