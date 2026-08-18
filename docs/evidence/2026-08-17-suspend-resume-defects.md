@@ -98,12 +98,28 @@ on full `s2idle` cycles are worse still because that protocol was also noisy.
 Configurations need on the order of ten cycles each before they can be
 compared at all.
 
-**Rate after reverting the local MSA patch.** Ten `pm_test=devices` cycles gave
-2/10, against 4/5 at the same level while that patch was in the tree. The patch
-killed the modem a second time, fatally, after each first crash, so a single
-suspend produced two deaths and every count taken then was inflated. The
-underlying defect is untouched: the modem still raises its watchdog on about
-one cycle in five. No deadlock and no GSI timeout fired during the ten cycles.
+**Only interleaved comparisons are worth anything.** Two runs of
+`pm_test=devices` on identical code gave 2/10 and 13/15. The rate swings that
+far between runs, so no configuration may be compared against a figure from an
+earlier run, however many cycles each has. An attempt to read the 2/10 as the
+MSA revert lowering the failure rate was withdrawn for exactly this reason.
+Alternate the configurations within a single run instead, so that whatever
+drifts over a series, heat or the modem's state after N restarts, lands on both
+of them equally.
+
+**The phase is settled.** Thirty cycles alternating the two levels one for one:
+
+| level | modem watchdog |
+| --- | --- |
+| `freezer` | 2/15 |
+| `devices` | 13/15 |
+
+The killer is in `dpm_prepare` plus `dpm_suspend`, the ordinary `->suspend()`
+callbacks. Freezing userspace on its own is close to clean; the residual 2/15
+is consistent with a crash from the preceding `devices` cycle landing late.
+This supersedes the earlier freezer 0/2 against devices 2/2, which at this
+failure rate showed nothing, and it is the one localisation in this file backed
+by a sample large enough to carry it.
 
 **What has been eliminated by measurement**, each with its cycle counts below
 
