@@ -57,16 +57,26 @@ transition rests on that artefact; treat those conclusions as unsupported.
   modem to answer. Measured directly with `power:device_pm_callback_*`:
   `ieee80211 phy0 [resume]` takes 30.371 s, and no other callback in the cycle
   exceeds 0.18 s.
-- Wi-Fi never returning: the MSA reassignment is rejected after the modem
-  restarts. `ath10k_qmi_map_msa_permission()` moves the regions from HLOS to
-  `MSS_MSA` and `WLAN`, so it only succeeds while HLOS owns them, and the
-  reclaim that restores that ownership hangs off the WLFW service leaving
-  QRTR, which a crashing modem does not reliably produce. Fixed by reclaiming
-  from the subsystem restart notifier on `QCOM_SSR_AFTER_SHUTDOWN` instead,
-  the one point where the modem is known to be down; see
-  `wifi: ath10k: reclaim the MSA regions when the modem goes down`. The
-  assignment is now tracked so the reclaim is idempotent, since either path
-  can reach it first.
+- Wi-Fi never returning: **fixed, and measured.** Four suspend cycles each
+  ending in a modem watchdog crash now leave `wlan0` up with its address
+  through all four; every one of them used to leave it down. It took two
+  patches, and the first one alone did nothing.
+
+  `ath10k_qmi_map_msa_permission()` moves the regions from HLOS to `MSS_MSA`
+  and `WLAN`, so it only succeeds while HLOS owns them, and the reclaim that
+  restores that ownership hung off the WLFW service leaving QRTR, which a
+  crashing modem does not reliably produce. `reclaim the MSA regions when the
+  modem goes down` moves it to the subsystem restart notifier on
+  `QCOM_SSR_AFTER_SHUTDOWN`, the one point where the modem is known to be
+  down, and tracks the assignment so either path can reach it first.
+
+  That ran at the right moment and was still rejected with `-EINVAL`, because
+  `qcom_scm_assign_mem()` validates the source set against the actual owners
+  and tearing the modem down revokes its `MSS_MSA` share silently.
+  `reclaim MSA from whoever still owns it` retries with the `WLAN` set alone.
+  Together they clear every assignment and QMI configuration failure. One
+  crash in four still logs the reclaim error twice: that is the case where
+  HLOS already holds the regions, and the assignment after it succeeds.
 - Platform resets: modem crash, then MSA failure, then a DPU frame-done
   timeout that ends the boot.
 
