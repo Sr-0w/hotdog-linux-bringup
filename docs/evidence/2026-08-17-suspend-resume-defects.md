@@ -131,6 +131,15 @@ This supersedes the earlier freezer 0/2 against devices 2/2, which at this
 failure rate showed nothing, and it is the one localisation in this file backed
 by a sample large enough to carry it.
 
+**The display path is cleared.** Forty cycles alternating blocks with the
+panel lit and blanked: 15/20 lit against 14/20 blanked. `msm_dpu` was the
+obvious suspect, being the only `->suspend()` callback in the cycle that takes
+longer than 0.01 s, at 0.160 s, and the one that drops the `mmcx` corner.
+Blanking really did take effect rather than being swallowed by the compositor:
+`initializing panel` appears ten times over the run, once per unblank. An
+interim reading of 4/5 against 1/4 pointed the other way and was noise, which
+is what the interleaved design is there to catch.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
