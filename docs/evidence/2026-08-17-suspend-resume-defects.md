@@ -609,6 +609,59 @@ instrumentation changes timing everywhere, so the failure may be provoked by
 the instrument rather than latent. The diagnostic kernel is being rebuilt
 without it to tell the two apart.
 
+
+## Where the cycle time actually goes
+
+`power:suspend_resume` gives the phase boundaries, and they change the picture
+of what a "26 second sleep" has been measuring all along:
+
+```text
+52.457  suspend_enter begin
+52.711  dpm_suspend begin
+55.989  dpm_suspend end          -> 3.28 s
+56.001  machine_suspend begin
+56.002  timekeeping_freeze begin
+56.002  timekeeping_freeze end
+56.002  machine_suspend end
+56.010  dpm_resume begin
+86.504  dpm_resume end           -> 30.5 s
+```
+
+Suspending the devices takes 3.3 s and resuming them takes **30.5 s**. That
+resume figure is on an unfrozen clock and is real: it is the wake latency a
+user feels, and it is dominated by `ath10k` timing out, which matches the
+earlier measurement that removing Wi-Fi halves the cycle.
+
+The `machine_suspend` span cannot be read the same way. Timekeeping is frozen
+between those two markers, so its apparent duration of a millisecond says
+nothing about how long the phone actually slept. A cycle with a 25 s alarm
+measured 25.4 s end to end on `/proc/uptime`, so the sleep does happen. An
+earlier reading of this file claimed the system never sleeps at all; that was
+the same frozen-clock mistake made twice, and it is withdrawn.
+
+What does hold is `aosd`, `cxsd` and `ddr` staying at zero: s2idle runs, but
+the SoC never reaches its deep states.
+
+## A real charger interrupt storm, but not the modem's killer
+
+Tracing the wakeup sources across a cycle shows the charger asserting one
+every 11 ms while the suspend is being attempted:
+
+```text
+irq/149-usbin-i: wakeup_source_activate: pm8150b-charger state=0x420001
+irq/149-usbin-i: wakeup_source_activate: pm8150b-charger state=0x430001
+...
+```
+
+IRQ 149 is `usbin-icl-change`, the input-current-limit renegotiation. At idle
+it fires zero times per second; suspending the USB controller makes the charger
+renegotiate, and each step arms a wakeup. The limit also ends up at 800 mA
+rather than the 900 mA negotiated earlier.
+
+This is a genuine defect in the SMB5 path and worth fixing on its own, but it
+is not the cause of the modem crash: disabling the charger's wakeup source
+leaves the watchdog and the cycle duration unchanged.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle.
