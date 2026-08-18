@@ -82,9 +82,55 @@ counted as the defect.
   doing when its domain corner drops, which is why rates swung between 0 and
   100 percent across sessions and why every small sample taken here misled.
 
-## Status
+## Verified on the phone
 
-The fix is committed and the device tree builds. It has not yet run on the
-phone: the DTB ships inside the boot image, so verifying it needs a rebuild
-and a flash. The unbind measurement above is the evidence that the mechanism
-is real; confirming the DT change itself is the next step.
+Flashed and booted. `pm_genpd_summary` now reads:
+
+```
+cx                             off-0
+    8804000.mmc                    suspended
+    genpd:0:4080000.remoteproc     suspended
+    17300000.remoteproc            suspended
+```
+
+| test | before | after |
+| --- | --- | --- |
+| `pm_test=devices`, 15 cycles | 6/10, 4/10, 9/10, 13/15, 15/20 | **0/15** |
+| real `s2idle`, 8 cycles | crashed on essentially every cycle | **2/8** |
+
+The fifteen `pm_test=devices` cycles were completely clean, with `dmesg`
+confirming fifteen suspend entries and zero crash handling. On real `s2idle`
+the last five consecutive cycles were clean and returned in 25.9 s against a
+25 s alarm, meaning the modem lived and `ath10k` never burned its 30 s QMI
+timeout; a failing cycle shows up unmistakably as 56 s.
+
+## What is left
+
+Real `s2idle` still fails about one cycle in four, so this was one contributor
+and not the only one. `pm_test=devices` is now clean while the full cycle is
+not, which places the remainder in the phases `devices` does not reach:
+`dpm_suspend_late`, `dpm_suspend_noirq` and `machine_suspend`. That is
+consistent with the earlier observation that `pm_test=platform` also killed
+the modem, which was recorded before this cause was known and cannot be
+attributed to it alone.
+
+## Note on flashing this port
+
+The boot image is Android header **v2** with the DTB in its own section, not
+header v0 with the DTB appended to the kernel. Building it the latter way
+produces an image the bootloader rejects, which drops the phone into fastboot.
+Recovering from that is straightforward, and it is also the only reliable way
+found to reach fastboot on this device: `reboot bootloader` and
+`LINUX_REBOOT_CMD_RESTART2` both come back into the OS, because the mainline
+device tree has no reboot-reason plumbing. Exact arguments:
+
+```
+mkbootimg --header_version 2 --kernel Image --ramdisk ramdisk.gz --dtb dtb \
+  --pagesize 0x1000 --base 0x0 --kernel_offset 0x8000 \
+  --ramdisk_offset 0x1000000 --second_offset 0x0 --tags_offset 0x100 \
+  --dtb_offset 0x1f00000 --cmdline "$(cat cmdline.txt)"
+```
+
+Build the kernel with `LOCALVERSION=` set, or `setlocalversion` appends a `+`
+and the initramfs modules no longer match the kernel, which also fails to
+boot.
