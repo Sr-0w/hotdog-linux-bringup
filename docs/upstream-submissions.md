@@ -22,6 +22,9 @@ OnePlus 7T Pro device-tree series has not been mailed.
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
 | S6SY761 resume sensing | 1 | Local, `checkpatch --strict` clean | Confirm on a second suspend cycle after the next flash, then send standalone; it is an upstream driver bug, not device-specific |
 | DSI raw FIFO/timeout reporting | 1 | Local, `checkpatch --strict` clean | Diagnostic-only improvement; decide whether to send alone or with the eventual DSI transport fix |
+| SM8150 sdhc_2 power domain | 1 | Local | `sm8150.dtsi` puts the SD host in `<&rpmhpd 0>`, which is `SM8150_MSS`, so it votes on the modem's power domain and drops it on suspend. Verified on hardware: `pm_test=devices` goes from 6/10 crashes to 0/15. Affects every SM8150 board running a modem, not just this one |
+| IPA bounded GSI transaction wait | 1 | Local | `gsi_trans_commit_wait()` waits forever on a completion from the modem's SSR notifier chain while the rproc lock is held, so a modem crash can wedge recovery permanently and block any driver unregistering an SSR notifier. Two sysrq-w stack traces in the evidence file |
+| ath10k MSA reclaim after modem crash | 2 | Local | The reclaim hangs off the WLFW service leaving QRTR, which a crashing modem does not reliably produce, and it names a source VM set the hypervisor rejects once the modem is torn down. Wi-Fi survives 4/4 modem crashes with both applied, against 0/4 before |
 
 All submitted messages were sent through the kernel.org `b4` web endpoint,
 signed with the configured patatt key, and copied to
@@ -114,3 +117,10 @@ IDs, retrieve the public thread with `b4 mbox --no-cache`, and run
 `b4 am --no-cache --check` on the posted revision. `b4 send` automatically
 rerolls the prep branch; the resulting templated next-revision cover is not a
 new submission and must not be sent until a real review requires it.
+
+## Not for upstream
+
+`net: ipa: add a diagnostic switch for the system suspend callback` adds an
+`no_system_suspend` module parameter purely to bisect the modem crash, since
+unloading IPA makes the modem assert on its own in `ipa_hwp_init.c` and so
+cannot be used as a test arm. It must never be sent.
