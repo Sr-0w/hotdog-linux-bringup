@@ -229,9 +229,20 @@ all six of `884000`, `890000`, `89c000`, `a80000`, `a84000` and `c80000.i2c`.
 
 Every one of these was picked for being safe to unbind rather than for any
 suspected link to the modem, which makes the result more surprising than
-satisfying: none of them has an obvious path to the modem. Bisection of the
-batch follows, and until it names one device this says only that the cause is
-somewhere in that set.
+satisfying: none of them has an obvious path to the modem.
+
+**Replicated.** A second independent run gave 4/10 against 0/10. Pooled over
+both, 10/20 against 0/20, Fisher exact p = 0.0002. The base rate differed
+between the runs, 6/10 and 4/10 in the bound arms, which is the usual drift;
+the unbound arm stayed at zero across twenty cycles.
+
+**But the two largest subsets do nothing.** `i2c-qcom-cci` alone gave 3/4
+bound against 4/4 unbound, and the six `geni_i2c` buses gave 2/6 against 3/6.
+That is eight of the ten devices cleared, while all ten together suppress the
+crash completely. Either `qcom-soundwire` and `sdhci_msm` carry it on their
+own, or the effect is cumulative and no proper subset reproduces it. The pair
+is being tested now; that distinction decides whether there is a driver to fix
+or a property of `dpm_suspend` itself.
 
 **What has been eliminated by measurement**, each with its cycle counts below
 
