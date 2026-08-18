@@ -140,6 +140,24 @@ Blanking really did take effect rather than being swallowed by the compositor:
 interim reading of 4/5 against 1/4 pointed the other way and was noise, which
 is what the interleaved design is there to catch.
 
+**Waking the modem just before the suspend does not save it.** Eighteen
+cycles alternating one for one, a QMI `dms-get-ids` issued immediately before
+the write to `/sys/power/state` in one arm and nothing in the other: 9/9
+untouched against 7/9 woken. That is no difference at this sample size.
+
+This matters because it undercuts the reading the counters invite. `Count` and
+`Last Exited` in `qcom_stats/modem` are frozen across a failing cycle while the
+modem leaves its low-power state twice a second normally, which suggests it
+goes in and cannot come out. If that were the whole story, a modem already
+awake when the devices suspend should survive far more often. It does not, so
+the frozen counters are equally consistent with the modem simply having died,
+the last recorded transition being an entry. **The "stuck asleep" wording is a
+reading, not a finding, and nothing here rests on it.**
+
+Note also the 9/9 in the untouched arm. The rate in that session was total,
+against 13/15 and 15/20 in others, which is a further reminder that only
+figures taken inside one run may be compared.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
