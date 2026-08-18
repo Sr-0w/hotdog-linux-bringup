@@ -182,6 +182,20 @@ counter says a crash happened, not which crash. The reason string is in
 introduces, and it is free to collect. Any comparison that does not check it
 can be reporting a difference between two unrelated failures.
 
+**The defect does not always reproduce, and one session showed none of it.**
+Seventeen cycles alternating IPA's system suspend on and off gave 0/9 against
+0/8: not a single modem watchdog, on a build and a boot where nothing relevant
+had changed. Other sessions on the same code gave 13/15, 15/20 and 9/9. Nothing
+can be concluded from that run about IPA, and no future run may be trusted
+without a baseline arm inside it showing the defect actually fires. A
+configuration that looks clean is worthless unless its control arm is dirty.
+
+**IPA's system suspend can now be switched off without unloading the module**,
+via `no_system_suspend` in the local patch `net: ipa: add a diagnostic switch
+for the system suspend callback`. It is writable at runtime, so configurations
+alternate per cycle with no reload. This exists because unloading IPA is not a
+valid arm, per the paragraph above.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
