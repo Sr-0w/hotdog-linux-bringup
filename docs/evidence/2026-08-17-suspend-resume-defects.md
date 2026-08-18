@@ -196,6 +196,22 @@ for the system suspend callback`. It is writable at runtime, so configurations
 alternate per cycle with no reload. This exists because unloading IPA is not a
 valid arm, per the paragraph above.
 
+**IPA's system suspend is cleared, and this one has a control arm that
+fired.** Nineteen cycles alternating `no_system_suspend` on and off:
+
+| `ipa_suspend()` | modem watchdog |
+| --- | --- |
+| normal | 9/10 |
+| skipped | 7/9 |
+
+`ipa_suspend()` masks the IPA interrupt and forces the runtime suspend that
+stops the GSI channels, and IPA is the only driver sharing hardware with the
+modem, so this was the best-motivated candidate left. Skipping it changes
+nothing. All sixteen crashes over the run carried the same generic SFR, with
+no foreign reason mixed in, so both arms were measuring the same defect.
+
+This supersedes every earlier attempt to test IPA by unloading it.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
