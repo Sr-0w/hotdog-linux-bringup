@@ -15,9 +15,10 @@ are the working record, in order, and some of them are superseded by later ones.
 
 **What is established**
 
-- The modem overruns the latency budget of its own island-mode entry after
-  roughly four seconds with the AP's devices suspended, and raises its
-  watchdog. `pm_test=freezer` is clean, `pm_test=devices` is not.
+- The modem overruns the latency budget of its own island-mode entry while the
+  AP's devices are suspended, and raises its watchdog. `pm_test=freezer` is
+  clean, `pm_test=devices` is not. The failure is probabilistic, not a clean
+  threshold: see the measurements below.
 - It is the first island entry after the transition that fails. The modem then
   recovers and completes later entries normally: a 2.5 hour sleep produced one
   crash, not a continuous stream.
@@ -860,6 +861,38 @@ Steps 2 to 4 are all consequences. Fixing step 1 removes all of them, which is
 why it stays the priority rather than shortening the timeout, though a driver
 that skips the exchange when `ATH10K_SNOC_FLAG_MODEM_STOPPED` is set would make
 the wake far less painful in the meantime.
+
+
+## The four-second threshold does not hold
+
+An earlier reading of these results proposed that the modem tolerates about
+four seconds of the suspended-device state and fails beyond it, which would
+have explained why `#186` failed eight times out of eight while `#188` produced
+clean cycles. Measuring the window directly refutes it.
+
+Four consecutive `pm_test=devices` cycles on `#188`, with the suspended window
+computed from the `dpm_suspend` phase boundaries:
+
+```text
+cycle 1 : dpm_suspend=0.00s  window=5.00s  watchdog=0
+cycle 2 : dpm_suspend=0.06s  window=4.94s  watchdog=0
+cycle 3 : dpm_suspend=0.06s  window=4.93s  watchdog=0
+cycle 4 : dpm_suspend=0.07s  window=4.93s  watchdog=1
+```
+
+The window is essentially identical across all four and only one fails. On
+`#186` a comparable window failed every time. So the window length does not
+determine the outcome, and the difference between the two kernels is not
+explained by it.
+
+Two claims made from a single earlier sample are withdrawn with it: that
+`dpm_suspend` takes 3.3 s on `#188`, and that the compiled-in instrumentation
+is what slows it. It takes 0.06 s on these cycles; the single 3.30 s reading
+was an outlier, most likely the first cycle after boot.
+
+What survives is that the failure is intermittent on `#188` and was
+deterministic on `#186`, which still points at timing, but through a mechanism
+that neither the window length nor the tracing overhead accounts for.
 
 ## Current gate
 
