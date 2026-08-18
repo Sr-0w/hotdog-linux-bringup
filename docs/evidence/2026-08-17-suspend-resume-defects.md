@@ -894,6 +894,39 @@ What survives is that the failure is intermittent on `#188` and was
 deterministic on `#186`, which still points at timing, but through a mechanism
 that neither the window length nor the tracing overhead accounts for.
 
+
+## The failure rate, and no correlation with the modem's own transitions
+
+Eight `pm_test=devices` cycles on `#188`, recording the modem's low-power entry
+count from `qcom_stats` alongside the watchdog:
+
+```text
+cycle  island entries  watchdog
+    1        1            1
+    2       37            1
+    3       37            1
+    4       35            0
+    5        0            1
+    6       34            1
+    7       38            0
+    8        0            1
+```
+
+Six failures out of eight. The earlier four-cycle run that gave one failure was
+too small a sample to build on, and the reading taken from it should not have
+been offered as a model.
+
+There is no correlation with the modem's own activity either. Cycles with 37
+entries both fail and pass, and cycles with none at all still fail. Whatever
+decides the outcome is not how many low-power transitions the modem attempts
+during the window, which removes the coincidence-of-overlap explanation as
+well.
+
+So the position is: 8/8 failures on `#186`, 6/8 on `#188`, no dependence on the
+suspended window length and none on the modem's transition count. The failure
+is close to systematic on both kernels and the residual variation is not yet
+attributable to anything measured.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle, and the modem one is now
