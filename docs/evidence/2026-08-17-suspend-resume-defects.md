@@ -4,10 +4,59 @@ Date: 2026-08-17
 
 ## Status
 
-Suspend/resume remains broken. The `ipa-clock-query` hypothesis carried over
-from 16 August is refuted. A real `s2idle` cycle now completes and returns, but
-the modem raises its watchdog while the AP is still asleep, and several
-subsystems fail to come back correctly.
+Suspend/resume is not usable. The phone does sleep and wake, but the modem
+raises its watchdog on entering suspend, and everything else a user notices
+follows from that.
+
+This file grew through a long investigation and records refuted hypotheses as
+well as confirmed ones, including several of the author's own that measurement
+knocked down. Read this summary for the current position; the sections below
+are the working record, in order, and some of them are superseded by later ones.
+
+**What is established**
+
+- The modem overruns the latency budget of its own island-mode entry after
+  roughly four seconds with the AP's devices suspended, and raises its
+  watchdog. `pm_test=freezer` is clean, `pm_test=devices` is not.
+- It is the first island entry after the transition that fails. The modem then
+  recovers and completes later entries normally: a 2.5 hour sleep produced one
+  crash, not a continuous stream.
+- The ADSP survives identical cycles because it attempts no low-power
+  transition during them, while the modem attempts one every four seconds.
+- The Bluetooth driver aborts every cycle before this can even be reached:
+  `qca_suspend()` returns `-110`. With `hci_uart` blacklisted the cycle
+  completes.
+
+**What causes the user-visible symptoms**, all downstream of the modem crash
+
+- Slow wake: one `ath10k` QMI transaction burning its full 30 s timeout with no
+  modem to answer. That is the whole of the 30.5 s `dpm_resume`.
+- Wi-Fi never returning: the MSA reassignment is rejected after the modem
+  restarts, and the recovery races the modem coming back up.
+- Platform resets: modem crash, then MSA failure, then a DPU frame-done
+  timeout that ends the boot.
+
+**What has been eliminated by measurement**, each with its cycle counts below
+
+AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
+power-domain or corner withdrawal, RPMh sleep-set programming, the SMP2P
+interrupt being masked, deep CPU idle states, the charger, userspace freezing,
+and every driver that could be removed at runtime: Bluetooth, Wi-Fi, USB, IPA,
+`rmnet`, the camera actuator and the pop-up motor.
+
+**What is not known**
+
+Why the island entry overruns. Every accessible cause on the application
+processor side has been ruled out, and the failing cycle shows the AP saying
+nothing at all to the modem. Answering this needs either the firmware's F3
+traces decoded, or the downstream kernel sources for `qcom,system-pm` to
+compare against mainline's `rpmh-rsc`.
+
+**Two measurement traps** that produced retracted conclusions here, worth
+knowing before adding to this file: `printk` timestamps freeze across `s2idle`,
+so no duration may be derived from `dmesg` across a cycle; and instrumentation
+changes the failure rate, so a clean cycle after removing a driver never proved
+that driver responsible.
 
 ## Refuted: the IPA clock-query hypothesis
 
