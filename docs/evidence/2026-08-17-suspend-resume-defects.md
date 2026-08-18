@@ -252,6 +252,20 @@ interrupt being masked, deep CPU idle states, the charger, userspace freezing,
 and every driver that could be removed at runtime: Bluetooth, Wi-Fi, USB, IPA,
 `rmnet`, the camera actuator and the pop-up motor.
 
+**Found: the SD host is in the modem's power domain.** `sm8150.dtsi` gives
+`sdhc_2` `power-domains = <&rpmhpd 0>`, and `SM8150_MSS` is 0. The SD host
+votes performance states on the modem's domain and drops them when it
+suspends. Unbinding it alone: 6/10 crashes bound against 0/10 unbound, Fisher
+exact p = 0.011. `pm_genpd_summary` shows `8804000.mmc` sitting in `mss` beside
+the modem's own remoteproc. Full account in
+[the SD host in the modem's power domain](2026-08-18-sdhc2-modem-power-domain.md);
+fix in `arm64: dts: qcom: sm8150: put sdhc_2 in CX, not the modem's domain`.
+
+This accounts for the whole shape of the defect recorded above: why the ADSP
+survives, why no AP-to-modem traffic is involved, why freezer is clean and
+devices is not, why no regulator or interconnect measurement found anything,
+and why the failure rate swung so wildly between sessions.
+
 **What is not known**
 
 What the modem is waiting on. The established facts narrow it: the Q6 stops
