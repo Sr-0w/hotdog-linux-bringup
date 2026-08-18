@@ -212,6 +212,27 @@ no foreign reason mixed in, so both arms were measuring the same defect.
 
 This supersedes every earlier attempt to test IPA by unloading it.
 
+**First positive result: unbinding a batch of ten devices suppresses the
+crash entirely.** Twenty cycles alternating one for one, the batch bound
+against unbound:
+
+| batch | modem watchdog |
+| --- | --- |
+| bound | 6/10 |
+| unbound | 0/10 |
+
+Fisher exact p = 0.011, and no crash in the run carried a foreign SFR, so both
+arms were measuring the same defect and the control arm fired properly. The
+batch was `i2c-qcom-cci` on `ac4a000.cci` and `ac4b000.cci`, `qcom-soundwire`
+on `wcd934x-soundwire.4.auto`, `sdhci_msm` on `8804000.mmc`, and `geni_i2c` on
+all six of `884000`, `890000`, `89c000`, `a80000`, `a84000` and `c80000.i2c`.
+
+Every one of these was picked for being safe to unbind rather than for any
+suspected link to the modem, which makes the result more surprising than
+satisfying: none of them has an obvious path to the modem. Bisection of the
+batch follows, and until it names one device this says only that the cause is
+somewhere in that set.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
