@@ -782,6 +782,36 @@ RPMh explanation only survives if the slowdown comes from somewhere other than
 what the AP programs. The mechanism behind the modem's latency budget being
 exceeded is still unidentified.
 
+
+## The 30 second wake, exactly
+
+`dpm_resume` measuring 30.5 s has a precise source in `ath10k`:
+
+```c
+#define ATH10K_QMI_TIMEOUT		30
+ret = qmi_txn_wait(&txn, ATH10K_QMI_TIMEOUT * HZ);
+```
+
+Every QMI transaction waits up to thirty seconds. When the modem has just
+crashed there is nothing to answer, so the transaction ath10k issues during
+resume burns the whole timeout. That single wait is the wake latency, and it
+matches the earlier measurement that removing `ath10k_snoc` halves the cycle.
+
+The chain a user experiences is therefore fully accounted for except its first
+step:
+
+1. the suspend kills the modem, mechanism still unknown;
+2. the modem crash takes the WLAN firmware with it;
+3. resume issues a QMI exchange with no one to answer and waits 30 s, which is
+   the slow wake;
+4. the MSA reassignment then fails and Wi-Fi stays down until the module is
+   reloaded.
+
+Steps 2 to 4 are all consequences. Fixing step 1 removes all of them, which is
+why it stays the priority rather than shortening the timeout, though a driver
+that skips the exchange when `ATH10K_SNOC_FLAG_MODEM_STOPPED` is set would make
+the wake far less painful in the meantime.
+
 ## Current gate
 
 Two defects remain in the way of a clean cycle, and the modem one is now
