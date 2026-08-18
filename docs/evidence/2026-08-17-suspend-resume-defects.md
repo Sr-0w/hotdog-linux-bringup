@@ -158,6 +158,30 @@ Note also the 9/9 in the untouched arm. The rate in that session was total,
 against 13/15 and 15/20 in others, which is a further reminder that only
 figures taken inside one run may be compared.
 
+**IPA cannot be tested by unloading it, and the earlier attempts to do so are
+void.** With the module removed the modem crashes for a different reason
+entirely, and says so itself:
+
+```
+qcom_q6v5_pas 4080000.remoteproc: fatal error received:
+  ipa_hwp_init.c:414:IPA Assert: 0 failed:
+  ipa_hwp_init_rsp_timer_cb: didnt rx any ind frm HWP
+```
+
+The modem's own IPA initialisation waits on an indication that only the AP's
+IPA driver can produce. An A/B whose second arm manufactures its own failure
+measures nothing, so every elimination of IPA by `modprobe -r` recorded here
+is withdrawn, including the ones in earlier sections. Over one run the tally
+was 10 crashes carrying that assert against 4 carrying the generic watchdog
+SFR: two different bugs counted as one.
+
+**Therefore: record the SFR text, not just the interrupt count.** The watchdog
+counter says a crash happened, not which crash. The reason string is in
+`dmesg`, it distinguishes the defect under study
+(`Init: wdog or kernel error suspected`) from anything a test configuration
+introduces, and it is free to collect. Any comparison that does not check it
+can be reporting a difference between two unrelated failures.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
