@@ -72,6 +72,24 @@ recovery that follows assigns the regions again, so each restart fed the next.
 Reverted. Upstream already reclaims the regions from
 `ath10k_qmi_event_server_exit()`, which runs while the modem is down.
 
+**The measurement protocol, and why the earlier ones were not good enough.**
+`/sys/power/pm_test` runs the suspend phases up to a chosen level, waits five
+seconds and returns by itself: no RTC alarm to arm, no wake that can fail to
+arrive, fixed duration, about twenty seconds per cycle. It is in
+`helpers/suspend-pm-test-cycle.sh`. Count the modem watchdog interrupt in
+`/proc/interrupts` rather than reading `dmesg`, whose timestamp belongs to the
+threaded handler.
+
+The failure is probabilistic, near 2 in 3. A first run gave freezer 0/2,
+devices 2/2, platform 2/2, and a later one gave 2/3 unmodified and 1/3 with
+IPA removed. Those last two do not differ. **At p close to 0.6, three cycles
+distinguish nothing and two cycles clean happen once in six runs by chance.**
+Every elimination recorded below that rests on one or two cycles is worth no
+more than that, including the freezer/devices split above, and the ones taken
+on full `s2idle` cycles are worse still because that protocol was also noisy.
+Configurations need on the order of ten cycles each before they can be
+compared at all.
+
 **What has been eliminated by measurement**, each with its cycle counts below
 
 AP-to-modem traffic of any kind, QRTR client deletions, in-flight transactions,
