@@ -96,7 +96,7 @@ cx                             off-0
 | test | before | after |
 | --- | --- | --- |
 | `pm_test=devices`, 15 cycles | 6/10, 4/10, 9/10, 13/15, 15/20 | **0/15** |
-| real `s2idle`, 8 cycles | crashed on essentially every cycle | **2/8** |
+| real `s2idle`, 35 cycles over two campaigns | crashed on essentially every cycle | **2/35** |
 
 The fifteen `pm_test=devices` cycles were completely clean, with `dmesg`
 confirming fifteen suspend entries and zero crash handling. On real `s2idle`
@@ -106,13 +106,19 @@ timeout; a failing cycle shows up unmistakably as 56 s.
 
 ## What is left
 
-Real `s2idle` still fails about one cycle in four, so this was one contributor
-and not the only one. `pm_test=devices` is now clean while the full cycle is
-not, which places the remainder in the phases `devices` does not reach:
-`dpm_suspend_late`, `dpm_suspend_noirq` and `machine_suspend`. That is
-consistent with the earlier observation that `pm_test=platform` also killed
-the modem, which was recorded before this cause was known and cannot be
-attributed to it alone.
+Real `s2idle` settles at 2 crashes in 35 cycles across two campaigns, about
+6 percent, against essentially every cycle before. `pm_test=platform` is also
+clean at 0/12, so `dpm_suspend_late` and `dpm_suspend_noirq` are not involved
+in what remains, and disabling the deepest cpuidle state changes nothing
+either: 0/8 against 0/8 over sixteen real cycles. Whatever is left is rare
+enough that no measurement so far separates it from noise.
+
+Wi-Fi is a separate matter and is not fixed. It fails to return on 13 of 15
+cycles even when the modem lives, with at least three distinct failure modes
+seen: a modem crash timing out QMI, `QMI_ERR_INCOMPATIBLE_STATE` because the
+firmware still holds WLAN enabled, and an HTT connect timeout. Only the second
+has a patch, and that one stops the failure being permanent rather than
+preventing it.
 
 ## Note on flashing this port
 
