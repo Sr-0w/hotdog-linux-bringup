@@ -13,29 +13,64 @@ well as confirmed ones, including several of the author's own that measurement
 knocked down. Read this summary for the current position; the sections below
 are the working record, in order, and some of them are superseded by later ones.
 
+**Retracted on 2026-08-18, and it runs through most of this file.** The
+island-entry attribution has no evidence behind it. It came from finding
+`FATAL: LARGE ISLAND ENTRY LATENCY DETECTED` with `strings` on the modem
+ramdump. That same string is present in `modem.mbn`, the stock firmware image
+as shipped and never executed, so it is a format string in the firmware's
+string table and not a logged event. A `strings` sweep of a memory dump returns
+the loaded code and rodata along with the data. Every section below that
+reasons about a latency budget, a hard deadline or a first-entry-after-
+transition rests on that artefact; treat those conclusions as unsupported.
+
 **What is established**
 
-- The modem overruns the latency budget of its own island-mode entry while the
-  AP's devices are suspended, and raises its watchdog. `pm_test=freezer` is
-  clean, `pm_test=devices` is not. The failure is probabilistic, not a clean
-  threshold: see the measurements below.
-- It is the first island entry after the transition that fails. The modem then
-  recovers and completes later entries normally: a 2.5 hour sleep produced one
-  crash, not a continuous stream.
-- The ADSP survives identical cycles because it attempts no low-power
-  transition during them, while the modem attempts one every four seconds.
+- The modem raises its own watchdog 3.7 s to 9.2 s after the AP enters
+  `s2idle`, measured from `PM: suspend entry` to `watchdog received` in the
+  same `dmesg` (both endpoints are on the same side of the clock freeze, so
+  this delta is sound where the retracted ones were not). Three cycles: 4.53 s,
+  3.7 s, 9.2 s.
+- The SFR the modem writes to SMEM is `Init: wdog or kernel error suspected`.
+  That is the generic reason the Q6 records when its watchdog bites without a
+  more specific fault, i.e. the task that pets the watchdog stopped being
+  scheduled. It indicates a hung or starved modem thread, not a latency
+  complaint.
+- The AP never reaches system-level low power at all: `qcom_stats` reports
+  `aosd`, `cxsd` and `ddr` at `Count: 0` since boot, and `cpuidle` exposes only
+  `WFI` and `cpu-sleep-0-0`. With no system state there is no `rpmh_flush()`
+  and no sleep-set application, so that whole family of hypotheses is excluded
+  by construction rather than by testing.
+- The modem survives the sleep in the sense that it dies *during* it and the AP
+  keeps sleeping afterwards: in `s2idle` the watchdog IRQ is serviced without
+  ending the suspend, which is why the handler's `dmesg` line falls inside the
+  sleep window.
 - The Bluetooth driver aborts every cycle before this can even be reached:
   `qca_suspend()` returns `-110`. With `hci_uart` blacklisted the cycle
   completes.
+- The ADSP survives identical cycles; only the modem dies. Both are PAS
+  remote processors started the same way, so whatever the AP withdraws is
+  something only the modem depends on.
 
 **What causes the user-visible symptoms**, all downstream of the modem crash
 
 - Slow wake: one `ath10k` QMI transaction burning its full 30 s timeout with no
-  modem to answer. That is the whole of the 30.5 s `dpm_resume`.
+  modem to answer. Measured directly with `power:device_pm_callback_*`:
+  `ieee80211 phy0 [resume]` takes 30.371 s, and no other callback in the cycle
+  exceeds 0.18 s.
 - Wi-Fi never returning: the MSA reassignment is rejected after the modem
   restarts, and the recovery races the modem coming back up.
 - Platform resets: modem crash, then MSA failure, then a DPU frame-done
   timeout that ends the boot.
+
+**A defect this investigation introduced**, recorded because it polluted the
+measurements taken while it was in the tree. The local patch "recover the MSA
+assignment after a modem restart" answered a rejected assignment by reclaiming
+the regions to HLOS and retrying. `ath10k_qmi_unmap_msa_permission()` moves
+them out of `MSS_MSA`, so it strips a *running* modem of its own memory. A
+pstore capture shows the modem taking a fatal error 77 ms later, and the
+recovery that follows assigns the regions again, so each restart fed the next.
+Reverted. Upstream already reclaims the regions from
+`ath10k_qmi_event_server_exit()`, which runs while the modem is down.
 
 **What has been eliminated by measurement**, each with its cycle counts below
 
@@ -47,11 +82,13 @@ and every driver that could be removed at runtime: Bluetooth, Wi-Fi, USB, IPA,
 
 **What is not known**
 
-Why the island entry overruns. Every accessible cause on the application
-processor side has been ruled out, and the failing cycle shows the AP saying
-nothing at all to the modem. Answering this needs either the firmware's F3
-traces decoded, or the downstream kernel sources for `qcom,system-pm` to
-compare against mainline's `rpmh-rsc`.
+What the modem is waiting on. The established facts narrow it: the Q6 stops
+petting its watchdog a few seconds after the AP's devices are suspended, the
+SoC never enters a system low-power state, and the ADSP under identical
+conditions is fine. That points at a resource or a service the AP withdraws
+during `dpm_suspend` which only the modem consumes, and at a modem thread
+blocking on it long enough to starve the pet task. The next measurement is the
+last AP-to-modem exchange before the watchdog, to see what goes unanswered.
 
 **Two measurement traps** that produced retracted conclusions here, worth
 knowing before adding to this file: `printk` timestamps freeze across `s2idle`,
