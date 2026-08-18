@@ -43,6 +43,22 @@ that one cycle.
   consequence. The patch was reverted rather than kept on a story that did not
   survive its own test.
 
+## A level split that did not hold
+
+One run suggested the trigger sat between `pm_test=devices` and
+`pm_test=platform`: on a fresh boot `devices` came out clean and a `platform`
+cycle straight after it killed the modem, and in a separate run a first
+`platform` cycle killed it while the two real `s2idle` cycles that followed
+were clean. A third run then gave a clean `platform` cycle on a fresh boot,
+with the same `mss.lvl 0x0` and `mss.lvl 0x1` writes present as in the runs
+that crashed.
+
+So the split is not real and neither is the determinism it seemed to offer.
+Recorded here because it was asserted on two observations before the third
+contradicted it, which is the same mistake this file warns about elsewhere.
+The `mss.lvl` writes appear in crashing and clean first cycles alike and do
+not discriminate.
+
 ## Where that leaves it
 
 The crash is confined to `machine_suspend`: `pm_test=devices` is 0/15 and
