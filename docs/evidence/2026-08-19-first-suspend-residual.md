@@ -59,6 +59,26 @@ contradicted it, which is the same mistake this file warns about elsewhere.
 The `mss.lvl` writes appear in crashing and clean first cycles alike and do
 not discriminate.
 
+## The rate on a fresh boot, and what it does not license
+
+Six consecutive fresh boots, each doing exactly one real `s2idle` cycle:
+6 crashes out of 6. Later cycles on the same boots stay clean, so the whole
+"4 to 6 percent" figure quoted earlier in this file is one crash divided by
+campaign length and means nothing on its own.
+
+That 6/6 was then read as determinism, and a batch of single-boot experiments
+was built on it: `pm_test=devices` clean against `pm_test=platform` fatal,
+which would have placed the trigger in `dpm_suspend_late` or
+`dpm_suspend_noirq`, and from there `bam-dma-engine` plus `geni_i2c` unbound
+coming out clean, which would have named them. Re-running that last
+configuration gave a crash.
+
+**So the first suspend is very likely to crash but not certain, and none of
+those single-boot results discriminate anything.** They are recorded as
+withdrawn, not as findings. A configuration comparison here needs several
+boots per arm, at roughly two and a half minutes per boot, and nothing below
+that is worth reading.
+
 ## Where that leaves it
 
 The crash is confined to `machine_suspend`: `pm_test=devices` is 0/15 and
