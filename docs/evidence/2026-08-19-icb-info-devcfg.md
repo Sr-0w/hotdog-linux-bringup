@@ -2,6 +2,13 @@
 
 Date: 2026-08-19
 
+> **Superseded.** The conclusion below is wrong: the arbiter works, votes real
+> bandwidth, and resolves masters 131, 112, 76, 180 and 52. The two clients it
+> refuses name BLSP masters that no SM8150 topology has, so that failure is the
+> same under OxygenOS. See
+> [2026-08-19-sensor-core-registers-no-driver.md](2026-08-19-sensor-core-registers-no-driver.md).
+> The address arithmetic and structure layouts here remain correct and useful.
+
 The full chain, end to end, read out of the DSP's own memory rather than
 inferred. This replaces the "capacity" reading of the previous note.
 
