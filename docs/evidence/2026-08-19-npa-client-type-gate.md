@@ -95,3 +95,33 @@ here, or its callback depends on state the host establishes. That callback is
 the next thing to disassemble, and it is now reachable: it is
 `memw(memw(resource+0x14)+0x10)`, and the resource is the one defined at
 `0xb032a0c8`.
+
+## Correction: it is a capacity, not a type
+
+Following the registers through both frames changes the reading.
+
+`npa_create_sync_client_ex` at `b01e2bcc` marshals its arguments as
+`r17:16 = combine(r2,r0)`, `r21:20 = combine(r3,r4)`, `r19 = r1`, then calls the
+worker at `b01e2c64` with `r2` and `r3` preserved in order. The worker keeps
+`r20 = r2` and `r19 = r3`, and:
+
+- `bitsset(mask, r20)` at `b01e2cd8` tests **`r2`**, which is `0x400` at every
+  call site including the failing ones. That gate passes, and its error path is
+  a different message from the one observed.
+- `create_client` at `b01e2db8` is called `r1:0 = combine(r19,r16)`, so its
+  second argument is **`r3`** — the value that is `0x8` where clients succeed
+  and `0x10` where they fail.
+
+So the client type is the same everywhere. What differs is the second argument
+to the arbiter's own create-client callback: the QUP drivers ask for `0x10`
+where every other client asks for `0x8`, and the callback returns 4.
+
+For a bus arbiter taking a vector client, that argument is the size of the
+bandwidth vector: the QUP drivers want room for sixteen master-slave pairs and
+the arbiter will only hand out eight. That is a capacity inside the DSP's own
+arbiter, not a malformed request, which is consistent with everything else
+observed: the resource is healthy, other vector clients work, and only these two
+are refused.
+
+Why the arbiter's capacity would be short here and not on stock remains the open
+question, and it is the same question as before, only sharper.
