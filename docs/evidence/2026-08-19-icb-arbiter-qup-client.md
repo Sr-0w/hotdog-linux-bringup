@@ -207,3 +207,53 @@ Worth recording separately: the SLPI stops cleanly now, in about a second, but
 a *restart* still fails. `start` reaches `Booting fw image` and then times out,
 `can't start rproc slpi: -110`, so the DSP never signals ready on a second
 start. A first start, whenever it happens, works.
+
+## The abort happens before the QUP is ever touched
+
+The firmware contains a full set of QUP bring-up messages —
+`firmware_load - qup-%d Done !`, `firmware_load - ERR - IRAM program fail`,
+`gpii_init - WARN - qup-%d gpii-%d initialized!`,
+`gpii_init - ERR - qup-%d gpii-%d not ready`, seventeen strings in total. **None
+of them appears anywhere in the capture**, success or failure.
+
+So the SSC QUP's microcode is never loaded and its GPI is never initialised.
+`spi_plat_init` asks `/icb/arbiter` for its bandwidth client, is refused, and
+returns before reaching any of that. The chain is complete and consistent:
+no bandwidth client, no QUP bring-up, no SPI, and on the I2C side a controller
+that goes as far as issuing transfers and collects NACKs.
+
+Also worth noting from the same strings: the SLPI's own QUP driver names GCC
+clocks, `gcc_qupv3_wrap0_core_clk`, `gcc_qupv3_wrap_0_m_ahb_clk` and the rest,
+and the SSC pin groups appear as `ssc_qup0` through `ssc_qup3` under audio
+function names, `aud_spi_pri_*[ssc_qup2_*]` being the accelerometer's SPI.
+
+## Further hypotheses tested and closed
+
+- **The sensors are not reachable from the application processor.** Neither the
+  downstream SoC device tree nor any of the ten stock overlays declares a sensor
+  anywhere, so there is no I2C bus on the application-processor side to bind a
+  mainline IIO driver to. The parts exist only behind the SSC.
+- **NPA client-id exhaustion.** The firmware has
+  `can't find available clientID max=%u, numofclients=%u`; its pointer appears
+  zero times in the coredump, so the pool was never exhausted.
+- **The arbiter's own rejection path was not taken.**
+  `%s: icbarb client create failed:M=%u, S=%u` also appears zero times, in the
+  ULog buffers and in the raw 20 MB dump alike. The refusal comes from the
+  generic `npa_new_client`, not from the arbiter's validation, which is why the
+  master and slave identifiers are nowhere to be found.
+- **A different firmware build.** The OTA copy of `slpi.mbn` was repacked and
+  installed; TrustZone rejects it outright, `error -22 initializing firmware`.
+  Only the image from this handset's own `modem_b` partition authenticates.
+
+## Where this stands
+
+The fault is localised, correctly read, and reproducible: the sensor DSP cannot
+obtain the bus-bandwidth client its QUP drivers need, and everything else
+follows. Every lever the application processor has over that has been tested
+and none of them moves it.
+
+What would move it next is not another hypothesis but a tool: either a diag
+transport to read the DSP's F3 messages, where the rejected master and slave are
+printed, or static analysis of the Hexagon code around `/icb/arbiter`'s
+client-create callback. The client name is materialised as an immediate rather
+than through a data pointer, so the latter needs a real disassembler.
