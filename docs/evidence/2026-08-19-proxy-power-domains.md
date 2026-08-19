@@ -41,7 +41,10 @@ unless stated.
 | **this patch** | 4 | **0** |
 
 Then fifteen real `s2idle` cycles from a fresh boot, the first of them
-previously fatal: **0 modem crashes and 0 Wi-Fi losses**.
+previously fatal: **0 modem crashes and 0 Wi-Fi losses**. Repeated from a
+second fresh boot: **0/15 again**, and the phone's own `dmesg` confirms
+fifteen suspend entries with zero crash handling. Thirty real cycles across
+two boots, none of them a crash.
 
 ## How it was found
 
