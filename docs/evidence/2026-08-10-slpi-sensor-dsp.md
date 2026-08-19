@@ -1060,3 +1060,37 @@ The QRTR picture with the SLPI up: node 9 publishes service 400, the Snapdragon
 Sensor Core, on port 13, alongside subsystem control, service registry and
 CoreSight tracing. The service answers; it simply has no physical sensor to
 report.
+
+### The sensor bus topology, from the vendor registry
+
+`vendor/etc/sensors/config` in the OxygenOS vendor image gives the exact
+platform wiring of the three sensors, which matches the ICB masters the DSP
+asks for and fails to get:
+
+| sensor | bus_type | instance | slave | data-ready IRQ | rail |
+| --- | --- | ---: | --- | ---: | --- |
+| LSM6DSM accel/gyro | 1, SPI | **2** | CS 0, 9.6 MHz | 132 | `/pmic/client/sensor_vddio` |
+| MMC5603X magnetometer | 0, I2C | **1** | 0x30 | — | same |
+| TCS3701 light/proximity | 0, I2C | **3** | 0x39 | 117 | same |
+
+Instances 1 and 2 are precisely `ICBID_MASTER_QUP_1` and `ICBID_MASTER_QUP_2`,
+the two routes rejected with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`. The DSP is
+asking for DDR access on behalf of the magnetometer's I2C and the
+accelerometer's SPI, and being refused both.
+
+### The sensor clock controller is not the answer
+
+SM8150 has a sensor clock controller, and mainline has no driver for it: the
+stock DTB declares `qcom,scc@2b10000`, compatible `qcom,scc-sm8150-v2`, with
+its own `vdd_scc_cx` supply, while `drivers/clk/qcom` has no `scc-sm8150` and
+the mainline SM8150 DTS has no node at that address. That looked like the
+explanation, since unclocked QUP masters would have no route.
+
+It is not. The node reads `status = "disabled"` in the stock DTB, the stock
+DTBO does not enable it, and a live capture of a running OxygenOS system shows
+it disabled there too. Stock drives these sensors without the AP-side SCC, so
+its absence from mainline cannot be what blocks them. The SSC's own clocks are
+managed from the DSP side.
+
+Recorded because the hypothesis is an attractive one and someone else will
+have it.
