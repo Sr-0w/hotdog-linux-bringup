@@ -146,3 +146,55 @@ an X.509 blob, `QUALCOMM Attestation CA`, `SecTools Test User`, dated 2023-03-13
 That is the image's attestation metadata, which PAS hands to TrustZone through
 `qcom_mdt_pas_init` rather than placing in the subsystem's memory. Its absence
 from the DSP's RAM is correct.
+
+## Decoded: the configuration does not describe the masters the drivers ask for
+
+The device-configuration format resolves cleanly once the indirection is read
+properly. `0xb014788c` does not use the context pointer as the data base: it
+loads `r18 = *ctx`, then `r19 = *r18`, and the device's list is `r19 + offset`.
+
+```
+*0xb05c062c = 0xb025aba4      the configuration object
+*0xb025aba4 = 0xb025d180      the actual data base
+ 0xb05c0630 = 0x48d8          the /icb/arb offset
+ -> property list at 0xb0261a58
+```
+
+Entries are `{header, value}` pairs separated by `0xff00ff00`. The header's low
+bits are a name offset into a pool based three bytes below the data base, and
+the value is an index into a table at `*(0xb025aba4+4)` = `0xb025abb8`.
+
+Decoding the `/icb/arb` list gives an unmistakably interconnect-shaped property
+set: `icb_info`, `…ROUTES`, `…DDR_BW_TABLE`, `…AHBIX_BW_TABLE`,
+`…MEMORY_DESCRIPTORS`, `…POWER_DOMAIN_DESCRIPTORS`,
+`…MASTER_PROGRAMMING_SPEEDS`. `icb_info` is header `0x1280140d`, value `0x495`,
+and `table[0x495]` = `0xb032f5e0`.
+
+That data is a list of master descriptors, an identifier and a small attribute
+each:
+
+```
+130,0  131,0  132,0  133,0  134,0  143,0  144,2  145,2  146,2
+147,2  148,2  149,1  150,…  151,…  152,…
+```
+
+Fifteen masters, **130 through 152**. The QUP drivers ask for masters **39 and
+41**. They are not in it.
+
+## What that means
+
+Two findings that point the same way:
+
+- the arbiter never installed this configuration at all and is still running its
+  built-in one-entry fallback, which is why the lookup path bails;
+- and had it installed it, masters 39 and 41 would still be absent, so the QUP
+  clients would be refused just the same.
+
+So the sensor buses cannot come up with the configuration this image resolves.
+Either a different configuration set is meant to be selected on this hardware,
+device configuration on Qualcomm being keyed by platform, or the QUP masters are
+meant to resolve through a table other than the one `/icb/arb` publishes.
+
+Everything here is inside the DSP: its own firmware, its own configuration, its
+own arbiter. No part of it is supplied by the host, which is consistent with
+every host-side lever having been tested and found irrelevant.
