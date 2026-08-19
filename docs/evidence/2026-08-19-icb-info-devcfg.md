@@ -262,3 +262,45 @@ So the pointer the arbiter needs is zero-initialised memory that no code in this
 firmware ever fills in. The only reference to the address anywhere in the six
 megabytes is the device-configuration table entry that names it as `icb_info`'s
 storage.
+
+## `icb_info` is the only property without a value, and two paths both bail
+
+Decoding every property of `/icb/arb` and comparing its storage in the image
+against the coredump settles what kind of failure this is:
+
+| property | size | storage | static | live |
+| --- | ---: | --- | --- | --- |
+| …`_ROUTES` | 4 | `0xb0326728` | `00000005` | `00000005` |
+| …`DDR_BW_TABLE` | 4 | `0xb0326748` | `00000001` | `00000001` |
+| …`POWER_DOMAIN_DESCRIPTORS` | 4 | `0xb0326740` | `00000003` | `00000003` |
+| …`_DESCRIPTORS` | 4 | `0xb0326710` | `00000007` | `00000007` |
+| **`icb_info`** | 4 | `0xb05c5fd0` | **no backing** | **`00000000`** |
+
+Thirty-three properties carry real values, present in the image and unchanged at
+runtime. Exactly one does not: `icb_info` is the only one whose storage lies in
+zero-filled memory, and it is the only one that reads null. The configuration
+mechanism is working perfectly; this single value is missing from it.
+
+And the firmware only ever reads that one. Across the whole image there are two
+calls to the property reader, `0xb0166624` and `0xb01670d4`, and both ask for
+`icb_info`. Nothing reads `…_ROUTES`, `…DDR_BW_TABLE` or any of the others
+through that interface — they are counts describing a structure that something
+else is expected to have assembled and published.
+
+Both readers behave identically:
+
+```
+b01670b4: call 0xb0164bc4            ; attach /icb/arb   (succeeds)
+b01670d4: call 0xb0164ca0            ; read icb_info     (returns null)
+b01670d8: if (r0 == 0) jump away     ; bail
+b01670e0: memw(##0xb05c9120) = r0    ; otherwise publish
+```
+
+and live, `0xb05c9120` holds `0xb032a09c`, the same static one-master fallback as
+`0xb05c911c`. Two independent initialisation paths, the same empty result.
+
+So the sensor DSP expects the interconnect topology pointer to be handed to it
+already populated, and on this system it never is. Everything else it needs is
+present: the master descriptors indexed by identifier, the route counts, the
+bandwidth tables. Only the pointer that reaches them is missing, and no code in
+the image writes it.
