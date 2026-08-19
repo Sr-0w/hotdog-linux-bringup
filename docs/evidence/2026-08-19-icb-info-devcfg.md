@@ -198,3 +198,54 @@ meant to resolve through a table other than the one `/icb/arb` publishes.
 Everything here is inside the DSP: its own firmware, its own configuration, its
 own arbiter. No part of it is supplied by the host, which is consistent with
 every host-side lever having been tested and found irrelevant.
+
+## Root cause: the `icb_info` variable is never populated
+
+The value table is made of eight-byte entries, `{size, pointer}`, not four. With
+that corrected:
+
+```
+icb_info   index 0x495   size 4   storage 0xb05c5fd0
+```
+
+A four-byte property whose storage lives at `0xb05c5fd0`, an address that has **no
+backing in the static image** — it is zero-initialised memory. Read out of the
+coredump:
+
+```
+0xb05c5fd0 = 0x00000000
+```
+
+The property is found. Its value is null. And the installer is
+
+```
+call 0xb0164ca0                ; returns the property value
+p0 = cmp.eq(r0,#0x0)
+if (p0) jump 0xb016673c        ; null: give up
+memw(##0xb05c911c) = r0        ; otherwise install
+```
+
+so it gives up, and the arbiter keeps the one-entry fallback it was built with.
+
+That is the whole failure, and every step of it has now been read out of the
+running DSP rather than inferred:
+
+1. something should write the ICB topology pointer into `icb_info` at
+   `0xb05c5fd0`; on this system nothing ever does, and it stays zero
+2. the arbiter's installer therefore bails and keeps its built-in fallback,
+   a table of one master
+3. route lookup is a bounds-checked array index, so every master from 1 up is
+   out of range
+4. the QUP bandwidth clients ask for masters 41 and 39 against slave 0 and are
+   refused with error 4
+5. `spi_plat_init` returns, the SSC QUP microcode is never loaded and its GPI
+   never initialised
+6. SPI never runs at all, I2C reaches the wire against an unstarted engine and
+   collects NACKs
+7. no sensor is ever detected, and the sensor core answers every SUID lookup
+   with nothing
+
+The topology data itself is in the image. Master descriptors are DevCfg values
+indexed by master id — entry 41 is an eight-byte record at `0xb032e4d8`, and the
+underlying array runs from master 1 to 168 with 39 and 41 present. What is
+missing is the pointer that would let the arbiter reach any of it.
