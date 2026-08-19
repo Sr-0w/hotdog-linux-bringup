@@ -1094,3 +1094,81 @@ managed from the DSP side.
 
 Recorded because the hypothesis is an attractive one and someone else will
 have it.
+
+## 2026-08-19: the file service was the missing half, and it is not the blocker
+
+Picking up the downstream 4.14 control meant first establishing a reference arm
+worth comparing against. That turned out to expose a much larger gap than the
+one being chased.
+
+**The sensor core was not running at all.** `remoteproc0` reported `running`,
+but the SLPI published no QRTR node: the fastrpc channel came up and no
+`IPCRTR` channel ever followed. The sensor PD is not created by booting the
+DSP. It is created by the first FastRPC attach from the host, which is
+`hexagonrpcd`, and `hexagonrpcd` was not installed on this rootfs. Neither was
+the tree it serves. Every earlier "no SUID" reading on this image was taken
+against a sensor core that had never been instantiated.
+
+**The served tree, rebuilt from the handset's own partitions.** The layout is
+fixed in `rpcd_builder.c`, and the packaged r13 build moves the registry mount
+one level up, so `<root>/sensors/registry/` backs the DSP's
+`/persist/sensors/registry/registry`:
+
+| Path the DSP opens | Backed by | Source |
+| --- | --- | --- |
+| `/persist/sensors/registry/registry/` | `<root>/sensors/registry/` | the handset's own `persist` partition, 438 files |
+| `/persist/sensors/registry/sns_reg_version` | `<root>/sensors/sns_reg_version` | pre-created, writable |
+| `/persist/sensors/registry/file<N>` | `<root>/sensors/file<N>` | pre-created, writable |
+| `/vendor/etc/sensors/config/` | `<root>/sensors/config/` | OxygenOS vendor |
+| `/vendor/etc/sensors/sns_reg_config` | `<root>/sensors/sns_reg.conf` | OxygenOS vendor |
+| `/sys/devices/soc0/` | `<root>/socinfo/` | the device's own socinfo |
+| `/sys/project_info/project_name` | `<root>/project_info/project_name` | `19861`, from `vendor.oem_ftm.rc` |
+| `/proc/oppoVersion/modemType` | `<root>/oppoVersion/modemType` | `MSM` |
+
+Pre-creating the numbered files sidesteps the missing `O_CREAT` in the mapped
+backend recorded in [`2026-08-13-hexagonrpcd-write.md`](2026-08-13-hexagonrpcd-write.md)
+without patching it: the backend opens existing paths read-write quite happily.
+
+**`hw_platform` is constrained, not guessed.** Mainline's socinfo exposes the
+raw integer, `8`, and has no string table; downstream converts it. Rather than
+reverse the table, note that the stock sensor configs only match
+`[ "MTP", "Dragon", "Surf", "QRD", "HDK", "IDP" ]` against `hw_platform`, and
+`339` against `soc_id`. The stock value must therefore be one of those six, and
+`MTP` is the only one coherent for this handset. A value outside that set would
+have every sensor config reject the platform, which is itself a plausible way
+to produce exactly the symptom being chased.
+
+**Result: the file service is now fully satisfied, and it changes nothing.**
+From a fresh boot, with the service started before the first attach:
+
+- the sensor core registers, `service 400` on QRTR node 9 port 12
+- the DSP completes **3943 file operations with zero failures**
+- every SUID lookup still answers `result: ok, error 0` with no SUID, for
+  `accel`, `gyro`, `mag`, `proximity` and `ambient_light` alike
+
+So the sensor framework reaches the point of answering client requests
+correctly and still instantiates no physical sensor. That removes the file
+service from the list of suspects and leaves the ICB rejection described above
+as the live one.
+
+**Mechanics worth knowing before repeating this.** The sensor PD is created
+once, on first attach; a failed attach leaves it inert and the SLPI cannot be
+restarted hot, so recovering means a reboot. That is why the capture runs from
+`/etc/local.d`, before anything else touches the DSP. Note also that
+`pkill -f hexagonrpcd` kills the ssh session driving it, because the remote
+shell carries the same word in its command line; `pkill -x` is required.
+
+### Two platform hypotheses closed from the downstream tree
+
+The lineage 4.14 boot image carries the downstream SM8150 v2 SoC DTB, which
+answers two questions without booting it.
+
+- **No missing interconnect provider.** The downstream fabric list is
+  `aggre1_noc`, `aggre2_noc`, `camnoc_virt`, `compute_noc`, `config_noc`,
+  `dc_noc`, `gem_noc`, `ipa_virt`, `mc_virt`, `mmss_noc`, `system_noc` plus the
+  display variants, which is exactly what mainline provides. `mas-qhm-qup0/1/2`
+  and `slv-qhs-ssc-cfg` are present on both sides.
+- **The AOP load-state signal is not missing either.** The stock
+  `qcom,ssc@5c00000` carries `qcom,signal-aop` with a `slpi-pil` mailbox;
+  mainline's `sdm845_slpi_resource_init` already sets `.load_state = "slpi"`
+  and the DT node already has `qcom,qmp = <&aoss_qmp>`.
