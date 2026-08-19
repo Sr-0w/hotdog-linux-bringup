@@ -129,3 +129,20 @@ Decoding it means working out the property encoding — `{type|name-offset,
 value}` pairs terminated by `0xff00ff00`, against a name pool whose base still
 has to be pinned down — and reading that function. Everything needed is in the
 coredump and the image.
+
+## Two more checks, both negative
+
+**The lookup does not take its logged error paths.** `0xb014788c` carries
+`DALPROP_PropsInfo is NULL- pszName:%s` and
+`Failed- pszDevName:%s DALPROP_PropsInfo:0x%x`. Neither pointer appears in the
+capture, so the search ran normally and simply returned "not found" through a
+path that logs nothing.
+
+**The one segment outside the carveout is the signature, not configuration.**
+`slpi.mdt` segment 1 loads at physical `0x98700000`, which is the first address
+past `slpi_mem` and is where mainline reserves `ipa_fw_mem`. It is also absent
+from the coredump, which looked like a strong lead. It is not: the segment holds
+an X.509 blob, `QUALCOMM Attestation CA`, `SecTools Test User`, dated 2023-03-13.
+That is the image's attestation metadata, which PAS hands to TrustZone through
+`qcom_mdt_pas_init` rather than placing in the subsystem's memory. Its absence
+from the DSP's RAM is correct.
