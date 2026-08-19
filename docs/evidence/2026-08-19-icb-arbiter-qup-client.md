@@ -102,3 +102,45 @@ own bus topology. Candidates worth separating, in order of cost:
   present on the node and no QMP error appears, but which has never been
   observed to succeed;
 - anything the arbiter reads at init to build its route table.
+
+## Hypotheses tested against the arbiter failure
+
+Each of these was run on hardware and each leaves
+`spi_plat_init: npa_create_sync_client_ex failed` exactly where it was.
+
+**`pd_ignore_unused`.** The clean boot log shows
+`PM: genpd: Disabling unused power domains` at 1.12 s, five seconds before the
+SLPI boots at 6.37 s, and the cmdline carries `clk_ignore_unused` but had no
+power-domain equivalent. If mainline collapsed the SSC island before the DSP
+enumerated its bus, the QUP masters would be missing from the arbiter's
+topology, which would match the two root causes already found in this project.
+A boot image with `pd_ignore_unused` added, packed and AVB-signed, boots and the
+parameter is live in `/proc/cmdline`. The SPI buffer still holds one record and
+it is the same failure. Reverted, because keeping unused domains powered would
+also disturb the suspend work that is currently at 100 %.
+
+**The AOP handshake.** `qcom,qmp` is present on the SLPI node,
+`c300000.power-management` is bound to `qcom_aoss_qmp`, and no QMP error is
+logged, so the `load_state` signal mainline declares is being delivered.
+
+**The interconnect vote.** Dropped without testing. `qhm_sensorss_ahb` reads
+`0 0`, but an application-processor bandwidth vote cannot add a route to a table
+the DSP builds for itself, and the arbiter refuses the client before any request
+is issued.
+
+## A further correction
+
+`ICBARB_ERROR_NO_ROUTE_TO_SLAVE`, the string this whole investigation was named
+after, **does not appear anywhere in the firmware the handset runs**. Searching
+every segment of the image rebuilt from `modem_b` finds only `icbarb`,
+`icbarb_post`, `%s: Failed creation of MIPS icbarb client` and
+`%s: icbarb client create failed:M=%u, S=%u`. Like the ADSP-DDR bandwidth lines,
+it came from a different image.
+
+The message that would name the rejected master and slave is that last one, and
+it is not written to any ULog buffer: all 51 buffers were enumerated, the 37
+carrying data were dumped, and it appears in none of them. It presumably goes to
+the DSP's diag channel, which mainline has no transport for. Recovering the
+master and slave identifiers therefore needs either a diag path or static
+analysis of Hexagon code, since the client name is materialised as an immediate
+rather than through a data pointer.
