@@ -1014,3 +1014,49 @@ userspace on the known downstream 4.14 kernel and stock DTBO. A success there
 would isolate a host-kernel/platform difference; the same rejection there
 would move the investigation back inside the DSP configuration rather than
 mainline.
+
+## 2026-08-19: the firmware was not installed, and the proxy regulators now match downstream
+
+Two findings from picking this up again.
+
+**The SLPI could not boot at all on the current image.** `remoteproc0` failed
+with `Direct firmware load for qcom/sm8150/oneplus/hotdog/slpi.mbn failed with
+error -2`: the squashed image this file describes was never packaged, so every
+boot left the sensor DSP offline. Rebuilding it from the handset's own `modem`
+partition, the `slpi.mdt` ELF header plus its 21 non-empty segments, gives a
+6,249,778 byte image that boots:
+
+```
+remoteproc remoteproc0: Booting fw image qcom/sm8150/oneplus/hotdog/slpi.mbn, size 6249778
+remoteproc remoteproc0: remote processor slpi is now up
+```
+
+It belongs in `firmware-oneplus-hotdog` rather than dropped into
+`/lib/firmware` by hand, which is still where it sits.
+
+**Downstream holds the SLPI's proxy regulators, and mainline now does too.**
+The stock `qcom,ssc@5c00000` node carries `qcom,keep-proxy-regs-on`, unlike the
+modem and ADSP nodes beside it. On mainline the SLPI's proxy domains are `lcx`
+and `lmx`, and they read `off-0` once handover completed. The
+`remoteproc: qcom_q6v5_pas: hold the proxy power domains until stop` patch
+written for the modem's suspend crash gives the same behaviour for free:
+
+```
+lcx    on    2147483647
+lmx    on    2147483647
+```
+
+That is a genuine convergence with downstream, but **it does not unblock the
+sensors**. With the SLPI up and its domains held, the sensor core still answers
+`data-type 'accel': no SUID`. The ICB rejection this file documents is inside
+the DSP and is unaffected by what the host does with `lcx` and `lmx`.
+
+**Also worth recording:** the SLPI cannot be restarted after a clean stop.
+`echo stop` times out and the following start fails with
+`can't start rproc slpi: -110`; only a reboot brings it back. That makes
+iterating on the sensor PD more expensive than it looks.
+
+The QRTR picture with the SLPI up: node 9 publishes service 400, the Snapdragon
+Sensor Core, on port 13, alongside subsystem control, service registry and
+CoreSight tracing. The service answers; it simply has no physical sensor to
+report.
