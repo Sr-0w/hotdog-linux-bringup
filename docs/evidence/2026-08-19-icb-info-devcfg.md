@@ -249,3 +249,16 @@ The topology data itself is in the image. Master descriptors are DevCfg values
 indexed by master id — entry 41 is an eight-byte record at `0xb032e4d8`, and the
 underlying array runs from master 1 to 168 with 39 and 41 present. What is
 missing is the pointer that would let the arbiter reach any of it.
+
+## And nothing in the image writes it
+
+`0xb05c5fd0` falls inside segment 5, `va=0xb0319000 fsz=1226964 msz=5382144`, so
+it is past the loaded data and zero-filled at load. Searching the disassembly
+for a writer finds none — not as an absolute immediate, and not as a
+`base + offset` store either, which was checked separately because Hexagon
+usually builds addresses that way and a plain search would miss it.
+
+So the pointer the arbiter needs is zero-initialised memory that no code in this
+firmware ever fills in. The only reference to the address anywhere in the six
+megabytes is the device-configuration table entry that names it as `icb_info`'s
+storage.
