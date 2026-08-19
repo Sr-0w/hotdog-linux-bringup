@@ -83,3 +83,26 @@ topology, is a 4-byte BSS variable that no code in the image writes. The
 failure is therefore identical under OxygenOS. On failure the function stores a
 null bandwidth handle and returns, so `spi_open` is not blocked — and the SPI
 log holds exactly one record, meaning no sensor ever called it.
+
+## The rail request is not the gate either
+
+The `alsps` driver does run. The file service shows it reading its whole
+registry group, three times over:
+
+```
+3 alsps          3 alsps.als          3 alsps.als.config
+3 alsps_platform 3 alsps.prox         3 alsps.prox.config
+3 alsps_platform.config
+2 alsps_platform.als.fac_cal          2 alsps_platform.prox.fac_cal
+```
+
+It simply never opens its bus. The obvious difference against the SAR, which
+does reach the wire, is the rail request: the SAR asks for two rails that both
+resolve to `/pmic/client/sensor_vddio`, while the ALS asks additionally for
+`/pmic/client/sensor_vdd`, which appears nowhere in the PMIC log.
+
+Tested by rewriting the synthesised config to `num_rail=1`,
+`rail_on_state=1`, `sensor_vddio` only — the SAR's shape — and rebooting. The
+probed set is unchanged: 0x28 and 0x2c, nothing at 0x46. The rail request is
+not what gates bus access, and the config has been restored to the values the
+phone's own registry carries.
