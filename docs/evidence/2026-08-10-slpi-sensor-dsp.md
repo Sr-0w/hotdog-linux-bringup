@@ -1172,3 +1172,92 @@ answers two questions without booting it.
   `qcom,ssc@5c00000` carries `qcom,signal-aop` with a `slpi-pil` mailbox;
   mainline's `sdm845_slpi_resource_init` already sets `.load_state = "slpi"`
   and the DT node already has `qcom,qmp = <&aoss_qmp>`.
+
+### The ICB rejection is gone, and the blocker moved to the SSC's QUP
+
+With the file service satisfied, the SLPI was crashed deliberately through
+`/sys/kernel/debug/remoteproc/remoteproc0/crash` with `coredump` set to
+`inline`, giving a 20,885,487 byte ELF to read the DSP's own ULog buffers from.
+Format strings resolve against the split PIL image without guesswork: the
+loaded segments are exactly those of `slpi.mdt`, so a logged pointer maps to an
+offset inside the matching `slpi.b<NN>`.
+
+**`ICB Arb Log` holds 480 bytes and not one error.** Every record is the same
+format, `%s: ADSP-DDR BW: Ab=%llu, Ib=%llu; AHB BW: Ab=%llu, Ib=%llu`, with
+real grants including 0xb2d05e00, three gigabytes per second. The
+`ICBARB_ERROR_NO_ROUTE_TO_SLAVE` this file was built around **does not occur
+any more**. Whatever produced it, it was upstream of the bus arbiter and went
+away once the DSP could read its registry and platform identity.
+
+**The failure is now in the sensor QUP itself.** Decoded from the same dump:
+
+| count | log | message |
+| ---: | --- | --- |
+| 42 | I2C | `bus_iface_callback : CLEANUP ERROR: failed to stop RX chan` |
+| 41 | I2C | `spi_power_off : clock disable failed, handle 0x%x` |
+| 4 | I2C_error | `spi_power_on : invalid param` |
+| 4 | I2C_error | `spi_power_off : invalid param` |
+| 4 | I2C_error | `ERROR arb-lost/7e-nack` |
+| 1 | I2C | `spi_gpi_callback : GPI driver sending SPI_ERROR_DMA_QUP_NOTIF` |
+
+The `I2C` buffer has wrapped, 11,432 bytes written, while `SPI` holds 16 bytes
+and `SPI_error` none: the DSP is driving the bus hard and failing, rather than
+never starting. Clock enable and disable on the serial engine are what fail,
+which is a different class of problem from a missing bus route.
+
+### What mainline does not describe at all
+
+The downstream SoC DTB carries an entire SSC-side serial-engine tier that has
+no counterpart anywhere in `sm8150.dtsi`:
+
+| downstream node | address | note |
+| --- | --- | --- |
+| `qcom,qupv3_3_geni_se` | `0x26c0000` | `qcom,subsys-name = "slpi"`, clocks `corex`/`core2x`, bus master `0xaa` = `mas-qhm-sensorss-ahb` |
+| `i2c@2680000`, `i2c@2684000`, `i2c@2688000` | | SSC serial engines, `qcom,wrapper-core` pointing at the above |
+| `slpi_pinctrl` | `0x2b40000` | the SSC's own pin controller |
+| `qcom,scc` | `0x2b10000` | sensor clock controller, `vdd_scc_cx` |
+
+Mainline has no node at any of those addresses and no driver for them.
+
+This does not by itself convict mainline, and the trap recorded earlier still
+applies: all four are `status = "disabled"` in the stock DTB, so stock does not
+drive them from the application processor either. The DSP owns them. What the
+dump adds is that the DSP's ownership is now demonstrably not working, in
+exactly the clock domain those nodes describe, which makes the question worth
+reopening as *what does the AP have to leave in place, or leave alone, for the
+DSP to take them*, rather than *which driver is mainline missing*.
+
+### The downstream 4.14 control cannot answer this, and was not run
+
+The control proposed above was to run the same firmware and sensor userspace on
+the downstream 4.14 kernel with the stock DTBO. It is not a usable experiment,
+for a reason that only became visible once the reference arm was working: the
+sensor PD is created by the host's FastRPC attach, and the two kernels do not
+share that interface.
+
+- The lineage 4.14 image exposes only the downstream `adsprpc` driver:
+  `qcom,msm-fastrpc-compute`, `/dev/adsprpc-smd`, `adsprpc-smd-secure`,
+  `cdsprpc-smd`, and `sensors_pdr_adsprpc`. There is no `sdsp` domain, no
+  `fastrpc-<domain>` device naming and no `FASTRPC_IOCTL`, because the mainline
+  `qcom,fastrpc` binding is absent.
+- `hexagonrpcd` is written against mainline's `misc/fastrpc.h`, so it cannot
+  attach there, and nothing else in a postmarketOS userspace plays the role
+  Android's `sscrpcd` does.
+
+The 4.14 arm would therefore report no sensor core at all, for reasons having
+nothing to do with the SSC, against a mainline arm that has one. That
+discriminates nothing.
+
+Two further practical points argue against running it anyway. The boot image
+that exists targets `pmos_boot_uuid=9ecffd22…`/`pmos_root_uuid=de13a416…`, an
+install that no longer exists; it was built as a kexec relay, not as an OS. And
+there is no software path into fastboot on this device: writing
+`bootonce-bootloader` into the `misc` BCB leaves the field intact across a
+reboot, so ABL ignores it, and mainline's DT declares no `reboot-mode`. The
+only remaining route would be flashing a slot, which per
+[2026-08-17-ab-slot-retry-regression.md](2026-08-17-ab-slot-retry-regression.md)
+risks the retry-exhaustion screen that presents no USB device of any kind. That
+is not a risk worth taking for a test that cannot answer the question.
+
+A software path to fastboot is worth having on its own merits, independently of
+this: it is what would make every future boot experiment cheap and safe.
