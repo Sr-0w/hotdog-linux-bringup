@@ -110,3 +110,52 @@ reads as zeros, so the OxygenOS 11 `vendor` is no longer on the device. The
 `persist`, `opproduct`, `op1`, `op2` and `dsp_b` partitions survive, but none
 carries `/etc/sensors`. The set therefore has to come from an OxygenOS 11
 package for HD1913 — build `11.W.24` or near it.
+
+## Proof, and a partial repair
+
+The phone's `persist` partition was never touched by the postmarketOS install.
+Mounted read-only it still holds the original OxygenOS 11 registry, 438
+entries. Comparing it against the copy we serve — which the DSP rewrites from
+our config files at every boot — 428 entries match and **ten differ**:
+
+```
+ak0991x_0_platform.config       ak0991x_0_platform.orient
+lsm6dsm_0_platform.config       mmc5603x_0_platform.config
+mmc5603x_0_platform.mag.fac_cal.corr_mat
+sns_fmv_platform.config         sns_gyro_cal_config
+sns_reg_config                  sx932x_0_platform.config
+tcs3701_platform.als.fac_cal
+```
+
+Every one of them is a sensor the board actually has, and in each case the
+served value is the OxygenOS 10.0.13 one overwriting the phone's own:
+
+| entry | field | phone | overwritten with |
+|---|---|---|---|
+| `lsm6dsm_0_platform` | `irq_pull_type` | 3 | 2 |
+| | `num_rail` | 2 | 1 |
+| | `rail_on_state` | 2 | 1 |
+| `sx932x_0_platform` | `slave_config` | **40 (0x28)** | **44 (0x2c)** |
+| | `dri_irq_num` | 119 | 87 |
+| | `irq_pull_type` | 0 | 3 |
+| | `num_rail` | 1 | 2 |
+| `mmc5603x_0_platform` | `rail_on_state` | 2 | 1 |
+
+The SAR line is the clearest: the phone puts that part at **0x28**, our config
+set moved it to 0x2c, and 0x2c is one of the two addresses the DSP was seen
+NACKing. `num_rail=1` on the IMU likewise denies the LSM6DSM its VDD rail.
+
+`msmnile_lsm6dsm_0.json`, `msmnile_sx932x.json` and `msmnile_mmc5603x_0.json`
+now carry the phone's values (`firmware/sensors/config/`), and after a reboot
+the registry keeps them: `sx932x slave_config=40`, `lsm6dsm num_rail=2`. The
+corruption is gone.
+
+Timestamps are not a way around this. The parser records each config file's
+mtime in `sns_reg_config` as its version, but it reparses regardless — setting
+every config's mtime to the recorded `1230768000` changed nothing. The values
+have to be right in the JSON itself.
+
+No sensor registers yet: `accel`, `gyro`, `proximity`, `ambient_light`, `sar`
+and `mag` all still answer "no SUID", and the wire still shows only 0x28 and
+0x2c on qup-3. So the corrupted registry was a real defect but not the last
+one.
