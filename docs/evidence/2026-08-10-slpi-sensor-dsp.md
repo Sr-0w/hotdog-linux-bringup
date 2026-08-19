@@ -1319,3 +1319,49 @@ device tree**. Fragments resolved through `__fixups__` cannot land, because a
 mainline DTB carries no `__symbols__`, which is presumably why only a
 root-level property survived. Worth knowing before trusting that our DT is
 exactly what we compiled.
+
+### Every host-side lever is now eliminated, and the DSP gives up after one try
+
+The GSI failures above raised one more candidate worth testing and then closed
+it, which leaves nothing on the application-processor side untested.
+
+**It is not the IOMMU.** The downstream SSC QUP declares a context bank,
+`iommus = <0x26 0x4e3 0x00>` with `qcom,iommu-s1-bypass`, and mainline declares
+nothing for that stream. That looked like it would strand the GSI's DMA, and
+mainline does block unknown streams when `CONFIG_ARM_SMMU_DISABLE_BYPASS_BY_DEFAULT`
+is in force, printing `Blocked unknown Stream ID`. On this device it is not in
+force: `/sys/module/arm_smmu/parameters/disable_bypass` reads `N`, the running
+cmdline carries `arm-smmu.disable_bypass=0`, and that message never appears.
+Unmatched streams are bypassed, so SID `0x4e3` transacts freely. This also
+explains the absence of any SMMU fault: there is nothing blocking to fault.
+
+**The memory reservation is identical.** Downstream `pil_slpi_region` is
+`0x97300000` for `0x1400000`; mainline `slpi_mem` is the same base and the same
+size.
+
+That completes the elimination. Clocks, power domains, interconnect, IOMMU,
+memory reservation, the AP-side loader and the host file service have each been
+checked against stock and each matches or exceeds it.
+
+**The DSP tries once and stops.** A second coredump was taken deliberately early,
+110 seconds after boot, against the first at roughly twelve minutes. The ULog
+byte counts are identical in both:
+
+| buffer | early dump | late dump |
+| --- | ---: | ---: |
+| `gpi_err` | 2672 | 2672 |
+| `I2C` | 11432 | 11432 |
+| `I2C_error` | 408 | 408 |
+| `SPI` | 16 | 16 |
+| `ICB Arb Log` | 480 | 480 |
+
+The timestamps differ by a constant offset but hold the same internal spacing,
+so this is one reproducible burst per boot: the sensor drivers attempt their
+buses roughly ten seconds after the PD is created, fail, and never retry. That
+is why nothing changes no matter how long the system runs.
+
+It also means the very first channel allocation cannot be recovered by dumping
+earlier. `gpi_dbg` takes 22,300 bytes into an 8,192 byte ring, so it overflows
+*during* the burst; the retained window always begins mid-failure. Reading the
+initial allocation would need a larger ring or a live ULog transport rather than
+a post-mortem, which is where this should resume.
