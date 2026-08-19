@@ -100,3 +100,32 @@ is `0xb014788c`, called with the context at `0xb05c062c`, live value
 Nothing about this is host-side, which is consistent with every host-side lever
 having been tested and found irrelevant. But it is now a concrete, bounded
 question rather than a wall.
+
+## The data is loaded correctly
+
+Comparing the coredump against the firmware image at the three addresses that
+matter — the `/icb/arb` property blob at `0xb025f47c`, the name pool holding
+`icb_info` at `0xb025e58a`, and the device table entry at `0xb0262758` — all
+three are **byte-identical**. The segment loaded exactly as PAS was given it.
+
+The live attach state confirms the rest:
+
+```
+0xb05c0628 = "/icb/arb"      the device name
+0xb05c062c = 0xb025aba4      the configuration blob base
+0xb05c0630 = 0x000048d8      the device's offset, matching the table entry
+0xb05c0638 = 0xb05c9008      a live configuration handle
+0xb05c9104 = 1               the arbiter's init-once flag, set
+0xb05c911c = 0xb032a09c      but the context is still the static fallback
+```
+
+So the device attach succeeded, the blob is present and intact, the offset is
+right, and the property is in the pool. The lookup of `icb_info` nevertheless
+returned nothing.
+
+That is a logic failure inside the DSP's own configuration search
+(`0xb014788c`), not a missing file, a bad load, or anything the host provides.
+Decoding it means working out the property encoding — `{type|name-offset,
+value}` pairs terminated by `0xff00ff00`, against a name pool whose base still
+has to be pinned down — and reading that function. Everything needed is in the
+coredump and the image.
