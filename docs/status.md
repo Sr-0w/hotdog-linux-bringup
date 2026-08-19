@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-17
+Last updated: 2026-08-19
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -47,7 +47,7 @@ State meanings:
 | Internal display | Partial | Correct 1440x3120 KMS, fixed 60 Hz and selectable 90 Hz work. Spontaneous DSI transport error bursts drain all four HS lanes and desynchronise the DSC stream into unreadable noise, with no driver recovery path; a panel re-init clears it. Not caused by brightness, input or compositor load. See [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md). |
 | GPU | Working | Adreno 640, GMU, Freedreno/Turnip, Vulkan, `kmscube`, Weston and Plasma scanout work. Sustained mixed load and suspend/resume remain stability gates. |
 | Touch and keys | Partial | S6SY761 touch plus Power, Volume Up and Volume Down work in Plasma. After a suspend cycle all input is lost, from two independent causes: the elogind session on `seat0` stays inactive so the compositor holds no input device, and `s6sy761_resume()` never re-enables sensing. Both are diagnosed and the driver bug is patched; all contact slots and alert slider remain. |
-| Wi-Fi | Partial | WCN3990 scans and associates on both bands with Internet reachability. `wlan0` now keeps its address across a modem crash, measured over four suspend cycles that each ended in one, where every cycle used to leave it down; this needed the two MSA reclaim patches, see the evidence file. Resume itself still costs 30.4 s whenever the modem is dead, since one QMI transaction burns the full `ATH10K_QMI_TIMEOUT`. Factory MAC, sustained throughput and AP/roaming remain. |
+| Wi-Fi | Partial | WCN3990 scans and associates on both bands with Internet reachability. The link now survives system suspend: 0 losses over 30 real `s2idle` cycles, against 13 of 15 before. That needed `device_init_wakeup()` in `ath10k_snoc`, without which `ath10k_snoc_hif_suspend()` always returned `-EPERM` and mac80211 tore the connection down every cycle, plus WoWLAN triggers configured from userspace. `wlan0` also keeps its address across a modem crash now, from the two MSA reclaim patches. Factory MAC, sustained throughput and AP/roaming remain, and copy engine 2 armed as a wake source means ordinary traffic can wake the phone. |
 | Bluetooth | Broken | The controller no longer initialises: `hci0` stays `DOWN` with a locally administered address and no firmware download. Worse, `qca_suspend()` times out after ~3.3 s and aborts every system suspend, and `rmmod hci_uart` panics the kernel in `qca_power_shutdown()`. See [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md). |
 | Audio | Partial | Both internal speakers and the handset microphone work through packaged UCM. Earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio, capture controls and protection telemetry remain. |
 | USB-C host / dock | Partial | Dual-role Type-C, powered host mode, USB 3, storage, Ethernet enumeration and DisplayPort video at 2560x1440@60 work. Unpowered VBUS, broader HID/hotplug, DP mode pruning, DP audio and docked suspend remain. |
@@ -89,15 +89,28 @@ State meanings:
   [Hexagon writable service](evidence/2026-08-13-hexagonrpcd-write.md)
 - [SMB5 900 mA complete image](evidence/2026-08-16-smb5-complete-900ma.md),
   [A/B retry regression](evidence/2026-08-17-ab-slot-retry-regression.md),
-  [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md) and
-  [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md)
+  [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md),
+  [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md),
+  [sdhc_2 in the modem's power domain](evidence/2026-08-18-sdhc2-modem-power-domain.md),
+  [the IPA SSR notifier deadlock](evidence/2026-08-18-ipa-ssr-notifier-deadlock.md),
+  [ath10k wakeup capability](evidence/2026-08-19-ath10k-wakeup-capability.md) and
+  [the PAS proxy power domains](evidence/2026-08-19-proxy-power-domains.md)
 
 ## Current checkpoint
 
-The active frontier is suspend/resume, which is the widest open gate: a real
-`s2idle` cycle returns, but the MPSS watchdog, Wi-Fi, camera CCI, the elogind
-session and touch sensing each fail on resume, and charger wakeups truncate
-test cycles while USB is attached. Alongside it sit the downstream-4.14 SLPI
-route control, normal GNSS/mobile-data integration and upstream revision work. In parallel, phase 0 of the
-[roadmap](roadmap.md) requires every partial/broken row above to reach Working
-and Stable. Historical experiment details are evidence, not pending tasks.
+Suspend/resume is closed. Thirty real `s2idle` cycles across two fresh boots
+ran with no modem crash and no Wi-Fi loss, where the first suspend of every
+boot used to kill the modem six times out of six. Both root causes were the
+same mistake in different places, a power domain withdrawn from something that
+still depended on it: `sdhc_2` was wired to the modem's domain in
+`sm8150.dtsi`, and `qcom_pas_handover()` released the proxy `cx`/`mss` votes
+at handover so `genpd_suspend_noirq()` took them down on the first suspend.
+
+What remains on that front is smaller and named: the power cost of holding
+`cx`/`mss` for the life of the modem is unmeasured, and downstream avoids it
+with a ten second proxy timeout; Bluetooth still aborts cycles when `hci_uart`
+is loaded; and the camera CCI, elogind session and touch sensing resume paths
+each need their own work. The active frontier moves to the downstream-4.14
+SLPI route control, normal GNSS/mobile-data integration and upstream revision.
+Phase 0 of the [roadmap](roadmap.md) still requires every partial/broken row
+above to reach Working and Stable.

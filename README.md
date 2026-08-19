@@ -21,7 +21,7 @@
   <strong>OnePlus 7T Pro HD1913 · Snapdragon 855+ · Linux 6.16 · postmarketOS · Plasma Mobile</strong>
 </p>
 
-Last reviewed: **2026-08-13**
+Last reviewed: **2026-08-19**
 
 ## Project goals
 
@@ -127,6 +127,7 @@ function under **Working** and a broader integration or stability item under
 | Audio | Internal stereo speakers | Both TFA9874 speaker channels are independently hardware-validated through the packaged UCM path. |
 | Audio | Handset microphone | AMIC4 with MIC BIAS1 is acoustically validated from the packaged profile and confirmed by listening. |
 | Wi-Fi | WCN3990 association and IPv4 connectivity | Both bands scan, NetworkManager associates and basic external IPv4 reachability is validated. |
+| Power | System suspend / s2idle | Thirty real cycles across two fresh boots with no modem crash and no Wi-Fi loss. Two power domains were being withdrawn from parts that still needed them: `sdhc_2` sat in the modem's domain, and the PAS proxy votes were dropped at handover. |
 | Bluetooth | HID connectivity | BlueZ scans and connects to a real HID device. |
 | Cameras | Four-sensor capture | S5K3M5 telephoto, IMX586 main, IMX481 ultra-wide and IMX471 front sensors capture through libcamera. |
 | Cameras | Rear autofocus | The main and telephoto actuators expose calibrated focus control and produce distinct focus planes; experimental continuous autofocus completes. |
@@ -147,7 +148,7 @@ function under **Working** and a broader integration or stability item under
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work, but wake/blank-unblank reliability is not acceptable yet. |
 | USB | USB ACM serial | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
-| Wi-Fi | Power management / stable factory identity | Basic data works; sustained throughput, AP/roaming, suspend and factory-address handling remain. |
+| Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
 | Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
 | Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
 | Power | SMB5 charging | The exact v3 candidate passed guarded 180-second and 600-second runs plus a physical VBUS cycle. The complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
@@ -170,7 +171,6 @@ function under **Working** and a broader integration or stability item under
 | Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
-| Power | System suspend / s2idle | `pm_test=freezer` passes, but the device stage fails because S6SY761 returns zeroes during resume. |
 | Sensors | Motion / rotation / light / proximity | LSM6DSM, MMC5603x and TCS3701 publish no physical SUID. Both tested firmware sets reject QUP1/QUP2-to-EBI1 with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; the downstream 4.14 plus stock-DTBO control is next. |
 
 ### ⚪ Not yet supported
@@ -217,8 +217,9 @@ The active engineering frontier is:
    configuration fault;
 2. bridge GNSS and mobile data into standard services and test SIM, SMS, calls
    and data;
-3. close suspend, display wake, UFS ICE, remaining audio, dock, charging and
-   camera-quality gaps;
+3. close display wake, UFS ICE, remaining audio, dock, charging and
+   camera-quality gaps, and measure what holding `cx`/`mss` for the life of the
+   modem costs in power now that suspend itself is clean;
 4. replace temporary DT transforms, SMMU/ICE bypasses and laboratory deployment
    assumptions with clean source integration;
 5. revise the Linux patch tracks through maintainer review, migrate the port to
