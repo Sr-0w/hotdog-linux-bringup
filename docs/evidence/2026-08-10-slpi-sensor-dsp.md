@@ -1261,3 +1261,61 @@ is not a risk worth taking for a test that cannot answer the question.
 
 A software path to fastboot is worth having on its own merits, independently of
 this: it is what would make every future boot experiment cheap and safe.
+
+### The clock trail around the SSC serial engine is closed
+
+Following the SSC QUP failures to their clocks does not incriminate mainline
+anywhere. Recorded so nobody walks it twice.
+
+- **The SSC QUP is not fed by GCC at all.** `qcom,qupv3_3_geni_se@26c0000`
+  takes `corex` and `core2x` from phandle `0x2ad`, which resolves to
+  `qcom,scc@2b10000`, the sensor clock controller. `gcc-sm8150.c` contains no
+  SSC clock, and neither does the downstream 4.14 kernel: there is no
+  `gcc_*ssc*` symbol in either. There is no GCC clock around `0x26c0000` for
+  mainline to have left off.
+- **Mainline disables nothing at boot anyway.** `clk_ignore_unused` is on the
+  running cmdline, so `clk_disable_unused` never runs.
+- **Stock does not drive this tier from the application processor.** The SCC,
+  `qupv3_3_geni_se` and the SSC serial engines are `status = "disabled"` in the
+  stock base DTB, and the stock DTBO for this handset does not enable them. The
+  overlay set was pulled from `dtbo_b` and split: ten overlays, and the one for
+  this device carries no fragment touching any of them.
+- **The supply names mislead.** The stock `qcom,ssc@5c00000` asks for
+  `vdd_cx-supply` and `vdd_mx-supply`, which reads like the SoC CX and MX rails.
+  They resolve to phandles `0x6c` and `0x7e`, which are
+  `rpmh-regulator-lcxlvl`/`pm8150_l8_level` and
+  `rpmh-regulator-lmxlvl`/`pm8150_l4_level` — LCX and LMX, precisely the two
+  domains mainline already votes and, since the PAS proxy patch, holds for the
+  life of the subsystem. `qcom,scc@2b10000` shares `0x6c`, so the sensor clock
+  controller's rail is held too.
+- **The bus vote is absent on both sides.** Mainline does model the nodes:
+  `qhm_sensorss_ahb` is `SM8150_MASTER_SENSORS_AHB` and `qhs_ssc_cfg` is
+  present, and both read `0 0` in `interconnect_summary` on the running device.
+  Downstream would vote that path from `qupv3_3_geni_se`, which declares
+  `qcom,bus-mas-id = <0xaa>`, matching `mas-qhm-sensorss-ahb` — but that node is
+  disabled, so stock never makes the vote either.
+
+The one SSC-related node that stock does enable and mainline has no counterpart
+for is `qcom,msm-ssc-sensors`, `status = "ok"`, carrying only
+`qcom,firmware-name = "slpi"`. Its driver holds `geni_se_ssc_qup_up`,
+`geni_se_ssc_qup_down`, `ssc_qup_state` and `slpi_loader_init_sysfs`. That is
+where this thread should resume.
+
+### Two corrections to the served tree, and one surprise
+
+`hw_platform = MTP` was inferred from the constraint that stock sensor configs
+only accept six values. The stock DTBO confirms it directly: all ten overlays
+are modelled `SM8150 MTP <project>`.
+
+The project number was wrong. `19861` came from a condition line in
+`vendor.oem_ftm.rc`; the handset's own device tree reports
+`SM8150 MTP 19801 EVT PVT DVT`, matching DTBO entry 5. Corrected to `19801`.
+It changes nothing: 3944 file operations, no failures, and still no SUID.
+
+The surprise is where that model string comes from. The mainline DTS sets
+`model = "OnePlus 7T Pro"`, yet the running device reports the stock overlay's
+string, so **the bootloader is applying the stock DTBO on top of our mainline
+device tree**. Fragments resolved through `__fixups__` cannot land, because a
+mainline DTB carries no `__symbols__`, which is presumably why only a
+root-level property survived. Worth knowing before trusting that our DT is
+exactly what we compiled.
