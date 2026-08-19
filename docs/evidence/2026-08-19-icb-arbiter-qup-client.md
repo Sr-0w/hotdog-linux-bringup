@@ -144,3 +144,66 @@ the DSP's diag channel, which mainline has no transport for. Recovering the
 master and slave identifiers therefore needs either a diag path or static
 analysis of Hexagon code, since the client name is materialised as an immediate
 rather than through a data pointer.
+
+## The bus-level symptom, read correctly
+
+The `I2C_error` buffer, resolved against the right image, is not a DMA failure.
+It is three sensors refusing to answer:
+
+```
+ERROR nack
+bus_iface_callback : ERROR DMA EVT OTHER during data phase   (x2)
+Performing cancel sequence, for ctxt 0xb0028f20   (and 0xb0028f98)
+```
+
+repeated for two contexts. The `I2C` buffer alongside it holds ordinary
+transfer bookkeeping, channels, TREs, buffer descriptors, so the controller and
+its DMA are working. The DSP drives the bus, addresses the part, and gets no
+acknowledgement.
+
+## The sensor rails are up
+
+A systematic NACK on several parts points at power, and the DSP does ask for it
+correctly. From the NPA log:
+
+```
+/pmic/client/sensor_vddio -> /pm/ldoc8/en  = 1
+/pmic/client/sensor_vdd   -> /pm/ldoc7/mode = 7
+                             /pm/ldoc7/mV   = 0xbc0   (3008 mV)
+                             /pm/ldoc7/en   = 1
+   ... the NACKs ...
+/pmic/client/sensor_vdd   -> /pm/ldoc7/en  = 0
+/pmic/client/sensor_vddio -> /pm/ldoc8/en  = 0
+```
+
+`ldoc7` and `ldoc8` are PM8150L LDO 7 and 8, and the application processor sees
+both enabled:
+
+| regulator | state | voltage |
+| --- | --- | --- |
+| `pm8150l` `ldo7` | enabled | 2,856,000 µV |
+| `pm8150l` `ldo8` | enabled | 1,800,000 µV |
+
+The DSP asks 3,008 mV where the rail sits at 2,856 mV, but every part on these
+buses is specified well below that, so it is noted rather than suspected.
+
+Power is therefore not the blocker, and neither is the controller. What remains
+is that both QUP drivers failed to obtain their `/icb/arbiter` bandwidth clients
+at init: the I2C one carries on and gets NACKs, the SPI one gives up, which is
+why the accelerometer and gyroscope on SPI never appear at all.
+
+## Boot ordering eliminated
+
+Stock loads the SLPI from userspace long after Android is up, while mainline
+boots it 6.4 seconds in. A module parameter, `slpi_auto_boot=0`, was added to
+`qcom_q6v5_pas` to test whether that matters. With it, the SLPI stays offline
+through boot and starts cleanly on demand at 90 seconds of uptime, with the
+modem and ADSP already running and `pd-mapper` serving.
+
+The result is identical: `SPI` holds one record, `spi_plat_init:
+npa_create_sync_client_ex failed`, and no sensor publishes a SUID. Reverted.
+
+Worth recording separately: the SLPI stops cleanly now, in about a second, but
+a *restart* still fails. `start` reaches `Booting fw image` and then times out,
+`can't start rproc slpi: -110`, so the DSP never signals ready on a second
+start. A first start, whenever it happens, works.
