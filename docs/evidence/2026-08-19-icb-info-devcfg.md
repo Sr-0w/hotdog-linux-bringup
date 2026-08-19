@@ -1,0 +1,102 @@
+# The sensor bus dies because the arbiter's master table has one entry
+
+Date: 2026-08-19
+
+The full chain, end to end, read out of the DSP's own memory rather than
+inferred. This replaces the "capacity" reading of the previous note.
+
+## The method that unlocked it
+
+The static firmware could not answer the question, because the structures
+involved are built at runtime. The **coredump is the DSP's RAM**, so they are all
+in it. Its segments are physical, offset from the DSP's virtual addresses by a
+constant:
+
+```
+DSP 0xb0100000  <->  physical 0x97300000     relocation 0x18E00000
+```
+
+which is the same constant `slpi-ulog-coredump.py` uses for its heap pointers.
+With that, any DSP address can be read as it was when the DSP was running.
+
+## The chain
+
+**1. What the QUP drivers ask for.** The bandwidth vector is the fourth argument
+of `npa_create_sync_client_ex`, passed in `r4`, and it is static: `0xb002b220`
+for SPI, `0xb002b210` for I2C. Both hold the same two pairs:
+
+| pair | master | slave |
+| ---: | ---: | ---: |
+| 0 | **41** (0x29) | 0 |
+| 1 | **39** (0x27) | 0 |
+
+Slave 0 is fine on its own: the arbiter services `MID 180 -> SID 0` during the
+same boot.
+
+**2. Where it is refused.** The arbiter's create-client callback is
+`0xb0165708`, reached from the live resource object. It reads `r22 = r1 >> 3`,
+so its second argument is a pair count in units of eight: `0x8` is one pair,
+`0x10` is two. For each pair it calls the route lookup at `0xb016688c`, and on a
+NULL result jumps to `0xb0165828`, which sets `r19 = #0x4`. That is the `error: 4`.
+
+**3. Why the lookup returns NULL.** It is an array index, nothing more:
+
+```
+r5 = memw(##0xb05c911c)        ; the arbiter context
+r3 = memw(r5+#0x4)             ; number of masters
+p0 = !cmp.gtu(r3,r0)           ; master id beyond the table?
+if (p0) return NULL
+r4 = memw(r5+#0x8)             ; table base
+r4 = memw(r4+r0<<#0x2)         ; table[master]
+```
+
+**4. What the table actually contains.** From the coredump:
+
+```
+context @0xb05c911c = 0xb032a09c
+  number of masters = 1
+  table base        = 0xb032a094
+```
+
+**One entry.** Every master id from 1 upwards is out of range, 39 and 41
+included. Those two addresses are in the firmware's static data, so the arbiter
+is still holding its built-in fallback: the real topology was never installed.
+
+**5. Where the real topology should come from.** The single write to that
+pointer is at `0xb0166630`:
+
+```
+r0 = ##0xb026d2fc              ; "icb_info"
+call 0xb0164ca0                ; device-configuration lookup
+p0 = cmp.eq(r0,#0x0)
+if (p0) jump 0xb016673c        ; not found: give up, keep the fallback
+memw(##0xb05c911c) = r0        ; found: install it
+```
+
+`0xb0164ca0` attaches the DAL device `/icb/arb` and reads its `icb_info`
+property. The bail path is the one taken.
+
+**6. And the data is present.** The device-configuration tables are in the image:
+`/icb/arb` has an entry at `0xb0262758` with a property blob at offset `0x48d8`,
+whose contents are well-formed, and `icb_info` is in the name pool at
+`0xb025e58a`. The live device-configuration handle at `0xb05c0638` is non-null,
+so that subsystem came up.
+
+## So
+
+The sensor buses are dead because the DSP's bus arbiter is running with a
+one-entry master table, and it is running with a one-entry master table because
+its `icb_info` device-configuration property lookup came back empty at boot —
+even though the property is in the image and the configuration subsystem
+initialised.
+
+That is a much smaller question than any asked so far, and it is the last one:
+**why does the `/icb/arb` `icb_info` lookup fail at runtime.** The lookup itself
+is `0xb014788c`, called with the context at `0xb05c062c`, live value
+`0xb025aba4`. Both are readable in the coredump, and the property encoding is
+`{type|name-offset, value}` pairs against a name pool that resolves `0x31f` to
+`icb_info`.
+
+Nothing about this is host-side, which is consistent with every host-side lever
+having been tested and found irrelevant. But it is now a concrete, bounded
+question rather than a wall.
