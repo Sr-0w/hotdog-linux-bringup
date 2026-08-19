@@ -44,7 +44,33 @@ turns the sink off for 650 ms. That is roughly 2.3 seconds with charging
 interrupted, immediately after it started. It then lands in `SNK_READY` and
 charges normally.
 
-That is the reported symptom exactly, and it is a delay rather than a fault.
+That is a real, measured interruption. Whether it is *the* symptom reported is
+not established, and the section below explains why.
+
+## The battery was full throughout, which confounds the attribution
+
+The supply samples carry the battery state, and it never left the top of its
+range for the whole capture:
+
+```
+13:21:55  Charging      icl=500000   batt=+194000@93%
+14:15:53  Discharging   icl=0        batt=-89000@100%    <- unplug
+14:15:57  Not charging  icl=100000   batt=-549000@100%   <- 65 W attached
+14:16:20  Charging      icl=1450000  batt=+114000@100%
+```
+
+A full battery produces "starts, then stops" on its own: the charger terminates
+and only resumes at the recharge threshold, and it does so for far longer than
+2.3 seconds. Both explanations therefore fit the report, and the capture cannot
+separate them because the pack stayed between 93 and 100 percent.
+
+What the battery state cannot explain is the PD behaviour. Source capability
+messages are sent by the source unprompted and TCPM negotiates regardless of
+charge level, so the absence of any `PD RX` from this charger stands on its own.
+
+The discriminating test is simply to repeat the plug event with the pack around
+70 to 80 percent. Until then the hard resets are a measured fact whose
+contribution to the reported experience is unquantified.
 
 ## Why the gentle path is not taken
 
@@ -96,11 +122,27 @@ Deliberately not decided here. Worth revisiting if a cleaner mechanism appears
 upstream, such as separating "a hard reset is survivable" from "prefer a hard
 reset".
 
-## Open question
+## The source that does no PD
 
-It is not established whether the 65 W charger was attached over a C-to-C or an
-A-to-C cable. An A-to-C cable presents Rp-default from the cable resistor and
-carries no PD at all, in which case everything above is correct behaviour and
-there is nothing else to find. Over C-to-C, a 65 W source failing to send
-Source_Capabilities would be a second and separate defect. The captured CC
-state was `Rp-def`, which is consistent with either.
+The cable question is settled: the 65 W unit is a Lenovo laptop supply with a
+USB-C output and nothing between it and the handset, so this is a C-to-C
+attachment and a genuine PD source is expected. Comparing the two attachments
+in the same log isolates the difference:
+
+| | Lenovo laptop port, ts 4556 | Lenovo 65 W supply, ts 4608 |
+| --- | --- | --- |
+| CC | `CC2: 0 -> 5`, Rp-3.0A | `CC2: 0 -> 3`, Rp-default |
+| polarity | 1 | 1 |
+| `PD RX` | yes, 120 ms in | never |
+| outcome | PD contract, Identity `17ef:a207` | two hard resets, gives up |
+
+Two hypotheses die here. Orientation is not involved: both attach at polarity 1,
+the same way round. And the PMIC decodes Rp-3.0A correctly when it is present,
+fifty seconds earlier on the same port, so the `Rp-def` reading is a real
+measurement rather than a decoding gap. `CC1` stays open in both, so there is no
+e-marker.
+
+A 65 W supply advertising Rp-default and then never initiating PD is not
+compliant behaviour on its part. It costs nothing here, because BC1.2 detects it
+as `DCP` and AICL still ramps to 1450 mA, but it is worth recording that the
+receive path is demonstrably working on this port and this orientation.
