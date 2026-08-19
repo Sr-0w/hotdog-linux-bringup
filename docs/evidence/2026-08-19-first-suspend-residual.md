@@ -79,6 +79,37 @@ withdrawn, not as findings. A configuration comparison here needs several
 boots per arm, at roughly two and a half minutes per boot, and nothing below
 that is worth reading.
 
+## Localisation, this time with samples
+
+Four fresh boots per configuration, one cycle each. The baseline is the six
+boots above, 6/6.
+
+| configuration | boots | crashes |
+| --- | ---: | ---: |
+| `pm_test=devices` | 4 | **0** |
+| `pm_test=platform` | 4 | **4** |
+| `pm_test=platform`, `bam-dma-engine` and `geni_i2c` unbound | 4 | 4 |
+| `pm_test=platform`, `smp2p-mpss` wakeup enabled | 4 | 4 |
+
+`devices` against `platform` is Fisher exact p = 0.014. The trigger is in
+`dpm_suspend_late` or `dpm_suspend_noirq`, the only phases `platform` adds.
+
+That clears everything bisected at the `devices` level earlier in this
+investigation, the ten device batch and the SD host among them. The `sdhc_2`
+fix remains valid for the defect it did remove; it simply is not this one.
+
+`bam-dma-engine` and `geni_i2c` are the only bound drivers implementing
+`suspend_late` or `suspend_noirq`, and removing both changes nothing, so the
+trigger is not a driver callback but the PM core's own work in that phase.
+Arming the modem's SMP2P interrupt as a wake source, which stops
+`suspend_device_irqs()` masking it, also changes nothing.
+
+What is left in that phase is `genpd_suspend_noirq()` powering domains off.
+That has **not** been tested: `echo on > power/control` on the modem's genpd
+devices prevents runtime suspend but not the noirq power-off, so the 4/4 from
+that run says nothing. Testing it needs a kernel change rather than a sysfs
+knob.
+
 ## Where that leaves it
 
 The crash is confined to `machine_suspend`: `pm_test=devices` is 0/15 and
