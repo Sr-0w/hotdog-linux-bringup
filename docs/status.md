@@ -63,7 +63,7 @@ State meanings:
 | SLPI infrastructure | Partial | SLPI boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests and ULog forensics work end to end. Only infrastructure SUIDs are published. |
 | Motion/light sensors | Broken | LSM6DSM, MMC5603x and TCS3701 drivers publish no physical SUID. Both tested firmware sets reject the QUP1/QUP2-to-EBI1 ICB routes with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; the next control is the current firmware/userspace on downstream 4.14 with stock DTBO. |
 | Range sensor | Not yet supported | STMVL53L1 wiring, calibration, driver and standard proximity/range integration remain. |
-| Fingerprint | Not yet supported | Transport, firmware/TEE dependency, UDFPS illumination and fprintd integration remain. |
+| Fingerprint | Not yet supported | Goodix `G_OPTICAL_18865_G3` in-display optical sensor, wired on tlmm 101 (supply), 131 (reset), 118 (interrupt) and 90 (vendor id), all currently unclaimed. There is no SPI node: the bus belongs to a Qualcomm TrustZone applet, and the stock HAL `libgf_ud_hal.so` reaches it through `libQSEEComAPI.so`, so no image ever reaches Linux. Blocked on a mainline QSEECom equivalent rather than on a missing driver. See [the fingerprint assessment](evidence/2026-08-19-fingerprint-goodix-udfps.md). |
 | Ubuntu Touch / Lomiri | Not yet supported | The no-Halium architecture, rootfs boot, packaging, OTA/recovery and Lomiri session remain future roadmap phases. |
 
 ## Validated milestone evidence
