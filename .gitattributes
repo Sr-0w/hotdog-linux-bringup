@@ -15,4 +15,4 @@ aports/device/testing/linux-oneplus-hotdog-lineage414/stock-hotdog-dtbpack.dtb -
 aports/**/*.patch -text
 
 # This curated OOS11 capture intentionally preserves CRLF bytes for its hash.
-firmware/sensors/config-curated/45/msmnile_mmc5603nj.json -text -eol
+firmware/sensors/config-curated/45/msmnile_mmc5603nj.json -text -eol whitespace=cr-at-eol

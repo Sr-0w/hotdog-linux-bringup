@@ -3,6 +3,30 @@
   "mission": "SENSORS-SLPI-02",
   "device": "oneplus-hotdog / HD1913 / SM8150",
   "status": "offline reproducibility manifest; external firmware and registry capture required",
+  "hardware_candidate_status": "BLOCKED_NEEDS_QUALCOMM_PARSER_EVIDENCE",
+  "format_validation": {
+    "parser_proof": false,
+    "standard_json_check": "python3 -B -m json.tool is not a Qualcomm parser proof",
+    "policy": "preserve the captured bytes unchanged; stage only with --allow-blocked for offline opaque-parser experiments",
+    "blocked_files": [
+      {
+        "path": "sns_cm.json",
+        "source": "firmware/sensors/config/sns_cm.json",
+        "size": 638,
+        "sha256": "b024a3fb6ea13fd7c6a1e49bc2965983d0d1bf391ab486f67a6e13935b85dd6c",
+        "reason": "literal :wq! appears inside the soc_id array between values; standard JSON parsing fails",
+        "action": "do not edit; require Qualcomm parser acceptance evidence"
+      },
+      {
+        "path": "msmnile_mmc5603nj.json",
+        "source": "firmware/sensors/config-curated/45/msmnile_mmc5603nj.json",
+        "size": 5962,
+        "sha256": "ef36624ee32da1d715ee5a17645fe6ca0450ebe8d5461acc901c08f4fb26b502",
+        "reason": "raw tab character occurs inside the captured data string at line 115; standard JSON parsing fails",
+        "action": "do not edit; require Qualcomm parser acceptance evidence"
+      }
+    ]
+  },
   "baseline": {
     "git_commit": "6dcf72f36ea8e3858574ba1a971fdfd56f80723b",
     "git_tree": "6becb099b8b48b376c73f16110646cfb00a949f9",
