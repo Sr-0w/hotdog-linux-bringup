@@ -95,3 +95,49 @@ registers, and only the SAR ever reaches the wire.
 The next instrument has to be the sensor PD's own diag messages. The ULog
 buffers carry the platform drivers' view; the SEE drivers log to diag, which is
 where the reason for a refused port will be stated in words.
+
+## Only two driver families ever reach the wire, and they are the wrong two
+
+Testing capacity properly — by removing the SAR's **registry** entries rather
+than its config files — gave a sharper result than expected.
+
+With the SAR's 18 registry entries moved aside, the DSP allocated **one** GPII
+instead of two and probed a completely new address:
+
+```
+0x0c  write x3, read x3
+iface_reg - Allocating qup-3 gpii-0
+```
+
+0x0c is `ak0991x`, the AKM magnetometer. So a different driver took the slot.
+That is not a capacity limit — the GPI log contains no allocation error at any
+point — it is a different driver becoming the one that probes.
+
+Removing `ak0991x`'s 18 registry entries as well:
+
+```
+(no I2C transaction at all)
+```
+
+Nothing else steps forward. So the position is:
+
+| family | in firmware | registry | reaches the wire |
+|---|---|---|---|
+| `sx932x` / `sx9324` | yes | yes | **yes** (0x28, 0x2c) |
+| `ak0991x` | yes | yes | **yes** (0x0c) |
+| `lsm6dsm` | yes | yes | never |
+| `alsps` | yes | yes | never |
+| `mmc5603x` | yes | yes | never |
+
+And `devinfo` in the phone's own `persist` says the parts actually fitted are
+`lsm6dsm` (accel, gyro) and `alsps` (light, proximity, RGB) — precisely the two
+that never probe. The two families that do probe are not fitted, which is why
+they NACK.
+
+So the question is no longer "why does nothing work" but the much narrower
+"why do `lsm6dsm`, `alsps` and `mmc5603x` never open a port while `sx932x` and
+`ak0991x` do", with identical firmware support, identical registry shape and
+the same QUP core.
+
+Everything has been restored: 65 config files, 438 registry entries matching
+`persist`, all subsystems running.
