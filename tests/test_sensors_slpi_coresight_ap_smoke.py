@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -117,6 +118,23 @@ class Fixture:
                 if ! awk -v name="$name" '$1 == name { found = 1 } END { exit !found }' "$modules"; then
                   printf '%s 1 0 - Live 0x0\\n' "$name" >> "$modules"
                 fi
+                if [ "$name" = "stm_core" ] && [ "${FAKE_MODPROBE_CREATES_TOPOLOGY:-0}" = 1 ]; then
+                  sys=${HOTDOG_AP_SMOKE_SYSFS_ROOT:?}
+                  mkdir -p "$sys/bus/coresight/devices/stm0/connections"
+                  mkdir -p "$sys/bus/coresight/devices/tmc_etf0/connections"
+                  mkdir -p "$sys/bus/coresight/devices/tmc_etf0/mgmt"
+                  mkdir -p "$sys/class/stm/stm0"
+                  printf '0\\n' > "$sys/bus/coresight/devices/stm0/enable_source"
+                  printf 'stm-ok\\n' > "$sys/bus/coresight/devices/stm0/status"
+                  printf '0\\n' > "$sys/bus/coresight/devices/tmc_etf0/enable_sink"
+                  printf '0x10000\\n' > "$sys/bus/coresight/devices/tmc_etf0/buffer_size"
+                  printf 'etf-ok\\n' > "$sys/bus/coresight/devices/tmc_etf0/status"
+                  printf '0x1000\\n' > "$sys/bus/coresight/devices/tmc_etf0/mgmt/rsz"
+                  : > "$sys/bus/coresight/devices/stm0/connections/out:0"
+                  : > "$sys/bus/coresight/devices/tmc_etf0/connections/in:0"
+                  printf '0 0\\n' > "$sys/class/stm/stm0/masters"
+                  printf '16\\n' > "$sys/class/stm/stm0/channels"
+                fi
                 """),
             "insmod": textwrap.dedent("""\
                 #!/usr/bin/env bash
@@ -200,6 +218,13 @@ class Fixture:
     def commands(self):
         return self.command_log.read_text()
 
+    def command_lines(self):
+        return [line for line in self.commands().splitlines() if line]
+
+    def remove_coresight_topology(self):
+        shutil.rmtree(self.sysfs / "bus", ignore_errors=True)
+        shutil.rmtree(self.sysfs / "class", ignore_errors=True)
+
 
 class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
     def setUp(self):
@@ -229,6 +254,7 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertIn("sink-buffer-size-post: 0x10000", result.stdout)
         self.assertIn("rmmod stm_p_basic", self.fixture.commands())
         self.assertNotIn("modprobe -r stm_p_basic", self.fixture.commands())
+        self.assertNotIn("modprobe stm_core", self.fixture.commands())
 
     def test_busybox_find_fixture_rejects_formatted_output(self):
         forbidden = "-" + "printf"
@@ -279,7 +305,7 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertIn("module vermagic mismatch", result.stderr)
         self.assertEqual(self.fixture.modules(), "")
 
-    def test_ambiguous_stm_devices_are_rejected_and_modules_rolled_back(self):
+    def test_ambiguous_stm_devices_are_rejected_before_module_load(self):
         self.fixture._write(
             self.fixture.sysfs /
             "bus/coresight/devices/stm1/enable_source", "0\n")
@@ -289,6 +315,7 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected exactly one CoreSight stm0", result.stderr)
         self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
 
     def test_etr_sink_is_rejected(self):
         self.fixture._write(
@@ -311,6 +338,22 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("refusing ETR sink", result.stderr)
         self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
+
+    def test_invalid_sink_argument_is_rejected_before_module_load(self):
+        result = subprocess.run([
+            str(SCRIPT),
+            "--module", str(self.fixture.module),
+            "--module-sha256", self.fixture.module_sha,
+            "--sink", "tmc_funnel0",
+            "--capture-out", str(self.fixture.capture),
+        ], cwd=ROOT, env=self.fixture.env, text=True, capture_output=True,
+           timeout=10)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("sink must be a tmc_etf* device", result.stderr)
+        self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
 
     def test_ambiguous_etf_sink_is_rejected(self):
         self.fixture._write(
@@ -326,6 +369,37 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected exactly one explicit ETF sink candidate",
                       result.stderr)
+        self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
+
+    def test_absent_topology_loads_core_then_enumerates_before_p_basic(self):
+        self.fixture.remove_coresight_topology()
+
+        result = self.fixture.run(env={"FAKE_MODPROBE_CREATES_TOPOLOGY": "1"})
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("coresight-enumeration-phase: pre-load", result.stdout)
+        self.assertIn("coresight-topology-state: absent", result.stdout)
+        self.assertIn("coresight-enumeration-phase: post-stm-core-load",
+                      result.stdout)
+        lines = self.fixture.command_lines()
+        self.assertEqual(lines[0], "modprobe stm_core")
+        self.assertTrue(lines[1].startswith("insmod "))
+        self.assertEqual(lines[-2:], ["rmmod stm_p_basic",
+                                      "modprobe -r stm_core"])
+        self.assertEqual(self.fixture.modules(), "")
+
+    def test_absent_topology_rolls_back_core_without_p_basic(self):
+        self.fixture.remove_coresight_topology()
+
+        result = self.fixture.run()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("missing CoreSight sysfs topology", result.stderr)
+        self.assertEqual(self.fixture.command_lines(), [
+            "modprobe stm_core",
+            "modprobe -r stm_core",
+        ])
         self.assertEqual(self.fixture.modules(), "")
 
     def test_pre_enabled_source_is_refused_without_disabling_it(self):

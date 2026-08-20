@@ -22,6 +22,11 @@ Safety properties:
 
 - attests `hostname=hotdog`, `uname -m=aarch64` and `uname -r=6.16.0-sm8150`;
 - validates the exact module hash and vermagic before loading;
+- rejects invalid sink names and `tmc_etr*` sink arguments before any module
+  load attempt;
+- pre-enumerates the existing CoreSight topology before module load; if STM/ETF
+  devices are already visible, it requires exactly one `stm0`, one STM class
+  `stm0` and one explicit `tmc_etf*` sink before `stm_p_basic` can be loaded;
 - accepts explicit `tmc_etf*` sinks even when they expose `buffer_size`, refuses
   `tmc_etr*`, and never writes `buffer_size`;
 - refuses pre-enabled STM/ETF paths and pre-existing smoke policies;
@@ -37,6 +42,12 @@ The capture file remains private lab evidence until reviewed. Loading an
 out-of-tree module can taint the kernel; `rmmod` removes the module but does not
 clear that taint. If a clean-taint proof is required for a later lease, schedule
 a separate pre-test reboot before running the smoke.
+
+The only supported path where module mutation precedes complete CoreSight
+topology validation is the cold case where no STM/ETF topology is visible and
+`stm_core`/`stm_p_basic` are not already loaded. In that case the script loads
+`stm_core`, immediately repeats topology enumeration, and only then permits the
+reviewed `stm_p_basic.ko` load.
 
 ## Runtime command set
 

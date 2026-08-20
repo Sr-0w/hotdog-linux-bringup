@@ -298,6 +298,8 @@ validate_args() {
 	[[ -f "$MODULE_PATH" ]] || die "--module is not a regular file: $MODULE_PATH"
 	[[ "$MODULE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || die "--module-sha256 must be 64 hex characters"
 	[[ "$SINK_NAME" != */* && "$SINK_NAME" != *..* && -n "$SINK_NAME" ]] || die "--sink must be a device name"
+	[[ "$SINK_NAME" != tmc_etr* ]] || die "refusing ETR sink: $SINK_NAME"
+	[[ "$SINK_NAME" == tmc_etf* ]] || die "sink must be a tmc_etf* device: $SINK_NAME"
 	[[ "$CAPTURE_OUT" == /* ]] || die "--capture-out must be an absolute path"
 	[[ ! -e "$CAPTURE_OUT" ]] || die "--capture-out already exists: $CAPTURE_OUT"
 	capture_parent=${CAPTURE_OUT%/*}
@@ -345,13 +347,15 @@ capture_module_prestate() {
 		"$PRE_STM_CORE_LOADED" "$PRE_STM_P_BASIC_LOADED"
 }
 
-load_modules() {
+load_stm_core() {
 	if [[ "$PRE_STM_CORE_LOADED" -eq 0 ]]; then
 		modprobe stm_core
 		module_loaded stm_core || die "stm_core did not load"
 		INTRODUCED_STM_CORE=1
 	fi
+}
 
+load_stm_p_basic() {
 	if [[ "$PRE_STM_P_BASIC_LOADED" -eq 0 ]]; then
 		insmod "$MODULE_PATH"
 		module_loaded stm_p_basic || die "stm_p_basic did not load"
@@ -392,18 +396,43 @@ connections_summary() {
 }
 
 enumerate_coresight() {
+	local phase=$1
+	local allow_absent=${2:-0}
 	local cs_root="$SYSFS_ROOT/bus/coresight/devices"
 	local stm_class_root="$SYSFS_ROOT/class/stm"
 	local stms class_stms etfs etrs
 
-	[[ -d "$cs_root" ]] || die "missing CoreSight sysfs root: $cs_root"
-	[[ -d "$stm_class_root" ]] || die "missing STM class root: $stm_class_root"
+	printf 'coresight-enumeration-phase: %s\n' "$phase"
+
+	if [[ ! -d "$cs_root" || ! -d "$stm_class_root" ]]; then
+		printf 'coresight-topology-state: absent\n'
+		if [[ -d "$cs_root" ]]; then
+			printf 'coresight-root: present\n'
+		else
+			printf 'coresight-root: missing\n'
+		fi
+		if [[ -d "$stm_class_root" ]]; then
+			printf 'stm-class-root: present\n'
+		else
+			printf 'stm-class-root: missing\n'
+		fi
+		[[ "$allow_absent" -eq 1 ]] && return 2
+		die "missing CoreSight sysfs topology"
+	fi
 
 	mapfile -t stms < <(collect_matching_devices "$cs_root" stm)
 	mapfile -t class_stms < <(list_child_names "$stm_class_root")
 	mapfile -t etfs < <(collect_matching_devices "$cs_root" etf | sort)
 	mapfile -t etrs < <(collect_matching_devices "$cs_root" etr | sort)
 
+	if [[ "${#stms[@]}" -eq 0 && "${#class_stms[@]}" -eq 0 &&
+	      "${#etfs[@]}" -eq 0 && "${#etrs[@]}" -eq 0 ]]; then
+		printf 'coresight-topology-state: absent\n'
+		[[ "$allow_absent" -eq 1 ]] && return 2
+		die "missing CoreSight sysfs topology"
+	fi
+
+	printf 'coresight-topology-state: visible\n'
 	printf 'coresight-stm-devices: %s\n' "${stms[*]:-none}"
 	printf 'stm-class-devices: %s\n' "${class_stms[*]:-none}"
 	printf 'coresight-etf-candidates: %s\n' "${etfs[*]:-none}"
@@ -411,8 +440,6 @@ enumerate_coresight() {
 
 	[[ "${#stms[@]}" -eq 1 && "${stms[0]}" == "stm0" ]] || die "expected exactly one CoreSight stm0"
 	[[ "${#class_stms[@]}" -eq 1 && "${class_stms[0]}" == "stm0" ]] || die "expected exactly one STM class stm0"
-	[[ "$SINK_NAME" != tmc_etr* ]] || die "refusing ETR sink: $SINK_NAME"
-	[[ "$SINK_NAME" == tmc_etf* ]] || die "sink must be a tmc_etf* device: $SINK_NAME"
 	[[ "${#etfs[@]}" -eq 1 && "${etfs[0]}" == "$SINK_NAME" ]] || die "expected exactly one explicit ETF sink candidate: $SINK_NAME"
 
 	SINK_CS="$cs_root/$SINK_NAME"
@@ -425,6 +452,19 @@ enumerate_coresight() {
 
 	printf 'stm-connections: %s\n' "$(connections_summary "$STM_CS")"
 	printf 'sink-connections: %s\n' "$(connections_summary "$SINK_CS")"
+}
+
+prepare_coresight_topology() {
+	if enumerate_coresight pre-load 1; then
+		return 0
+	fi
+
+	[[ "$PRE_STM_CORE_LOADED" -eq 0 && "$PRE_STM_P_BASIC_LOADED" -eq 0 ]] ||
+		die "CoreSight topology absent while STM modules are already loaded"
+
+	printf 'coresight-topology-load: no pre-existing topology; loading stm_core before second enumeration\n'
+	load_stm_core
+	enumerate_coresight post-stm-core-load 0
 }
 
 capture_prestate() {
@@ -505,8 +545,8 @@ main() {
 	attest_device
 	verify_module_file
 	capture_module_prestate
-	load_modules
-	enumerate_coresight
+	prepare_coresight_topology
+	load_stm_p_basic
 	capture_prestate
 	create_policy
 	run_smoke
