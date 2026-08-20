@@ -1,0 +1,323 @@
+{
+  "schema": "hotdog-sensors-slpi-repro-v1",
+  "mission": "SENSORS-SLPI-02",
+  "device": "oneplus-hotdog / HD1913 / SM8150",
+  "status": "offline reproducibility manifest; external firmware and registry capture required",
+  "hardware_candidate_status": "BLOCKED_NEEDS_QUALCOMM_PARSER_EVIDENCE",
+  "format_validation": {
+    "parser_proof": false,
+    "standard_json_check": "python3 -B -m json.tool is not a Qualcomm parser proof",
+    "policy": "preserve the captured bytes unchanged; stage only with --allow-blocked for offline opaque-parser experiments",
+    "blocked_files": [
+      {
+        "path": "sns_cm.json",
+        "source": "firmware/sensors/config/sns_cm.json",
+        "size": 638,
+        "sha256": "b024a3fb6ea13fd7c6a1e49bc2965983d0d1bf391ab486f67a6e13935b85dd6c",
+        "reason": "literal :wq! appears inside the soc_id array between values; standard JSON parsing fails",
+        "action": "do not edit; require Qualcomm parser acceptance evidence"
+      },
+      {
+        "path": "msmnile_mmc5603nj.json",
+        "source": "firmware/sensors/config-curated/45/msmnile_mmc5603nj.json",
+        "size": 5962,
+        "sha256": "ef36624ee32da1d715ee5a17645fe6ca0450ebe8d5461acc901c08f4fb26b502",
+        "reason": "raw tab character occurs inside the captured data string at line 115; standard JSON parsing fails",
+        "action": "do not edit; require Qualcomm parser acceptance evidence"
+      }
+    ]
+  },
+  "baseline": {
+    "git_commit": "6dcf72f36ea8e3858574ba1a971fdfd56f80723b",
+    "git_tree": "6becb099b8b48b376c73f16110646cfb00a949f9",
+    "config_pool": {
+      "path": "firmware/sensors/config",
+      "file_count": 65,
+      "sha256_sorted_sha_path": "8f3612b05077b6631936b3e8bd86c1e3c269d695e110420fd2d1bcda87537b72",
+      "role": "OxygenOS 11 source pool; mutually exclusive alternatives, not a runtime set"
+    },
+    "curated_physical_evidence": {
+      "source_manifest": "logs/2026-08-20-sensors-curated-physical/00-curated-config.sha256",
+      "source_manifest_sha256": "bb3ecae7faf9343f908cdeae28492b8dc225a0760c7b6a4f3640a9bcb6854cc2",
+      "file_count": 45,
+      "path_policy": "stable tracked basenames below replace the original temporary capture paths"
+    }
+  },
+  "config_selection": {
+    "runtime_root": "sensors/config",
+    "baseline_45": [
+      {"path": "default_sensors.json", "source": "firmware/sensors/config/default_sensors.json", "size": 1777, "sha256": "f071750569c6ba7fa9d28e28a28bd79f26c8705056000d003952b83e4ed51a84"},
+      {"path": "lsm6dsm_0.json", "source": "firmware/sensors/config/lsm6dsm_0.json", "size": 1860, "sha256": "221ef27478012c979c14dcdb145ee07f2a86679aea95e86262fc43265f948c5d"},
+      {"path": "mmc5603nj_0.json", "source": "firmware/sensors/config/mmc5603nj_0.json", "size": 583, "sha256": "a8df6d57dbc91cb3ad72f4a16cac98cb83efc287706809e3217d37386d4a2a24"},
+      {"path": "msmnile_irq.json", "source": "firmware/sensors/config/msmnile_irq.json", "size": 161, "sha256": "39efcfed8b6a7057873b7c22084a7c79931500a174b1685fd54eb4c6b09e62f0"},
+      {"path": "msmnile_lsm6dsm.json", "source": "firmware/sensors/config/msmnile_lsm6dsm.json", "size": 6616, "sha256": "222ad1223dc6d92a900655c6779190f86bbcf7451e29097eaa26ff10586ffe5b"},
+      {"path": "msmnile_mmc5603nj.json", "source": "firmware/sensors/config-curated/45/msmnile_mmc5603nj.json", "size": 5962, "sha256": "ef36624ee32da1d715ee5a17645fe6ca0450ebe8d5461acc901c08f4fb26b502"},
+      {"path": "msmnile_power_0.json", "source": "firmware/sensors/config/msmnile_power_0.json", "size": 8739, "sha256": "0baa123b3522fa794eb38a67f5b29faa696c8165f2dd8ef7f6573502694629f4"},
+      {"path": "msmnile_sx9324_op.json", "source": "firmware/sensors/config/msmnile_sx9324_op.json", "size": 2424, "sha256": "afd5d29d4d39236768c3fcf4c49e7979246fc55171e042390cdb8c3d8f85fbf7"},
+      {"path": "msmnile_tcs3701.json", "source": "firmware/sensors/config/msmnile_tcs3701.json", "size": 4237, "sha256": "cb6868ed747c400da77131368f89de10cdf122f9600618eb9141f8b0854480eb"},
+      {"path": "sns_amd.json", "source": "firmware/sensors/config/sns_amd.json", "size": 583, "sha256": "20b1f3935ef7cc3eac4e0ee722e49a823ec3c82c04a5e3cfec7cc8d1208de12b"},
+      {"path": "sns_amd_sw_disabled.json", "source": "firmware/sensors/config/sns_amd_sw_disabled.json", "size": 244, "sha256": "47a236823cd281bf04e30cfcbea9bf1a0e95afd7e14becd07c4cb9ab427ede93"},
+      {"path": "sns_amd_sw_enabled.json", "source": "firmware/sensors/config/sns_amd_sw_enabled.json", "size": 423, "sha256": "d43c84f5e2fa680ab1b043d28616317e0463fc90f76c703cc0a2fe5cbae5ff4c"},
+      {"path": "sns_aont.json", "source": "firmware/sensors/config/sns_aont.json", "size": 142, "sha256": "e635f641b0ef34e7f232e21518df475907e9820d8f95394c17811d280c1d47fd"},
+      {"path": "sns_basic_gestures.json", "source": "firmware/sensors/config/sns_basic_gestures.json", "size": 1094, "sha256": "683264cdb3beb82e86c6fce5cb7390d2893054620cb0e606b3d3b9a8f8a1db8b"},
+      {"path": "sns_bring_to_ear.json", "source": "firmware/sensors/config/sns_bring_to_ear.json", "size": 1108, "sha256": "28a32d23eea4c9b5452240f75b68da1ebe9985731b891b9eb70f777d9b23a575"},
+      {"path": "sns_ccd.json", "source": "firmware/sensors/config/sns_ccd.json", "size": 6215, "sha256": "18abc6f814e4896b1832bde539ac133040ddaf0a40e394bd5e294c76af9c81a5"},
+      {"path": "sns_ccd_v2_walk.json", "source": "firmware/sensors/config/sns_ccd_v2_walk.json", "size": 450, "sha256": "f6098b69612a5d83dfec547f299cccb8504521d638846f0a0bc3e051fb6df197"},
+      {"path": "sns_ccd_v3_1_walk.json", "source": "firmware/sensors/config/sns_ccd_v3_1_walk.json", "size": 1253, "sha256": "366015375183cfa27a09f65f74aec3523babffbf6a7e9603a8bec2fbabb41426"},
+      {"path": "sns_ccd_v3_walk.json", "source": "firmware/sensors/config/sns_ccd_v3_walk.json", "size": 1230, "sha256": "9a6e88129cba6127c7dfbe3bc820045ed8fdfe1b4647f0d3a9aa4b3d03d61312"},
+      {"path": "sns_cm.json", "source": "firmware/sensors/config/sns_cm.json", "size": 638, "sha256": "b024a3fb6ea13fd7c6a1e49bc2965983d0d1bf391ab486f67a6e13935b85dd6c"},
+      {"path": "sns_dae.json", "source": "firmware/sensors/config/sns_dae.json", "size": 234, "sha256": "b9d9139a9be68c355054b5fa728bc812a0821c3284d3d5ccdf3755b5f47f8e4b"},
+      {"path": "sns_device_orient.json", "source": "firmware/sensors/config/sns_device_orient.json", "size": 1083, "sha256": "9c0b897fef35c3aeb4f93862cca50aebaf29eb9e6636d50c5d3dbb1bc9740b08"},
+      {"path": "sns_diag_filter.json", "source": "firmware/sensors/config/sns_diag_filter.json", "size": 5708, "sha256": "d21f8e7165e7962a2c690aca89abd3ef05c80e3d939a06b0a91f1925e3f935b9"},
+      {"path": "sns_distance_bound.json", "source": "firmware/sensors/config/sns_distance_bound.json", "size": 998, "sha256": "d0b76fcbb4f06a25b4bf15e51ed1f3d0576e4a3b001a13257457c7585cf7937d"},
+      {"path": "sns_dpc.json", "source": "firmware/sensors/config/sns_dpc.json", "size": 788, "sha256": "a69529dd311e2ff8d2f3a4e309b01942cdb9d15da78063c04d0579d03f39ce4c"},
+      {"path": "sns_facing.json", "source": "firmware/sensors/config/sns_facing.json", "size": 760, "sha256": "5d57b5c548ebfe42d00cdd63f961bb9c925a1322f4482320e5e9fb2275ebe0b7"},
+      {"path": "sns_fmv.json", "source": "firmware/sensors/config/sns_fmv.json", "size": 1473, "sha256": "9af6d0c5e976d0abf6d9a5dfdd190d9498983b4ecb2064ad8c6d0a9ff0f705e6"},
+      {"path": "sns_fmv_legacy.json", "source": "firmware/sensors/config/sns_fmv_legacy.json", "size": 1562, "sha256": "ffd89c6dbc4eeb9f5995137533e915ca4ac53117a12ac04a900208d63222049d"},
+      {"path": "sns_geomag_rv.json", "source": "firmware/sensors/config/sns_geomag_rv.json", "size": 1072, "sha256": "c28acc6286c6df694bdef460cb752dbda97ec4c0e2b199ace74cbf373e41db83"},
+      {"path": "sns_gyro_cal.json", "source": "firmware/sensors/config/sns_gyro_cal.json", "size": 802, "sha256": "f3bf3b8ab6d72d5d476e1067206b40e9e420766a322a229a34c531aeb0328f28"},
+      {"path": "sns_heart_rate.json", "source": "firmware/sensors/config/sns_heart_rate.json", "size": 3591, "sha256": "988c45a103ce8e30adcb399aed58692a53ae80c13e768f22d62563715f3a2226"},
+      {"path": "sns_mag_cal.json", "source": "firmware/sensors/config/sns_mag_cal.json", "size": 527, "sha256": "8faf2a26d6674bd8c7c9cb37432805578307b0ae8603bc4914686859046f2891"},
+      {"path": "sns_mag_cal_legacy.json", "source": "firmware/sensors/config/sns_mag_cal_legacy.json", "size": 306, "sha256": "bc1dccfa39a4089169fec6e12271fee9f802f54461f6ce0bc5c9d83bd4ff8ac4"},
+      {"path": "sns_multishake.json", "source": "firmware/sensors/config/sns_multishake.json", "size": 767, "sha256": "36aeb77ed11fefb4fa059b7c6f9d6a600f9f02e38399b01126b4ebb74cd56218"},
+      {"path": "sns_pedometer.json", "source": "firmware/sensors/config/sns_pedometer.json", "size": 936, "sha256": "20ce880b80123738df7d2ed5f6c147cbfa045d1499dbbca2edb19af8ece45231"},
+      {"path": "sns_rmd.json", "source": "firmware/sensors/config/sns_rmd.json", "size": 774, "sha256": "5362b5174d95cb18079b1eb7a49994a02554646e4a724e26b4b7c5484446eb10"},
+      {"path": "sns_rotv.json", "source": "firmware/sensors/config/sns_rotv.json", "size": 701, "sha256": "e21a96041cc497939e67bc1bb71f48d163113af8121f971d8cc9d5eb82545398"},
+      {"path": "sns_smd.json", "source": "firmware/sensors/config/sns_smd.json", "size": 1207, "sha256": "20e59adc7e88ec4c3a099295a315265d830dbe2652b30d786183d432b08c718e"},
+      {"path": "sns_tilt.json", "source": "firmware/sensors/config/sns_tilt.json", "size": 668, "sha256": "a9fccf6cbe6892171fa38fca766caa2316d896da5bcf0460a091617a6e46fc60"},
+      {"path": "sns_tilt_sw_disabled.json", "source": "firmware/sensors/config/sns_tilt_sw_disabled.json", "size": 253, "sha256": "141d8f6205c31c8ec9d91b1fcc299de333b5cf97de9d84528bc875dde01b9a1f"},
+      {"path": "sns_tilt_sw_enabled.json", "source": "firmware/sensors/config/sns_tilt_sw_enabled.json", "size": 417, "sha256": "f61827b584578a67897543b86c174ce116b46f8d137bd796f089625e38ea4920"},
+      {"path": "sns_tilt_to_wake.json", "source": "firmware/sensors/config/sns_tilt_to_wake.json", "size": 1439, "sha256": "b33b7ef0ab0aeb85d167b75a0aff34467eac3a3a94b6b9043d298b2216b0c80b"},
+      {"path": "sns_wrist_pedo.json", "source": "firmware/sensors/config/sns_wrist_pedo.json", "size": 654, "sha256": "801ed332d173c0e8d09d22e0a67ebdcf14efaf02456385bc488a3e7b4e34fc49"},
+      {"path": "sx932x_0.json", "source": "firmware/sensors/config/sx932x_0.json", "size": 572, "sha256": "bca39ee3dd0277f36abbb2cc2901d60cf3cde951df52fe63a378dd5244889e0d"},
+      {"path": "tcs3701.json", "source": "firmware/sensors/config/tcs3701.json", "size": 1064, "sha256": "ec19d281c483fe11c7419e3f7e1ebcf6a3a9479c027bb2bca5ec35437ddb92f2"}
+    ],
+    "alsps_variant_47_additions": [
+      {"path": "alsps.json", "source": "firmware/sensors/config/alsps.json", "size": 961, "sha256": "2df496e3c4a0c10cf73692884f34f0039928ffd0f36804d81f6fe46594006f3e"},
+      {"path": "msmnile_alsps.json", "source": "firmware/sensors/config/msmnile_alsps.json", "size": 2401, "sha256": "b81fbe2a8eca1e1e4c6f6560231fda07223a995203bc654647a401476accf085"}
+    ],
+    "excluded_from_runtime": "all other files in the 65-file pool, including alternative ALS/PS, IMU, SAR and magnetometer device definitions",
+    "curated_overrides": [
+      {
+        "path": "firmware/sensors/config-curated/45/msmnile_mmc5603nj.json",
+        "reason": "the OOS11 physical capture is byte-identical in content to the pool entry but uses CRLF; the explicit overlay preserves its 5962-byte captured identity",
+        "pool_entry_sha256": "dabc3dd85587a9f370e8b1a6e9a73f02cb35091fd7f4325e6d8d8559b736cc97",
+        "pool_entry_size": 5742,
+        "capture_sha256": "ef36624ee32da1d715ee5a17645fe6ca0450ebe8d5461acc901c08f4fb26b502",
+        "capture_size": 5962
+      }
+    ]
+  },
+  "alsps_identity": {
+    "owner": "sns_alsps",
+    "i2c_instance": 3,
+    "slave_address_decimal": 70,
+    "slave_address_hex": "0x46",
+    "dri": 120,
+    "bus_khz": 400,
+    "rails": ["/pmic/client/sensor_vdd", "/pmic/client/sensor_vddio"],
+    "tcs3701_alternative": {"owner": "sns_tcs3701", "slave_address_decimal": 57, "slave_address_hex": "0x39", "dri": 117},
+    "cct_decision": {
+      "baseline_present": false,
+      "added_by": "ff832f37c7f8f8e27d06193fc857a3a509c968a1",
+      "removed_by": "cf762002f0964c99e0d8c1cddf60347a0c336068",
+      "removed_block": "alsps_platform.cct.fac_cal",
+      "policy": "do not synthesize or silently re-add .cct; capture and hash the registry request separately before selecting a future CCT candidate"
+    }
+  },
+  "image_v16": {
+    "label": "2026-08-16-smb5-complete-v16-900ma",
+    "source_manifest": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/MANIFEST.md",
+    "hash_manifest": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/SHA256SUMS",
+    "kernel_source_commit": "f6b7912af50e0c30b45d85531cb049909f2752b5",
+    "kernel_config": {"path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/.config", "size": 234893, "sha256": "9794e6dfcff27a6339b2ce9d60feebbd174481e36d8462607bebc1f3297a4156", "tracked": false},
+    "artifacts": [
+      {"name": "Image", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/arch/arm64/boot/Image", "size": 27639816, "sha256": "9871837071bfb350d380e730f719c88b5cb45f3dd7928dc9f5b080b6b4747bc9", "tracked": false},
+      {"name": "DTB", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dtb", "size": 163748, "sha256": "ed287502b67dc42e01bd9349091182994338da8da1a8d95cd24ca120b1ef4a1b", "tracked": false},
+      {"name": "initramfs", "path": "build/2026-08-16-smb5-complete-v16-900ma/ramdisk-smb5-v16-900ma.gz", "size": 9211749, "sha256": "0ced7954e5c46ccf506a44289e6acecc13bbbdd5408382cf55b3221d52c1db23", "tracked": false},
+      {"name": "rootfs-full-disk-image", "path": "build/2026-08-16-smb5-complete-v16-900ma/oneplus-hotdog-smb5-v16-900ma.img", "size": 14096007168, "sha256": "da14ec85cdde39336baf84bacbf33b11e8aa609c3e527b324cb9e3e7f0113324", "tracked": false},
+      {"name": "boot-image-raw", "path": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/boot-smb5-complete-v16-900ma.img", "size": 37023744, "sha256": "21b4064bd223dcc46d2083c3d3e25423d11c62640c66cd661bee2263e2e1adbe", "tracked": false},
+      {"name": "boot-image-avb", "path": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/boot.img", "size": 100663296, "sha256": "1f4fb9f5b2d56faa0b9581774cdda89241c363b2f643bbdc78659247cb67d8a9", "tracked": false},
+      {"name": "component-kernel", "path": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/components/kernel", "size": 27639816, "sha256": "9871837071bfb350d380e730f719c88b5cb45f3dd7928dc9f5b080b6b4747bc9", "tracked": false},
+      {"name": "component-DTB", "path": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/components/dtb", "size": 163748, "sha256": "ed287502b67dc42e01bd9349091182994338da8da1a8d95cd24ca120b1ef4a1b", "tracked": false},
+      {"name": "component-initramfs", "path": "images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma/components/ramdisk", "size": 9211749, "sha256": "0ced7954e5c46ccf506a44289e6acecc13bbbdd5408382cf55b3221d52c1db23", "tracked": false}
+    ],
+    "build_command": "./scripts/build-mainline-direct-bootimg.sh --kernel build/2026-08-16-smb5-dwc3-icl-900ma-out/arch/arm64/boot/Image --dtb build/2026-08-16-smb5-dwc3-icl-900ma-out/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dtb --ramdisk build/2026-08-16-smb5-complete-v16-900ma/ramdisk-smb5-v16-900ma.gz --cmdline-file images/pmos-experiments/2026-08-13-camera-composite-becdecdf/components/cmdline.txt --outdir images/pmos-experiments/2026-08-16-smb5-complete-v16-900ma --name boot-smb5-complete-v16-900ma --partition-size 100663296",
+    "rootfs_validation": {"evidence": "logs/2026-08-16-smb5-complete-v16-900ma/17-rootfs-complete-validation.txt", "known_defects": ["usr/sbin/sshd reported MISSING", "usr/bin/tinydm reported MISSING despite service entries"]}
+  },
+  "slpi_00121": {
+    "active_mbn": {"path": "backups/slpi-active-00121/slpi.mbn", "size": 6249778, "sha256": "6e80f8a6178177f18f20be8c468053c9ce7daa2c80171d694db6494bc07caa92", "tracked": false},
+    "split_capture_root": "backups/slpi-current-00121",
+    "split_files": [
+      {"name": "slpi.mdt", "size": 8380, "sha256": "fc286a65f45f7d404331a062fa3d59cd71f4594c5df5478e89123586a8e6fd46"},
+      {"name": "slpi.b00", "size": 756, "sha256": "55abacaa559e3951d5b5e230ea872bf23a30c88130f1a21d83b684f8cc9fe5c6"},
+      {"name": "slpi.b01", "size": 7624, "sha256": "804e6d0e8a24843170a681f19f1d7bebb089c236fdf7a67441e471e9ab49b6b6"},
+      {"name": "slpi.b02", "size": 10012, "sha256": "885cd37078073dfaaaa1a6017b18fb25fb60d01a2e221f22c5082b378de496c5"},
+      {"name": "slpi.b03", "size": 168588, "sha256": "5ce3a041398bd2fbca32271b6532cb165938154fdf44d3cea82607e07147b6de"},
+      {"name": "slpi.b04", "size": 2048432, "sha256": "a85bca0139d8ecca3d5b3930a674bce76d5a847575464bf4d319615b4495b509"},
+      {"name": "slpi.b05", "size": 1248496, "sha256": "ae90c9c7805ac97a39f44cb0d73cc6577fe8d5b28721014ac76587f514523154"},
+      {"name": "slpi.b06", "size": 178516, "sha256": "8cc0d19abba7a012c790b44e828d55c0c3ea25bbf5233ce7990e435177c7c301"},
+      {"name": "slpi.b07", "size": 88044, "sha256": "fd54a7ff9e5a97d642403fe16d9e85927104af9f4706b89561fb35e6e162b8db"},
+      {"name": "slpi.b08", "size": 29248, "sha256": "1bea8062ff6421666076fff6bfc8d5cb87b6b3c2bde0d4bb2d3e72d0db2aa243"},
+      {"name": "slpi.b09", "size": 82, "sha256": "f71e99b136488bea1d0e0fa42c68091cc6e498541059579f9171b3688bac6f42"},
+      {"name": "slpi.b10", "size": 12288, "sha256": "f3cc103136423a57975750907ebc1d367e2985ac6338976d4d5a439f50323f4a"},
+      {"name": "slpi.b11", "size": 969785, "sha256": "00d909e354158afddbe489d5caf54d78c87e257b8b6aa4aa01a0d0419e7d1394"},
+      {"name": "slpi.b12", "size": 214200, "sha256": "b8594360f183db5c988db360dfcb872c4b63397afb325c096589aef45785b786"},
+      {"name": "slpi.b13", "size": 199844, "sha256": "e207fb611466881a09cef2ab7cd2e8b947caf8e38894ca13c1cf4d74efb704ca"},
+      {"name": "slpi.b14", "size": 24580, "sha256": "afad3a1363dccbeb8a84aa2b591f0c7f65cd535645a89833125a85c26ed7909f"},
+      {"name": "slpi.b15", "size": 92848, "sha256": "4802e34e35330c80fcd8506f4ebd339f3194704efdc155b5bd54548c8d617c23"},
+      {"name": "slpi.b16", "size": 53140, "sha256": "f41f444dd73ab895d5b9d0d4efa3de0e604ed905c51dd6227961acf4acc549aa"},
+      {"name": "slpi.b17", "size": 451428, "sha256": "e3c0afd37906c04c800dc8c21b64c2638b66c8e03eaca0f2383c62f0f6c7520a"},
+      {"name": "slpi.b18", "size": 56644, "sha256": "0a8a5b0597d47a0767025dd683dad8d8db263fab04987c0c84a2402b54235a14"},
+      {"name": "slpi.b19", "size": 368772, "sha256": "e13bce3d6c0ddea664b44fba11b8d5dbd074c76a9e30b0497ab5e1c022e007b1"},
+      {"name": "slpi.b20", "size": 260, "sha256": "33a2a0e1a364bb648601987aa91c6c593fbbf67466ef94710b17f7f09b4aefbb"}
+    ],
+    "reassembly_command": "python3 scripts/slpi/build-slpi-elf.py <slpi-00121-segment-directory> <output>/slpi-00121.elf",
+    "provenance": "local capture; no firmware bytes are committed or published"
+  },
+  "qrtr_kernel_modules": [
+    {"name": "qrtr.ko", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/net/qrtr/qrtr.ko", "size": 868112, "sha256": "23347a4f5a250c435d98db67f08ce36d567879a46c125c69b102832ce7234b94"},
+    {"name": "qrtr-smd.ko", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/net/qrtr/qrtr-smd.ko", "size": 268120, "sha256": "b9cbe84f3d096ade22e0cf6ec2ecbd5ea5d6273fc8812128af3c65094b497483"},
+    {"name": "qrtr-tun.ko", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/net/qrtr/qrtr-tun.ko", "size": 276016, "sha256": "fc6b4e16615b845a52203e2f2d4e1142738b3bd80141d81090d76429292f65db"},
+    {"name": "qrtr-mhi.ko", "path": "build/2026-08-16-smb5-dwc3-icl-900ma-out/net/qrtr/qrtr-mhi.ko", "size": 481072, "sha256": "f687af785db31b25dc5ba51d3d2dd6b5898aa882aad688f63f6264f1059729da"}
+  ],
+  "tracked_helpers": [
+    {"path": "helpers/qrtr-services.py", "size": 2098, "sha256": "ac3db77214c39c93a670098a0120756322e1f6485458210e40b9ff07251b5005"},
+    {"path": "helpers/ssc-client.py", "size": 9290, "sha256": "4d637f1129042782c085dffe60db010810853282fd61b43508633a321d7897dd"},
+    {"path": "helpers/ssc-subscribe.py", "size": 5373, "sha256": "f0e8871c6a1b68e3ad76e5e3a3a00a771e22a359d098d43775888657a7e4a41c"},
+    {"path": "helpers/qdssc-client.py", "size": 5552, "sha256": "16288e3ced53af787f0dc991782940b4d5e9d9efa1bd0cfcbcee13cf01910d20"},
+    {"path": "helpers/slpi-ulog-coredump.py", "size": 12060, "sha256": "16f5828c68576f8385289de29bd3c713bfde374114b312634d5680aa940df660"},
+    {"path": "scripts/slpi/slpi-disassemble.sh", "size": 2644, "sha256": "6467aeed93d5b7989e8cf88473ea23cab2a4998fbddac314fd0b82cba05ef17c"},
+    {"path": "scripts/slpi/build-slpi-elf.py", "size": 2196, "sha256": "0173a0db0513888790ed231576fb591f6e3c08125d18e6ce47402814da28dfa8"}
+  ],
+  "runtime_registry": {
+    "mapping": {
+      "sns_reg.conf": "/vendor/etc/sensors/sns_reg_config -> sensors/sns_reg.conf",
+      "sns_reg_version": "runtime sensors/sns_reg_version",
+      "config": "/vendor/etc/sensors/config -> sensors/config",
+      "registry": "/persist/sensors/registry/registry -> sensors/registry"
+    },
+    "required_external_root_layout": ["sns_reg.conf", "sns_reg_version", "config/", "registry/"],
+    "capture_state": {
+      "clean_registry_trial_files": 220,
+      "clean_sns_reg_version_sha256": "9c7a6b1706fbd672af64d908c7bd1044958ce50801e86d112fbfbba57f1dd4ff",
+      "curated_physical_config_files": 45,
+      "curated_physical_registry_files": 121,
+      "exact_registry_bytes_in_repo": false,
+      "exact_sns_reg_conf_in_repo": false,
+      "rollback_ready": false,
+      "blocker": "the current repository retains counts and logs, not the served registry/config root bytes"
+    },
+    "snapshot_command": "python3 scripts/sensors-slpi-repro.py snapshot --served-root <captured-sensors-root> --out <snapshot-dir> --quiesced",
+    "restore_command": "python3 scripts/sensors-slpi-repro.py restore --snapshot <snapshot-dir> --target <offline-sensors-root>"
+  },
+  "runtime_capture_candidate": {
+    "id": "sensors-slpi-04-runtime-20260820",
+    "status": "EXTERNAL_PRIVATE_CAPTURE_NOT_GIT",
+    "publication_policy": "metadata-only in this manifest; never publish the archive or extracted tree",
+    "capture_root": "logs/2026-08-20-sensors-slpi-04-runtime",
+    "runtime_root": "logs/2026-08-20-sensors-slpi-04-runtime/extracted/sensors",
+    "archive": {
+      "path": "logs/2026-08-20-sensors-slpi-04-runtime/sensors-active.tar",
+      "size": 286208,
+      "sha256": "f84436fa6369eb192653ada22a90bee762eab7a6f1e71bd0fc30cb1da5bdbe3f"
+    },
+    "local_manifest": {
+      "path": "logs/2026-08-20-sensors-slpi-04-runtime/sensors-active.local-manifest.tsv",
+      "size": 22605,
+      "sha256": "33adeb8c05e3e4b6c45bc970cea65de62769b478d3d3edb26af116270a580db7"
+    },
+    "runtime": {
+      "config_files": 48,
+      "config_bytes": 86196,
+      "registry_files": 133,
+      "registry_bytes": 47427,
+      "sns_reg_conf": {"path": "sns_reg.conf", "size": 597, "sha256": "63ad14bef0a37e96f8321d067edebb8ff786f5ef66f1447b75d57bb71b7bbd5e"},
+      "sns_reg_version": {"path": "sns_reg_version", "size": 10, "sha256": "9c7a6b1706fbd672af64d908c7bd1044958ce50801e86d112fbfbba57f1dd4ff"}
+    },
+    "slpi_00121": {
+      "mbn_sha256": "6e80f8a6178177f18f20be8c468053c9ce7daa2c80171d694db6494bc07caa92",
+      "matches_manifest": true
+    },
+    "mapping": {
+      "variant_45": {
+        "exact_selected_files": 45,
+        "missing": [],
+        "allowed_extras": ["alsps.json", "msmnile_alsps.json", "msmnile_power_0.json.pre-island-off-20260820"],
+        "status": "45_MATCH_PLUS_ALSPS_VARIANT_AND_OPERATIONAL_BACKUP"
+      },
+      "variant_47": {
+        "exact_selected_files": 47,
+        "missing": [],
+        "allowed_extras": ["msmnile_power_0.json.pre-island-off-20260820"],
+        "status": "47_MATCH_PLUS_OPERATIONAL_BACKUP"
+      },
+      "identity_note": "TCS3701-named files are present in the runtime config set; this does not change the ALSPS hardware identity established by the registry/config values"
+    },
+    "extras": [
+      {
+        "path": "config/msmnile_power_0.json.pre-island-off-20260820",
+        "size": 8739,
+        "sha256": "0baa123b3522fa794eb38a67f5b29faa696c8165f2dd8ef7f6573502694629f4",
+        "same_as": "config/msmnile_power_0.json",
+        "classification": "byte-identical operational backup retained by the runtime capture; not a separate sensor definition",
+        "integration_policy": "exclude from the selected runtime before staging"
+      },
+      {
+        "path": "registry/power.island.pre-island-off-20260820",
+        "size": 94,
+        "sha256": "e2d005116fba017b5588593fb175770ed6191f41b3f84c5a1cd9740b383336af",
+        "classification": "registry operational backup retained by the capture; part of the 133-file observed registry, not a Git source",
+        "integration_policy": "preserve only inside the private snapshot; do not package or promote independently"
+      }
+    ],
+    "gate_3": {
+      "command": "env HOTDOG_SENSOR_CAPTURE_ROOT=<runtime-capture-root> sh -c 'python3 scripts/sensors-slpi-repro.py gate3 --capture-root \"$HOTDOG_SENSOR_CAPTURE_ROOT\" --variant 47 --artifact-root \"$1\"' sh <artifact-root>",
+      "status": "OFFLINE_GATE_ONLY",
+      "hardware_ready": false,
+      "requires": ["private capture archive and local manifest hashes", "complete sensors-active.local-manifest.tsv tree validation", "45/47 config mapping", "registry count/hash validation", "SLPI 00121 artifact verification", "Qualcomm parser evidence before hardware Working"]
+    }
+  },
+  "package_boundary": {
+    "firmware_oneplus_hotdog": {"recipe": "aports/device/testing/firmware-oneplus-hotdog/APKBUILD", "pkgver": "20241212", "pkgrel": 5, "installs_sensor_configs": false, "installs_slpi_mbn": false},
+    "device_initramfs_firmware": {"recipe": "aports/device/testing/device-oneplus-hotdog/30-initramfs-firmware.files", "entries": ["/lib/firmware/qcom/a630_sqe.fw", "/lib/firmware/qcom/a640_gmu.bin", "/lib/firmware/qcom/sm8150/oneplus/hotdog/a640_zap.mbn"]},
+    "hexagonrpcd": {"recipe": "aports/main/hexagonrpcd/APKBUILD", "provides_mapping_only": true, "populates_sensor_root": false},
+    "policy": "do not package the 65-file pool or proprietary SLPI; stage the selected config and externally captured registry under an explicit integration step"
+  },
+  "dependencies": {
+    "host": ["python3 standard library", "sha256sum", "git"],
+    "runtime": ["kernel QRTR modules", "qrtr-lookup for ssc/qdssc helpers", "AF_QIPCRTR (42)"],
+    "helper_notes": ["ssc-subscribe imports local ssc-client", "no Python protobuf dependency"]
+  },
+  "reproduction": {
+    "verify_45": "python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 45",
+    "verify_47": "python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 47",
+    "stage_45_offline_only_blocked_parser_experiment": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 45 --allow-blocked --out-root <offline-root>",
+    "stage_47_offline_only_blocked_parser_experiment_with_clean_registry": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 47 --allow-blocked --external-root <clean-selected-sensors-root-without-private-backups> --out-root <offline-root>",
+    "image_rebuild": "see image_v16.build_command; kernel, DTB, initramfs and rootfs are external build outputs and must pass the hashes above",
+    "slpi_identity": "hash slpi.mbn and every slpi.mdt/slpi.b00..b20 segment against slpi_00121 before ELF reassembly"
+  },
+  "integration_protocol": [
+    "Obtain a byte-preserving OOS11/runtime capture outside Git; record sns_reg.conf, sns_reg_version, config and registry with the snapshot tool.",
+    "Run verify variant 45, then stage only 45 JSON files. Treat variant 47 as a separate ALSPS candidate.",
+    "Hash the exact SLPI 00121 MBN or all 22 split inputs; never substitute an OTA/other OxygenOS build.",
+    "Build the image from the recorded v16 inputs and compare Image, DTB, initramfs, rootfs and boot-image hashes.",
+    "Keep pmaports unchanged until registry and SLPI provenance are complete; no package may silently populate the sensor root.",
+    "Any later phone validation requires a separate explicit hardware lease and remote identity checks; this branch performs none."
+  ],
+  "known_risks": [
+    "No byte-for-byte registry or sns_reg.conf rollback artifact is currently available in the repository.",
+    "The current 45-file evidence has ephemeral source paths; this manifest remaps by basename and records every file hash.",
+    "The ALSPS CCT block is contradictory across ff832f3 and cf76200; it is intentionally not present in either staged variant.",
+    "The v16 rootfs validation reports missing sshd and tinydm binaries despite service entries.",
+    "All kernel/image/SLPI artifacts are local untracked captures; a clean clone alone cannot rebuild the exact candidate."
+  ],
+  "evidence": [
+    "docs/evidence/2026-08-19-which-sensors-this-board-actually-has.md",
+    "docs/evidence/2026-08-20-curated-sensor-config-and-sar-events.md",
+    "docs/evidence/2026-08-20-alsps-registry-request-set.md",
+    "docs/evidence/2026-08-20-tcs3701-only-slpi-coredump.md",
+    "logs/2026-08-20-sensors-curated-physical/00-curated-config.sha256",
+    "logs/2026-08-16-smb5-complete-v16-900ma/17-rootfs-complete-validation.txt"
+  ]
+}
