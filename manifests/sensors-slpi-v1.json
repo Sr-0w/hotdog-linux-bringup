@@ -127,7 +127,7 @@
     "split_files": [
       {"name": "slpi.mdt", "size": 8380, "sha256": "fc286a65f45f7d404331a062fa3d59cd71f4594c5df5478e89123586a8e6fd46"},
       {"name": "slpi.b00", "size": 756, "sha256": "55abacaa559e3951d5b5e230ea872bf23a30c88130f1a21d83b684f8cc9fe5c6"},
-      {"name": "slpi.b01", "size": 7624, "sha256": "804e6d0e8a24843170a681f19f1d7bebb089c236fdf7a67441e471e9ab49b6"},
+      {"name": "slpi.b01", "size": 7624, "sha256": "804e6d0e8a24843170a681f19f1d7bebb089c236fdf7a67441e471e9ab49b6b6"},
       {"name": "slpi.b02", "size": 10012, "sha256": "885cd37078073dfaaaa1a6017b18fb25fb60d01a2e221f22c5082b378de496c5"},
       {"name": "slpi.b03", "size": 168588, "sha256": "5ce3a041398bd2fbca32271b6532cb165938154fdf44d3cea82607e07147b6de"},
       {"name": "slpi.b04", "size": 2048432, "sha256": "a85bca0139d8ecca3d5b3930a674bce76d5a847575464bf4d319615b4495b509"},
