@@ -233,6 +233,16 @@ class Fixture:
     def command_lines(self):
         return [line for line in self.commands().splitlines() if line]
 
+    def add_second_etf(self):
+        self._write(
+            self.sysfs / "bus/coresight/devices/tmc_etf1/enable_sink", "0\n")
+        self._write(
+            self.sysfs / "bus/coresight/devices/tmc_etf1/buffer_size",
+            "0x10000\n")
+        self._write(
+            self.sysfs / "bus/coresight/devices/tmc_etf1/status", "etf1-ok\n")
+        self._write(self.dev / "tmc_etf1", "TRACE2")
+
     def remove_coresight_topology(self):
         shutil.rmtree(self.sysfs / "bus", ignore_errors=True)
         shutil.rmtree(self.sysfs / "class", ignore_errors=True)
@@ -367,19 +377,35 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(self.fixture.modules(), "")
         self.assertEqual(self.fixture.commands(), "")
 
-    def test_ambiguous_etf_sink_is_rejected(self):
-        self.fixture._write(
-            self.fixture.sysfs /
-            "bus/coresight/devices/tmc_etf1/enable_sink", "0\n")
-        self.fixture._write(
-            self.fixture.sysfs /
-            "bus/coresight/devices/tmc_etf1/buffer_size", "0x10000\n")
-        self.fixture._write(self.fixture.dev / "tmc_etf1", "TRACE2")
+    def test_multiple_etfs_explicit_sink_succeeds(self):
+        self.fixture.add_second_etf()
 
         result = self.fixture.run()
 
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("coresight-etf-candidates: tmc_etf0 tmc_etf1",
+                      result.stdout)
+        self.assertEqual(
+            (self.fixture.sysfs /
+             "bus/coresight/devices/tmc_etf1/enable_sink").read_text(), "0\n")
+        self.assertEqual((self.fixture.dev / "tmc_etf1").read_text(),
+                         "TRACE2")
+        self.assertEqual(self.fixture.modules(), "")
+
+    def test_requested_etf_absent_is_rejected_before_module_load(self):
+        self.fixture.add_second_etf()
+
+        result = subprocess.run([
+            str(SCRIPT),
+            "--module", str(self.fixture.module),
+            "--module-sha256", self.fixture.module_sha,
+            "--sink", "tmc_etf9",
+            "--capture-out", str(self.fixture.capture),
+        ], cwd=ROOT, env=self.fixture.env, text=True, capture_output=True,
+           timeout=10)
+
         self.assertEqual(result.returncode, 1)
-        self.assertIn("expected exactly one explicit ETF sink candidate",
+        self.assertIn("requested ETF sink not found exactly once",
                       result.stderr)
         self.assertEqual(self.fixture.modules(), "")
         self.assertEqual(self.fixture.commands(), "")
@@ -491,6 +517,7 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("STM source already enabled", result.stderr)
         self.assertEqual(source.read_text(), "1\n")
+        self.assertEqual(self.fixture.commands(), "")
 
     def test_missing_policy_backend_rolls_back_modules(self):
         (self.fixture.configfs / "stp-policy").rmdir()
@@ -500,6 +527,18 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing STM configfs policy root", result.stderr)
         self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
+
+    def test_existing_policy_is_refused_before_module_load(self):
+        (self.fixture.configfs /
+         "stp-policy/stm0:p_basic.ap-smoke").mkdir()
+
+        result = self.fixture.run()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("policy already exists", result.stderr)
+        self.assertEqual(self.fixture.modules(), "")
+        self.assertEqual(self.fixture.commands(), "")
 
     def test_trap_rolls_back_after_policy_creation_failure(self):
         channels = self.fixture.sysfs / "class/stm/stm0/channels"

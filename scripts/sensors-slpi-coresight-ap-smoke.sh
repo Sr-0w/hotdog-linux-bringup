@@ -415,12 +415,37 @@ connections_summary() {
 	fi
 }
 
+check_requested_connections() {
+	local stm_connections sink_connections
+
+	stm_connections=$(connections_summary "$STM_CS")
+	sink_connections=$(connections_summary "$SINK_CS")
+
+	printf 'stm-connections: %s\n' "$stm_connections"
+	printf 'sink-connections: %s\n' "$sink_connections"
+
+	if [[ "$stm_connections $sink_connections" == *tmc_etf* ||
+	      "$stm_connections $sink_connections" == *stm* ]]; then
+		if [[ "$stm_connections" == *"$SINK_NAME"* ||
+		      "$sink_connections" == *"$STM_NAME"* ]]; then
+			printf 'connections-check: graph-metadata-links %s to %s\n' \
+				"$STM_NAME" "$SINK_NAME"
+		else
+			die "CoreSight connection metadata does not link $STM_NAME to $SINK_NAME"
+		fi
+	else
+		printf 'connections-check: endpoint names unavailable; using explicit requested sink %s\n' \
+			"$SINK_NAME"
+	fi
+}
+
 enumerate_coresight() {
 	local phase=$1
 	local allow_absent=${2:-0}
 	local cs_root="$SYSFS_ROOT/bus/coresight/devices"
 	local stm_class_root="$SYSFS_ROOT/class/stm"
 	local stms class_stms etfs etrs
+	local etf requested_matches=0
 
 	printf 'coresight-enumeration-phase: %s\n' "$phase"
 
@@ -460,9 +485,17 @@ enumerate_coresight() {
 
 	[[ "${#stms[@]}" -eq 1 && "${stms[0]}" == "stm0" ]] || die "expected exactly one CoreSight stm0"
 	[[ "${#class_stms[@]}" -eq 1 && "${class_stms[0]}" == "stm0" ]] || die "expected exactly one STM class stm0"
-	[[ "${#etfs[@]}" -eq 1 && "${etfs[0]}" == "$SINK_NAME" ]] || die "expected exactly one explicit ETF sink candidate: $SINK_NAME"
+
+	for etf in "${etfs[@]}"; do
+		if [[ "$etf" == "$SINK_NAME" ]]; then
+			requested_matches=$((requested_matches + 1))
+		fi
+	done
+	[[ "$requested_matches" -eq 1 ]] || die "requested ETF sink not found exactly once: $SINK_NAME"
 
 	SINK_CS="$cs_root/$SINK_NAME"
+	[[ -d "$SINK_CS" ]] || die "requested ETF sink sysfs directory is missing: $SINK_CS"
+	[[ -e "$SINK_CS/enable_sink" ]] || die "requested ETF sink missing enable_sink: $SINK_CS"
 
 	STM_NAME=stm0
 	STM_CLASS="$stm_class_root/$STM_NAME"
@@ -470,8 +503,7 @@ enumerate_coresight() {
 	POLICY_DIR="$CONFIGFS_ROOT/stp-policy/${STM_NAME}:p_basic.${POLICY_NAME}"
 	POLICY_NODE_DIR="$POLICY_DIR/$POLICY_NODE"
 
-	printf 'stm-connections: %s\n' "$(connections_summary "$STM_CS")"
-	printf 'sink-connections: %s\n' "$(connections_summary "$SINK_CS")"
+	check_requested_connections
 }
 
 prepare_coresight_topology() {
@@ -566,8 +598,8 @@ main() {
 	verify_module_file
 	capture_module_prestate
 	prepare_coresight_topology
-	load_stm_p_basic
 	capture_prestate
+	load_stm_p_basic
 	create_policy
 	run_smoke
 }
