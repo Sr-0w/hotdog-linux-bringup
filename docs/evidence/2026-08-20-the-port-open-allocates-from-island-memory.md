@@ -180,3 +180,42 @@ static initialisers — start, end, id, size — and the sensor PD's copy
 reproduces them byte for byte, so nothing has updated the descriptor either.
 The allocator's helpers `0xb2065e24` and `0xb2065ac4` and the assert path at
 `0xb2065780` are the places to read.
+
+## Correction: pool 2 is healthy, and the allocation is not the blocker
+
+The section above is wrong on two counts and is corrected here rather than
+deleted, because the mistake is instructive.
+
+**First mistake: the wrong copy again.** Segment 18's content appears at three
+physical addresses in the coredump — `0x982d9000` (the root PD's, matching the
+MDT), `0x97a96000`, and `0x98680000`. Found by taking twenty-five dense 64-byte
+witnesses out of `slpi.b18` and locating each; all twenty-five agree on all
+three bases. The live sensor-PD copy is `0x98680000`. Reading pool 2's object
+there:
+
+```
+pa 0x986901d0
+  +0x20  abcddcba b20102a0 00000161 000257f0
+  +0x30  0000e556 00010e02 00001000 b2065d68
+  +0x40  b2065d7c abcdabcd 00000002 00010c50
+```
+
+Heap magic `abcddcba` and `abcdabcd`, a live vtable method at `+0x3c`, and the
+accounting: **58710 bytes free of 69122**. Pool 3 next to it reads free 0 of 5,
+so the fields are what they look like.
+
+**Second mistake: the descriptor's first two words are not arena bounds.** They
+are the pool object pointer and a second pointer. Treating `0xb20101d0` to
+`0xb2010298` as a 200-byte arena, and concluding from an absence of interior
+pointers that nothing had ever been allocated, was reading the wrong thing
+entirely. The real arena is 69 KB.
+
+So an allocation of 0x18 bytes from pool 2 succeeds with room to spare. **The
+port open is not blocked at the allocation.** The gate is still the flag byte
+at `+0x24`, and the reason it is never set lies past the allocation, in the
+rest of `0xb205ee48`.
+
+The extrapolation that produced the first wrong address is also worth
+recording: the offset between a root copy and a PD copy measured on
+file-backed segments does not carry to a neighbouring segment, and does not
+carry to BSS. Each segment's PD copy has to be located on its own content.
