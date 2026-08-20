@@ -76,3 +76,55 @@ succeeds or which do not need pool 2.
 it, and reading the pool descriptors it indexes out of a coredump, says
 directly whether pool 2 exists and has room. That is a bounded read, and it
 either names the fault or eliminates the last hypothesis standing.
+
+## The allocator and its pools
+
+`0xb2065728` is the pool allocator, `r0` the pool id and `r1` the size:
+
+```
+b206572c: r2 = #0x4
+b2065738: if (!cmp.gtu(r2,r16)) jump <assert>     ; pool id must be < 4
+b206573c: r2 = +mpyi(r16,#0x28)                   ; descriptor stride 0x28
+b206574c: r0 = memw(r2 + ##0xb20429d0)            ; pool table
+b2065758: if (r17 == 0) ...                       ; allocation failed
+```
+
+The table at `0xb20429d0` holds four descriptors. Their static initialisers,
+which the sensor PD's copy at physical `0x97ab3028` reproduces byte for byte:
+
+```
+pool 0 : start b2542b48  end b2542c10  id 1  size 0x180000   (1.5 MB)
+pool 1 : start b23c2a80  end b23c2b48  id 2  size 0x25800    (150 KB)
+pool 2 : start b20101d0  end b2010298  id 3  size 0x400      (1 KB)
+pool 3 : start b2035a98  --            --    --
+```
+
+**Pool 2, the one the port open asks first, is the smallest by three orders of
+magnitude** — a 1 KB arena whose descriptor spans 200 bytes — and each port
+costs 0x18 bytes. That is a hard ceiling of a few dozen ports at best, and
+plausibly far fewer once other island users take their share.
+
+It also matches the strangest observation of the session: with the SAR present
+two ports are allocated and the ALS gets none; with the SAR's registry entries
+removed, a different driver, `ak0991x`, takes a port instead. That is what a
+small first-come arena looks like from the outside.
+
+Its backing store at `0xb20101d0` lies past segment 18's file size, so it is
+BSS and only exists at run time. The root PD's copy reads as 208 zero bytes,
+which is expected — the root PD does not use it, exactly as with the bus
+handler table at `0xb2042668`, whose root copy is also null while the sensor
+PD's copy is populated.
+
+## The one question left
+
+Locate the **sensor PD's** copy of `0xb20101d0` and read it. If the arena is
+full, or was never initialised, the port open fails there and everything above
+follows. Finding it needs the PD's mapping for segment 18's BSS, which the
+seg12/seg15 offset of `0x2E4CC2A0` does not cover — that offset was measured
+between file-backed copies, and a BSS region has no content to match on.
+
+The practical way in is the allocator itself: `0xb2065e24` and `0xb2065ac4`,
+called on the path above, take the descriptor as an argument, so a coredump
+taken with a breakpoint-free read of the driver state — the ALS state at
+`0x9869d3f8` carries the port object pointer — leads to the arena directly
+rather than by search.
