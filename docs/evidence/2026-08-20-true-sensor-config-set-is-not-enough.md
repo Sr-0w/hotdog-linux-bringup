@@ -141,3 +141,20 @@ the same QUP core.
 
 Everything has been restored: 65 config files, 438 registry entries matching
 `persist`, all subsystems running.
+
+## The DAE's SDC path is not the gate either
+
+`sns_dae.json` sets `use_sdc: 1`, and the DSP's own clock log shows the Sensor
+Data Collector clocks being switched off:
+
+```
+clkrgm_DisableDalClock: Disabled scc_sdc_proc_fclk_clk
+clkrgm_DisableDalClock: Disabled scc_sdc_proc_hclk_clk
+```
+
+The firmware contains `sns_lsm6dsm_dae_if_island`, so the IMU goes through the
+DAE while the SAR polls directly — which would have explained the split
+exactly. Setting `use_sdc` to 0 to take the software path, and letting the
+registry regenerate (`"use_sdc":{...,"data":"0"}` confirmed in the registry
+after reboot), changes nothing: still only 0x28 and 0x2c on the wire, still no
+SPI buffer, still no SUIDs. Restored to 1.
