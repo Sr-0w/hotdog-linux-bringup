@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-08-13
+Last updated: 2026-08-20
 
 ## Final objective
 
@@ -141,6 +141,8 @@ timeline
       2026-08-13 : YOU ARE HERE — SMB5 v3 validated
                  : SLPI QUP-to-EBI1 route failure isolated; downstream control is next
                  : Mainline review follow-up and partial/broken closure remain active
+      2026-08-20 : Display regression `e566d5d4-r2` recovered by lock/unlock
+                 : DSI/DSC FIFO-timeout follow-up remains; no causal source/config delta proven
     section Remaining hardware and upstream
       Next : Finish sensors, GNSS integration, NFC lifecycle and haptics userspace
       Then : Telephony, audio endpoints, suspend, charging, dock and camera quality
@@ -172,7 +174,7 @@ timeline
 
 The project is past basic boot and broad peripheral discovery. A useful
 mainline postmarketOS/Plasma system exists, but it is not yet a complete or
-upstream-clean phone. The active engineering frontier on 2026-08-13 is:
+upstream-clean phone. The active engineering frontier on 2026-08-20 is:
 
 - running the downstream 4.14 plus stock-DTBO control for the isolated SLPI
   QUP1/QUP2-to-EBI1 route rejection, then exposing real sensor data through
@@ -180,7 +182,8 @@ upstream-clean phone. The active engineering frontier on 2026-08-13 is:
 - turning the new IPA/rmnet foundation into normal GNSS and mobile-data
   services, then validating the modem with a SIM;
 - closing every incomplete baseline item in phase 0, especially suspend,
-  UFS ICE, display resume, remaining audio endpoints and dock behavior;
+  UFS ICE, display resume/DSI transport stability, remaining audio endpoints
+  and dock behavior;
 - revising and submitting the Linux patch tracks until maintainer acceptance.
 
 Ubuntu Touch/Lomiri without Halium is an explicit final objective, but no
@@ -238,7 +241,7 @@ note.
 | K1/shared kernel package | Hardware-test reproducible current-mainline builds, then retire K1 in favor of the shared SM8150 package. |
 | Device tree | Replace SMMU, ICE, DMA, reserved-memory and overlay workarounds with source DTS accepted by schema and hardware regression tests. |
 | USB ACM | Complete interactive bidirectional serial sessions across reboot and recovery, not enumeration alone. |
-| DRM/panel | Fix 90 Hz blank/unblank and resume; make repeated atomic 60/90 transitions reliable while retaining 60 Hz as the safe default until then. |
+| DRM/panel | Follow up the `e566d5d4-r2` transient scanout corruption, then fix 90 Hz blank/unblank and resume; make repeated atomic 60/90 transitions reliable while retaining `Partial` / `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP` until evidence supports a stronger state. |
 | GPU | Pass sustained mixed graphics/video load, repeated cold boot and suspend/resume without GMU, IOMMU or scanout faults. |
 | Apps SMMU | Attach and validate every applicable client independently, with translated domains and no global or device-specific bypass. |
 | UFS ICE (`Not working`) | Fix clocks, power, probe order and SMMU integration; validate encrypted and unencrypted storage plus repeated read-write root boots. |
