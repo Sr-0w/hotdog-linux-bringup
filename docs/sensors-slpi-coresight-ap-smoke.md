@@ -26,9 +26,15 @@ Safety properties:
   load attempt;
 - pre-enumerates the existing CoreSight topology before module load; if STM/ETF
   devices are already visible, it requires exactly one `stm0`, one STM class
-  `stm0` and one explicit `tmc_etf*` sink before `stm_p_basic` can be loaded;
+  `stm0` and the requested `tmc_etf*` sink to exist exactly once before
+  `stm_p_basic` can be loaded;
 - accepts explicit `tmc_etf*` sinks even when they expose `buffer_size`, refuses
-  `tmc_etr*`, and never writes `buffer_size`;
+  `tmc_etr*`, reports any other ETF candidates without touching them, and never
+  writes `buffer_size`;
+- treats CoreSight `connections/` metadata as proof only when exact normalized
+  tokens name `stm0` and/or the requested `tmc_etf*`; generic endpoint names
+  are logged as not proving the graph and do not override the explicit sink
+  selection;
 - refuses pre-enabled STM/ETF paths and pre-existing smoke policies;
 - creates one `stm0:p_basic.ap-smoke/default` policy with one master and one
   channel;

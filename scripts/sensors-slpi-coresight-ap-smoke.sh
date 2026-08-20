@@ -165,6 +165,15 @@ join_words() {
 	printf '%s' "$joined"
 }
 
+join_args() {
+	local item joined=""
+
+	for item in "$@"; do
+		joined="${joined}${joined:+ }$item"
+	done
+	printf '%s' "${joined:-none}"
+}
+
 cleanup() {
 	local rc=$?
 	local cleanup_rc=0
@@ -415,12 +424,104 @@ connections_summary() {
 	fi
 }
 
+connection_tokens() {
+	local device=$1
+	local path
+
+	[[ -d "$device/connections" ]] || return 0
+
+	while IFS= read -r path; do
+		printf '%s\n' "${path##*/}"
+		if [[ -f "$path" && -r "$path" ]]; then
+			sed -n '1,16p' "$path"
+		fi
+	done < <(list_child_paths "$device/connections") |
+		awk '
+		{
+			line = $0
+			gsub(/[^[:alnum:]_]+/, " ", line)
+			n = split(line, tokens, " ")
+			for (i = 1; i <= n; i++)
+				if (tokens[i] != "")
+					print tokens[i]
+		}
+		' | sort
+}
+
+tokens_contain() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" == "$wanted" ]] && return 0
+	done
+	return 1
+}
+
+tokens_contain_other_etf() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" =~ ^tmc_etf[0-9]+$ && "$token" != "$wanted" ]] &&
+			return 0
+	done
+	return 1
+}
+
+tokens_contain_other_stm() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" =~ ^stm[0-9]+$ && "$token" != "$wanted" ]] &&
+			return 0
+	done
+	return 1
+}
+
+check_requested_connections() {
+	local stm_connections sink_connections
+	local stm_tokens sink_tokens
+
+	stm_connections=$(connections_summary "$STM_CS")
+	sink_connections=$(connections_summary "$SINK_CS")
+	mapfile -t stm_tokens < <(connection_tokens "$STM_CS" | sort -u)
+	mapfile -t sink_tokens < <(connection_tokens "$SINK_CS" | sort -u)
+
+	printf 'stm-connections: %s\n' "$stm_connections"
+	printf 'sink-connections: %s\n' "$sink_connections"
+	printf 'stm-connection-tokens: %s\n' "$(join_args "${stm_tokens[@]}")"
+	printf 'sink-connection-tokens: %s\n' "$(join_args "${sink_tokens[@]}")"
+
+	if tokens_contain_other_etf "$SINK_NAME" "${stm_tokens[@]}"; then
+		die "CoreSight connection metadata names a different ETF sink for $STM_NAME"
+	fi
+	if tokens_contain_other_stm "$STM_NAME" "${sink_tokens[@]}"; then
+		die "CoreSight connection metadata names a different STM source for $SINK_NAME"
+	fi
+
+	if tokens_contain "$SINK_NAME" "${stm_tokens[@]}" ||
+	   tokens_contain "$STM_NAME" "${sink_tokens[@]}"; then
+		printf 'connections-check: graph-metadata-links %s to %s\n' \
+			"$STM_NAME" "$SINK_NAME"
+		return 0
+	fi
+
+	printf 'connections-check: connection graph not proven by sysfs names; using explicit requested sink %s\n' \
+		"$SINK_NAME"
+}
+
 enumerate_coresight() {
 	local phase=$1
 	local allow_absent=${2:-0}
 	local cs_root="$SYSFS_ROOT/bus/coresight/devices"
 	local stm_class_root="$SYSFS_ROOT/class/stm"
 	local stms class_stms etfs etrs
+	local etf requested_matches=0
 
 	printf 'coresight-enumeration-phase: %s\n' "$phase"
 
@@ -460,9 +561,17 @@ enumerate_coresight() {
 
 	[[ "${#stms[@]}" -eq 1 && "${stms[0]}" == "stm0" ]] || die "expected exactly one CoreSight stm0"
 	[[ "${#class_stms[@]}" -eq 1 && "${class_stms[0]}" == "stm0" ]] || die "expected exactly one STM class stm0"
-	[[ "${#etfs[@]}" -eq 1 && "${etfs[0]}" == "$SINK_NAME" ]] || die "expected exactly one explicit ETF sink candidate: $SINK_NAME"
+
+	for etf in "${etfs[@]}"; do
+		if [[ "$etf" == "$SINK_NAME" ]]; then
+			requested_matches=$((requested_matches + 1))
+		fi
+	done
+	[[ "$requested_matches" -eq 1 ]] || die "requested ETF sink not found exactly once: $SINK_NAME"
 
 	SINK_CS="$cs_root/$SINK_NAME"
+	[[ -d "$SINK_CS" ]] || die "requested ETF sink sysfs directory is missing: $SINK_CS"
+	[[ -e "$SINK_CS/enable_sink" ]] || die "requested ETF sink missing enable_sink: $SINK_CS"
 
 	STM_NAME=stm0
 	STM_CLASS="$stm_class_root/$STM_NAME"
@@ -470,8 +579,7 @@ enumerate_coresight() {
 	POLICY_DIR="$CONFIGFS_ROOT/stp-policy/${STM_NAME}:p_basic.${POLICY_NAME}"
 	POLICY_NODE_DIR="$POLICY_DIR/$POLICY_NODE"
 
-	printf 'stm-connections: %s\n' "$(connections_summary "$STM_CS")"
-	printf 'sink-connections: %s\n' "$(connections_summary "$SINK_CS")"
+	check_requested_connections
 }
 
 prepare_coresight_topology() {
@@ -566,8 +674,8 @@ main() {
 	verify_module_file
 	capture_module_prestate
 	prepare_coresight_topology
-	load_stm_p_basic
 	capture_prestate
+	load_stm_p_basic
 	create_policy
 	run_smoke
 }
