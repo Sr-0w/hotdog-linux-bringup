@@ -28,6 +28,14 @@ python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 45
 python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 47
 ```
 
+When the local v16 build and SLPI capture roots are present under the same
+baseline root, verify all 37 recorded external artifacts in one pass:
+
+```sh
+python3 scripts/sensors-slpi-repro.py verify-external \
+  --artifact-root /path/to/hotdog-r6-rebaseline
+```
+
 Stage only the Git-owned config files into an offline root:
 
 ```sh

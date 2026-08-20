@@ -81,6 +81,25 @@ def verify_helpers(repo_root: Path, manifest: dict) -> None:
     print(f"verified helper sources: {len(manifest['tracked_helpers'])} files")
 
 
+def external_entries(manifest: dict) -> list[dict]:
+    entries = list(manifest["image_v16"]["artifacts"])
+    entries.append(manifest["image_v16"]["kernel_config"])
+    entries.append(manifest["slpi_00121"]["active_mbn"])
+    split_root = manifest["slpi_00121"]["split_capture_root"]
+    entries.extend(
+        {**entry, "path": f"{split_root}/{entry['name']}"}
+        for entry in manifest["slpi_00121"]["split_files"]
+    )
+    entries.extend(manifest["qrtr_kernel_modules"])
+    return entries
+
+
+def verify_external(artifact_root: Path, manifest: dict) -> None:
+    for entry in external_entries(manifest):
+        check_entry(artifact_root / entry["path"], entry)
+    print(f"verified external build and firmware captures: {len(external_entries(manifest))} files")
+
+
 def ensure_new_directory(path: Path) -> None:
     if path.exists():
         if not path.is_dir() or any(path.iterdir()):
@@ -221,6 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--repo-root", default=Path("."), type=Path)
     verify.add_argument("--variant", choices=("45", "47"), default="45")
 
+    external = sub.add_parser("verify-external", help="verify image, SLPI and QRTR captures")
+    external.add_argument("--artifact-root", required=True, type=Path)
+
     stage_parser = sub.add_parser("stage", help="stage config and optional captured registry")
     stage_parser.add_argument("--repo-root", default=Path("."), type=Path)
     stage_parser.add_argument("--variant", choices=("45", "47"), default="45")
@@ -248,6 +270,8 @@ def main() -> int:
     if args.command == "verify":
         verify_selection(repo_root, manifest, args.variant)
         verify_helpers(repo_root, manifest)
+    elif args.command == "verify-external":
+        verify_external(args.artifact_root.resolve(), manifest)
     elif args.command == "stage":
         stage(repo_root, manifest, args.variant, args.out_root.resolve(),
               args.external_root.resolve() if args.external_root else None,
