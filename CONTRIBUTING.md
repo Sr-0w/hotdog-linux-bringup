@@ -119,6 +119,22 @@ Commit source, build recipes, concise redacted evidence, file sizes, and
 cryptographic hashes instead. Do not mix cleanup or generated metadata with a
 functional change.
 
+## Checkpoint commits
+
+Commit each meaningful, reviewable milestone instead of waiting for an entire
+subsystem to become working. Useful checkpoints include a reproducible
+baseline, a new diagnostic result, a buildable implementation, a QA fix, a
+hardware validation result, and a documented supersession of an earlier
+finding.
+
+Keep checkpoint commits atomic and preserve their history. Each commit should
+state the evidence level it reached, identify relevant source or artifact
+hashes, and say explicitly when hardware validation is still pending. Follow-up
+commits should correct or supersede earlier work rather than silently folding
+the development path into one large final change. Do not create empty commits
+for routine progress updates or commit private/generated evidence merely to
+increase commit frequency.
+
 ## Validation
 
 Run the public-tree validator for every pull request:
