@@ -164,7 +164,7 @@ function under **Working** and a broader integration or stability item under
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
 | NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
 | Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
-| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests and ULog forensics work; only infrastructure SUIDs are published. |
+| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work. The physical SX9324 SAR sensor publishes real on-change events. |
 
 ### 🔴 Broken
 
@@ -173,7 +173,7 @@ function under **Working** and a broader integration or stability item under
 | Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
-| Sensors | Motion / rotation / light / proximity | LSM6DSM, MMC5603x and TCS3701 publish no physical SUID. Both tested firmware sets reject QUP1/QUP2-to-EBI1 with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; the downstream 4.14 plus stock-DTBO control is next. |
+| Sensors | Motion / rotation / light / proximity | SX9324 SAR works. LSM6DSM, MMC5603x and TCS3701/ALSPS still publish no SUID: SPI platform NPA setup blocks the IMU, while the I2C families vote rails but never open a port. Sensor-PD diag/address-map work is next. |
 
 ### ⚪ Not yet supported
 

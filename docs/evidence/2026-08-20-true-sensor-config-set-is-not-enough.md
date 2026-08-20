@@ -2,11 +2,16 @@
 
 Date: 2026-08-20
 
+> **Superseded:** the 65-file directory is a source pool, not a valid board
+> selection. A curated board set later made the physical SX9324 SAR sensor
+> publish events. See [the controlled follow-up](2026-08-20-curated-sensor-config-and-sar-events.md).
+
 [The previous note](2026-08-19-sensor-config-set-is-from-the-wrong-oxygenos.md)
 showed the sensor configuration we served came from OxygenOS 10.0.13 while the
 phone shipped OxygenOS 11, and that the mismatch was corrupting the registry.
-The real set has now been found and installed. The corruption is gone. No
-sensor registers anyway.
+The real source pool was found and installed. The registry corruption was
+removed, but mutually exclusive alternatives in that pool still obscured the
+board result.
 
 ## Where the real set was
 

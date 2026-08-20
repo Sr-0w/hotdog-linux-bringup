@@ -69,18 +69,6 @@
         }
       }
     },
-    ".cct":{
-      "owner": "sns_alsps",
-      ".fac_cal":{
-        "owner": "sns_alsps",
-        "scale":{ "type": "flt", "ver": "0",
-          "data": "1000.0"
-        },
-        "bias":{ "type": "flt", "ver": "0",
-          "data": "5000.0"
-        }
-      }
-    },
     ".prox":{
       "owner": "sns_alsps",
       ".fac_cal":{
