@@ -21,7 +21,7 @@
   <strong>OnePlus 7T Pro HD1913 · Snapdragon 855+ · Linux 6.16 · postmarketOS · Plasma Mobile</strong>
 </p>
 
-Last reviewed: **2026-08-19**
+Last reviewed: **2026-08-20**
 
 ## Project goals
 
@@ -70,7 +70,9 @@ or a kexec bridge.
 - Direct Linux boot from OnePlus ABL into a writable postmarketOS rootfs, with
   USB networking, SSH, clean reboot and automatic A/B success marking.
 - Native 1440×3120 DSI/DSC scanout and accelerated Adreno 640 graphics through
-  Freedreno/Turnip, including Plasma Mobile.
+  Freedreno/Turnip, including Plasma Mobile. Display remains an aggregate
+  `Partial` state: the 2026-08-20 r2 scanout corruption recovered immediately
+  after lock/unlock, but DSI/DSC FIFO/timeout instability needs follow-up.
 - Hardware validation of touch, physical keys, Wi-Fi, Bluetooth HID, both
   speakers and the handset microphone.
 - USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
@@ -113,7 +115,7 @@ function under **Working** and a broader integration or stability item under
 | Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
 | Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
 | Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
-| Display | Internal panel 1440×3120 at 60 Hz | Native DPU/DSI/DSC KMS scanout is stable in graphical userspace. |
+| Display | Internal panel 1440×3120 at 60 Hz | Function-level KMS scanout is validated; the aggregate display state remains `Partial` because of the transient DSI/DSC regression. See [display regression 01](docs/evidence/2026-08-20-display-regression-01.md). |
 | GPU | Adreno 640 / GMU / Turnip | Vulkan workloads, `kmscube`, Weston and Plasma Mobile use accelerated rendering without observed GPU/GMU/IOMMU faults. |
 | Input | S6SY761 touchscreen | Touch, drag, pressure, multitouch and graphical orientation are hardware-validated while the device is awake. |
 | Input | Power key | PM8150 PON power-key input and physical button interaction are hardware-validated. |
@@ -147,7 +149,7 @@ function under **Working** and a broader integration or stability item under
 |---|---|---|
 | Boot | Reboot modes / recovery integration | Clean normal reboot and A/B marking work; direct recovery selection, all reboot modes and the final installer rollback flow remain incomplete. |
 | Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
-| Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work, but wake/blank-unblank reliability is not acceptable yet. |
+| Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
 | USB | USB ACM serial | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |

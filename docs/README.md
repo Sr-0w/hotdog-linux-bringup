@@ -1,6 +1,6 @@
 # Documentation
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-20
 
 The active path is direct boot from the OnePlus A/B bootloader into the
 mainline-oriented Linux 6.16 reference kernel and a normal postmarketOS
@@ -56,7 +56,7 @@ Halium.
 - [Android/OxygenOS reference policy](android-reference.md)
 - [Current hardware evidence](evidence/)
 
-Recent evidence that defines the 2026-08-13 checkpoint:
+Recent evidence and current regression records:
 
 - [Alpha 1 validation](evidence/2026-08-10-v0.1.0-alpha.1.md)
 - [All four cameras and pop-up lifecycle](evidence/2026-08-10-mainline616-camera-imx471-popup.md)
@@ -70,6 +70,7 @@ Recent evidence that defines the 2026-08-13 checkpoint:
 - [Dual-channel camera flash](evidence/2026-08-12-camera-flash.md)
 - [SMB5 v3 hardware validation](evidence/2026-08-13-smb5-v3-hardware-validation.md)
 - [SMB5 v4 dock and VBUS role validation](evidence/2026-08-20-smb5-v4-dock-validation.md)
+- [Display regression 01 — transient scanout recovery](evidence/2026-08-20-display-regression-01.md)
 - [Writable Hexagon service](evidence/2026-08-13-hexagonrpcd-write.md)
 
 Raw dumps, serials, credentials, complete RAM captures and generated images

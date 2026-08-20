@@ -1,6 +1,6 @@
 # Hardware enablement roadmap
 
-Last updated: 2026-08-13
+Last updated: 2026-08-20
 
 This roadmap follows the
 [direct-boot completion criteria](direct-boot.md#completion-criteria). The
@@ -20,9 +20,10 @@ relevant regression controls.
 
 ## Current hardware frontier
 
-| Area | Proven by 2026-08-13 | Next clean gate |
+| Area | Proven or observed through 2026-08-20 | Next clean gate |
 |---|---|---|
 | Cameras | All four capture through libcamera; rear focus and automatic pop-up lifecycle work. | Recovery, camera quality, full controls, video, flash/OIS and upstream media review. |
+| Display | Native DPU/DSI/DSC scanout and 60/90 Hz operation are validated at the function level. The 2026-08-20 r2 episode recovered immediately after lock/unlock; DSI FIFO/timeout errors and panel reinitialization remain. | Reproduce and isolate the DSI/DSC transport regression without changing DRM/DSI/panel configuration; retain `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`. |
 | IPA / modem / GNSS | IPA v4.1 creates `rmnet_ipa0`; modem QMI and LOC sessions answer without a SIM. | Standard location/mobile-data services, SIM/data/SMS/calls and upstream IPA acceptance. |
 | NFC | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. | Clean down/up lifecycle, HCE and secure-element scope. |
 | Haptics | AW8697 driver builds and physical vibration is confirmed. | Range/repetition, feedbackd, suspend and upstream driver review. |
@@ -149,10 +150,21 @@ stock HD1913 90 Hz command and timing; DRM reports the active CRTC at
 [graphical userspace evidence](evidence/2026-08-04-mainline616-graphical-userspace.md)
 and [90 Hz display evidence](evidence/2026-08-04-mainline616-display-90hz.md).
 
+**2026-08-20 regression evidence.** Boot `e566d5d4-r2` showed transient
+corrupted DSC scanout; lock/unlock restored it immediately. Hardware Lab
+counted 48 DSI worker status-5 FIFO/timeout events and repeated Samsung DSC
+panel initialization at 90 Hz, with no DPU underrun. No display-related
+DRM/DSI/panel source or configuration delta was found, and the added tracing
+does not establish causality. Keep the aggregate state `Partial` and the
+canonical state `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; see [display
+regression 01](evidence/2026-08-20-display-regression-01.md).
+
 **Next experiment.** Repeat direct boots into `tinydm` with the fixed 90 Hz
-candidate while retaining SSH, then validate screen blank/unblank. After that
-stable checkpoint, implement a panel-aware dynamic 60/90 Hz mode switch so the
-DSI command and DRM timing change atomically.
+candidate while retaining SSH, capture the DSI worker/panel reinitialization
+sequence, and validate screen blank/unblank. Change only one variable at a
+time; do not infer causality from the general tracing/debug addition. After
+that stable checkpoint, implement a panel-aware dynamic 60/90 Hz mode switch
+so the DSI command and DRM timing change atomically.
 
 **Success criteria.** Three direct boots reach a correctly oriented 1440x3120
 Plasma Mobile session without manual service startup, duplicated rows, tearing,

@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -44,7 +44,7 @@ State meanings:
 | UFS ICE | Broken | UFS boots only without the ICE dependency; clock, power, probe-order and SMMU integration remain. |
 | Apps SMMU | Partial | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; complete client coverage and removal of all temporary bypasses remain. |
 | USB device / recovery | Partial | NCM networking and SSH are stable and ACM enumerates. Interactive ACM, all reboot modes and the final non-laboratory recovery flow remain. |
-| Internal display | Partial | Correct 1440x3120 KMS, fixed 60 Hz and selectable 90 Hz work. Spontaneous DSI transport error bursts drain all four HS lanes and desynchronise the DSC stream into unreadable noise, with no driver recovery path; a panel re-init clears it. Not caused by brightness, input or compositor load. See [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md). |
+| Internal display | Partial | Correct 1440x3120 KMS, fixed 60 Hz and selectable 90 Hz work at the function level. On 2026-08-20, `e566d5d4-r2` produced transient corrupted DSC scanout that recovered immediately after lock/unlock. The post-recovery trace counted 48 `dsi_err_worker` status-5 FIFO/timeout events and Samsung DSC panel reinitializations at 90 Hz, with no DPU underrun. No display-related DRM/DSI/panel source or config delta was found; r4/v4 tracing/debug does not prove causality. Canonical state: `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`. See [display regression 01](evidence/2026-08-20-display-regression-01.md) and [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md). |
 | GPU | Working | Adreno 640, GMU, Freedreno/Turnip, Vulkan, `kmscube`, Weston and Plasma scanout work. Sustained mixed load and suspend/resume remain stability gates. |
 | Touch and keys | Partial | S6SY761 touch plus Power, Volume Up and Volume Down work in Plasma. After a suspend cycle all input is lost, from two independent causes: the elogind session on `seat0` stays inactive so the compositor holds no input device, and `s6sy761_resume()` never re-enables sensing. Both are diagnosed and the driver bug is patched; all contact slots and alert slider remain. |
 | Wi-Fi | Partial | WCN3990 scans and associates on both bands with Internet reachability. The link now survives system suspend: 0 losses over 30 real `s2idle` cycles, against 13 of 15 before. That needed `device_init_wakeup()` in `ath10k_snoc`, without which `ath10k_snoc_hif_suspend()` always returned `-EPERM` and mac80211 tore the connection down every cycle, plus WoWLAN triggers configured from userspace. `wlan0` also keeps its address across a modem crash now, from the two MSA reclaim patches. Factory MAC, sustained throughput and AP/roaming remain, and copy engine 2 armed as a wake source means ordinary traffic can wake the phone. |
@@ -89,6 +89,7 @@ State meanings:
   [Hexagon writable service](evidence/2026-08-13-hexagonrpcd-write.md)
 - [SMB5 900 mA complete image](evidence/2026-08-16-smb5-complete-900ma.md),
   [SMB5 v4 dock and VBUS roles](evidence/2026-08-20-smb5-v4-dock-validation.md),
+  [display regression 01](evidence/2026-08-20-display-regression-01.md),
   [A/B retry regression](evidence/2026-08-17-ab-slot-retry-regression.md),
   [DSI/DSC transport errors](evidence/2026-08-17-dsi-dsc-transport-errors.md),
   [suspend/resume defects](evidence/2026-08-17-suspend-resume-defects.md),
