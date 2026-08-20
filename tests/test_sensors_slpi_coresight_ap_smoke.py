@@ -27,6 +27,7 @@ class Fixture:
         self.configfs = self.root / "config"
         self.dev = self.root / "dev"
         self.proc_modules = self.root / "proc_modules"
+        self.command_log = self.root / "commands.log"
         self.bin = self.root / "bin"
         self.module = self.root / "stm_p_basic.ko"
         self.capture = self.root / "capture.bin"
@@ -43,6 +44,7 @@ class Fixture:
             "HOTDOG_AP_SMOKE_CONFIGFS_ROOT": str(self.configfs),
             "HOTDOG_AP_SMOKE_DEV_ROOT": str(self.dev),
             "HOTDOG_AP_SMOKE_PROC_MODULES": str(self.proc_modules),
+            "FAKE_COMMAND_LOG": str(self.command_log),
             "FAKE_MODINFO_VERMAGIC": VERMAGIC,
         })
 
@@ -60,16 +62,24 @@ class Fixture:
                     "stm-ok\n")
         self._write(self.sysfs / "bus/coresight/devices/tmc_etf0/enable_sink",
                     "0\n")
+        self._write(self.sysfs / "bus/coresight/devices/tmc_etf0/buffer_size",
+                    "0x10000\n")
         self._write(self.sysfs / "bus/coresight/devices/tmc_etf0/status",
                     "etf-ok\n")
         self._write(self.sysfs / "bus/coresight/devices/tmc_etf0/mgmt/rsz",
                     "0x1000\n")
+        self._write(self.sysfs / "bus/coresight/devices/stm0/connections/out:0",
+                    "")
+        self._write(
+            self.sysfs /
+            "bus/coresight/devices/tmc_etf0/connections/in:0", "")
         self._write(self.sysfs / "class/stm/stm0/masters", "0 0\n")
         self._write(self.sysfs / "class/stm/stm0/channels", "16\n")
         (self.configfs / "stp-policy").mkdir(parents=True)
         self._write(self.dev / "stm0", "")
         self._write(self.dev / "tmc_etf0", "TRACEBYTES")
         self._write(self.proc_modules, "")
+        self._write(self.command_log, "")
 
     def _build_fake_commands(self):
         self.bin.mkdir(parents=True)
@@ -94,6 +104,8 @@ class Fixture:
             "modprobe": textwrap.dedent("""\
                 #!/usr/bin/env bash
                 modules=${HOTDOG_AP_SMOKE_PROC_MODULES:?}
+                log=${FAKE_COMMAND_LOG:?}
+                printf 'modprobe %s\\n' "$*" >> "$log"
                 if [ "$1" = "-r" ]; then
                   name=$2
                   tmp="${modules}.tmp"
@@ -109,9 +121,30 @@ class Fixture:
             "insmod": textwrap.dedent("""\
                 #!/usr/bin/env bash
                 modules=${HOTDOG_AP_SMOKE_PROC_MODULES:?}
+                log=${FAKE_COMMAND_LOG:?}
+                printf 'insmod %s\\n' "$*" >> "$log"
                 if ! awk '$1 == "stm_p_basic" { found = 1 } END { exit !found }' "$modules"; then
                   printf 'stm_p_basic 1 0 - Live 0x0\\n' >> "$modules"
                 fi
+                """),
+            "lsmod": textwrap.dedent("""\
+                #!/usr/bin/env bash
+                printf 'Module Size Used by\\n'
+                cat "${HOTDOG_AP_SMOKE_PROC_MODULES:?}"
+                """),
+            "rmmod": textwrap.dedent("""\
+                #!/usr/bin/env bash
+                modules=${HOTDOG_AP_SMOKE_PROC_MODULES:?}
+                log=${FAKE_COMMAND_LOG:?}
+                name=$1
+                printf 'rmmod %s\\n' "$name" >> "$log"
+                if [ "${FAKE_RMMOD_FAIL:-0}" = 1 ]; then
+                  printf 'fake rmmod failure for %s\\n' "$name" >&2
+                  exit 1
+                fi
+                tmp="${modules}.tmp"
+                awk -v name="$name" '$1 != name' "$modules" > "$tmp"
+                mv "$tmp" "$modules"
                 """),
             "find": textwrap.dedent("""\
                 #!/usr/bin/env bash
@@ -164,6 +197,9 @@ class Fixture:
     def modules(self):
         return self.proc_modules.read_text()
 
+    def commands(self):
+        return self.command_log.read_text()
+
 
 class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
     def setUp(self):
@@ -189,6 +225,10 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(self.fixture.capture.read_bytes(), b"TRACEBYTES")
         self.assertIn("HOTDOG_STM_AP_SMOKE", (self.fixture.dev /
                                               "stm0").read_text())
+        self.assertIn("sink-buffer-size: 0x10000", result.stdout)
+        self.assertIn("sink-buffer-size-post: 0x10000", result.stdout)
+        self.assertIn("rmmod stm_p_basic", self.fixture.commands())
+        self.assertNotIn("modprobe -r stm_p_basic", self.fixture.commands())
 
     def test_busybox_find_fixture_rejects_formatted_output(self):
         forbidden = "-" + "printf"
@@ -215,6 +255,8 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("stm_core", self.fixture.modules())
         self.assertIn("stm_p_basic", self.fixture.modules())
+        self.assertNotIn("rmmod stm_p_basic", self.fixture.commands())
+        self.assertNotIn("modprobe -r stm_core", self.fixture.commands())
 
     def test_wrong_hash_is_rejected_before_loading_modules(self):
         result = subprocess.run([
@@ -267,7 +309,23 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
            timeout=10)
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("sink is not an unambiguous ETF candidate", result.stderr)
+        self.assertIn("refusing ETR sink", result.stderr)
+        self.assertEqual(self.fixture.modules(), "")
+
+    def test_ambiguous_etf_sink_is_rejected(self):
+        self.fixture._write(
+            self.fixture.sysfs /
+            "bus/coresight/devices/tmc_etf1/enable_sink", "0\n")
+        self.fixture._write(
+            self.fixture.sysfs /
+            "bus/coresight/devices/tmc_etf1/buffer_size", "0x10000\n")
+        self.fixture._write(self.fixture.dev / "tmc_etf1", "TRACE2")
+
+        result = self.fixture.run()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected exactly one explicit ETF sink candidate",
+                      result.stderr)
         self.assertEqual(self.fixture.modules(), "")
 
     def test_pre_enabled_source_is_refused_without_disabling_it(self):
@@ -331,6 +389,48 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(
             (self.fixture.sysfs /
              "bus/coresight/devices/tmc_etf0/enable_sink").read_text(), "0\n")
+
+    def test_rmmod_failure_leaves_nonzero_diagnostic(self):
+        result = self.fixture.run(env={"FAKE_RMMOD_FAIL": "1"})
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fake rmmod failure for stm_p_basic", result.stderr)
+        self.assertIn("ERROR: rmmod stm_p_basic failed", result.stderr)
+        self.assertIn("ERROR: rollback verification failed", result.stderr)
+        self.assertIn("stm_p_basic", self.fixture.modules())
+        self.assertEqual(
+            (self.fixture.sysfs /
+             "bus/coresight/devices/stm0/enable_source").read_text(), "0\n")
+        self.assertEqual(
+            (self.fixture.sysfs /
+             "bus/coresight/devices/tmc_etf0/enable_sink").read_text(), "0\n")
+
+    def test_absent_insmod_module_at_cleanup_is_success(self):
+        timeout = self.fixture.bin / "timeout"
+        timeout.write_text(textwrap.dedent("""\
+            #!/usr/bin/env bash
+            modules=${HOTDOG_AP_SMOKE_PROC_MODULES:?}
+            tmp="${modules}.tmp"
+            awk '$1 != "stm_p_basic"' "$modules" > "$tmp"
+            mv "$tmp" "$modules"
+            shift
+            input=
+            output=
+            for arg in "$@"; do
+              case "$arg" in
+              if=*) input=${arg#if=} ;;
+              of=*) output=${arg#of=} ;;
+              esac
+            done
+            cp "$input" "$output"
+            """))
+        timeout.chmod(timeout.stat().st_mode | stat.S_IXUSR)
+
+        result = self.fixture.run()
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(self.fixture.modules(), "")
+        self.assertNotIn("rmmod stm_p_basic", self.fixture.commands())
 
     def test_term_trap_after_enable_triggers_full_rollback(self):
         timeout = self.fixture.bin / "timeout"

@@ -20,8 +20,6 @@ CAPTURE_TIMEOUT=3
 SYSFS_ROOT="${HOTDOG_AP_SMOKE_SYSFS_ROOT:-/sys}"
 CONFIGFS_ROOT="${HOTDOG_AP_SMOKE_CONFIGFS_ROOT:-/sys/kernel/config}"
 DEV_ROOT="${HOTDOG_AP_SMOKE_DEV_ROOT:-/dev}"
-PROC_MODULES="${HOTDOG_AP_SMOKE_PROC_MODULES:-/proc/modules}"
-
 MODULE_PATH=""
 MODULE_SHA256=""
 SINK_NAME=""
@@ -73,8 +71,12 @@ on_signal() {
 
 module_loaded() {
 	local module=$1
-	awk -v module="$module" '$1 == module { found = 1 } END { exit !found }' \
-		"$PROC_MODULES"
+
+	lsmod | awk -v module="$module" '
+		NR == 1 && $1 == "Module" { next }
+		$1 == module { found = 1 }
+		END { exit !found }
+	'
 }
 
 read_one_line() {
@@ -107,10 +109,12 @@ verify_tooling() {
 		find
 		hostname
 		insmod
+		lsmod
 		mkdir
 		modinfo
 		modprobe
 		rmdir
+		rmmod
 		sed
 		sha256sum
 		sort
@@ -192,11 +196,21 @@ cleanup() {
 	fi
 
 	if [[ "$INTRODUCED_STM_P_BASIC" -eq 1 ]]; then
-		modprobe -r stm_p_basic || cleanup_rc=1
+		if module_loaded stm_p_basic; then
+			if ! rmmod stm_p_basic; then
+				printf 'ERROR: rmmod stm_p_basic failed\n' >&2
+				cleanup_rc=1
+			fi
+		fi
 	fi
 
 	if [[ "$INTRODUCED_STM_CORE" -eq 1 ]]; then
-		modprobe -r stm_core || cleanup_rc=1
+		if module_loaded stm_core; then
+			if ! modprobe -r stm_core; then
+				printf 'ERROR: modprobe -r stm_core failed\n' >&2
+				cleanup_rc=1
+			fi
+		fi
 	fi
 
 	if [[ "$INTRODUCED_SOURCE_ENABLE" -eq 1 && -n "$STM_CS" ]]; then
@@ -289,7 +303,6 @@ validate_args() {
 	capture_parent=${CAPTURE_OUT%/*}
 	[[ -n "$capture_parent" ]] || capture_parent=/
 	[[ -d "$capture_parent" ]] || die "--capture-out parent does not exist"
-	[[ -r "$PROC_MODULES" ]] || die "cannot read modules list: $PROC_MODULES"
 }
 
 attest_device() {
@@ -359,19 +372,29 @@ collect_matching_devices() {
 			[[ "$base" == stm* && -e "$path/enable_source" ]] && printf '%s\n' "$base"
 			;;
 		etf)
-			[[ "$base" == *etf* && -e "$path/enable_sink" && ! -e "$path/buffer_size" ]] && printf '%s\n' "$base"
+			[[ "$base" == tmc_etf* && -e "$path/enable_sink" ]] && printf '%s\n' "$base"
 			;;
 		etr)
-			[[ "$base" == *etr* || -e "$path/buffer_size" ]] && printf '%s\n' "$base"
+			[[ "$base" == tmc_etr* ]] && printf '%s\n' "$base"
 			;;
 		esac
 	done < <(list_child_paths "$root")
 }
 
+connections_summary() {
+	local device=$1
+
+	if [[ -d "$device/connections" ]]; then
+		list_child_names "$device/connections" | join_words
+	else
+		printf 'missing'
+	fi
+}
+
 enumerate_coresight() {
 	local cs_root="$SYSFS_ROOT/bus/coresight/devices"
 	local stm_class_root="$SYSFS_ROOT/class/stm"
-	local stms class_stms etfs etrs sink_match
+	local stms class_stms etfs etrs
 
 	[[ -d "$cs_root" ]] || die "missing CoreSight sysfs root: $cs_root"
 	[[ -d "$stm_class_root" ]] || die "missing STM class root: $stm_class_root"
@@ -388,23 +411,20 @@ enumerate_coresight() {
 
 	[[ "${#stms[@]}" -eq 1 && "${stms[0]}" == "stm0" ]] || die "expected exactly one CoreSight stm0"
 	[[ "${#class_stms[@]}" -eq 1 && "${class_stms[0]}" == "stm0" ]] || die "expected exactly one STM class stm0"
-
-	sink_match=0
-	for etf in "${etfs[@]}"; do
-		if [[ "$etf" == "$SINK_NAME" ]]; then
-			sink_match=$((sink_match + 1))
-		fi
-	done
-	[[ "$sink_match" -eq 1 ]] || die "sink is not an unambiguous ETF candidate: $SINK_NAME"
+	[[ "$SINK_NAME" != tmc_etr* ]] || die "refusing ETR sink: $SINK_NAME"
+	[[ "$SINK_NAME" == tmc_etf* ]] || die "sink must be a tmc_etf* device: $SINK_NAME"
+	[[ "${#etfs[@]}" -eq 1 && "${etfs[0]}" == "$SINK_NAME" ]] || die "expected exactly one explicit ETF sink candidate: $SINK_NAME"
 
 	SINK_CS="$cs_root/$SINK_NAME"
-	[[ "$SINK_NAME" != *etr* && ! -e "$SINK_CS/buffer_size" ]] || die "refusing ETR/buffer_size sink: $SINK_NAME"
 
 	STM_NAME=stm0
 	STM_CLASS="$stm_class_root/$STM_NAME"
 	STM_CS="$cs_root/$STM_NAME"
 	POLICY_DIR="$CONFIGFS_ROOT/stp-policy/${STM_NAME}:p_basic.${POLICY_NAME}"
 	POLICY_NODE_DIR="$POLICY_DIR/$POLICY_NODE"
+
+	printf 'stm-connections: %s\n' "$(connections_summary "$STM_CS")"
+	printf 'sink-connections: %s\n' "$(connections_summary "$SINK_CS")"
 }
 
 capture_prestate() {
@@ -472,6 +492,7 @@ run_smoke() {
 		bs="$CAPTURE_BLOCK_SIZE" count="$CAPTURE_BLOCKS"
 
 	printf 'marker: %s\n' "$marker"
+	printf 'sink-buffer-size-post: %s\n' "$(read_one_line "$SINK_CS/buffer_size")"
 	capture_size=$(wc -c < "$CAPTURE_OUT")
 	printf 'capture: path=%s size=%s\n' "$CAPTURE_OUT" "$capture_size"
 	sha256sum "$CAPTURE_OUT"

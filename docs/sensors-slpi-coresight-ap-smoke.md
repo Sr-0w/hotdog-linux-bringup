@@ -22,16 +22,21 @@ Safety properties:
 
 - attests `hostname=hotdog`, `uname -m=aarch64` and `uname -r=6.16.0-sm8150`;
 - validates the exact module hash and vermagic before loading;
-- refuses ETR sinks and never writes `buffer_size`;
+- accepts explicit `tmc_etf*` sinks even when they expose `buffer_size`, refuses
+  `tmc_etr*`, and never writes `buffer_size`;
 - refuses pre-enabled STM/ETF paths and pre-existing smoke policies;
 - creates one `stm0:p_basic.ap-smoke/default` policy with one master and one
   channel;
 - writes a single AP marker through `/dev/stm0`;
 - captures at most 4096 bytes from the selected ETF device;
-- rollback order is source, sink, policy, `stm_p_basic`, `stm_core`;
+- rollback order is source, sink, policy, `rmmod stm_p_basic`, `modprobe -r
+  stm_core` for modules introduced by the script;
 - pre-existing modules are not unloaded.
 
-The capture file remains private lab evidence until reviewed.
+The capture file remains private lab evidence until reviewed. Loading an
+out-of-tree module can taint the kernel; `rmmod` removes the module but does not
+clear that taint. If a clean-taint proof is required for a later lease, schedule
+a separate pre-test reboot before running the smoke.
 
 ## Runtime command set
 
@@ -44,10 +49,12 @@ available. The script uses shell builtins plus these external commands:
 - `find`, only as `find ROOT -print`
 - `hostname`
 - `insmod`
+- `lsmod`
 - `mkdir`
 - `modinfo`
 - `modprobe`
 - `rmdir`
+- `rmmod`
 - `sed`
 - `sha256sum`
 - `sort`
