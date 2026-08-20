@@ -165,6 +165,15 @@ join_words() {
 	printf '%s' "$joined"
 }
 
+join_args() {
+	local item joined=""
+
+	for item in "$@"; do
+		joined="${joined}${joined:+ }$item"
+	done
+	printf '%s' "${joined:-none}"
+}
+
 cleanup() {
 	local rc=$?
 	local cleanup_rc=0
@@ -415,28 +424,95 @@ connections_summary() {
 	fi
 }
 
+connection_tokens() {
+	local device=$1
+	local path
+
+	[[ -d "$device/connections" ]] || return 0
+
+	while IFS= read -r path; do
+		printf '%s\n' "${path##*/}"
+		if [[ -f "$path" && -r "$path" ]]; then
+			sed -n '1,16p' "$path"
+		fi
+	done < <(list_child_paths "$device/connections") |
+		awk '
+		{
+			line = $0
+			gsub(/[^[:alnum:]_]+/, " ", line)
+			n = split(line, tokens, " ")
+			for (i = 1; i <= n; i++)
+				if (tokens[i] != "")
+					print tokens[i]
+		}
+		' | sort
+}
+
+tokens_contain() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" == "$wanted" ]] && return 0
+	done
+	return 1
+}
+
+tokens_contain_other_etf() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" =~ ^tmc_etf[0-9]+$ && "$token" != "$wanted" ]] &&
+			return 0
+	done
+	return 1
+}
+
+tokens_contain_other_stm() {
+	local wanted=$1
+	shift
+	local token
+
+	for token in "$@"; do
+		[[ "$token" =~ ^stm[0-9]+$ && "$token" != "$wanted" ]] &&
+			return 0
+	done
+	return 1
+}
+
 check_requested_connections() {
 	local stm_connections sink_connections
+	local stm_tokens sink_tokens
 
 	stm_connections=$(connections_summary "$STM_CS")
 	sink_connections=$(connections_summary "$SINK_CS")
+	mapfile -t stm_tokens < <(connection_tokens "$STM_CS" | sort -u)
+	mapfile -t sink_tokens < <(connection_tokens "$SINK_CS" | sort -u)
 
 	printf 'stm-connections: %s\n' "$stm_connections"
 	printf 'sink-connections: %s\n' "$sink_connections"
+	printf 'stm-connection-tokens: %s\n' "$(join_args "${stm_tokens[@]}")"
+	printf 'sink-connection-tokens: %s\n' "$(join_args "${sink_tokens[@]}")"
 
-	if [[ "$stm_connections $sink_connections" == *tmc_etf* ||
-	      "$stm_connections $sink_connections" == *stm* ]]; then
-		if [[ "$stm_connections" == *"$SINK_NAME"* ||
-		      "$sink_connections" == *"$STM_NAME"* ]]; then
-			printf 'connections-check: graph-metadata-links %s to %s\n' \
-				"$STM_NAME" "$SINK_NAME"
-		else
-			die "CoreSight connection metadata does not link $STM_NAME to $SINK_NAME"
-		fi
-	else
-		printf 'connections-check: endpoint names unavailable; using explicit requested sink %s\n' \
-			"$SINK_NAME"
+	if tokens_contain_other_etf "$SINK_NAME" "${stm_tokens[@]}"; then
+		die "CoreSight connection metadata names a different ETF sink for $STM_NAME"
 	fi
+	if tokens_contain_other_stm "$STM_NAME" "${sink_tokens[@]}"; then
+		die "CoreSight connection metadata names a different STM source for $SINK_NAME"
+	fi
+
+	if tokens_contain "$SINK_NAME" "${stm_tokens[@]}" ||
+	   tokens_contain "$STM_NAME" "${sink_tokens[@]}"; then
+		printf 'connections-check: graph-metadata-links %s to %s\n' \
+			"$STM_NAME" "$SINK_NAME"
+		return 0
+	fi
+
+	printf 'connections-check: connection graph not proven by sysfs names; using explicit requested sink %s\n' \
+		"$SINK_NAME"
 }
 
 enumerate_coresight() {

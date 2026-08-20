@@ -31,6 +31,10 @@ Safety properties:
 - accepts explicit `tmc_etf*` sinks even when they expose `buffer_size`, refuses
   `tmc_etr*`, reports any other ETF candidates without touching them, and never
   writes `buffer_size`;
+- treats CoreSight `connections/` metadata as proof only when exact normalized
+  tokens name `stm0` and/or the requested `tmc_etf*`; generic endpoint names
+  are logged as not proving the graph and do not override the explicit sink
+  selection;
 - refuses pre-enabled STM/ETF paths and pre-existing smoke policies;
 - creates one `stm0:p_basic.ap-smoke/default` policy with one master and one
   channel;
