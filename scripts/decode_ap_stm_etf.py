@@ -109,6 +109,8 @@ def deformat_tmc_etf(data: bytes) -> list[TraceStream]:
     This follows the frame shape implemented by OpenCSD's frame deformatter.
     """
 
+    if not data:
+        raise DecodeError("empty ETF capture")
     if len(data) % FRAME_SIZE:
         raise DecodeError(f"capture size {len(data)} is not a multiple of {FRAME_SIZE}")
 
@@ -154,6 +156,9 @@ def deformat_tmc_etf(data: bytes) -> list[TraceStream]:
             current_trace_id = (last >> 1) & 0x7F
         else:
             append_byte(current_trace_id, last | (1 if aux & 0x80 else 0))
+
+    if not streams:
+        raise DecodeError("ETF capture contains no CoreSight source streams")
 
     return [TraceStream(trace_id, bytes(payload)) for trace_id, payload in sorted(streams.items())]
 
@@ -462,6 +467,9 @@ def summarize(args: argparse.Namespace) -> int:
         payload = payload_from_packets(packets)
         selected_packets.append((stream.trace_id, packets))
         selected_payloads.append((stream.trace_id, payload))
+
+    if not selected_packets:
+        raise DecodeError("ETF capture contains no useful STP stream")
 
     for trace_id, packets in selected_packets:
         print(f"packets atid={trace_id}:")

@@ -62,30 +62,118 @@ For VERSION 3 the helper uses natural-binary reconstruction. For VERSION 4 it
 reconstructs through Gray-code state. Partial updates replace the low
 `timestamp_bits` of the previous timestamp, matching OpenCSD/Zephyr decoder
 semantics; they are not printed as absolute timestamps. The public regression
-case is a full 64-bit timestamp `0x8acbb9494` followed by an 8-bit update
-`0xca`, reconstructing to `0x8acbb94ca`.
+cases are:
+
+- VERSION 3 natural-binary: full 64-bit `0x123456789abcdef0`, then 8-bit raw
+  update `0x5a`, reconstructing to `0x123456789abcde5a`;
+- VERSION 4 Gray-coded: full raw `0x08913ba26ef75dc4`, decoding to
+  `0x0f1e2d3c4b5a6978`, then 8-bit raw update `0x3c`, reconstructing to
+  `0x0f1e2d3c4b5a69d7`.
 
 ## OpenCSD cross-check
 
-The private S50 capture was cross-checked against OpenCSD commit
-`59f15320637ce6e510604e7bed550d7ad109d15d`. Keep these commands sanitized and
-treat the private capture as an external input:
+The private AP ETF capture was cross-checked against OpenCSD:
+
+- repository: <https://github.com/Linaro/OpenCSD>;
+- commit: `59f15320637ce6e510604e7bed550d7ad109d15d`;
+- tree: `302aa77dfae81280a856172f7eb1e4e1f53c0f12`.
+
+Build:
 
 ```sh
-git clone --no-checkout <opencsd-repository> <opencsd-worktree>
+git clone --no-checkout https://github.com/Linaro/OpenCSD.git <opencsd-worktree>
 cd <opencsd-worktree>
 git checkout 59f15320637ce6e510604e7bed550d7ad109d15d
 cmake -S decoder/build/linux -B <build-dir> -DCMAKE_BUILD_TYPE=Release
 cmake --build <build-dir> --target trc_pkt_lister
-<build-dir>/trc_pkt_lister \
-  -ss_dir <stm-only-snapshot-dir> \
-  -o_raw_unpacked -decode -id 1 \
-  -src_name <private-capture.bin>
 ```
 
-For this trace shape, selecting candidate trace ID `1` decodes the STM payload.
-Candidate ID `0` is formatter padding/metadata and is classified as
-`zero-padding`, not AP STM payload.
+Minimal snapshot directory for an already-formatted CoreSight ETF capture:
+
+`snapshot.ini`
+
+```ini
+[snapshot]
+version=1.0
+
+[device_list]
+device0=device_0.ini
+
+[trace]
+metadata=trace.ini
+```
+
+`trace.ini`
+
+```ini
+[trace_buffers]
+buffers=buffer1
+
+[buffer1]
+name=ETB_1
+file=<capture-file-name>
+format=coresight
+
+[source_buffers]
+STM_0=ETB_1
+
+[core_trace_sources]
+```
+
+`device_0.ini`
+
+```ini
+[device]
+name=STM_0
+class=trace_source
+type=STM
+
+[regs]
+STMTCSR(0x3A0)=0x00010007
+```
+
+The synthetic `STMTCSR` value above selects CoreSight trace ID 1 using the
+OpenCSD STM trace-ID field:
+
+```text
+STMTCSR = (trace_id << 16) | flags
+        = (0x01 << 16) | 0x00000007
+        = 0x00010007
+```
+
+Run `trc_pkt_lister` with the private capture as an external input:
+
+```sh
+cd <scratch-output-dir>
+<build-dir>/trc_pkt_lister \
+  -ss_dir <stm-only-snapshot-dir> \
+  -o_raw_unpacked -decode -id 1 -src_name ETB_1 \
+  -logstdout -no_time_print
+```
+
+`-src_name` is the snapshot source name (`ETB_1` in `trace.ini`), while the
+private capture path is supplied by `file=<capture-file-name>` in `trace.ini`.
+Run from a scratch output directory because OpenCSD may create a packet-listing
+log file in the current directory.
+
+Expected output shape, with private payload bytes omitted:
+
+```text
+Trace Packet Lister : Protocol printer STM on Trace ID 0x1
+Frame Data; Index <n>; ID_DATA[0x01]; <formatted bytes omitted>
+Idx:<n>; ID:1; ... ASYNC:Alignment synchronisation packet
+Idx:<n>; ID:1; ... VERSION:Version packet; Ver=3
+Idx:<n>; ID:1; ... FREQ:Frequency packet; Freq=0Hz
+Idx:<n>; ID:1; ... M8:Set current master; Master=<hardware-master>
+Idx:<n>; ID:1; ... C16:Set current channel; Chan=<policy-derived-channel>
+Idx:<n>; ID:1; ... D32TS:32 bit data + timestamp; Data=<omitted>; TS=<omitted>
+Idx:<n>; ID:1; ... D32:32 bit data; Data=<omitted>
+Idx:<n>; ID:1; ... FLAG:Flag packet
+```
+
+For this trace shape, candidate trace ID `1` decodes the STM payload. Candidate
+ID `0` is formatter padding/metadata and is classified as `zero-padding`, not AP
+STM payload.
 
 ## Usage
 
@@ -102,7 +190,8 @@ Exit codes:
 - `1`: decode succeeded but `--expect-marker` did not match any decoded STP
   payload;
 - `2`: input read error, hash mismatch, malformed ETF/STPv2 stream, unsupported
-  opcode, unsupported timestamp encoding or truncated packet.
+  opcode, unsupported timestamp encoding, truncated packet, empty capture or
+  capture with no useful STP stream.
 
 ## Synthetic decoded sequence
 
