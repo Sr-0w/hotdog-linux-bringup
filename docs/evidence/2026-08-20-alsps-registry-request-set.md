@@ -74,3 +74,39 @@ to make is with the SAR, whose pool at `0xb222b970` carries `SX9324_SAR`,
 `Semtech`, `sx9324_op_0_platform.config` — it is the one driver of the three
 that reaches the wire, so what its init does after the registry callback is
 what the ALS and the IMU are not doing.
+
+## The dispatcher and the handler, mapped
+
+Both drivers have the same two-phase shape, and both phases are now located.
+
+**Request**, ALS at `0xb21da96c`: seven consecutive calls to `0xb21da890`, one
+per group name, adding each to the request set.
+
+**Dispatch**, ALS at `0xb21db1a0`, SAR at `0xb21e2814`: a chain of calls to the
+shared name-compare helper `0xb216ede0`, one per known group, each followed by
+`p0 = cmp.eq(r0,#0)` and a branch to that group's handler. The SAR's chain
+matches `sx9324_op_0_platform.config` at `0xb21e2848`; the ALS's matches
+`alsps_platform.config` at `0xb21db1cc` and `alsps_platform.cct.fac_cal` at
+`0xb21db23c`. The two are structurally identical, so the ALS is not failing for
+want of a dispatcher.
+
+**Handler**, ALS `alsps_platform.config` at `0xb21db4c8`:
+
+```
+b21db524: call 0xb2071aa8            ; protobuf decode, descriptor 0xb2044300
+b21db534: p0 = r0
+b21db53c: if (!p0.new) jump 0xb21db340   ; decode failed -> abandon this group
+b21db544: r3 = memw(r18+#0xf4)       ; and on success, copy the decoded fields
+b21db54c: r2 = memub(r18+#0x107)     ; into driver state at +0x68, +0x64, +0x70…
+```
+
+So a group whose payload does not decode is dropped **silently** — no log, no
+diag message. That matches the symptom exactly: the driver reads every file,
+never complains, and never proceeds.
+
+Whether the decode actually fails, and for which group, is the next thing to
+settle. The state offsets are known (`+0x64`, `+0x68`, `+0x6c`, `+0x70`,
+`+0x74`, `+0x78`, `+0x80` receive the platform fields), so a coredump taken
+while the sensor PD is alive can be read to see which of them were ever
+populated — that distinguishes "decode failed" from "decode fine, blocked
+later" without any further disassembly.
