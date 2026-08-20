@@ -110,3 +110,46 @@ settle. The state offsets are known (`+0x64`, `+0x68`, `+0x6c`, `+0x70`,
 while the sensor PD is alive can be read to see which of them were ever
 populated — that distinguishes "decode failed" from "decode fine, blocked
 later" without any further disassembly.
+
+## The decode succeeds — read out of live memory
+
+The question left open above is now answered, and without more disassembly.
+Searching a coredump for a window holding the ALS's characteristic values
+together — slave 70, 400 kHz, DRI 120 — finds six regularly spaced copies. One
+of them:
+
+```
+0x9869d3f8  00000046 00000000 00000190 00000190   slave 70, 400 kHz, 400 kHz
+0x9869d408  00000003 00000000 00000078 01000001   bus instance 3, DRI 120
+0x9869d418  "/pmic/client/sensor_vddio"
+0x9869d438  "/pmic/client/sensor_vdd"
+0x9869d458  b2035c0c b20426b0 b2042780 b200fff0   structure pointers
+0x9869d468  b201dd38 b201ec28
+```
+
+Every field from `alsps_platform.config` is there: address, both bus speeds,
+instance, interrupt, and both rail names. **The protobuf decode succeeds and
+the driver's state is fully populated.** The silent-drop path at `0xb21db340`
+is not being taken.
+
+The pointers at `+0x60` sit next to the bus handler table found earlier at
+`0xb2042668`, whose I2C entry is `0xb2042738` — so this is the driver's
+com-port configuration, assembled and ready.
+
+The same search for the SAR (slave 40, 400 kHz, DRI 119) and for the IMU
+(9600 kHz, DRI 132, instance 2) finds nothing, which is worth noting: the SAR
+reaches the wire without such a structure being findable this way, so it takes
+a different route to its port.
+
+## So the failure is at the open, not before it
+
+Configuration is complete and correct in memory, and no port is opened. Yet
+`sns_sync_com_port_service.c:null port_handle` is never emitted — checked by
+searching the dump for a logged reference to that string, of which there are
+exactly two, both in the static message tables.
+
+That leaves a narrow gap: between having a valid com-port configuration and
+calling the open, the ALS driver stops without taking either the failure branch
+that logs or the success branch that allocates a GPI channel. The next thing to
+read is what sits between them — the callers of the com-port open, and what
+condition guards the call.
