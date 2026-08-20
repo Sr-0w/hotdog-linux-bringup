@@ -148,3 +148,35 @@ Scanning blindly for the port object does not work: a loose signature over the
 whole dump returns 3501 candidates, almost all coincidence. The anchored route
 is the one to take — follow the pointer out of the driver's own state rather
 than search for the shape.
+
+## Nothing has ever been allocated from pool 2
+
+The arena spans 200 bytes, `0xb20101d0` to `0xb2010298`, which makes any
+pointer into it a tight signature. Searching the whole coredump for a 4-byte
+value in that range finds **eight**, and every one of them is the arena's
+*start* address `0xb20101d0` — the descriptor's own field, copied about. Not a
+single interior pointer exists anywhere in DSP memory.
+
+An arena that has served even one allocation would show interior pointers held
+by whoever owns the block. There are none. Combined with its backing store
+reading as 208 zero bytes, the conclusion is that **pool 2 has never handed out
+a block**, either because it was never initialised or because every request
+failed.
+
+That is consistent with every observation in this investigation: the port open
+asks pool 2 first, its failure is silent, the flag byte is never set, the
+transfer path refuses, no GPI channel is allocated, and nothing reaches the
+wire — for the ALS, the IMU and the magnetometer alike.
+
+It also fits the exception. The SAR does reach the wire, and the same searches
+that find the ALS's decoded platform values find nothing equivalent for it, so
+the SAR takes a different route to its port and does not depend on this arena.
+
+## What that makes the next question
+
+Not "why does the allocation fail" but "who was supposed to initialise pool 2,
+and does that code run at all". The pool table at `0xb20429d0` carries only
+static initialisers — start, end, id, size — and the sensor PD's copy
+reproduces them byte for byte, so nothing has updated the descriptor either.
+The allocator's helpers `0xb2065e24` and `0xb2065ac4` and the assert path at
+`0xb2065780` are the places to read.
