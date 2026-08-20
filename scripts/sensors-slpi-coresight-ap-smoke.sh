@@ -349,17 +349,37 @@ capture_module_prestate() {
 
 load_stm_core() {
 	if [[ "$PRE_STM_CORE_LOADED" -eq 0 ]]; then
-		modprobe stm_core
-		module_loaded stm_core || die "stm_core did not load"
-		INTRODUCED_STM_CORE=1
+		if modprobe stm_core; then
+			if module_loaded stm_core; then
+				INTRODUCED_STM_CORE=1
+			else
+				die "stm_core did not load"
+			fi
+		else
+			if module_loaded stm_core; then
+				INTRODUCED_STM_CORE=1
+				die "modprobe stm_core failed after partially loading stm_core"
+			fi
+			die "modprobe stm_core failed"
+		fi
 	fi
 }
 
 load_stm_p_basic() {
 	if [[ "$PRE_STM_P_BASIC_LOADED" -eq 0 ]]; then
-		insmod "$MODULE_PATH"
-		module_loaded stm_p_basic || die "stm_p_basic did not load"
-		INTRODUCED_STM_P_BASIC=1
+		if insmod "$MODULE_PATH"; then
+			if module_loaded stm_p_basic; then
+				INTRODUCED_STM_P_BASIC=1
+			else
+				die "stm_p_basic did not load"
+			fi
+		else
+			if module_loaded stm_p_basic; then
+				INTRODUCED_STM_P_BASIC=1
+				die "insmod stm_p_basic failed after partially loading stm_p_basic"
+			fi
+			die "insmod stm_p_basic failed"
+		fi
 	fi
 }
 

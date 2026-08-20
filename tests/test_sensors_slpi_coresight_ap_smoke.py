@@ -109,6 +109,10 @@ class Fixture:
                 printf 'modprobe %s\\n' "$*" >> "$log"
                 if [ "$1" = "-r" ]; then
                   name=$2
+                  if [ "${FAKE_MODPROBE_REMOVE_FAIL:-0}" = 1 ]; then
+                    printf 'fake modprobe remove failure for %s\\n' "$name" >&2
+                    exit 1
+                  fi
                   tmp="${modules}.tmp"
                   awk -v name="$name" '$1 != name' "$modules" > "$tmp"
                   mv "$tmp" "$modules"
@@ -117,6 +121,10 @@ class Fixture:
                 name=$1
                 if ! awk -v name="$name" '$1 == name { found = 1 } END { exit !found }' "$modules"; then
                   printf '%s 1 0 - Live 0x0\\n' "$name" >> "$modules"
+                fi
+                if [ "$name" = "stm_core" ] && [ "${FAKE_MODPROBE_PARTIAL_FAIL:-0}" = 1 ]; then
+                  printf 'fake modprobe partial failure for %s\\n' "$name" >&2
+                  exit 1
                 fi
                 if [ "$name" = "stm_core" ] && [ "${FAKE_MODPROBE_CREATES_TOPOLOGY:-0}" = 1 ]; then
                   sys=${HOTDOG_AP_SMOKE_SYSFS_ROOT:?}
@@ -143,6 +151,10 @@ class Fixture:
                 printf 'insmod %s\\n' "$*" >> "$log"
                 if ! awk '$1 == "stm_p_basic" { found = 1 } END { exit !found }' "$modules"; then
                   printf 'stm_p_basic 1 0 - Live 0x0\\n' >> "$modules"
+                fi
+                if [ "${FAKE_INSMOD_PARTIAL_FAIL:-0}" = 1 ]; then
+                  printf 'fake insmod partial failure for stm_p_basic\\n' >&2
+                  exit 1
                 fi
                 """),
             "lsmod": textwrap.dedent("""\
@@ -401,6 +413,74 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
             "modprobe -r stm_core",
         ])
         self.assertEqual(self.fixture.modules(), "")
+
+    def test_partial_modprobe_failure_rolls_back_loaded_core(self):
+        self.fixture.remove_coresight_topology()
+
+        result = self.fixture.run(env={"FAKE_MODPROBE_PARTIAL_FAIL": "1"})
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fake modprobe partial failure for stm_core",
+                      result.stderr)
+        self.assertIn(
+            "modprobe stm_core failed after partially loading stm_core",
+            result.stderr)
+        self.assertEqual(self.fixture.command_lines(), [
+            "modprobe stm_core",
+            "modprobe -r stm_core",
+        ])
+        self.assertEqual(self.fixture.modules(), "")
+
+    def test_partial_modprobe_cleanup_failure_keeps_nonzero_residue(self):
+        self.fixture.remove_coresight_topology()
+
+        result = self.fixture.run(env={
+            "FAKE_MODPROBE_PARTIAL_FAIL": "1",
+            "FAKE_MODPROBE_REMOVE_FAIL": "1",
+        })
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fake modprobe partial failure for stm_core",
+                      result.stderr)
+        self.assertIn("fake modprobe remove failure for stm_core",
+                      result.stderr)
+        self.assertIn("ERROR: modprobe -r stm_core failed", result.stderr)
+        self.assertIn("ERROR: rollback verification failed", result.stderr)
+        self.assertEqual(self.fixture.command_lines(), [
+            "modprobe stm_core",
+            "modprobe -r stm_core",
+        ])
+        self.assertIn("stm_core", self.fixture.modules())
+
+    def test_partial_insmod_failure_rolls_back_loaded_p_basic(self):
+        result = self.fixture.run(env={"FAKE_INSMOD_PARTIAL_FAIL": "1"})
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fake insmod partial failure for stm_p_basic",
+                      result.stderr)
+        self.assertIn(
+            "insmod stm_p_basic failed after partially loading stm_p_basic",
+            result.stderr)
+        lines = self.fixture.command_lines()
+        self.assertTrue(lines[0].startswith("insmod "))
+        self.assertEqual(lines[1:], ["rmmod stm_p_basic"])
+        self.assertEqual(self.fixture.modules(), "")
+
+    def test_partial_insmod_cleanup_failure_keeps_nonzero_residue(self):
+        result = self.fixture.run(env={
+            "FAKE_INSMOD_PARTIAL_FAIL": "1",
+            "FAKE_RMMOD_FAIL": "1",
+        })
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fake insmod partial failure for stm_p_basic",
+                      result.stderr)
+        self.assertIn("ERROR: rmmod stm_p_basic failed", result.stderr)
+        self.assertIn("ERROR: rollback verification failed", result.stderr)
+        lines = self.fixture.command_lines()
+        self.assertTrue(lines[0].startswith("insmod "))
+        self.assertEqual(lines[1:], ["rmmod stm_p_basic"])
+        self.assertIn("stm_p_basic", self.fixture.modules())
 
     def test_pre_enabled_source_is_refused_without_disabling_it(self):
         source = self.fixture.sysfs / "bus/coresight/devices/stm0/enable_source"
