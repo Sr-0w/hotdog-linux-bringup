@@ -40,6 +40,6 @@ treated as a confirmed rollback.
 
 The parser is intentionally strict for all expected QMI responses: the QMI
 header length must match the received packet exactly, TLVs must be complete,
-and the result TLV must be present with at least the result and error fields.
-Malformed responses keep the process result nonzero even if the final GET state
-appears safe.
+and the result TLV must be present with exactly the 4-byte result/error
+payload. Malformed responses keep the process result nonzero even if the final
+GET state appears safe.

@@ -186,13 +186,12 @@ def qmi_result(response_tlvs, required=False):
             raise RuntimeError("missing QMI result TLV")
         return 0, 0
     result = response_tlvs[2]
-    if len(result) < 4:
+    if len(result) != 4:
         if required:
-            raise RuntimeError("short QMI result TLV")
+            raise RuntimeError("malformed QMI result TLV length %d" %
+                               len(result))
         return 0, 0
-    if len(result) >= 4:
-        return struct.unpack_from("<HH", result)
-    return 0, 0
+    return struct.unpack("<HH", result)
 
 
 def transact(transport, node, port, txn, msg_id, tlvs=b""):

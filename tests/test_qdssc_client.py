@@ -59,6 +59,14 @@ def qmi_response_with_tlvs(txn, msg_id, tlvs, msg_type=2):
     return struct.pack("<BHHH", msg_type, txn, msg_id, len(tlvs)) + tlvs
 
 
+def qmi_response_with_result_payload(module, txn, msg_id, result_payload,
+                                     state=None):
+    tlvs = module.tlv(2, result_payload)
+    if state is not None:
+        tlvs += module.tlv(0x10, struct.pack("<I", state))
+    return qmi_response_with_tlvs(txn, msg_id, tlvs)
+
+
 def success(module, txn, msg_id, state=None):
     return qmi_response(module, txn, msg_id, state=state)
 
@@ -401,7 +409,72 @@ class QdsscClientTests(unittest.TestCase):
         rc, output, _stderr, _fake = self.run_client([], responses)
 
         self.assertEqual(rc, 1)
-        self.assertIn("short QMI result TLV", output)
+        self.assertIn("malformed QMI result TLV length 2", output)
+
+    def test_read_response_rejects_six_byte_result_tlv(self):
+        m = self.module
+        malformed = bytes.fromhex(
+            "02010020001000"
+            "020600000000000000"
+            "10040000000000")
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("malformed QMI result TLV length 6", output)
+
+    def test_result_tlv_lengths_must_be_exactly_four(self):
+        m = self.module
+        for length in (0, 1, 3, 5, 6):
+            with self.subTest(length=length):
+                malformed = qmi_response_with_result_payload(
+                    m, 1, m.QMI_GET_SWT, bytes(length), state=0)
+                responses = self.read_with_first_response(malformed)
+                rc, output, _stderr, _fake = self.run_client([], responses)
+
+                self.assertEqual(rc, 1)
+                self.assertIn("malformed QMI result TLV length %d" % length,
+                              output)
+
+    def test_disable_six_byte_result_tlv_keeps_nonzero_after_safe_get(self):
+        m = self.module
+        malformed_set_entity = bytes.fromhex(
+            "02010023000900"
+            "020600000000000000")
+        responses = [
+            malformed_set_entity,
+            success(m, 2, m.QMI_SET_ENTITY),
+            success(m, 3, m.QMI_SET_ENTITY),
+            success(m, 4, m.QMI_SET_ENTITY),
+            success(m, 5, m.QMI_SET_SWT),
+            success(m, 6, m.QMI_GET_SWT, state=0),
+            success(m, 7, m.QMI_GET_ENTITY, state=0),
+            success(m, 8, m.QMI_GET_ENTITY, state=0),
+            success(m, 9, m.QMI_GET_ENTITY, state=0),
+            success(m, 10, m.QMI_GET_ENTITY, state=0),
+        ]
+        rc, output, _stderr, fake = self.run_client(
+            ["--disable", "--instance", "90"], responses)
+        msg_ids = [
+            m.split_qmi(packet)[2] for packet in self.sent_packets(fake)
+        ]
+
+        self.assertEqual(rc, 1)
+        self.assertIn("malformed QMI result TLV length 6", output)
+        self.assertIn("software trace: result=0 error=0 state=disabled",
+                      output)
+        self.assertEqual(msg_ids, [
+            m.QMI_SET_ENTITY,
+            m.QMI_SET_ENTITY,
+            m.QMI_SET_ENTITY,
+            m.QMI_SET_ENTITY,
+            m.QMI_SET_SWT,
+            m.QMI_GET_SWT,
+            m.QMI_GET_ENTITY,
+            m.QMI_GET_ENTITY,
+            m.QMI_GET_ENTITY,
+            m.QMI_GET_ENTITY,
+        ])
 
     def test_recv_oserror_is_reported_nonzero(self):
         m = self.module
