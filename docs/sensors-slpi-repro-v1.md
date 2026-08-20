@@ -121,6 +121,36 @@ collision, incomplete-payload, generation-change and atomic-replace failures:
 python3 -B -m unittest discover -s tests -p 'test_*.py'
 ```
 
+## Private runtime capture and gate 3
+
+Hardware Lab produced a separate read-only capture under
+`logs/2026-08-20-sensors-slpi-04-runtime` (external to Git). Its archive and
+local manifest hashes, 48 config files / 86196 bytes, 133 registry files /
+47427 bytes, `sns_reg.conf` and `sns_reg_version` hashes are recorded in the
+`runtime_capture_candidate` manifest object. The archive and extracted tree
+must remain private and must never become a Git source.
+
+All 45 baseline files and both ALSPS additions match byte-for-byte. The 48th
+config file,
+`msmnile_power_0.json.pre-island-off-20260820`, is a byte-identical operational
+backup of `msmnile_power_0.json`; it is not another sensor definition and must
+be excluded before staging. Therefore the capture maps to 45 plus the two
+ALSPS files, or to 47 plus that private backup. The registry backup
+`power.island.pre-island-off-20260820` remains part of the observed private
+133-file registry and is not independently packaged.
+
+Run the read-only gate against the extracted private root:
+
+```sh
+python3 scripts/sensors-slpi-repro.py gate3 \
+  --capture-root /path/to/logs/2026-08-20-sensors-slpi-04-runtime \
+  --variant 47 \
+  --artifact-root /path/to/hotdog-r6-rebaseline
+```
+
+The gate emits a machine-readable result and remains `hardware_ready: false`
+until Qualcomm parser evidence and the normal hardware lease are available.
+
 ## Image and SLPI inputs
 
 The manifest records exact size and SHA256 for the known complete v16 image:

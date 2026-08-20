@@ -211,6 +211,73 @@
     "snapshot_command": "python3 scripts/sensors-slpi-repro.py snapshot --served-root <captured-sensors-root> --out <snapshot-dir>",
     "restore_command": "python3 scripts/sensors-slpi-repro.py restore --snapshot <snapshot-dir> --target <offline-sensors-root>"
   },
+  "runtime_capture_candidate": {
+    "id": "sensors-slpi-04-runtime-20260820",
+    "status": "EXTERNAL_PRIVATE_CAPTURE_NOT_GIT",
+    "publication_policy": "metadata-only in this manifest; never publish the archive or extracted tree",
+    "capture_root": "logs/2026-08-20-sensors-slpi-04-runtime",
+    "runtime_root": "logs/2026-08-20-sensors-slpi-04-runtime/extracted/sensors",
+    "archive": {
+      "path": "logs/2026-08-20-sensors-slpi-04-runtime/sensors-active.tar",
+      "size": 286208,
+      "sha256": "f84436fa6369eb192653ada22a90bee762eab7a6f1e71bd0fc30cb1da5bdbe3f"
+    },
+    "local_manifest": {
+      "path": "logs/2026-08-20-sensors-slpi-04-runtime/sensors-active.local-manifest.tsv",
+      "size": 22605,
+      "sha256": "33adeb8c05e3e4b6c45bc970cea65de62769b478d3d3edb26af116270a580db7"
+    },
+    "runtime": {
+      "config_files": 48,
+      "config_bytes": 86196,
+      "registry_files": 133,
+      "registry_bytes": 47427,
+      "sns_reg_conf": {"path": "sns_reg.conf", "size": 597, "sha256": "63ad14bef0a37e96f8321d067edebb8ff786f5ef66f1447b75d57bb71b7bbd5e"},
+      "sns_reg_version": {"path": "sns_reg_version", "size": 10, "sha256": "9c7a6b1706fbd672af64d908c7bd1044958ce50801e86d112fbfbba57f1dd4ff"}
+    },
+    "slpi_00121": {
+      "mbn_sha256": "6e80f8a6178177f18f20be8c468053c9ce7daa2c80171d694db6494bc07caa92",
+      "matches_manifest": true
+    },
+    "mapping": {
+      "variant_45": {
+        "exact_selected_files": 45,
+        "missing": [],
+        "allowed_extras": ["alsps.json", "msmnile_alsps.json", "msmnile_power_0.json.pre-island-off-20260820"],
+        "status": "45_MATCH_PLUS_ALSPS_VARIANT_AND_OPERATIONAL_BACKUP"
+      },
+      "variant_47": {
+        "exact_selected_files": 47,
+        "missing": [],
+        "allowed_extras": ["msmnile_power_0.json.pre-island-off-20260820"],
+        "status": "47_MATCH_PLUS_OPERATIONAL_BACKUP"
+      },
+      "identity_note": "TCS3701-named files are present in the runtime config set; this does not change the ALSPS hardware identity established by the registry/config values"
+    },
+    "extras": [
+      {
+        "path": "config/msmnile_power_0.json.pre-island-off-20260820",
+        "size": 8739,
+        "sha256": "0baa123b3522fa794eb38a67f5b29faa696c8165f2dd8ef7f6573502694629f4",
+        "same_as": "config/msmnile_power_0.json",
+        "classification": "byte-identical operational backup retained by the runtime capture; not a separate sensor definition",
+        "integration_policy": "exclude from the selected runtime before staging"
+      },
+      {
+        "path": "registry/power.island.pre-island-off-20260820",
+        "size": 94,
+        "sha256": "e2d005116fba017b5588593fb175770ed6191f41b3f84c5a1cd9740b383336af",
+        "classification": "registry operational backup retained by the capture; part of the 133-file observed registry, not a Git source",
+        "integration_policy": "preserve only inside the private snapshot; do not package or promote independently"
+      }
+    ],
+    "gate_3": {
+      "command": "python3 scripts/sensors-slpi-repro.py gate3 --capture-root <runtime-capture-root> --variant 47 --artifact-root <artifact-root>",
+      "status": "OFFLINE_GATE_ONLY",
+      "hardware_ready": false,
+      "requires": ["private capture archive and local manifest hashes", "45/47 config mapping", "registry count/hash validation", "SLPI 00121 artifact verification", "Qualcomm parser evidence before hardware Working"]
+    }
+  },
   "package_boundary": {
     "firmware_oneplus_hotdog": {"recipe": "aports/device/testing/firmware-oneplus-hotdog/APKBUILD", "pkgver": "20241212", "pkgrel": 5, "installs_sensor_configs": false, "installs_slpi_mbn": false},
     "device_initramfs_firmware": {"recipe": "aports/device/testing/device-oneplus-hotdog/30-initramfs-firmware.files", "entries": ["/lib/firmware/qcom/a630_sqe.fw", "/lib/firmware/qcom/a640_gmu.bin", "/lib/firmware/qcom/sm8150/oneplus/hotdog/a640_zap.mbn"]},

@@ -168,6 +168,32 @@ def validate_baseline_manifest(manifest: dict) -> None:
         fail("SLPI split manifest must contain 22 files")
     for index, entry in enumerate(manifest.get("qrtr_kernel_modules", [])):
         validate_hash_entry(entry, f"qrtr_kernel_modules[{index}]")
+    capture = manifest.get("runtime_capture_candidate")
+    if not isinstance(capture, dict):
+        fail("runtime_capture_candidate must be an object")
+    for key in ("archive", "local_manifest"):
+        validate_hash_entry(capture.get(key), f"runtime_capture_candidate.{key}")
+        relative_path(capture[key]["path"], f"runtime_capture_candidate.{key}.path")
+    runtime = capture.get("runtime")
+    if not isinstance(runtime, dict):
+        fail("runtime_capture_candidate.runtime must be an object")
+    for key in ("config_files", "config_bytes", "registry_files", "registry_bytes"):
+        if not isinstance(runtime.get(key), int) or runtime[key] < 0:
+            fail(f"runtime_capture_candidate.runtime.{key} must be a non-negative integer")
+    for key in ("sns_reg_conf", "sns_reg_version"):
+        validate_hash_entry(runtime.get(key), f"runtime_capture_candidate.runtime.{key}")
+    slpi_capture = capture.get("slpi_00121")
+    if not isinstance(slpi_capture, dict) or not isinstance(slpi_capture.get("mbn_sha256"), str) or not SHA256_RE.fullmatch(slpi_capture["mbn_sha256"]):
+        fail("runtime_capture_candidate.slpi_00121.mbn_sha256 is invalid")
+    mapping = capture.get("mapping")
+    if not isinstance(mapping, dict):
+        fail("runtime_capture_candidate.mapping must be an object")
+    for key in ("variant_45", "variant_47"):
+        variant = mapping.get(key)
+        if not isinstance(variant, dict) or not isinstance(variant.get("allowed_extras"), list):
+            fail(f"runtime_capture_candidate.mapping.{key} is invalid")
+        for extra in variant["allowed_extras"]:
+            relative_path(f"config/{extra}", f"runtime_capture_candidate.mapping.{key}.allowed_extras")
 
 
 def candidate_status(manifest: dict, allow_blocked: bool) -> None:
@@ -238,10 +264,82 @@ def external_entries(manifest: dict) -> list[dict]:
     return entries
 
 
-def verify_external(artifact_root: Path, manifest: dict) -> None:
+def verify_external(artifact_root: Path, manifest: dict, quiet: bool = False) -> None:
     for entry in external_entries(manifest):
         check_entry(artifact_root / entry["path"], entry)
-    print(f"verified external build and firmware captures: {len(external_entries(manifest))} files")
+    if not quiet:
+        print(f"verified external build and firmware captures: {len(external_entries(manifest))} files")
+
+
+def gate3(capture_root: Path, manifest: dict, variant: str,
+          artifact_root: Path | None) -> None:
+    capture = manifest["runtime_capture_candidate"]
+    capture_root = canonical(capture_root)
+    runtime_root = safe_join(capture_root, "extracted/sensors", "runtime capture root")
+    archive = safe_join(capture_root, Path(capture["archive"]["path"]).name, "runtime archive")
+    local_manifest = safe_join(capture_root, Path(capture["local_manifest"]["path"]).name, "runtime local manifest")
+    check_entry(archive, capture["archive"])
+    check_entry(local_manifest, capture["local_manifest"])
+
+    inventory = runtime_inventory(runtime_root)
+    config_records = scan_files(safe_join(runtime_root, "config", "runtime config"), "runtime config")
+    selected = selection(manifest, variant)
+    selected_names = {entry["path"] for entry in selected}
+    mapping = capture["mapping"][f"variant_{variant}"]
+    allowed_names = set(mapping["allowed_extras"])
+    expected_names = selected_names | allowed_names
+    if set(config_records) != expected_names:
+        fail(f"gate3 config mapping mismatch: got {sorted(config_records)}, expected {sorted(expected_names)}")
+    for entry in selected:
+        check_entry(safe_join(runtime_root, f"config/{entry['path']}", "runtime selected config"), entry)
+
+    all_configs = {entry["path"]: entry for entry in selection(manifest, "47")}
+    extra_summary = []
+    extra_metadata = {entry["path"].removeprefix("config/"): entry for entry in capture["extras"]}
+    for name in sorted(allowed_names):
+        path = safe_join(runtime_root, f"config/{name}", "runtime extra config")
+        expected = all_configs.get(name) or extra_metadata.get(name)
+        if expected is None:
+            fail(f"gate3 has no metadata for allowed extra: {name}")
+        check_entry(path, expected)
+        extra_summary.append({
+            "path": f"config/{name}",
+            "sha256": config_records[name]["sha256"],
+            "classification": "selected alternative" if name in all_configs else expected["classification"],
+        })
+
+    runtime_expected = capture["runtime"]
+    if len(config_records) != runtime_expected["config_files"] or sum(e["size"] for e in config_records.values()) != runtime_expected["config_bytes"]:
+        fail("gate3 runtime config count/size mismatch")
+    registry_records = scan_files(safe_join(runtime_root, "registry", "runtime registry"), "runtime registry")
+    if len(registry_records) != runtime_expected["registry_files"] or sum(e["size"] for e in registry_records.values()) != runtime_expected["registry_bytes"]:
+        fail("gate3 runtime registry count/size mismatch")
+    for key in ("sns_reg_conf", "sns_reg_version"):
+        entry = runtime_expected[key]
+        check_entry(safe_join(runtime_root, entry["path"], f"runtime {key}"), entry)
+
+    slpi_status = "IDENTITY_MATCH_MANIFEST"
+    if artifact_root is not None:
+        verify_external(canonical(artifact_root), manifest, quiet=True)
+        slpi_status = "37_EXTERNAL_ARTIFACTS_VERIFIED"
+    summary = {
+        "schema": "hotdog-sensors-gate3-result-v1",
+        "capture_id": capture["id"],
+        "private_capture": True,
+        "variant": variant,
+        "archive_sha256": capture["archive"]["sha256"],
+        "local_manifest_sha256": capture["local_manifest"]["sha256"],
+        "runtime_files": len(inventory),
+        "config": {"files": len(config_records), "bytes": sum(e["size"] for e in config_records.values()), "selected_exact": len(selected), "extras": extra_summary},
+        "registry": {"files": len(registry_records), "bytes": sum(e["size"] for e in registry_records.values())},
+        "sns_reg_conf_sha256": runtime_expected["sns_reg_conf"]["sha256"],
+        "sns_reg_version_sha256": runtime_expected["sns_reg_version"]["sha256"],
+        "slpi_00121": slpi_status,
+        "hardware_ready": False,
+        "status": "OFFLINE_GATE_3_PASS_PRIVATE_CAPTURE",
+        "blocker": "Qualcomm parser evidence is still required before hardware Working",
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
 
 
 def file_record(path: Path, relative: str, label: str) -> dict:
@@ -604,6 +702,12 @@ def build_parser() -> argparse.ArgumentParser:
     external = sub.add_parser("verify-external", help="verify image, SLPI and QRTR captures")
     external.add_argument("--artifact-root", required=True, type=Path)
 
+    gate = sub.add_parser("gate3", help="validate the private runtime capture without staging it")
+    gate.add_argument("--capture-root", required=True, type=Path)
+    gate.add_argument("--variant", choices=("45", "47"), default="47")
+    gate.add_argument("--artifact-root", type=Path,
+                      help="optional artifact root for the full 37-file SLPI/image verification")
+
     stage_parser = sub.add_parser("stage", help="stage config and optional captured registry")
     stage_parser.add_argument("--repo-root", default=Path("."), type=Path)
     stage_parser.add_argument("--variant", choices=("45", "47"), default="45")
@@ -640,6 +744,9 @@ def main() -> int:
             verify_standard_json(repo_root, manifest, args.variant)
     elif args.command == "verify-external":
         verify_external(canonical(args.artifact_root), manifest)
+    elif args.command == "gate3":
+        gate3(canonical(args.capture_root), manifest, args.variant,
+              canonical(args.artifact_root) if args.artifact_root else None)
     elif args.command == "stage":
         stage(repo_root, manifest, args.variant, canonical(args.out_root),
               canonical(args.external_root) if args.external_root else None,

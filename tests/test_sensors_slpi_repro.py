@@ -229,6 +229,19 @@ class SensorsReproSafetyTests(unittest.TestCase):
             self.assertFalse((restored / "stale").exists())
             self.assertFalse(any(restored.parent.glob(f".{restored.name}.backup-*")))
 
+    def test_private_runtime_capture_gate3_if_available(self) -> None:
+        capture = Path("/home/srobin/dev/hotdog-r6-rebaseline/logs/2026-08-20-sensors-slpi-04-runtime")
+        if not capture.is_dir():
+            self.skipTest("Hardware Lab private capture is not present")
+        result = run_tool("gate3", "--capture-root", str(capture), "--variant", "47")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["status"], "OFFLINE_GATE_3_PASS_PRIVATE_CAPTURE")
+        self.assertFalse(summary["hardware_ready"])
+        self.assertEqual(summary["config"]["files"], 48)
+        self.assertEqual(summary["registry"]["files"], 133)
+        self.assertEqual(summary["config"]["selected_exact"], 47)
+
 
 if __name__ == "__main__":
     unittest.main()
