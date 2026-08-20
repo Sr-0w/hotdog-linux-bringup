@@ -113,6 +113,33 @@ class Fixture:
                   printf 'stm_p_basic 1 0 - Live 0x0\\n' >> "$modules"
                 fi
                 """),
+            "find": textwrap.dedent("""\
+                #!/usr/bin/env bash
+                for arg in "$@"; do
+                  if [ "$arg" = "-""printf" ]; then
+                    printf 'fake BusyBox find: unsupported option\\n' >&2
+                    exit 64
+                  fi
+                done
+                if [ "$#" -ne 2 ] || [ "$2" != "-print" ]; then
+                  printf 'fake BusyBox find: unsupported arguments: %s\\n' "$*" >&2
+                  exit 64
+                fi
+                root=$1
+                walk() {
+                  dir=$1
+                  printf '%s\\n' "$dir"
+                  for child in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+                    [ -e "$child" ] || [ -L "$child" ] || continue
+                    if [ -d "$child" ]; then
+                      walk "$child"
+                    else
+                      printf '%s\\n' "$child"
+                    fi
+                  done
+                }
+                walk "$root"
+                """),
         }
         for name, body in commands.items():
             path = self.bin / name
@@ -162,6 +189,21 @@ class SensorsSlpiCoreSightApSmokeTests(unittest.TestCase):
         self.assertEqual(self.fixture.capture.read_bytes(), b"TRACEBYTES")
         self.assertIn("HOTDOG_STM_AP_SMOKE", (self.fixture.dev /
                                               "stm0").read_text())
+
+    def test_busybox_find_fixture_rejects_formatted_output(self):
+        forbidden = "-" + "printf"
+
+        self.assertNotIn(forbidden, SCRIPT.read_text())
+
+        rejected = subprocess.run([
+            str(self.fixture.bin / "find"),
+            str(self.fixture.sysfs),
+            forbidden,
+        ], text=True, capture_output=True, timeout=10)
+        result = self.fixture.run()
+
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
 
     def test_preexisting_modules_are_not_unloaded(self):
         self.fixture.proc_modules.write_text(

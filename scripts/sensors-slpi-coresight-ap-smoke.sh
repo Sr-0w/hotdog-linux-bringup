@@ -92,6 +92,75 @@ write_value() {
 	printf '%s\n' "$value" > "$path"
 }
 
+require_command() {
+	local command=$1
+
+	command -v "$command" >/dev/null 2>&1 || die "missing required command: $command"
+}
+
+verify_tooling() {
+	local command
+	local commands=(
+		awk
+		date
+		dd
+		find
+		hostname
+		insmod
+		mkdir
+		modinfo
+		modprobe
+		rmdir
+		sed
+		sha256sum
+		sort
+		timeout
+		uname
+		wc
+	)
+
+	if [[ "$CONFIGFS_ROOT" != "/sys/kernel/config" ]]; then
+		commands+=(rm)
+	fi
+
+	for command in "${commands[@]}"; do
+		require_command "$command"
+	done
+
+	find "$MODULE_PATH" -print >/dev/null 2>&1 || die "find -print is not supported"
+}
+
+list_child_paths() {
+	local root=$1
+	local path rel
+
+	find "$root" -print | sort | while IFS= read -r path; do
+		[[ "$path" == "$root" ]] && continue
+		rel=${path#"$root"/}
+		[[ "$rel" == "$path" ]] && continue
+		[[ "$rel" == */* ]] && continue
+		printf '%s\n' "$path"
+	done
+}
+
+list_child_names() {
+	local root=$1
+	local path
+
+	list_child_paths "$root" | while IFS= read -r path; do
+		printf '%s\n' "${path##*/}"
+	done
+}
+
+join_words() {
+	local item joined=""
+
+	while IFS= read -r item; do
+		joined="${joined}${joined:+ }$item"
+	done
+	printf '%s' "$joined"
+}
+
 cleanup() {
 	local rc=$?
 	local cleanup_rc=0
@@ -204,6 +273,8 @@ parse_args() {
 }
 
 validate_args() {
+	local capture_parent
+
 	[[ -n "$MODULE_PATH" ]] || die "--module is required"
 	[[ -n "$MODULE_SHA256" ]] || die "--module-sha256 is required"
 	[[ -n "$SINK_NAME" ]] || die "--sink is required"
@@ -215,7 +286,9 @@ validate_args() {
 	[[ "$SINK_NAME" != */* && "$SINK_NAME" != *..* && -n "$SINK_NAME" ]] || die "--sink must be a device name"
 	[[ "$CAPTURE_OUT" == /* ]] || die "--capture-out must be an absolute path"
 	[[ ! -e "$CAPTURE_OUT" ]] || die "--capture-out already exists: $CAPTURE_OUT"
-	[[ -d "$(dirname "$CAPTURE_OUT")" ]] || die "--capture-out parent does not exist"
+	capture_parent=${CAPTURE_OUT%/*}
+	[[ -n "$capture_parent" ]] || capture_parent=/
+	[[ -d "$capture_parent" ]] || die "--capture-out parent does not exist"
 	[[ -r "$PROC_MODULES" ]] || die "cannot read modules list: $PROC_MODULES"
 }
 
@@ -278,10 +351,9 @@ collect_matching_devices() {
 	local kind=$2
 	local path base
 
-	shopt -s nullglob
-	for path in "$root"/*; do
+	while IFS= read -r path; do
 		[[ -d "$path" ]] || continue
-		base=$(basename "$path")
+		base=${path##*/}
 		case "$kind" in
 		stm)
 			[[ "$base" == stm* && -e "$path/enable_source" ]] && printf '%s\n' "$base"
@@ -293,8 +365,7 @@ collect_matching_devices() {
 			[[ "$base" == *etr* || -e "$path/buffer_size" ]] && printf '%s\n' "$base"
 			;;
 		esac
-	done
-	shopt -u nullglob
+	done < <(list_child_paths "$root")
 }
 
 enumerate_coresight() {
@@ -306,7 +377,7 @@ enumerate_coresight() {
 	[[ -d "$stm_class_root" ]] || die "missing STM class root: $stm_class_root"
 
 	mapfile -t stms < <(collect_matching_devices "$cs_root" stm)
-	mapfile -t class_stms < <(find "$stm_class_root" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+	mapfile -t class_stms < <(list_child_names "$stm_class_root")
 	mapfile -t etfs < <(collect_matching_devices "$cs_root" etf | sort)
 	mapfile -t etrs < <(collect_matching_devices "$cs_root" etr | sort)
 
@@ -351,7 +422,7 @@ capture_prestate() {
 	printf 'sink-buffer-size: %s\n' "$(read_one_line "$SINK_CS/buffer_size")"
 	printf 'sink-mgmt-rsz: %s\n' "$(read_one_line "$SINK_CS/mgmt/rsz")"
 
-	policies=$(find "$CONFIGFS_ROOT/stp-policy" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')
+	policies=$(list_child_names "$CONFIGFS_ROOT/stp-policy" | join_words)
 	printf 'policies-prestate: %s\n' "${policies:-none}"
 
 	[[ "$(read_one_line "$STM_CS/enable_source")" == "0" ]] || die "STM source already enabled"
@@ -385,6 +456,7 @@ create_policy() {
 
 run_smoke() {
 	local marker
+	local capture_size
 
 	marker="HOTDOG_STM_AP_SMOKE $(date -u +%Y%m%dT%H%M%SZ) pid=$$"
 
@@ -397,16 +469,18 @@ run_smoke() {
 	write_value "$STM_CS/enable_source" 0
 
 	timeout "$CAPTURE_TIMEOUT" dd if="$DEV_ROOT/$SINK_NAME" of="$CAPTURE_OUT" \
-		bs="$CAPTURE_BLOCK_SIZE" count="$CAPTURE_BLOCKS" status=none
+		bs="$CAPTURE_BLOCK_SIZE" count="$CAPTURE_BLOCKS"
 
 	printf 'marker: %s\n' "$marker"
-	stat --printf='capture: path=%n size=%s\n' "$CAPTURE_OUT"
+	capture_size=$(wc -c < "$CAPTURE_OUT")
+	printf 'capture: path=%s size=%s\n' "$CAPTURE_OUT" "$capture_size"
 	sha256sum "$CAPTURE_OUT"
 }
 
 main() {
 	parse_args "$@"
 	validate_args
+	verify_tooling
 	attest_device
 	verify_module_file
 	capture_module_prestate
