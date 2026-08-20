@@ -135,6 +135,11 @@ the development path into one large final change. Do not create empty commits
 for routine progress updates or commit private/generated evidence merely to
 increase commit frequency.
 
+A project checkpoint is durable only after it has passed its relevant minimum
+checks, been integrated into an appropriate public branch, and been pushed to
+the GitHub repository. Worktree-only commits are candidates, not published
+project history.
+
 ## Validation
 
 Run the public-tree validator for every pull request:
