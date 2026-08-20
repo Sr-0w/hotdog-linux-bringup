@@ -32,20 +32,23 @@ The SE2 clock-domain object is at `0xb03336f0`.  Its plan pointer is
 `0xb06338b0`, with eight entries found at coredump offset `0x533b64`:
 19.2, 32, 48, 64, 96, 100 and 120 MHz, plus a repeated 19.2 MHz row.
 
-## The clock plan was obtained successfully
+## The sensor-PD clock cache was populated
 
 The sensor-PD globals at virtual `0xb001a000`, coredump offset `0x13b4fef`,
-are populated.  They contain eight copied plan entries and a non-null pointer
-near `0xb001a098` (`0xb06b4400`).  Therefore `DalClock_GetFrequencyPlan()` did
-not fail in the live protection domain.
+are populated. They contain eight copied plan entries and a non-null pointer
+near `0xb001a098` (`0xb06b4400`). This proves that the sensor-PD copy of the
+clock data was initialised. It does not prove that the later root-PD QDI
+resource request succeeded.
 
 The I2C table requests a 19.2 MHz serial-engine clock for a 400 kHz bus, and
 that exact frequency exists in the copied plan.  Both auxiliary Clock DAL
 handles at `0xb05c90a8` and `0xb05c90ac` are also non-null
 (`0xb05c8fe4`).  The decoded domain has an active first plan row and zero
-reference counts.  The available Qualcomm Clock DAL implementation gives no
-ordinary failure path for this state through `Clock_SetClockFrequency()` or
-`Clock_EnableClock()`.
+reference counts. The available Qualcomm Clock DAL implementation gives no
+ordinary failure path for this cached state through
+`Clock_SetClockFrequency()` or `Clock_EnableClock()`, but the platform call
+used by the failing open runs in the root PD, not directly against these
+sensor-PD globals.
 
 This rules out the earlier theory that the AP-side SCC clock driver or a
 missing frequency plan is the immediate blocker.  The downstream
@@ -89,11 +92,14 @@ resource transition is correct.
 ## Remaining boundary
 
 The low-level setup still returns non-zero before the failing drivers open a
-bus port, while the working SAR follows a different com-port path.  The useful
-next comparison is consequently between SSC synchronous and asynchronous
-com-port setup, including the QDI resource-vote method reached by the shared
-setup routine.  The live `resource_votes` field being zero is evidence about
-the current state, but not by itself proof that the clock call failed.
+bus port, while the working SAR follows a different com-port path. Static
+analysis identifies the shared routine as an `i2c_setup_lpi_resource()`
+wrapper with four reference-counted slots. It calls the sensor-PD QDI stub at
+`0xb206769c`, which invokes root-PD method `0x10b`,
+`I2C_QDI_SETUP_LPI_RESOURCE`. The useful next comparison is therefore inside
+that root-PD operation, not the sensor-PD cache. The live `resource_votes`
+field being zero is evidence about the current state, but not proof that the
+root-PD clock call failed.
 
 The branch that rejects the setup has no local ULog call.  Qualcomm diagnostic
 transport may still contain a message, so it should not be described as

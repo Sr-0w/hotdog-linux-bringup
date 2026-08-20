@@ -333,34 +333,47 @@ compare the byte loaded from the port object. A non-zero return from
 `0xb205ef78` is therefore the silent refusal.
 
 The object layout can now be named by matching the accesses against Qualcomm's
-SSC com-port sources. The local firmware remains authoritative, but the public
-SDM670 implementation provides the missing type names:
+SSC com-port sources. A later structure-layout audit found that this section
+was still shifted by one field: the private object starts with a four-byte
+sync handle, followed by the complete `sns_com_port_config` structure. The
+correct 32-bit layout is:
 
 ```
-object +0x04  com_config.slave_control       0x46
-object +0x08  com_config.reg_addr_type
-object +0x0c  com_config.min_bus_speed_KHz   400
-object +0x10  com_config.max_bus_speed_KHz   400
-object +0x18  com_config.bus_instance        3
+object +0x00  sync com-port handle
+object +0x04  com_config.bus_type             0 (I2C)
+object +0x08  com_config.slave_control        0x46
+object +0x0c  com_config.reg_addr_type
+object +0x10  com_config.min_bus_speed_KHz    400
+object +0x14  com_config.max_bus_speed_KHz    400
+object +0x18  com_config.bus_instance         3
 object +0x1c  bus_info.bus_type
 object +0x20  bus_info.bus_config
 object +0x24  power/open flags
 ```
 
-The four-byte shift comes from the sync com-port handle at the beginning of
-the private object. The observed `0x46` is the sensor's I2C slave address, not
-an invalid flag. This also explains why the same object contains 400 kHz and
-bus instance 3 at the offsets used by the call.
+The observed `0x46` is therefore the sensor's I2C slave address at `+0x08`,
+not the byte loaded at `+0x04`. The byte loaded at `+0x04` is bus type zero,
+which is the valid I2C enum value in the matching Qualcomm source. The
+branches in `0xb205ef78` that compare the type against one and two reject SPI
+and I3C for this path; they do not define the accepted values.
 
-`0xb205ef78` is the resource-setup stage. It manages a small shared-resource
-table and eventually calls `0xb206769c` with the bus speed and instance. Only
-after this stage succeeds does `0xb205ee48` proceed to the operations matching
-`i2c_open()` and `i2c_power_on()`. The reference implementation's equivalent
-setup can fail when the platform has no configuration for the requested bus
-instance, or when setting the serial-engine clock fails.
+`0xb205ef78` is the firmware's shared `i2c_setup_lpi_resource()` wrapper. It
+manages four `(bus type, instance, reference count, speed)` slots and calls
+the sensor-PD QDI stub at `0xb206769c`. That stub invokes root-PD method
+`0x10b`, `I2C_QDI_SETUP_LPI_RESOURCE`; the actual platform clock/resource
+operation therefore executes in the root PD. Only after this stage succeeds
+does `0xb205ee48` proceed to the operations matching `i2c_open()` and
+`i2c_power_on()`.
 
 The next question is consequently precise: **why does the low-level setup for
 I2C instance 3 at 400 kHz fail?** The live shared-resource table and the path
 below `0xb206769c` must distinguish a missing QUP/SE device configuration from
 a clock/resource transition failure. The island allocator, decoded sensor
 configuration, slave address, and bus-speed fields are no longer suspects.
+
+The ALS-only capture documented in
+[TCS3701-only SLPI coredump](2026-08-20-tcs3701-only-slpi-coredump.md) narrows
+this further: all three TCS3701 logical sensor objects are populated, but the
+I2C ULog contains only QDI initialisation and no transfer. The failure is
+therefore before the first physical transaction. It does not by itself prove
+which root-PD operation returned the error.
