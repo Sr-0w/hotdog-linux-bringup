@@ -268,3 +268,40 @@ What `+0x4` holds is the next thing to name. The failure-path log takes it and
 live in a table indexed by the file id in the descriptor (`0x7b` here), which
 is worth resolving on its own since it would give plain text for every message
 on this path.
+
+## The message table resolves, and the refusal really is silent
+
+The compact descriptors on this path — `0xb204eda0`, `0xb204edb8`,
+`0xb204edc4`, `0xb204edd0` — are `(file, line)` words, file id `0x7b`, and they
+sit in a per-file block that also carries the message pointers. Decoding
+`0xb204ed90..0xb204ef00` gives plain text for the whole of
+`sns_com_port_i2c.c`:
+
+```
+line 257   sns_com_port_i2c.c:Alloc I2C config in DDR
+line 280   ...
+line 292   sns_com_port_i2c.c:i2c_open failure. i2c...
+line 303   sns_com_port_i2c.c:i2c_power_on failure...
+           sns_com_port_i2c.c:i2c_open success. hnd...
+           sns_com_port_i2c.c:Unable to malloc in DDR
+           sns_com_port_i2c.c:i2c_transfer failed
+           sns_com_port_i2c.c:i2c_pwr failure: on:%
+```
+
+`Alloc I2C config in DDR` is the line reached when the pool 2 allocation
+returns null and the code retries from pool 0 — which confirms the reading of
+that retry, and confirms it is a fallback rather than a fatal path.
+
+More usefully, it settles the character of the refusal. The branch at
+`0xb205eec8`, taken when `memub(r16+0x4)` is non-zero, jumps straight to
+`0xb205ef3c` — free the block, return 1 — **without passing any of these log
+sites**. The success path at `0xb205ef50` logs `i2c_open success`; the two
+failure messages, `i2c_open failure` and `i2c_power_on failure`, belong to
+other branches. So the path actually taken emits nothing at all, on any
+channel, which is exactly why nothing has ever shown up in ULog or in the diag
+descriptors held in memory.
+
+That closes the question of why the failure is invisible. What `+0x4` holds
+remains open, but the file is now fully readable: every message in
+`sns_com_port_i2c.c` can be resolved by line, so walking the function with the
+line numbers in hand is straightforward.
