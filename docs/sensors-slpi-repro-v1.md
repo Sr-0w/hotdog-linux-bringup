@@ -114,6 +114,13 @@ external capture is supplied. The rollback contract preserves regular-file
 content, size, SHA256 and permission mode; it does not preserve owner/group,
 ACLs, xattrs, timestamps, hardlinks or directory metadata.
 
+Run the offline regression suite, including traversal, symlink, overlap,
+collision, incomplete-payload, generation-change and atomic-replace failures:
+
+```sh
+python3 -B -m unittest discover -s tests -p 'test_*.py'
+```
+
 ## Image and SLPI inputs
 
 The manifest records exact size and SHA256 for the known complete v16 image:
