@@ -20,8 +20,6 @@ CAPTURE_TIMEOUT=3
 SYSFS_ROOT="${HOTDOG_AP_SMOKE_SYSFS_ROOT:-/sys}"
 CONFIGFS_ROOT="${HOTDOG_AP_SMOKE_CONFIGFS_ROOT:-/sys/kernel/config}"
 DEV_ROOT="${HOTDOG_AP_SMOKE_DEV_ROOT:-/dev}"
-PROC_MODULES="${HOTDOG_AP_SMOKE_PROC_MODULES:-/proc/modules}"
-
 MODULE_PATH=""
 MODULE_SHA256=""
 SINK_NAME=""
@@ -73,8 +71,12 @@ on_signal() {
 
 module_loaded() {
 	local module=$1
-	awk -v module="$module" '$1 == module { found = 1 } END { exit !found }' \
-		"$PROC_MODULES"
+
+	lsmod | awk -v module="$module" '
+		NR == 1 && $1 == "Module" { next }
+		$1 == module { found = 1 }
+		END { exit !found }
+	'
 }
 
 read_one_line() {
@@ -107,10 +109,12 @@ verify_tooling() {
 		find
 		hostname
 		insmod
+		lsmod
 		mkdir
 		modinfo
 		modprobe
 		rmdir
+		rmmod
 		sed
 		sha256sum
 		sort
@@ -192,11 +196,21 @@ cleanup() {
 	fi
 
 	if [[ "$INTRODUCED_STM_P_BASIC" -eq 1 ]]; then
-		modprobe -r stm_p_basic || cleanup_rc=1
+		if module_loaded stm_p_basic; then
+			if ! rmmod stm_p_basic; then
+				printf 'ERROR: rmmod stm_p_basic failed\n' >&2
+				cleanup_rc=1
+			fi
+		fi
 	fi
 
 	if [[ "$INTRODUCED_STM_CORE" -eq 1 ]]; then
-		modprobe -r stm_core || cleanup_rc=1
+		if module_loaded stm_core; then
+			if ! modprobe -r stm_core; then
+				printf 'ERROR: modprobe -r stm_core failed\n' >&2
+				cleanup_rc=1
+			fi
+		fi
 	fi
 
 	if [[ "$INTRODUCED_SOURCE_ENABLE" -eq 1 && -n "$STM_CS" ]]; then
@@ -284,12 +298,13 @@ validate_args() {
 	[[ -f "$MODULE_PATH" ]] || die "--module is not a regular file: $MODULE_PATH"
 	[[ "$MODULE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]] || die "--module-sha256 must be 64 hex characters"
 	[[ "$SINK_NAME" != */* && "$SINK_NAME" != *..* && -n "$SINK_NAME" ]] || die "--sink must be a device name"
+	[[ "$SINK_NAME" != tmc_etr* ]] || die "refusing ETR sink: $SINK_NAME"
+	[[ "$SINK_NAME" == tmc_etf* ]] || die "sink must be a tmc_etf* device: $SINK_NAME"
 	[[ "$CAPTURE_OUT" == /* ]] || die "--capture-out must be an absolute path"
 	[[ ! -e "$CAPTURE_OUT" ]] || die "--capture-out already exists: $CAPTURE_OUT"
 	capture_parent=${CAPTURE_OUT%/*}
 	[[ -n "$capture_parent" ]] || capture_parent=/
 	[[ -d "$capture_parent" ]] || die "--capture-out parent does not exist"
-	[[ -r "$PROC_MODULES" ]] || die "cannot read modules list: $PROC_MODULES"
 }
 
 attest_device() {
@@ -332,17 +347,39 @@ capture_module_prestate() {
 		"$PRE_STM_CORE_LOADED" "$PRE_STM_P_BASIC_LOADED"
 }
 
-load_modules() {
+load_stm_core() {
 	if [[ "$PRE_STM_CORE_LOADED" -eq 0 ]]; then
-		modprobe stm_core
-		module_loaded stm_core || die "stm_core did not load"
-		INTRODUCED_STM_CORE=1
+		if modprobe stm_core; then
+			if module_loaded stm_core; then
+				INTRODUCED_STM_CORE=1
+			else
+				die "stm_core did not load"
+			fi
+		else
+			if module_loaded stm_core; then
+				INTRODUCED_STM_CORE=1
+				die "modprobe stm_core failed after partially loading stm_core"
+			fi
+			die "modprobe stm_core failed"
+		fi
 	fi
+}
 
+load_stm_p_basic() {
 	if [[ "$PRE_STM_P_BASIC_LOADED" -eq 0 ]]; then
-		insmod "$MODULE_PATH"
-		module_loaded stm_p_basic || die "stm_p_basic did not load"
-		INTRODUCED_STM_P_BASIC=1
+		if insmod "$MODULE_PATH"; then
+			if module_loaded stm_p_basic; then
+				INTRODUCED_STM_P_BASIC=1
+			else
+				die "stm_p_basic did not load"
+			fi
+		else
+			if module_loaded stm_p_basic; then
+				INTRODUCED_STM_P_BASIC=1
+				die "insmod stm_p_basic failed after partially loading stm_p_basic"
+			fi
+			die "insmod stm_p_basic failed"
+		fi
 	fi
 }
 
@@ -359,28 +396,63 @@ collect_matching_devices() {
 			[[ "$base" == stm* && -e "$path/enable_source" ]] && printf '%s\n' "$base"
 			;;
 		etf)
-			[[ "$base" == *etf* && -e "$path/enable_sink" && ! -e "$path/buffer_size" ]] && printf '%s\n' "$base"
+			[[ "$base" == tmc_etf* && -e "$path/enable_sink" ]] && printf '%s\n' "$base"
 			;;
 		etr)
-			[[ "$base" == *etr* || -e "$path/buffer_size" ]] && printf '%s\n' "$base"
+			[[ "$base" == tmc_etr* ]] && printf '%s\n' "$base"
 			;;
 		esac
 	done < <(list_child_paths "$root")
 }
 
+connections_summary() {
+	local device=$1
+
+	if [[ -d "$device/connections" ]]; then
+		list_child_names "$device/connections" | join_words
+	else
+		printf 'missing'
+	fi
+}
+
 enumerate_coresight() {
+	local phase=$1
+	local allow_absent=${2:-0}
 	local cs_root="$SYSFS_ROOT/bus/coresight/devices"
 	local stm_class_root="$SYSFS_ROOT/class/stm"
-	local stms class_stms etfs etrs sink_match
+	local stms class_stms etfs etrs
 
-	[[ -d "$cs_root" ]] || die "missing CoreSight sysfs root: $cs_root"
-	[[ -d "$stm_class_root" ]] || die "missing STM class root: $stm_class_root"
+	printf 'coresight-enumeration-phase: %s\n' "$phase"
+
+	if [[ ! -d "$cs_root" || ! -d "$stm_class_root" ]]; then
+		printf 'coresight-topology-state: absent\n'
+		if [[ -d "$cs_root" ]]; then
+			printf 'coresight-root: present\n'
+		else
+			printf 'coresight-root: missing\n'
+		fi
+		if [[ -d "$stm_class_root" ]]; then
+			printf 'stm-class-root: present\n'
+		else
+			printf 'stm-class-root: missing\n'
+		fi
+		[[ "$allow_absent" -eq 1 ]] && return 2
+		die "missing CoreSight sysfs topology"
+	fi
 
 	mapfile -t stms < <(collect_matching_devices "$cs_root" stm)
 	mapfile -t class_stms < <(list_child_names "$stm_class_root")
 	mapfile -t etfs < <(collect_matching_devices "$cs_root" etf | sort)
 	mapfile -t etrs < <(collect_matching_devices "$cs_root" etr | sort)
 
+	if [[ "${#stms[@]}" -eq 0 && "${#class_stms[@]}" -eq 0 &&
+	      "${#etfs[@]}" -eq 0 && "${#etrs[@]}" -eq 0 ]]; then
+		printf 'coresight-topology-state: absent\n'
+		[[ "$allow_absent" -eq 1 ]] && return 2
+		die "missing CoreSight sysfs topology"
+	fi
+
+	printf 'coresight-topology-state: visible\n'
 	printf 'coresight-stm-devices: %s\n' "${stms[*]:-none}"
 	printf 'stm-class-devices: %s\n' "${class_stms[*]:-none}"
 	printf 'coresight-etf-candidates: %s\n' "${etfs[*]:-none}"
@@ -388,23 +460,31 @@ enumerate_coresight() {
 
 	[[ "${#stms[@]}" -eq 1 && "${stms[0]}" == "stm0" ]] || die "expected exactly one CoreSight stm0"
 	[[ "${#class_stms[@]}" -eq 1 && "${class_stms[0]}" == "stm0" ]] || die "expected exactly one STM class stm0"
-
-	sink_match=0
-	for etf in "${etfs[@]}"; do
-		if [[ "$etf" == "$SINK_NAME" ]]; then
-			sink_match=$((sink_match + 1))
-		fi
-	done
-	[[ "$sink_match" -eq 1 ]] || die "sink is not an unambiguous ETF candidate: $SINK_NAME"
+	[[ "${#etfs[@]}" -eq 1 && "${etfs[0]}" == "$SINK_NAME" ]] || die "expected exactly one explicit ETF sink candidate: $SINK_NAME"
 
 	SINK_CS="$cs_root/$SINK_NAME"
-	[[ "$SINK_NAME" != *etr* && ! -e "$SINK_CS/buffer_size" ]] || die "refusing ETR/buffer_size sink: $SINK_NAME"
 
 	STM_NAME=stm0
 	STM_CLASS="$stm_class_root/$STM_NAME"
 	STM_CS="$cs_root/$STM_NAME"
 	POLICY_DIR="$CONFIGFS_ROOT/stp-policy/${STM_NAME}:p_basic.${POLICY_NAME}"
 	POLICY_NODE_DIR="$POLICY_DIR/$POLICY_NODE"
+
+	printf 'stm-connections: %s\n' "$(connections_summary "$STM_CS")"
+	printf 'sink-connections: %s\n' "$(connections_summary "$SINK_CS")"
+}
+
+prepare_coresight_topology() {
+	if enumerate_coresight pre-load 1; then
+		return 0
+	fi
+
+	[[ "$PRE_STM_CORE_LOADED" -eq 0 && "$PRE_STM_P_BASIC_LOADED" -eq 0 ]] ||
+		die "CoreSight topology absent while STM modules are already loaded"
+
+	printf 'coresight-topology-load: no pre-existing topology; loading stm_core before second enumeration\n'
+	load_stm_core
+	enumerate_coresight post-stm-core-load 0
 }
 
 capture_prestate() {
@@ -472,6 +552,7 @@ run_smoke() {
 		bs="$CAPTURE_BLOCK_SIZE" count="$CAPTURE_BLOCKS"
 
 	printf 'marker: %s\n' "$marker"
+	printf 'sink-buffer-size-post: %s\n' "$(read_one_line "$SINK_CS/buffer_size")"
 	capture_size=$(wc -c < "$CAPTURE_OUT")
 	printf 'capture: path=%s size=%s\n' "$CAPTURE_OUT" "$capture_size"
 	sha256sum "$CAPTURE_OUT"
@@ -484,8 +565,8 @@ main() {
 	attest_device
 	verify_module_file
 	capture_module_prestate
-	load_modules
-	enumerate_coresight
+	prepare_coresight_topology
+	load_stm_p_basic
 	capture_prestate
 	create_policy
 	run_smoke
