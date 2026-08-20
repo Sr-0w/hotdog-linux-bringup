@@ -61,3 +61,37 @@ amd    tilt
 So the wrong config set was a real defect and is now repaired, but it was not
 the reason the sensors are dead. Whatever blocks the hardware drivers sits
 below the configuration layer.
+
+## Drivers instantiate from the registry, not from the config files
+
+This invalidates every earlier experiment that worked by removing a config
+file. With **all four SAR config files** moved aside and the registry restored
+from `persist`, a fresh boot still shows:
+
+```
+0x28  write x2, read x1
+0x2c  write x2, read x2
+iface_reg - Allocating qup-3 gpii-0
+iface_reg - Allocating qup-3 gpii-2
+```
+
+The SAR drivers still instantiate and still probe. The `.json` files only seed
+the registry; what the framework instantiates comes from the registry itself.
+So "remove the config to disable the driver" does not work, and the earlier
+negative results from removing `msmnile_sx9324.json` and from switching the
+proximity to polling tested nothing.
+
+It also means the GPI capacity question is still open: two GPII are allocated
+on qup-3 and no more, and the only way to test whether that starves the ALS is
+to remove the SAR's **registry** entries, not its config files.
+
+## Where that leaves it
+
+The configuration layer is now provably correct and faithful to the phone:
+65 files from the device's own LineageOS blob set, and a registry that matches
+`persist` field for field. The DSP consumes all of it. No hardware sensor
+registers, and only the SAR ever reaches the wire.
+
+The next instrument has to be the sensor PD's own diag messages. The ULog
+buffers carry the platform drivers' view; the SEE drivers log to diag, which is
+where the reason for a refused port will be stated in words.
