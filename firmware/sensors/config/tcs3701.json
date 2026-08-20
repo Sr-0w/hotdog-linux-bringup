@@ -1,15 +1,15 @@
 {
   "config":
   {
-    "hw_platform": ["MTP"],
-    "soc_id": ["339"]
+    "hw_platform": ["QRD", "MTP", "Dragon", "Surf", "IDP", "HDK"],
+    "soc_id":["291", "246", "305", "321", "336", "341", "360", "365"]
   },
-  "alsps":{
-    "owner": "sns_alsps",
+  "tcs3701":{
+    "owner": "sns_tcs3701",
     ".als":{
-      "owner": "sns_alsps",
+      "owner": "sns_tcs3701",
       ".config":{
-        "owner": "sns_alsps",
+        "owner": "sns_tcs3701",
         "is_dri":{ "type": "int", "ver": "0",
           "data": "0"
         },
@@ -18,21 +18,21 @@
         },
         "res_idx":{ "type": "int", "ver": "0",
           "data": "0"
-       },
+        },
         "sync_stream":{ "type": "int", "ver": "0",
           "data": "0"
         }
       }
     },
-	".prox":{
-      "owner": "sns_alsps",
+    ".prox":{
+      "owner": "sns_tcs3701",
       ".config":{
-        "owner": "sns_alsps",
+        "owner": "sns_tcs3701",
         "is_dri":{ "type": "int", "ver": "0",
           "data": "1"
         },
         "hw_id":{ "type": "int", "ver": "0",
-          "data": "0"
+          "data": "1"
         },
         "res_idx":{ "type": "int", "ver": "0",
           "data": "0"

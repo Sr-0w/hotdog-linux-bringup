@@ -1,17 +1,17 @@
 {
   "config":
   {
-    "hw_platform": ["MTP"],
-    "soc_id": ["339"]
+    "hw_platform": ["QRD", "MTP", "Dragon", "Surf", "HDK", "IDP"],
+    "soc_id": ["291", "246", "300", "301", "305", "321", "336", "339","341", "355", "360", "393", "365"]
   },
-  "alsps":{
-    "owner": "sns_alsps",
-    ".als":{
-      "owner": "sns_alsps",
+  "stk2x2x_0":{
+    "owner": "sns_stk2x2x",
+    ".ambient_light":{
+      "owner": "sns_stk3x3x",
       ".config":{
-        "owner": "sns_alsps",
+        "owner": "sns_stk3x3x",
         "is_dri":{ "type": "int", "ver": "0",
-          "data": "0"
+          "data": "1"
         },
         "hw_id":{ "type": "int", "ver": "0",
           "data": "0"
@@ -24,11 +24,11 @@
         }
       }
     },
-	".prox":{
-      "owner": "sns_alsps",
+	".proximity":{
+      "owner": "sns_stk2x2x",
       ".config":{
-        "owner": "sns_alsps",
-        "is_dri":{ "type": "int", "ver": "0",
+        "owner": "sns_stk3x3x",
+        "is_dri":{ "type": "int", "ver": "1",
           "data": "1"
         },
         "hw_id":{ "type": "int", "ver": "0",
