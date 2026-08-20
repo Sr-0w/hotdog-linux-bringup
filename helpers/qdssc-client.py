@@ -3,8 +3,9 @@
 
 The SLPI firmware exposes QDSSC (QMI service 51) once for the sensor root PD
 and once for the sensor user PD.  This helper intentionally defaults to
-read-only GET queries.  Mutating modes require an explicit ``--instance`` and
-must be used only while holding the phone lease:
+read-only GET queries.  Mutating modes require exactly one explicit
+``--instance``, exactly one matching QRTR endpoint and must be used only while
+holding the phone lease:
 
 * prepare and verify the AP trace sink before ``--enable``;
 * capture only non-private diagnostic data;
@@ -65,7 +66,7 @@ class QmiResponse:
         self.txn = txn
         self.msg_id = msg_id
         self.tlvs = tlvs
-        self.result, self.error = qmi_result(tlvs)
+        self.result, self.error = qmi_result(tlvs, required=True)
 
     def ok(self):
         return self.result == 0
@@ -114,8 +115,19 @@ class QrtrTransport:
 
 
 def endpoints():
-    listing = subprocess.run(["qrtr-lookup"], capture_output=True, text=True,
-                             timeout=20, check=True).stdout
+    try:
+        listing = subprocess.run(["qrtr-lookup"], capture_output=True,
+                                 text=True, timeout=20,
+                                 check=True).stdout
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("qrtr-lookup timed out") from error
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr.strip() if error.stderr else ""
+        message = "qrtr-lookup failed"
+        if stderr:
+            message += ": %s" % stderr
+        raise RuntimeError(message) from error
+
     found = []
     for line in listing.splitlines():
         fields = line.split()
@@ -145,21 +157,39 @@ def entity_payload(entity, state=None):
 
 def split_qmi(buf):
     if len(buf) < 7:
-        return None
+        raise RuntimeError("short QMI header")
     msg_type, txn, msg_id, length = struct.unpack_from("<BHHH", buf)
+    if len(buf) != 7 + length:
+        raise RuntimeError("QMI length mismatch: header=%d actual=%d" %
+                           (length, len(buf) - 7))
     body = buf[7:7 + length]
     values = {}
     offset = 0
-    while offset + 3 <= len(body):
+    while offset < len(body):
+        if offset + 3 > len(body):
+            raise RuntimeError("truncated QMI TLV header at offset %d" %
+                               offset)
         number, size = struct.unpack_from("<BH", body, offset)
         offset += 3
+        if offset + size > len(body):
+            raise RuntimeError("truncated QMI TLV value type %d" % number)
+        if number in values:
+            raise RuntimeError("duplicate QMI TLV type %d" % number)
         values[number] = body[offset:offset + size]
         offset += size
     return msg_type, txn, msg_id, values
 
 
-def qmi_result(response_tlvs):
-    result = response_tlvs.get(2, b"")
+def qmi_result(response_tlvs, required=False):
+    if 2 not in response_tlvs:
+        if required:
+            raise RuntimeError("missing QMI result TLV")
+        return 0, 0
+    result = response_tlvs[2]
+    if len(result) < 4:
+        if required:
+            raise RuntimeError("short QMI result TLV")
+        return 0, 0
     if len(result) >= 4:
         return struct.unpack_from("<HH", result)
     return 0, 0
@@ -169,11 +199,12 @@ def transact(transport, node, port, txn, msg_id, tlvs=b""):
     packet = qmi_request(txn, msg_id, tlvs)
     transport.send(node, port, packet)
     decoded = split_qmi(transport.recv())
-    if decoded is None:
-        raise RuntimeError("short QMI response")
-    _, response_txn, response_id, response_tlvs = decoded
+    msg_type, response_txn, response_id, response_tlvs = decoded
+    if msg_type != 2:
+        raise RuntimeError("unexpected QMI message type %d" % msg_type)
     if response_txn != txn or response_id != msg_id:
         raise RuntimeError("unexpected QMI response")
+    qmi_result(response_tlvs, required=True)
     return QmiResponse(response_txn, response_id, response_tlvs)
 
 
@@ -203,8 +234,11 @@ def qmi_call(transport, node, port, txn, msg_id, payload, label,
              include_state=False):
     try:
         response = transact(transport, node, port, txn, msg_id, payload)
-    except Exception as error:
+    except OSError as error:
         print("  %s: transport-error=%s" % (label, error))
+        return None, False
+    except Exception as error:
+        print("  %s: response-error=%s" % (label, error))
         return None, False
 
     report_response(label, response, include_state)
@@ -321,7 +355,60 @@ def build_parser():
     return parser
 
 
-def selected_endpoints(found, requested):
+def validate_qdssc_endpoints(found):
+    rows = []
+    seen_rows = set()
+    seen_endpoints = set()
+
+    for entry in found:
+        if len(entry) != 5:
+            raise RuntimeError("malformed QDSSC service row: %r" %
+                               (entry,))
+        service, version, instance, node, port = tuple(map(int, entry))
+        if service != QDSSC_SERVICE:
+            continue
+
+        row = (service, version, instance, node, port)
+        if row in seen_rows:
+            raise RuntimeError(
+                "duplicate QDSSC service row: instance=%d node=%d port=%d" %
+                (instance, node, port))
+        seen_rows.add(row)
+
+        endpoint = (node, port)
+        if endpoint in seen_endpoints:
+            raise RuntimeError(
+                "duplicate QDSSC QRTR endpoint: node=%d port=%d" %
+                (node, port))
+        seen_endpoints.add(endpoint)
+        rows.append(row)
+
+    return rows
+
+
+def normalize_instances(requested, mutating):
+    if not requested:
+        return []
+
+    seen = set()
+    for instance in requested:
+        if instance in seen:
+            raise RuntimeError("duplicate --instance value: %d" % instance)
+        seen.add(instance)
+
+    if mutating and len(requested) != 1:
+        raise RuntimeError(
+            "--enable/--disable require exactly one --instance")
+
+    return requested
+
+
+def selected_endpoints(found, requested, mutating=False):
+    found = validate_qdssc_endpoints(found)
+    if not found:
+        raise RuntimeError("QDSSC service is not registered")
+    requested = normalize_instances(requested, mutating)
+
     if not requested:
         return found
 
@@ -332,20 +419,25 @@ def selected_endpoints(found, requested):
         raise RuntimeError(
             "requested QDSSC instance(s) not registered: %s" %
             ", ".join(map(str, missing)))
-    return [entry for entry in found if entry[2] in requested]
+    targets = [entry for entry in found if entry[2] in requested]
+    if mutating and len(targets) != 1:
+        raise RuntimeError(
+            "requested QDSSC instance matched %d endpoints; expected one" %
+            len(targets))
+    return targets
 
 
 def run(args, endpoint_provider=endpoints, transport_factory=QrtrTransport):
     mutating = args.enable or args.disable
     if mutating and not args.instance:
         raise RuntimeError(
-            "--enable/--disable require at least one --instance")
+            "--enable/--disable require exactly one --instance")
 
     found = endpoint_provider()
     if not found:
         raise RuntimeError("QDSSC service is not registered")
 
-    targets = selected_endpoints(found, args.instance)
+    targets = selected_endpoints(found, args.instance, mutating)
     mode = "enable" if args.enable else "disable" if args.disable else "read"
 
     transport = transport_factory()
@@ -370,8 +462,13 @@ def main(argv=None, endpoint_provider=endpoints,
          transport_factory=QrtrTransport):
     parser = build_parser()
     args = parser.parse_args(argv)
-    if (args.enable or args.disable) and not args.instance:
-        parser.error("--enable/--disable require at least one --instance")
+    mutating = args.enable or args.disable
+    if mutating and not args.instance:
+        parser.error("--enable/--disable require exactly one --instance")
+    try:
+        normalize_instances(args.instance, mutating)
+    except RuntimeError as error:
+        parser.error(str(error))
     try:
         return run(args, endpoint_provider, transport_factory)
     except RuntimeError as error:

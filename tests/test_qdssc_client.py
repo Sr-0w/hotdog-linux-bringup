@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import sys
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,10 @@ def qmi_response(module, txn, msg_id, result=0, error=0, state=None):
     return struct.pack("<BHHH", 2, txn, msg_id, len(tlvs)) + tlvs
 
 
+def qmi_response_with_tlvs(txn, msg_id, tlvs, msg_type=2):
+    return struct.pack("<BHHH", msg_type, txn, msg_id, len(tlvs)) + tlvs
+
+
 def success(module, txn, msg_id, state=None):
     return qmi_response(module, txn, msg_id, state=state)
 
@@ -69,15 +74,39 @@ class QdsscClientTests(unittest.TestCase):
     def run_client(self, argv, responses, endpoints=None):
         fake = FakeTransport(responses)
         args = self.module.build_parser().parse_args(argv)
+        endpoint_rows = ENDPOINTS if endpoints is None else endpoints
         out = io.StringIO()
         err = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             rc = self.module.run(
                 args,
-                endpoint_provider=lambda: endpoints or ENDPOINTS,
+                endpoint_provider=lambda: endpoint_rows,
                 transport_factory=lambda: fake,
             )
         return rc, out.getvalue(), err.getvalue(), fake
+
+    def run_main(self, argv, responses=None, endpoints=None):
+        fake = FakeTransport(responses or [])
+        endpoint_rows = ENDPOINTS if endpoints is None else endpoints
+        out = io.StringIO()
+        err = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = self.module.main(
+                argv,
+                endpoint_provider=lambda: endpoint_rows,
+                transport_factory=lambda: fake,
+            )
+        return rc, out.getvalue(), err.getvalue(), fake
+
+    def read_with_first_response(self, first_response):
+        m = self.module
+        return [
+            first_response,
+            success(m, 2, m.QMI_GET_ENTITY, state=0),
+            success(m, 3, m.QMI_GET_ENTITY, state=0),
+            success(m, 4, m.QMI_GET_ENTITY, state=0),
+            success(m, 5, m.QMI_GET_ENTITY, state=0),
+        ]
 
     def sent_packets(self, fake):
         return [packet for _, _, packet in fake.sent]
@@ -93,14 +122,16 @@ class QdsscClientTests(unittest.TestCase):
         ]
         rc, output, _stderr, fake = self.run_client([], responses)
 
-        expected = [m.qmi_request(1, m.QMI_GET_SWT)]
-        for txn, entity in enumerate(m.ENTITIES.values(), start=2):
-            expected.append(
-                m.qmi_request(txn, m.QMI_GET_ENTITY,
-                              m.entity_payload(entity))
-            )
+        expected = [
+            "00010020000000",
+            "0002002200070001040001000000",
+            "000300220007000104000b000000",
+            "000400220007000104000c000000",
+            "000500220007000104000d000000",
+        ]
         self.assertEqual(rc, 0, output)
-        self.assertEqual(self.sent_packets(fake), expected)
+        self.assertEqual([packet.hex() for packet in self.sent_packets(fake)],
+                         expected)
         self.assertTrue(fake.closed)
 
     def test_enable_and_disable_are_mutually_exclusive(self):
@@ -120,6 +151,28 @@ class QdsscClientTests(unittest.TestCase):
                                  endpoint_provider=lambda: ENDPOINTS,
                                  transport_factory=lambda: FakeTransport([]))
         self.assertEqual(raised.exception.code, 2)
+
+    def test_mutating_mode_rejects_duplicate_instance_argument(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit) as raised:
+                self.module.main(["--disable", "--instance", "90",
+                                  "--instance", "90"],
+                                 endpoint_provider=lambda: ENDPOINTS,
+                                 transport_factory=lambda: FakeTransport([]))
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("duplicate --instance value", err.getvalue())
+
+    def test_mutating_mode_rejects_multiple_instances(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit) as raised:
+                self.module.main(["--enable", "--instance", "8",
+                                  "--instance", "12"],
+                                 endpoint_provider=lambda: ENDPOINTS,
+                                 transport_factory=lambda: FakeTransport([]))
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("exactly one --instance", err.getvalue())
 
     def test_instance_validation_is_strict(self):
         parser = self.module.build_parser()
@@ -148,21 +201,21 @@ class QdsscClientTests(unittest.TestCase):
         rc, output, _stderr, fake = self.run_client(
             ["--disable", "--instance", "90"], responses)
 
-        expected = []
-        for txn, entity in enumerate(m.ENTITIES.values(), start=1):
-            expected.append(
-                m.qmi_request(txn, m.QMI_SET_ENTITY,
-                              m.entity_payload(entity, 0))
-            )
-        expected.append(m.qmi_request(5, m.QMI_SET_SWT, m.swt_payload(0)))
-        expected.append(m.qmi_request(6, m.QMI_GET_SWT))
-        for txn, entity in enumerate(m.ENTITIES.values(), start=7):
-            expected.append(
-                m.qmi_request(txn, m.QMI_GET_ENTITY,
-                              m.entity_payload(entity))
-            )
+        expected = [
+            "00010023000e000104000100000002040000000000",
+            "00020023000e000104000b00000002040000000000",
+            "00030023000e000104000c00000002040000000000",
+            "00040023000e000104000d00000002040000000000",
+            "0005002100070001040000000000",
+            "00060020000000",
+            "0007002200070001040001000000",
+            "000800220007000104000b000000",
+            "000900220007000104000c000000",
+            "000a00220007000104000d000000",
+        ]
         self.assertEqual(rc, 0, output)
-        self.assertEqual(self.sent_packets(fake), expected)
+        self.assertEqual([packet.hex() for packet in self.sent_packets(fake)],
+                         expected)
         self.assertIn("set software trace=disabled: result=0 error=0",
                       output)
 
@@ -184,21 +237,20 @@ class QdsscClientTests(unittest.TestCase):
             ["--enable", "--instance", "90"], responses)
 
         expected = [
-            m.qmi_request(1, m.QMI_SET_SWT, m.swt_payload(1)),
+            "0001002100070001040001000000",
+            "00020023000e000104000100000002040001000000",
+            "00030023000e000104000b00000002040001000000",
+            "00040023000e000104000c00000002040001000000",
+            "00050023000e000104000d00000002040001000000",
+            "00060020000000",
+            "0007002200070001040001000000",
+            "000800220007000104000b000000",
+            "000900220007000104000c000000",
+            "000a00220007000104000d000000",
         ]
-        for txn, entity in enumerate(m.ENTITIES.values(), start=2):
-            expected.append(
-                m.qmi_request(txn, m.QMI_SET_ENTITY,
-                              m.entity_payload(entity, 1))
-            )
-        expected.append(m.qmi_request(6, m.QMI_GET_SWT))
-        for txn, entity in enumerate(m.ENTITIES.values(), start=7):
-            expected.append(
-                m.qmi_request(txn, m.QMI_GET_ENTITY,
-                              m.entity_payload(entity))
-            )
         self.assertEqual(rc, 0, output)
-        self.assertEqual(self.sent_packets(fake), expected)
+        self.assertEqual([packet.hex() for packet in self.sent_packets(fake)],
+                         expected)
         self.assertIn("set software trace=enabled: result=0 error=0", output)
 
     def test_qmi_error94_is_reported_and_nonzero(self):
@@ -224,7 +276,7 @@ class QdsscClientTests(unittest.TestCase):
     def test_partial_failure_still_attempts_global_swt_disable(self):
         m = self.module
         responses = [
-            RuntimeError("mock receive failure"),
+            TimeoutError("mock receive timeout"),
             success(m, 2, m.QMI_SET_ENTITY),
             success(m, 3, m.QMI_SET_ENTITY),
             success(m, 4, m.QMI_SET_ENTITY),
@@ -242,8 +294,31 @@ class QdsscClientTests(unittest.TestCase):
         ]
 
         self.assertEqual(rc, 1)
-        self.assertIn("transport-error=mock receive failure", output)
+        self.assertIn("transport-error=mock receive timeout", output)
+        self.assertEqual(len(msg_ids), 10)
         self.assertEqual(msg_ids[4], m.QMI_SET_SWT)
+
+    def test_malformed_set_response_is_not_cleared_by_final_get(self):
+        m = self.module
+        responses = [
+            qmi_response_with_tlvs(1, m.QMI_SET_ENTITY, b""),
+            success(m, 2, m.QMI_SET_ENTITY),
+            success(m, 3, m.QMI_SET_ENTITY),
+            success(m, 4, m.QMI_SET_ENTITY),
+            success(m, 5, m.QMI_SET_SWT),
+            success(m, 6, m.QMI_GET_SWT, state=0),
+            success(m, 7, m.QMI_GET_ENTITY, state=0),
+            success(m, 8, m.QMI_GET_ENTITY, state=0),
+            success(m, 9, m.QMI_GET_ENTITY, state=0),
+            success(m, 10, m.QMI_GET_ENTITY, state=0),
+        ]
+        rc, output, _stderr, _fake = self.run_client(
+            ["--disable", "--instance", "90"], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("missing QMI result TLV", output)
+        self.assertIn("software trace: result=0 error=0 state=disabled",
+                      output)
 
     def test_final_get_state_must_confirm_disable(self):
         m = self.module
@@ -264,6 +339,146 @@ class QdsscClientTests(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         self.assertIn("final state: disabled not confirmed", output)
+
+    def test_strict_parser_rejects_short_header(self):
+        with self.assertRaisesRegex(RuntimeError, "short QMI header"):
+            self.module.split_qmi(b"\x02")
+
+    def test_strict_parser_rejects_header_length_mismatch(self):
+        m = self.module
+        malformed = struct.pack("<BHHH", 2, 1, m.QMI_GET_SWT, 8)
+        malformed += m.tlv(2, struct.pack("<HH", 0, 0))
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("QMI length mismatch", output)
+
+    def test_strict_parser_rejects_trailing_bytes(self):
+        m = self.module
+        malformed = success(m, 1, m.QMI_GET_SWT, state=0) + b"\x00"
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("QMI length mismatch", output)
+
+    def test_strict_parser_rejects_truncated_tlv_header(self):
+        m = self.module
+        malformed = struct.pack("<BHHH", 2, 1, m.QMI_GET_SWT, 1) + b"\x02"
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("truncated QMI TLV header", output)
+
+    def test_strict_parser_rejects_truncated_tlv_value(self):
+        m = self.module
+        body = b"\x02\x04\x00\x00"
+        malformed = struct.pack("<BHHH", 2, 1, m.QMI_GET_SWT,
+                                len(body)) + body
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("truncated QMI TLV value type 2", output)
+
+    def test_strict_parser_requires_result_tlv(self):
+        m = self.module
+        malformed = qmi_response_with_tlvs(
+            1, m.QMI_GET_SWT, m.tlv(0x10, struct.pack("<I", 0)))
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("missing QMI result TLV", output)
+
+    def test_strict_parser_requires_result_tlv_length_four(self):
+        m = self.module
+        malformed = qmi_response_with_tlvs(
+            1, m.QMI_GET_SWT, m.tlv(2, b"\x00\x00"))
+        responses = self.read_with_first_response(malformed)
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("short QMI result TLV", output)
+
+    def test_recv_oserror_is_reported_nonzero(self):
+        m = self.module
+        responses = [
+            OSError("mock recv error"),
+            success(m, 2, m.QMI_GET_ENTITY, state=0),
+            success(m, 3, m.QMI_GET_ENTITY, state=0),
+            success(m, 4, m.QMI_GET_ENTITY, state=0),
+            success(m, 5, m.QMI_GET_ENTITY, state=0),
+        ]
+        rc, output, _stderr, _fake = self.run_client([], responses)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("transport-error=mock recv error", output)
+
+    def test_qrtr_lookup_timeout_is_reported(self):
+        m = self.module
+        error = m.subprocess.TimeoutExpired(["qrtr-lookup"], timeout=20)
+        with patch.object(m.subprocess, "run", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "qrtr-lookup timed out"):
+                m.endpoints()
+
+    def test_qrtr_lookup_failure_is_reported(self):
+        m = self.module
+        error = m.subprocess.CalledProcessError(
+            1, ["qrtr-lookup"], stderr="mock failure")
+        with patch.object(m.subprocess, "run", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "qrtr-lookup failed"):
+                m.endpoints()
+
+    def test_no_qdssc_service_is_nonzero(self):
+        rc, _output, stderr, fake = self.run_main([], endpoints=[])
+
+        self.assertEqual(rc, 1)
+        self.assertIn("QDSSC service is not registered", stderr)
+        self.assertEqual(self.sent_packets(fake), [])
+
+    def test_unknown_instance_is_nonzero(self):
+        rc, _output, stderr, fake = self.run_main(
+            ["--disable", "--instance", "91"], endpoints=ENDPOINTS)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("requested QDSSC instance", stderr)
+        self.assertEqual(self.sent_packets(fake), [])
+
+    def test_duplicate_service_row_is_rejected(self):
+        rc, _output, stderr, fake = self.run_main(
+            ["--disable", "--instance", "90"],
+            endpoints=[ENDPOINTS[0], ENDPOINTS[0]])
+
+        self.assertEqual(rc, 1)
+        self.assertIn("duplicate QDSSC service row", stderr)
+        self.assertEqual(self.sent_packets(fake), [])
+
+    def test_duplicate_qrtr_endpoint_is_rejected(self):
+        endpoints = [
+            (51, 1, 90, 9, 14),
+            (51, 1, 91, 9, 14),
+        ]
+        rc, _output, stderr, fake = self.run_main(
+            ["--disable", "--instance", "90"], endpoints=endpoints)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("duplicate QDSSC QRTR endpoint", stderr)
+        self.assertEqual(self.sent_packets(fake), [])
+
+    def test_ambiguous_instance_selection_is_rejected(self):
+        endpoints = [
+            (51, 1, 90, 9, 14),
+            (51, 1, 90, 9, 15),
+        ]
+        rc, _output, stderr, fake = self.run_main(
+            ["--disable", "--instance", "90"], endpoints=endpoints)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("matched 2 endpoints", stderr)
+        self.assertEqual(self.sent_packets(fake), [])
 
 
 if __name__ == "__main__":
