@@ -128,3 +128,23 @@ called on the path above, take the descriptor as an argument, so a coredump
 taken with a breakpoint-free read of the driver state — the ALS state at
 `0x9869d3f8` carries the port object pointer — leads to the arena directly
 rather than by search.
+
+## The driver has its dependencies resolved
+
+Reading around the ALS state turns up its dependency SUID table, and every
+entry is filled with the same values the host's own client sees:
+
+```
++0xa0  ...b441 25 5e 59 27 7f 00 a7 54 27 e1…   registry  e12754a7007f27595e2541b470…
++0xb0  46 11 56 e2 e3 cf b6 e2 d0 3d ee 6e…     interrupt 45d03dee6ee3cfb6e2461156e2f58f61
++0xc0  65 63 ee 7e 3b b6 8a 31 08 b9 78 7c…     timer     d708b9787c3bb68a316563ee7e3ba813
+```
+
+So the driver has looked up and received the SUIDs of the registry, the
+interrupt sensor and the timer — the three services a hardware driver needs
+before it can open a port. Nothing is outstanding on that side either.
+
+Scanning blindly for the port object does not work: a loose signature over the
+whole dump returns 3501 candidates, almost all coincidence. The anchored route
+is the one to take — follow the pointer out of the driver's own state rather
+than search for the shape.
