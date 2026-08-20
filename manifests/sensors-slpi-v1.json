@@ -185,7 +185,7 @@
     {"path": "helpers/qrtr-services.py", "size": 2098, "sha256": "ac3db77214c39c93a670098a0120756322e1f6485458210e40b9ff07251b5005"},
     {"path": "helpers/ssc-client.py", "size": 9290, "sha256": "4d637f1129042782c085dffe60db010810853282fd61b43508633a321d7897dd"},
     {"path": "helpers/ssc-subscribe.py", "size": 5373, "sha256": "f0e8871c6a1b68e3ad76e5e3a3a00a771e22a359d098d43775888657a7e4a41c"},
-    {"path": "helpers/qdssc-client.py", "size": 5552, "sha256": "16288e3ced53af787f0dc991782940b4d5e9d9efa1bd0cfcbcee13cf01910d20"},
+    {"path": "helpers/qdssc-client.py", "size": 12404, "sha256": "5de8f2ef8fa3c8f6ddc72200e20c8d923a2afb1ce9d80f76e9a4a7343e86f71a"},
     {"path": "helpers/slpi-ulog-coredump.py", "size": 12060, "sha256": "16f5828c68576f8385289de29bd3c713bfde374114b312634d5680aa940df660"},
     {"path": "scripts/slpi/slpi-disassemble.sh", "size": 2644, "sha256": "6467aeed93d5b7989e8cf88473ea23cab2a4998fbddac314fd0b82cba05ef17c"},
     {"path": "scripts/slpi/build-slpi-elf.py", "size": 2196, "sha256": "0173a0db0513888790ed231576fb591f6e3c08125d18e6ce47402814da28dfa8"}

@@ -3,7 +3,18 @@
 
 The SLPI firmware exposes QDSSC (QMI service 51) once for the sensor root PD
 and once for the sensor user PD.  This helper intentionally defaults to
-read-only queries.  Pass ``--enable`` only when a trace sink has been prepared.
+read-only GET queries.  Mutating modes require an explicit ``--instance`` and
+must be used only while holding the phone lease:
+
+* prepare and verify the AP trace sink before ``--enable``;
+* capture only non-private diagnostic data;
+* run ``--disable`` after capture to clear the same controls.
+
+Within one QDSSC instance the enable order is global SWT first, then detailed
+entities, so the entity streams have a software-trace path to feed.  Rollback
+uses the reverse contract: disable entities first, then global SWT.  QMI
+result/error fields are always printed; firmware errors such as error 94 are
+reported directly and are not translated into success.
 """
 
 import argparse
@@ -30,6 +41,10 @@ ENTITIES = {
     "diag": 13,
 }
 
+QMI_ERRORS = {
+    94: "NOT_SUPPORTED",
+}
+
 libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.musl-aarch64.so.1",
                    use_errno=True)
 
@@ -43,6 +58,59 @@ class SockaddrQrtr(ctypes.Structure):
 def fail(what):
     raise OSError(ctypes.get_errno(), "%s: %s" %
                   (what, os.strerror(ctypes.get_errno())))
+
+
+class QmiResponse:
+    def __init__(self, txn, msg_id, tlvs):
+        self.txn = txn
+        self.msg_id = msg_id
+        self.tlvs = tlvs
+        self.result, self.error = qmi_result(tlvs)
+
+    def ok(self):
+        return self.result == 0
+
+
+class QrtrTransport:
+    def __init__(self):
+        self.fd = libc.socket(AF_QIPCRTR, socket.SOCK_DGRAM, 0)
+        if self.fd < 0:
+            fail("socket")
+        try:
+            self._bind()
+            libc.setsockopt(self.fd, socket.SOL_SOCKET, socket.SO_RCVTIMEO,
+                            struct.pack("qq", 2, 0), 16)
+        except Exception:
+            self.close()
+            raise
+
+    def _bind(self):
+        for candidate in range(12):
+            address = SockaddrQrtr(AF_QIPCRTR, candidate, 0)
+            if libc.bind(self.fd, ctypes.byref(address),
+                         ctypes.sizeof(address)) == 0:
+                return
+        fail("bind")
+
+    def send(self, node, port, packet):
+        destination = SockaddrQrtr(AF_QIPCRTR, node, port)
+        buf = ctypes.create_string_buffer(packet)
+        if libc.sendto(self.fd, buf, len(packet), 0,
+                       ctypes.byref(destination),
+                       ctypes.sizeof(destination)) < 0:
+            fail("sendto")
+
+    def recv(self):
+        rx = ctypes.create_string_buffer(4096)
+        n = libc.recvfrom(self.fd, rx, len(rx), 0, None, None)
+        if n < 0:
+            fail("recvfrom")
+        return rx.raw[:n]
+
+    def close(self):
+        if self.fd >= 0:
+            libc.close(self.fd)
+            self.fd = -1
 
 
 def endpoints():
@@ -64,6 +132,17 @@ def tlv(number, payload):
     return struct.pack("<BH", number, len(payload)) + payload
 
 
+def swt_payload(state):
+    return tlv(1, struct.pack("<I", state))
+
+
+def entity_payload(entity, state=None):
+    payload = tlv(1, struct.pack("<I", entity))
+    if state is not None:
+        payload += tlv(2, struct.pack("<I", state))
+    return payload
+
+
 def split_qmi(buf):
     if len(buf) < 7:
         return None
@@ -79,98 +158,226 @@ def split_qmi(buf):
     return msg_type, txn, msg_id, values
 
 
-def transact(fd, node, port, txn, msg_id, tlvs=b""):
-    packet = qmi_request(txn, msg_id, tlvs)
-    destination = SockaddrQrtr(AF_QIPCRTR, node, port)
-    buf = ctypes.create_string_buffer(packet)
-    if libc.sendto(fd, buf, len(packet), 0, ctypes.byref(destination),
-                   ctypes.sizeof(destination)) < 0:
-        fail("sendto")
+def qmi_result(response_tlvs):
+    result = response_tlvs.get(2, b"")
+    if len(result) >= 4:
+        return struct.unpack_from("<HH", result)
+    return 0, 0
 
-    rx = ctypes.create_string_buffer(4096)
-    n = libc.recvfrom(fd, rx, len(rx), 0, None, None)
-    if n < 0:
-        fail("recvfrom")
-    decoded = split_qmi(rx.raw[:n])
+
+def transact(transport, node, port, txn, msg_id, tlvs=b""):
+    packet = qmi_request(txn, msg_id, tlvs)
+    transport.send(node, port, packet)
+    decoded = split_qmi(transport.recv())
     if decoded is None:
         raise RuntimeError("short QMI response")
     _, response_txn, response_id, response_tlvs = decoded
     if response_txn != txn or response_id != msg_id:
         raise RuntimeError("unexpected QMI response")
-    result = response_tlvs.get(2, b"")
-    if len(result) >= 4:
-        status, error = struct.unpack_from("<HH", result)
-        if status:
-            raise RuntimeError("QMI request failed: error %d" % error)
-    return response_tlvs
+    return QmiResponse(response_txn, response_id, response_tlvs)
 
 
 def state_from_response(response):
-    value = response.get(0x10)
+    values = response.tlvs if isinstance(response, QmiResponse) else response
+    value = values.get(0x10)
     if value is None or len(value) < 4:
         return "not returned"
     return "enabled" if struct.unpack_from("<I", value)[0] else "disabled"
 
 
-def inspect_endpoint(fd, node, port, instance, enable):
-    print("instance=%d node=%d port=%d" % (instance, node, port))
-    txn = 1
-    if enable:
-        transact(fd, node, port, txn, QMI_SET_SWT,
-                 tlv(1, struct.pack("<I", 1)))
-        txn += 1
-    response = transact(fd, node, port, txn, QMI_GET_SWT)
-    print("  software trace: %s" % state_from_response(response))
+def result_text(response):
+    text = "result=%d error=%d" % (response.result, response.error)
+    if response.error in QMI_ERRORS:
+        text += " (%s)" % QMI_ERRORS[response.error]
+    return text
+
+
+def report_response(label, response, include_state=False):
+    text = "  %s: %s" % (label, result_text(response))
+    if include_state:
+        text += " state=%s" % state_from_response(response)
+    print(text)
+
+
+def qmi_call(transport, node, port, txn, msg_id, payload, label,
+             include_state=False):
+    try:
+        response = transact(transport, node, port, txn, msg_id, payload)
+    except Exception as error:
+        print("  %s: transport-error=%s" % (label, error))
+        return None, False
+
+    report_response(label, response, include_state)
+    return response, response.ok()
+
+
+def query_state(transport, node, port, txn):
+    ok = True
+    response, success = qmi_call(transport, node, port, txn, QMI_GET_SWT,
+                                 b"", "software trace", True)
+    ok = ok and success and state_from_response(response) != "not returned"
     txn += 1
 
     for name, entity in ENTITIES.items():
-        if enable:
-            payload = tlv(1, struct.pack("<I", entity))
-            payload += tlv(2, struct.pack("<I", 1))
-            try:
-                transact(fd, node, port, txn, QMI_SET_ENTITY, payload)
-            except RuntimeError as error:
-                print("  %-5s enable: %s" % (name, error))
-            txn += 1
-        response = transact(fd, node, port, txn, QMI_GET_ENTITY,
-                            tlv(1, struct.pack("<I", entity)))
-        print("  %-5s: %s" % (name, state_from_response(response)))
+        response, success = qmi_call(transport, node, port, txn,
+                                     QMI_GET_ENTITY,
+                                     entity_payload(entity),
+                                     "%-5s" % name, True)
+        ok = ok and success and state_from_response(response) != "not returned"
         txn += 1
 
+    return txn, ok
 
-def main():
+
+def confirm_state(transport, node, port, txn, wanted):
+    ok = True
+    response, success = qmi_call(transport, node, port, txn, QMI_GET_SWT,
+                                 b"", "software trace", True)
+    ok = ok and success and state_from_response(response) == wanted
+    txn += 1
+
+    for name, entity in ENTITIES.items():
+        response, success = qmi_call(transport, node, port, txn,
+                                     QMI_GET_ENTITY,
+                                     entity_payload(entity),
+                                     "%-5s" % name, True)
+        ok = ok and success and state_from_response(response) == wanted
+        txn += 1
+
+    if not ok:
+        print("  final state: %s not confirmed" % wanted)
+    return txn, ok
+
+
+def inspect_endpoint(transport, node, port, instance, mode):
+    print("instance=%d node=%d port=%d" % (instance, node, port))
+    txn = 1
+
+    if mode == "read":
+        _, ok = query_state(transport, node, port, txn)
+        return ok
+
+    ok = True
+    if mode == "enable":
+        response, success = qmi_call(transport, node, port, txn, QMI_SET_SWT,
+                                     swt_payload(1),
+                                     "set software trace=enabled")
+        ok = ok and success
+        txn += 1
+
+        for name, entity in ENTITIES.items():
+            response, success = qmi_call(transport, node, port, txn,
+                                         QMI_SET_ENTITY,
+                                         entity_payload(entity, 1),
+                                         "%-5s set=enabled" % name)
+            ok = ok and success
+            txn += 1
+
+        _, confirmed = confirm_state(transport, node, port, txn, "enabled")
+        return ok and confirmed
+
+    if mode == "disable":
+        for name, entity in ENTITIES.items():
+            response, success = qmi_call(transport, node, port, txn,
+                                         QMI_SET_ENTITY,
+                                         entity_payload(entity, 0),
+                                         "%-5s set=disabled" % name)
+            ok = ok and success
+            txn += 1
+
+        response, success = qmi_call(transport, node, port, txn, QMI_SET_SWT,
+                                     swt_payload(0),
+                                     "set software trace=disabled")
+        ok = ok and success
+        txn += 1
+
+        _, confirmed = confirm_state(transport, node, port, txn, "disabled")
+        return ok and confirmed
+
+    raise RuntimeError("unknown mode %s" % mode)
+
+
+def parse_instance(value):
+    try:
+        instance = int(value, 0)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("invalid instance: %s" %
+                                         value) from error
+    if instance < 0 or instance > 0xffffffff:
+        raise argparse.ArgumentTypeError(
+            "instance must be in range 0..0xffffffff")
+    return instance
+
+
+def build_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--enable", action="store_true",
-                        help="enable software, ULog, and DIAG tracing")
-    parser.add_argument("--instance", type=int, action="append",
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--enable", action="store_true",
+                       help="enable software, ULog, and DIAG tracing")
+    group.add_argument("--disable", action="store_true",
+                       help="disable entity tracing, then software tracing")
+    parser.add_argument("--instance", type=parse_instance, action="append",
                         help="limit the operation to a QDSSC instance")
-    args = parser.parse_args()
+    return parser
 
-    found = endpoints()
+
+def selected_endpoints(found, requested):
+    if not requested:
+        return found
+
+    requested = set(requested)
+    instances = {entry[2] for entry in found}
+    missing = sorted(requested - instances)
+    if missing:
+        raise RuntimeError(
+            "requested QDSSC instance(s) not registered: %s" %
+            ", ".join(map(str, missing)))
+    return [entry for entry in found if entry[2] in requested]
+
+
+def run(args, endpoint_provider=endpoints, transport_factory=QrtrTransport):
+    mutating = args.enable or args.disable
+    if mutating and not args.instance:
+        raise RuntimeError(
+            "--enable/--disable require at least one --instance")
+
+    found = endpoint_provider()
     if not found:
-        sys.exit("QDSSC service is not registered")
+        raise RuntimeError("QDSSC service is not registered")
 
-    fd = libc.socket(AF_QIPCRTR, socket.SOCK_DGRAM, 0)
-    if fd < 0:
-        fail("socket")
-    for candidate in range(12):
-        address = SockaddrQrtr(AF_QIPCRTR, candidate, 0)
-        if libc.bind(fd, ctypes.byref(address), ctypes.sizeof(address)) == 0:
-            break
-    else:
-        fail("bind")
-    libc.setsockopt(fd, socket.SOL_SOCKET, socket.SO_RCVTIMEO,
-                    struct.pack("qq", 2, 0), 16)
+    targets = selected_endpoints(found, args.instance)
+    mode = "enable" if args.enable else "disable" if args.disable else "read"
 
-    for service, version, instance, node, port in found:
-        if args.instance and instance not in args.instance:
-            continue
-        try:
-            inspect_endpoint(fd, node, port, instance, args.enable)
-        except Exception as error:
-            print("instance=%d node=%d port=%d: %s" %
-                  (instance, node, port, error), file=sys.stderr)
+    transport = transport_factory()
+    try:
+        ok = True
+        for service, version, instance, node, port in targets:
+            try:
+                ok = inspect_endpoint(transport, node, port, instance, mode) \
+                    and ok
+            except Exception as error:
+                ok = False
+                print("instance=%d node=%d port=%d: %s" %
+                      (instance, node, port, error), file=sys.stderr)
+        return 0 if ok else 1
+    finally:
+        close = getattr(transport, "close", None)
+        if close:
+            close()
+
+
+def main(argv=None, endpoint_provider=endpoints,
+         transport_factory=QrtrTransport):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if (args.enable or args.disable) and not args.instance:
+        parser.error("--enable/--disable require at least one --instance")
+    try:
+        return run(args, endpoint_provider, transport_factory)
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
