@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import hashlib
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -50,12 +52,90 @@ def record(path: str, data: bytes) -> dict:
     return {"path": path, "size": len(data), "sha256": sha, "mode": "0644"}
 
 
+def update_hash_entry(entry: dict, path: Path) -> None:
+    data = path.read_bytes()
+    entry["size"] = len(data)
+    entry["sha256"] = hashlib.sha256(data).hexdigest()
+
+
+def write_local_manifest(capture_root: Path, sensors_root: Path) -> Path:
+    rows = ["path\ttype\tmode\tsize\tuid\tgid\tsha256_or_target"]
+    records: list[tuple[str, str]] = []
+    for current, directories, files in os.walk(sensors_root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for name in sorted(directories):
+            path = current_path / name
+            records.append((path.relative_to(sensors_root).as_posix(), "d"))
+        for name in sorted(files):
+            path = current_path / name
+            records.append((path.relative_to(sensors_root).as_posix(), "f"))
+    for relative, kind in sorted(records):
+        path = sensors_root / relative
+        st = path.stat()
+        mode = f"{st.st_mode & 0o7777:03o}"
+        size = st.st_size
+        sha = hashlib.sha256(path.read_bytes()).hexdigest() if kind == "f" else ""
+        rows.append(f"sensors/{relative}\t{kind}\t{mode}\t{size}\t1000\t1000\t{sha}")
+    local_manifest = capture_root / "sensors-active.local-manifest.tsv"
+    local_manifest.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return local_manifest
+
+
 def load_tool_module():
     spec = importlib.util.spec_from_file_location("sensors_slpi_repro", SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def make_gate3_fixture(root: Path) -> tuple[object, dict, Path]:
+    module = load_tool_module()
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    capture_root = root / "capture"
+    sensors_root = capture_root / "extracted/sensors"
+    (sensors_root / "config").mkdir(parents=True)
+    (sensors_root / "registry").mkdir()
+
+    selected = list(manifest["config_selection"]["baseline_45"])
+    selected.extend(manifest["config_selection"]["alsps_variant_47_additions"])
+    for entry in selected:
+        shutil.copyfile(ROOT / entry["source"], sensors_root / "config" / entry["path"])
+    power = sensors_root / "config/msmnile_power_0.json"
+    shutil.copyfile(power, sensors_root / "config/msmnile_power_0.json.pre-island-off-20260820")
+
+    (sensors_root / "registry/stable").write_bytes(b"AA")
+    (sensors_root / "registry/power.island.pre-island-off-20260820").write_bytes(b"private-registry-backup")
+    (sensors_root / "sns_reg.conf").write_bytes(b"conf\n")
+    (sensors_root / "sns_reg_version").write_bytes(b"00121\n")
+    archive = capture_root / "sensors-active.tar"
+    archive.write_bytes(b"private test archive\n")
+    local_manifest = write_local_manifest(capture_root, sensors_root)
+
+    capture = manifest["runtime_capture_candidate"]
+    update_hash_entry(capture["archive"], archive)
+    update_hash_entry(capture["local_manifest"], local_manifest)
+    update_hash_entry(capture["runtime"]["sns_reg_conf"], sensors_root / "sns_reg.conf")
+    update_hash_entry(capture["runtime"]["sns_reg_version"], sensors_root / "sns_reg_version")
+    config_files = list((sensors_root / "config").iterdir())
+    registry_files = list((sensors_root / "registry").iterdir())
+    capture["runtime"]["config_files"] = len(config_files)
+    capture["runtime"]["config_bytes"] = sum(path.stat().st_size for path in config_files)
+    capture["runtime"]["registry_files"] = len(registry_files)
+    capture["runtime"]["registry_bytes"] = sum(path.stat().st_size for path in registry_files)
+    return module, manifest, capture_root
+
+
+def run_gate3(module: object, manifest: dict, capture_root: Path) -> str:
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        module.gate3(capture_root, manifest, "47", None)
+    return output.getvalue()
+
+
+def refresh_fixture_local_manifest(manifest: dict, capture_root: Path) -> None:
+    local_manifest = capture_root / "sensors-active.local-manifest.tsv"
+    update_hash_entry(manifest["runtime_capture_candidate"]["local_manifest"], local_manifest)
 
 
 class SensorsReproSafetyTests(unittest.TestCase):
@@ -202,6 +282,124 @@ class SensorsReproSafetyTests(unittest.TestCase):
             self.assertEqual(len(list((root / "valid/sensors/config").glob("*.json"))), 45)
             self.assertEqual((root / "valid/sensors/registry/r").read_bytes(), b"registry")
 
+    def test_stage_rejects_private_registry_backup_promotion(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        entries = manifest["config_selection"]["baseline_45"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            external = root / "external"
+            (external / "config").mkdir(parents=True)
+            (external / "registry").mkdir()
+            (external / "sns_reg.conf").write_bytes(b"conf")
+            (external / "sns_reg_version").write_bytes(b"version")
+            for entry in entries:
+                shutil.copyfile(ROOT / entry["source"], external / "config" / entry["path"])
+            (external / "registry/power.island.pre-island-off-20260820").write_bytes(b"private")
+            result = run_tool("stage", "--repo-root", str(ROOT), "--variant", "45",
+                              "--allow-blocked", "--external-root", str(external),
+                              "--out-root", str(root / "promote"))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("private snapshot-only registry", result.stderr)
+            self.assertFalse((root / "promote/sensors").exists())
+
+    def test_stage_variant_47_accepts_clean_external_registry(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        entries = list(manifest["config_selection"]["baseline_45"])
+        entries.extend(manifest["config_selection"]["alsps_variant_47_additions"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            external = root / "external"
+            (external / "config").mkdir(parents=True)
+            (external / "registry").mkdir()
+            (external / "sns_reg.conf").write_bytes(b"conf")
+            (external / "sns_reg_version").write_bytes(b"version")
+            for entry in entries:
+                shutil.copyfile(ROOT / entry["source"], external / "config" / entry["path"])
+            (external / "registry/r").write_bytes(b"registry")
+            result = run_tool("stage", "--repo-root", str(ROOT), "--variant", "47",
+                              "--allow-blocked", "--external-root", str(external),
+                              "--out-root", str(root / "clean"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(list((root / "clean/sensors/config").glob("*.json"))), 47)
+            self.assertEqual((root / "clean/sensors/registry/r").read_bytes(), b"registry")
+
+    def test_gate3_accepts_complete_private_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            module, manifest, capture = make_gate3_fixture(Path(directory))
+            summary = json.loads(run_gate3(module, manifest, capture))
+            self.assertEqual(summary["status"], "OFFLINE_GATE_3_PASS_PRIVATE_CAPTURE")
+            self.assertEqual(summary["config"]["files"], 48)
+            self.assertEqual(summary["registry"]["files"], 2)
+            self.assertEqual(summary["local_manifest_entries"], 54)
+            self.assertFalse(summary["hardware_ready"])
+
+    def test_gate3_rejects_registry_same_size_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            module, manifest, capture = make_gate3_fixture(Path(directory))
+            registry = capture / "extracted/sensors/registry/stable"
+            self.assertEqual(registry.stat().st_size, 2)
+            registry.write_bytes(b"BB")
+            with self.assertRaises(SystemExit):
+                run_gate3(module, manifest, capture)
+
+    def test_gate3_rejects_mode_type_and_path_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            module, manifest, capture = make_gate3_fixture(Path(directory) / "mode")
+            os.chmod(capture / "extracted/sensors/registry/stable", 0o600)
+            with self.assertRaises(SystemExit):
+                run_gate3(module, manifest, capture)
+
+        with tempfile.TemporaryDirectory() as directory:
+            module, manifest, capture = make_gate3_fixture(Path(directory) / "type")
+            path = capture / "extracted/sensors/registry/stable"
+            path.unlink()
+            path.mkdir()
+            with self.assertRaises(SystemExit):
+                run_gate3(module, manifest, capture)
+
+        with tempfile.TemporaryDirectory() as directory:
+            module, manifest, capture = make_gate3_fixture(Path(directory) / "path")
+            local_manifest = capture / "sensors-active.local-manifest.tsv"
+            text = local_manifest.read_text(encoding="utf-8")
+            text = text.replace("sensors/registry/stable\t", "sensors/registry/../escape\t", 1)
+            local_manifest.write_text(text, encoding="utf-8")
+            refresh_fixture_local_manifest(manifest, capture)
+            with self.assertRaises(SystemExit):
+                run_gate3(module, manifest, capture)
+
+    def test_gate3_rejects_extra_missing_symlink_and_traversal(self) -> None:
+        cases = ("extra", "missing", "symlink", "traversal")
+        for case in cases:
+            with self.subTest(case=case):
+                with tempfile.TemporaryDirectory() as directory:
+                    module, manifest, capture = make_gate3_fixture(Path(directory))
+                    sensors = capture / "extracted/sensors"
+                    if case == "extra":
+                        (sensors / "registry/extra").write_bytes(b"extra")
+                    elif case == "missing":
+                        (sensors / "registry/stable").unlink()
+                    elif case == "symlink":
+                        os.symlink(sensors / "registry/stable", sensors / "registry/link")
+                    else:
+                        local_manifest = capture / "sensors-active.local-manifest.tsv"
+                        text = local_manifest.read_text(encoding="utf-8")
+                        text = text.replace("sensors/registry/stable\t", "../escape\t", 1)
+                        local_manifest.write_text(text, encoding="utf-8")
+                        refresh_fixture_local_manifest(manifest, capture)
+                    with self.assertRaises(SystemExit):
+                        run_gate3(module, manifest, capture)
+
+    def test_versioned_tree_has_no_private_workstation_path(self) -> None:
+        needle = "/home/" + "srobin"
+        result = subprocess.run(
+            ["git", "grep", "-n", needle, "--", "."],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+
     def test_snapshot_round_trip_preserves_declared_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -230,7 +428,10 @@ class SensorsReproSafetyTests(unittest.TestCase):
             self.assertFalse(any(restored.parent.glob(f".{restored.name}.backup-*")))
 
     def test_private_runtime_capture_gate3_if_available(self) -> None:
-        capture = Path("/home/srobin/dev/hotdog-r6-rebaseline/logs/2026-08-20-sensors-slpi-04-runtime")
+        capture_value = os.environ.get("HOTDOG_SENSOR_CAPTURE_ROOT")
+        if not capture_value:
+            self.skipTest("set HOTDOG_SENSOR_CAPTURE_ROOT to validate the private Hardware Lab capture")
+        capture = Path(capture_value)
         if not capture.is_dir():
             self.skipTest("Hardware Lab private capture is not present")
         result = run_tool("gate3", "--capture-root", str(capture), "--variant", "47")

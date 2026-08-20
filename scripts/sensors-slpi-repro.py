@@ -30,6 +30,15 @@ RUNTIME_DIRS = ("config", "registry")
 SNAPSHOT_SCHEMA = "hotdog-sensors-runtime-snapshot-v1"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 CANDIDATE_READY = "READY"
+LOCAL_MANIFEST_HEADER = (
+    "path",
+    "type",
+    "mode",
+    "size",
+    "uid",
+    "gid",
+    "sha256_or_target",
+)
 
 
 def fail(message: str) -> NoReturn:
@@ -83,6 +92,20 @@ def relative_path(value: object, label: str) -> Path:
             any(part in ("", ".", "..") for part in parsed.parts)):
         fail(f"{label} is not normalized and relative: {value!r}")
     return Path(*parsed.parts)
+
+
+def mode_text(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-7]{3,4}", value):
+        fail(f"{label} must be an octal permission mode")
+    mode = int(value, 8)
+    if mode > 0o7777:
+        fail(f"{label} is outside the permission-mode range")
+    return f"{mode:03o}"
+
+
+def decimal_text(value: object, label: str) -> None:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
+        fail(f"{label} must be a decimal integer")
 
 
 def safe_join(root: Path, value: object, label: str) -> Path:
@@ -224,6 +247,133 @@ def check_entry(path: Path, entry: dict) -> None:
         )
 
 
+def runtime_manifest_path(value: object, expected_type: str, label: str) -> str:
+    relative = relative_path(value, label)
+    parts = relative.parts
+    if len(parts) < 2 or parts[0] != "sensors":
+        fail(f"{label} must be under sensors/: {value!r}")
+    runtime_parts = parts[1:]
+    root = runtime_parts[0]
+    if root in RUNTIME_NAMES:
+        if len(runtime_parts) != 1 or expected_type != "f":
+            fail(f"{label} has invalid runtime file path/type: {value!r}")
+    elif root in RUNTIME_DIRS:
+        if len(runtime_parts) == 1 and expected_type != "d":
+            fail(f"{label} has invalid runtime directory type: {value!r}")
+        if len(runtime_parts) > 1 and expected_type not in ("f", "d"):
+            fail(f"{label} has invalid runtime nested path type: {value!r}")
+    else:
+        fail(f"{label} is outside the declared sensor runtime: {value!r}")
+    return PurePosixPath(*runtime_parts).as_posix()
+
+
+def parse_local_manifest(path: Path) -> dict[str, dict]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        fail(f"cannot read local runtime manifest {path}: {exc}")
+    if not lines:
+        fail("local runtime manifest is empty")
+    header = tuple(lines[0].split("\t"))
+    if header != LOCAL_MANIFEST_HEADER:
+        fail(f"local runtime manifest header mismatch: {header!r}")
+    records: dict[str, dict] = {}
+    for index, line in enumerate(lines[1:], start=2):
+        fields = line.split("\t")
+        if len(fields) != len(LOCAL_MANIFEST_HEADER):
+            fail(f"local runtime manifest line {index} has invalid field count")
+        raw_path, kind, raw_mode, raw_size, uid, gid, sha_or_target = fields
+        if kind not in ("f", "d"):
+            fail(f"local runtime manifest line {index} has unsupported type: {kind!r}")
+        relative = runtime_manifest_path(raw_path, kind, f"local manifest line {index}.path")
+        if relative in records:
+            fail(f"duplicate local runtime manifest path: {relative}")
+        mode = mode_text(raw_mode, f"local manifest line {index}.mode")
+        decimal_text(uid, f"local manifest line {index}.uid")
+        decimal_text(gid, f"local manifest line {index}.gid")
+        try:
+            size = int(raw_size, 10)
+        except ValueError:
+            fail(f"local manifest line {index}.size must be a decimal integer")
+        if size < 0:
+            fail(f"local manifest line {index}.size must be non-negative")
+        record = {"path": relative, "type": kind, "mode": mode, "size": size}
+        if kind == "f":
+            if not SHA256_RE.fullmatch(sha_or_target):
+                fail(f"local manifest line {index}.sha256_or_target must be a SHA256")
+            record["sha256"] = sha_or_target
+        elif sha_or_target:
+            fail(f"local manifest line {index}.sha256_or_target must be empty for directories")
+        records[relative] = record
+    return dict(sorted(records.items()))
+
+
+def tree_record(path: Path, relative: str, label: str) -> dict:
+    if path.is_symlink():
+        fail(f"{label} contains a symlink: {path}")
+    stat_result = path.stat()
+    record = {
+        "path": relative,
+        "mode": f"{stat.S_IMODE(stat_result.st_mode):03o}",
+        "size": stat_result.st_size,
+    }
+    if path.is_dir():
+        record["type"] = "d"
+    elif path.is_file():
+        record["type"] = "f"
+        record["sha256"] = digest(path)[1]
+    else:
+        fail(f"{label} contains a non-regular entry: {path}")
+    return record
+
+
+def runtime_tree_records(root: Path) -> dict[str, dict]:
+    root = canonical(root)
+    if not root.is_dir() or root.is_symlink():
+        fail(f"runtime root is missing or unsafe: {root}")
+    allowed = set(RUNTIME_NAMES) | set(RUNTIME_DIRS)
+    records: dict[str, dict] = {}
+    for child in root.iterdir():
+        if child.name not in allowed:
+            fail(f"runtime root has undeclared entry: {child}")
+        if child.is_symlink():
+            fail(f"runtime root has a symlink: {child}")
+    for current, directories, files in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for name in sorted(directories):
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            safe_join(root, relative, "runtime tree directory")
+            if relative in records:
+                fail(f"duplicate runtime tree path: {relative}")
+            records[relative] = tree_record(path, relative, "runtime tree")
+        for name in sorted(files):
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            safe_join(root, relative, "runtime tree file")
+            if relative in records:
+                fail(f"duplicate runtime tree path: {relative}")
+            records[relative] = tree_record(path, relative, "runtime tree")
+    return dict(sorted(records.items()))
+
+
+def verify_local_manifest_tree(runtime_root: Path, local_manifest: Path) -> dict[str, dict]:
+    expected = parse_local_manifest(local_manifest)
+    actual = runtime_tree_records(runtime_root)
+    if set(actual) != set(expected):
+        missing = sorted(set(expected) - set(actual))
+        extra = sorted(set(actual) - set(expected))
+        fail(f"runtime tree/local manifest mismatch: missing={missing} extra={extra}")
+    for relative, expected_entry in expected.items():
+        actual_entry = actual[relative]
+        for key in ("type", "mode", "size"):
+            if actual_entry[key] != expected_entry[key]:
+                fail(f"runtime tree {key} mismatch for {relative}")
+        if expected_entry["type"] == "f" and actual_entry["sha256"] != expected_entry["sha256"]:
+            fail(f"runtime tree SHA256 mismatch for {relative}")
+    return expected
+
+
 def verify_selection(repo_root: Path, manifest: dict, variant: str) -> None:
     for entry in selection(manifest, variant):
         check_entry(repo_root / entry["source"], entry)
@@ -281,6 +431,7 @@ def gate3(capture_root: Path, manifest: dict, variant: str,
     check_entry(archive, capture["archive"])
     check_entry(local_manifest, capture["local_manifest"])
 
+    local_records = verify_local_manifest_tree(runtime_root, local_manifest)
     inventory = runtime_inventory(runtime_root)
     config_records = scan_files(safe_join(runtime_root, "config", "runtime config"), "runtime config")
     selected = selection(manifest, variant)
@@ -330,6 +481,7 @@ def gate3(capture_root: Path, manifest: dict, variant: str,
         "archive_sha256": capture["archive"]["sha256"],
         "local_manifest_sha256": capture["local_manifest"]["sha256"],
         "runtime_files": len(inventory),
+        "local_manifest_entries": len(local_records),
         "config": {"files": len(config_records), "bytes": sum(e["size"] for e in config_records.values()), "selected_exact": len(selected), "extras": extra_summary},
         "registry": {"files": len(registry_records), "bytes": sum(e["size"] for e in registry_records.values())},
         "sns_reg_conf_sha256": runtime_expected["sns_reg_conf"]["sha256"],
@@ -472,14 +624,33 @@ def external_config_records(external_root: Path, manifest: dict, variant: str) -
         check_entry(path, entry)
 
 
-def external_registry_records(external_root: Path) -> dict[str, dict]:
+def stage_forbidden_external_paths(manifest: dict) -> set[str]:
+    forbidden: set[str] = set()
+    capture = manifest.get("runtime_capture_candidate", {})
+    extras = capture.get("extras", []) if isinstance(capture, dict) else []
+    for entry in extras:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        policy = entry.get("integration_policy", "")
+        if not isinstance(path, str) or not isinstance(policy, str):
+            continue
+        if path.startswith("registry/") and "private snapshot" in policy:
+            forbidden.add(path)
+    return forbidden
+
+
+def external_registry_records(external_root: Path, manifest: dict) -> dict[str, dict]:
     records: dict[str, dict] = {}
+    forbidden = stage_forbidden_external_paths(manifest)
     for name in RUNTIME_NAMES:
         path = safe_join(external_root, name, "external runtime path")
         records[name] = file_record(path, name, "external runtime")
     registry = safe_join(external_root, "registry", "external registry")
     for relative, record in scan_files(registry, "external registry").items():
         full = f"registry/{relative}"
+        if full in forbidden:
+            fail(f"external-root contains private snapshot-only registry file: {full}")
         record = dict(record)
         record["path"] = full
         records[full] = record
@@ -528,7 +699,7 @@ def stage(repo_root: Path, manifest: dict, variant: str, out_root: Path,
         ensure_disjoint("stage target", target, "external root", external_root)
         external_root = canonical(external_root)
         external_config_records(external_root, manifest, variant)
-        external_before = external_registry_records(external_root)
+        external_before = external_registry_records(external_root, manifest)
     else:
         external_before = None
     if path_exists(target) and not replace:
@@ -550,7 +721,7 @@ def stage(repo_root: Path, manifest: dict, variant: str, out_root: Path,
                 source = safe_join(external_root, relative, "external runtime source")
                 destination = safe_join(staging, relative, "staged runtime")
                 copy_stable(source, destination, entry, "external runtime")
-            external_after = external_registry_records(external_root)
+            external_after = external_registry_records(external_root, manifest)
             if external_before != external_after:
                 fail("external runtime source changed during stage")
         expected = expected_runtime_records(manifest, variant, external_before)

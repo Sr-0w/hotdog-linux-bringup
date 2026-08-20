@@ -208,7 +208,7 @@
       "rollback_ready": false,
       "blocker": "the current repository retains counts and logs, not the served registry/config root bytes"
     },
-    "snapshot_command": "python3 scripts/sensors-slpi-repro.py snapshot --served-root <captured-sensors-root> --out <snapshot-dir>",
+    "snapshot_command": "python3 scripts/sensors-slpi-repro.py snapshot --served-root <captured-sensors-root> --out <snapshot-dir> --quiesced",
     "restore_command": "python3 scripts/sensors-slpi-repro.py restore --snapshot <snapshot-dir> --target <offline-sensors-root>"
   },
   "runtime_capture_candidate": {
@@ -272,10 +272,10 @@
       }
     ],
     "gate_3": {
-      "command": "python3 scripts/sensors-slpi-repro.py gate3 --capture-root <runtime-capture-root> --variant 47 --artifact-root <artifact-root>",
+      "command": "env HOTDOG_SENSOR_CAPTURE_ROOT=<runtime-capture-root> sh -c 'python3 scripts/sensors-slpi-repro.py gate3 --capture-root \"$HOTDOG_SENSOR_CAPTURE_ROOT\" --variant 47 --artifact-root \"$1\"' sh <artifact-root>",
       "status": "OFFLINE_GATE_ONLY",
       "hardware_ready": false,
-      "requires": ["private capture archive and local manifest hashes", "45/47 config mapping", "registry count/hash validation", "SLPI 00121 artifact verification", "Qualcomm parser evidence before hardware Working"]
+      "requires": ["private capture archive and local manifest hashes", "complete sensors-active.local-manifest.tsv tree validation", "45/47 config mapping", "registry count/hash validation", "SLPI 00121 artifact verification", "Qualcomm parser evidence before hardware Working"]
     }
   },
   "package_boundary": {
@@ -292,8 +292,8 @@
   "reproduction": {
     "verify_45": "python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 45",
     "verify_47": "python3 scripts/sensors-slpi-repro.py verify --repo-root . --variant 47",
-    "stage_45_without_registry": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 45 --out-root <offline-root>",
-    "stage_47_with_registry": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 47 --external-root <captured-sensors-root> --out-root <offline-root>",
+    "stage_45_offline_only_blocked_parser_experiment": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 45 --allow-blocked --out-root <offline-root>",
+    "stage_47_offline_only_blocked_parser_experiment_with_clean_registry": "python3 scripts/sensors-slpi-repro.py stage --repo-root . --variant 47 --allow-blocked --external-root <clean-selected-sensors-root-without-private-backups> --out-root <offline-root>",
     "image_rebuild": "see image_v16.build_command; kernel, DTB, initramfs and rootfs are external build outputs and must pass the hashes above",
     "slpi_identity": "hash slpi.mbn and every slpi.mdt/slpi.b00..b20 segment against slpi_00121 before ELF reassembly"
   },

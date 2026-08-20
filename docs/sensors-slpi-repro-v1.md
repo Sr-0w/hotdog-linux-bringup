@@ -62,14 +62,15 @@ python3 scripts/sensors-slpi-repro.py stage \
   --repo-root . --variant 45 --allow-blocked --out-root /path/to/offline-root
 ```
 
-When a separately acquired sensor root is available, stage its
-`sns_reg.conf`, `sns_reg_version`, `config/` and `registry/` inputs explicitly:
+When a separately acquired, integration-clean sensor root is available, stage
+its `sns_reg.conf`, `sns_reg_version`, `config/` and `registry/` inputs
+explicitly:
 
 ```sh
 python3 scripts/sensors-slpi-repro.py stage \
   --repo-root . --variant 47 \
   --allow-blocked \
-  --external-root /path/to/captured-sensors-root \
+  --external-root /path/to/clean-selected-sensors-root-without-private-backups \
   --out-root /path/to/offline-root
 ```
 
@@ -77,8 +78,11 @@ The external root must contain regular files (no symlinks) at
 `sns_reg.conf`, `sns_reg_version`, `config/` and `registry/`. Its `config/`
 must contain exactly the selected filenames and byte-identical hashes; extras,
 omissions and collisions are rejected. The external config is verified but
-never copied over the Git-owned selection. The helper never fetches these from
-a phone.
+never copied over the Git-owned selection. Registry files marked
+snapshot-private, including `registry/power.island.pre-island-off-20260820`,
+are rejected by staging and remain valid only inside the private runtime
+capture or a byte-preserving snapshot. The helper never fetches these from a
+phone.
 
 ## Byte-preserving rollback
 
@@ -142,14 +146,19 @@ ALSPS files, or to 47 plus that private backup. The registry backup
 Run the read-only gate against the extracted private root:
 
 ```sh
+export HOTDOG_SENSOR_CAPTURE_ROOT=/path/to/logs/2026-08-20-sensors-slpi-04-runtime
 python3 scripts/sensors-slpi-repro.py gate3 \
-  --capture-root /path/to/logs/2026-08-20-sensors-slpi-04-runtime \
+  --capture-root "$HOTDOG_SENSOR_CAPTURE_ROOT" \
   --variant 47 \
   --artifact-root /path/to/hotdog-r6-rebaseline
 ```
 
-The gate emits a machine-readable result and remains `hardware_ready: false`
-until Qualcomm parser evidence and the normal hardware lease are available.
+The gate verifies the private archive and `sensors-active.local-manifest.tsv`,
+then compares the complete extracted `sensors/` tree against the TSV by
+normalized path, entry type, mode, size and SHA256. Missing files, extras,
+symlinks, path traversal and same-size registry mutations are rejected. The
+gate emits a machine-readable result and remains `hardware_ready: false` until
+Qualcomm parser evidence and the normal hardware lease are available.
 
 ## Image and SLPI inputs
 
