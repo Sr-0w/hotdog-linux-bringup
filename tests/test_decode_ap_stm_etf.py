@@ -1,7 +1,9 @@
 import importlib.util
 import io
 import pathlib
+import random
 import sys
+import tempfile
 import unittest
 import unittest.mock
 
@@ -31,6 +33,54 @@ def stp_value(value, nibbles):
 def stp_data_packet(opcode, payload):
     value = int.from_bytes(payload, "little")
     return [opcode] + stp_value(value, len(payload) * 2)
+
+
+def stp_data_packet_ts(extended_opcode, payload, timestamp_raw, timestamp_bits):
+    return (
+        [0xF, extended_opcode]
+        + stp_value(int.from_bytes(payload, "little"), len(payload) * 2)
+        + timestamp_nibbles(timestamp_raw, timestamp_bits)
+    )
+
+
+def timestamp_nibbles(raw, bits):
+    if bits % 4:
+        raise ValueError("synthetic timestamps are nibble-aligned")
+    if bits == 56:
+        count = 0xD
+        nibble_count = 14
+    elif bits == 64:
+        count = 0xE
+        nibble_count = 16
+    else:
+        nibble_count = bits // 4
+        count = nibble_count
+    return [count] + stp_value(raw, nibble_count)
+
+
+def stm_prefix(master=0x40, channel=0x280A):
+    nibbles = []
+    nibbles += [0xF] * 21 + [0x0]  # ASYNC
+    nibbles += [0xF, 0x0, 0x0, 0x3]  # VERSION 3, natural-binary timestamps
+    nibbles += [0xF, 0x0, 0x8] + [0] * 8  # FREQ 0
+    nibbles += [0x1] + stp_value(master, 2)  # M8
+    nibbles += [0xF, 0x3] + stp_value(channel, 4)  # C16
+    return nibbles
+
+
+def synthetic_marker_stream(payload=b"PUBLIC_STM_TEST\n", master=0x40, channel=0x280A):
+    nibbles = stm_prefix(master=master, channel=channel)
+    if payload:
+        first = payload[:4]
+        nibbles += stp_data_packet_ts(0x6, first, 0x8ACBB9494, 64)  # D32_TS
+    cursor = 4
+    while cursor + 4 <= len(payload):
+        nibbles += stp_data_packet(0x6, payload[cursor : cursor + 4])
+        cursor += 4
+    if cursor < len(payload):
+        nibbles += stp_data_packet(0x4, payload[cursor:])
+    nibbles += [0xF, 0xE]  # FLAG
+    return nibbles_to_bytes(nibbles)
 
 
 def encode_etf_frames(trace_id, stream, pad_frames=1):
@@ -75,13 +125,13 @@ def encode_etf_frames(trace_id, stream, pad_frames=1):
 
     for _ in range(pad_frames):
         frame = bytearray(16)
-        frame[0] = 1  # source ID 0, followed by zero data bytes.
+        frame[0] = 1  # Source ID 0, followed by zero data bytes.
         frames.append(bytes(frame))
     return b"".join(frames)
 
 
 class ApStmEtfDecoderTests(unittest.TestCase):
-    def test_deformats_synthetic_core_sight_frames(self):
+    def test_deformats_synthetic_core_sight_frames_with_atid0_padding(self):
         stream = b"\xff" * 10 + b"\x0f" + b"pub"
         frames = encode_etf_frames(7, stream)
 
@@ -89,54 +139,116 @@ class ApStmEtfDecoderTests(unittest.TestCase):
 
         self.assertEqual(streams[0].trace_id, 0)
         self.assertEqual(streams[0].data, b"\x00" * 14)
+        self.assertEqual(decoder.classify_stream(streams[0]), "zero-padding")
         self.assertEqual(streams[1].trace_id, 7)
         self.assertEqual(streams[1].data, stream)
 
-    def test_decodes_p_basic_packet_subset(self):
-        payload = b"PUBLIC_STM_TEST\n"
-        nibbles = []
-        nibbles += [0xF] * 21 + [0x0]  # ASYNC
-        nibbles += [0xF, 0x0, 0x0, 0x3]  # VERSION 3
-        nibbles += [0xF, 0x0, 0x8] + [0] * 8  # FREQ 0
-        nibbles += [0x1] + stp_value(0x40, 2)  # M8
-        nibbles += [0xF, 0x3] + stp_value(0x280A, 4)  # C16
-        nibbles += stp_data_packet(0xA, payload[:4]) + [0x1, 0x2]  # D32_MTS + TS
-        cursor = 4
-        while cursor + 4 <= len(payload):
-            nibbles += stp_data_packet(0x6, payload[cursor : cursor + 4])
-            cursor += 4
-        if cursor < len(payload):
-            nibbles += stp_data_packet(0x4, payload[cursor:])
-        nibbles += [0xF, 0xE]  # FLAG
-
-        packets = decoder.decode_stm(nibbles_to_bytes(nibbles))
+    def test_decodes_p_basic_packet_subset_and_hw_override_channel(self):
+        packets = decoder.decode_stm(synthetic_marker_stream())
 
         self.assertEqual(packets[0].kind, "ASYNC")
         self.assertEqual(packets[1].kind, "VERSION")
         self.assertEqual(packets[3].kind, "M8")
         self.assertEqual(packets[3].master, 0x40)
         self.assertEqual(packets[4].kind, "C16")
+        self.assertEqual(packets[4].master, 0x40)
         self.assertEqual(packets[4].channel, 0x280A)
-        self.assertEqual(decoder.payload_from_packets(packets), payload)
+        self.assertEqual(packets[4].channel & 0xFF, 0x0A)
+        self.assertEqual(decoder.payload_from_packets(packets), b"PUBLIC_STM_TEST\n")
 
-    def test_cli_marker_check_fails_closed(self):
-        payload = b"PUBLIC_STM_TEST\n"
-        nibbles = [0xF] * 21 + [0x0]
-        nibbles += [0xF, 0x0, 0x0, 0x3]
-        nibbles += [0x1] + stp_value(0x40, 2)
-        nibbles += [0xF, 0x3] + stp_value(0x280A, 4)
-        nibbles += stp_data_packet(0x6, payload[:4])
-        nibbles += [0xF, 0xE]
-        frames = encode_etf_frames(1, nibbles_to_bytes(nibbles))
+    def test_little_endian_payload_reconstruction(self):
+        packets = decoder.decode_stm(nibbles_to_bytes(stm_prefix() + stp_data_packet(0x6, b"ABCD")))
 
-        tmp = self.enterContext(
-            unittest.mock.patch("pathlib.Path.read_bytes", return_value=frames)
-        )
-        self.assertIsNotNone(tmp)
-        with unittest.mock.patch("sys.stdout", new=io.StringIO()):
-            self.assertEqual(
-                decoder.main(["ignored.bin", "--expect-marker", "not-the-marker"]), 1
-            )
+        data_packets = [packet for packet in packets if packet.kind == "D32"]
+        self.assertEqual(data_packets[0].value, 0x44434241)
+        self.assertEqual(data_packets[0].payload, b"ABCD")
+
+    def test_timestamp_reconstruction_64_then_8_bits(self):
+        nibbles = stm_prefix()
+        nibbles += stp_data_packet_ts(0x6, b"ABCD", 0x8ACBB9494, 64)
+        nibbles += stp_data_packet_ts(0x4, b"\n", 0xCA, 8)
+
+        packets = decoder.decode_stm(nibbles_to_bytes(nibbles))
+        ts_packets = [packet for packet in packets if packet.timestamp_raw is not None]
+
+        self.assertEqual(ts_packets[0].timestamp_raw, 0x8ACBB9494)
+        self.assertEqual(ts_packets[0].timestamp_bits, 64)
+        self.assertEqual(ts_packets[0].timestamp, 0x8ACBB9494)
+        self.assertEqual(ts_packets[1].timestamp_raw, 0xCA)
+        self.assertEqual(ts_packets[1].timestamp_bits, 8)
+        self.assertEqual(ts_packets[1].timestamp, 0x8ACBB94CA)
+
+    def test_partial_timestamp_before_full_timestamp_is_none(self):
+        nibbles = stm_prefix()
+        nibbles += stp_data_packet_ts(0x4, b"\n", 0xCA, 8)
+
+        packets = decoder.decode_stm(nibbles_to_bytes(nibbles))
+        ts_packets = [packet for packet in packets if packet.timestamp_raw is not None]
+
+        self.assertEqual(ts_packets[0].timestamp_raw, 0xCA)
+        self.assertEqual(ts_packets[0].timestamp_bits, 8)
+        self.assertIsNone(ts_packets[0].timestamp)
+
+    def test_hash_mismatch_exit_code(self):
+        frames = encode_etf_frames(1, synthetic_marker_stream())
+        with unittest.mock.patch("pathlib.Path.read_bytes", return_value=frames):
+            with unittest.mock.patch("sys.stdout", new=io.StringIO()):
+                self.assertEqual(
+                    decoder.main(["ignored.bin", "--expect-sha256", "00" * 32]), 2
+                )
+
+    def test_non_multiple_16_capture_is_rejected(self):
+        with self.assertRaises(decoder.DecodeError):
+            decoder.deformat_tmc_etf(b"\x00")
+
+    def test_malformed_frame_is_rejected(self):
+        with self.assertRaises(decoder.DecodeError):
+            decoder.deformat_tmc_etf(bytes([0x02]) + b"\x00" * 15)
+
+    def test_unknown_reserved_opcode_is_rejected(self):
+        with self.assertRaises(decoder.DecodeError):
+            decoder.decode_stm(nibbles_to_bytes([0x2]))
+
+    def test_timestamp_size_0xf_is_rejected(self):
+        nibbles = stm_prefix()
+        nibbles += [0xF, 0x4] + stp_value(ord("A"), 2) + [0xF]
+
+        with self.assertRaises(decoder.DecodeError):
+            decoder.decode_stm(nibbles_to_bytes(nibbles))
+
+    def test_payload_bounds_are_checked(self):
+        nibbles = stm_prefix() + [0x6, 0x1, 0x2]  # D32 with only two value nibbles.
+
+        with self.assertRaises(decoder.DecodeError):
+            decoder.decode_stm(nibbles_to_bytes(nibbles))
+
+    def test_cli_marker_mismatch_exits_one(self):
+        frames = encode_etf_frames(1, synthetic_marker_stream())
+        with unittest.mock.patch("pathlib.Path.read_bytes", return_value=frames):
+            with unittest.mock.patch("sys.stdout", new=io.StringIO()):
+                self.assertEqual(
+                    decoder.main(["ignored.bin", "--expect-marker", "not-the-marker"]), 1
+                )
+
+    def test_cli_marker_match_exits_zero(self):
+        frames = encode_etf_frames(1, synthetic_marker_stream())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            capture = pathlib.Path(tmpdir) / "synthetic-etf.bin"
+            capture.write_bytes(frames)
+            with unittest.mock.patch("sys.stdout", new=io.StringIO()):
+                self.assertEqual(
+                    decoder.main([str(capture), "--expect-marker", "PUBLIC_STM_TEST"]), 0
+                )
+
+    def test_deterministic_fuzz_has_no_unbounded_loop(self):
+        rng = random.Random(0)
+        for _ in range(128):
+            size = rng.randrange(0, 80)
+            blob = bytes(rng.randrange(256) for _ in range(size))
+            try:
+                decoder.decode_stm(blob)
+            except decoder.DecodeError:
+                pass
 
 
 if __name__ == "__main__":
