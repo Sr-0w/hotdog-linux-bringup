@@ -63,6 +63,7 @@ Recent evidence that defines the 2026-08-13 checkpoint:
 - [GNSS QMI engine](evidence/2026-08-10-gnss-qmi-loc.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)
+- [Sensor-PD clock state and island-mode control](evidence/2026-08-20-sensor-pd-clock-and-island-control.md)
 - [Haptics](evidence/2026-08-11-haptics-aw8697.md)
 - [Upstream review follow-up](evidence/2026-08-12-upstream-follow-up.md)
 - [IPA v4.1](evidence/2026-08-12-ipa-v41-scope.md)

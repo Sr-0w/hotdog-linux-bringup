@@ -2,6 +2,12 @@
 
 Date: 2026-08-20
 
+> **Current status:** the title records the hypothesis that started this
+> investigation, not its conclusion.  The island allocator was subsequently
+> proved healthy, and disabling the sensor framework's island mode did not
+> restore the missing sensors.  The latest corrected state is summarised in
+> [Sensor-PD clock state and the island-mode control](2026-08-20-sensor-pd-clock-and-island-control.md).
+
 The chain is now followed end to end, from the ALS driver's decoded state to
 the instruction that decides whether a bus port exists.
 
