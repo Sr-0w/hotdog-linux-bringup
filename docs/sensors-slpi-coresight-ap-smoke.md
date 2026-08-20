@@ -32,3 +32,29 @@ Safety properties:
 - pre-existing modules are not unloaded.
 
 The capture file remains private lab evidence until reviewed.
+
+## Runtime command set
+
+The target environment is postmarketOS with BusyBox 1.38 userland and `bash`
+available. The script uses shell builtins plus these external commands:
+
+- `awk`
+- `date`
+- `dd`
+- `find`, only as `find ROOT -print`
+- `hostname`
+- `insmod`
+- `mkdir`
+- `modinfo`
+- `modprobe`
+- `rmdir`
+- `sed`
+- `sha256sum`
+- `sort`
+- `timeout`
+- `uname`
+- `wc`
+
+When tests override the configfs root with a fixture path, the script also uses
+`rm` to remove regular mock files before `rmdir`. On the real `/sys/kernel/config`
+path it does not use `rm` for policy cleanup.
