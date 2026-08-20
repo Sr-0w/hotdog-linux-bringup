@@ -73,8 +73,8 @@ or a kexec bridge.
   Freedreno/Turnip, including Plasma Mobile.
 - Hardware validation of touch, physical keys, Wi-Fi, Bluetooth HID, both
   speakers and the handset microphone.
-- USB-C dual role, powered host mode, USB 3, mass storage, Ethernet enumeration
-  and DisplayPort video at 2560×1440@60.
+- USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
+  mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60.
 - Capture from all four cameras through libcamera, rear autofocus and automatic
   Hall-bounded extension/retraction of the IMX471 pop-up camera.
 - Both PM8150L flash channels register and pass electrical torch/strobe tests
@@ -85,8 +85,9 @@ or a kexec bridge.
   and exchanges bidirectional ISO 7816-4 APDUs. Its unauthenticated ePassport
   BAC/PACE refusal is expected, not an NFC transport failure.
 - The source-built AW8697 force-feedback driver produces physical vibration.
-- The upstream-shaped SMB5 v3 candidate passed guarded 180-second and
-  600-second charging runs, host authorization and a physical VBUS cycle.
+- The upstream-shaped SMB5 v4 candidate passed guarded charging, powered-dock
+  sink and unpowered-dock source tests in both Type-C orientations, followed
+  by gadget and SSH recovery without reboot.
 - The complete Plasma image also passed a guarded 180-second SuperSpeed run at
   a 900 mA input limit, with rising battery voltage and health `Good`.
 - SLPI boot, FastRPC, writable Hexagon service, registry regeneration, QRTR,
@@ -121,6 +122,7 @@ function under **Working** and a broader integration or stability item under
 | USB | USB gadget / NCM networking | Stable host ping and SSH at `172.16.42.1` through the translated DWC3 SMMU path. |
 | USB-C | Type-C dual role and USB-PD detection | Type-C partner/PD state is exposed and device/sink negotiation works. |
 | USB-C | Host mode through powered dock | xHCI, a hub and attached devices enumerate while the handset remains a power sink. |
+| USB-C | Source VBUS for an unpowered dock | The handset remains data host, becomes power source and powers the hub, storage and Ethernet adapter in both plug orientations. |
 | USB-C | USB 3 SuperSpeed | Dock hub and RTL8153 enumerate at 5 Gbit/s. |
 | USB-C | USB mass storage | A SanDisk device enumerates, mounts and reads through the dock. |
 | DisplayPort | External video at 2560×1440@60 | Plasma reaches the external monitor with correct image while the internal panel remains active. |
@@ -151,7 +153,7 @@ function under **Working** and a broader integration or stability item under
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
 | Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
 | Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
-| Power | SMB5 charging | The exact v3 candidate passed guarded 180-second and 600-second runs plus a physical VBUS cycle. The complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
+| Power | SMB5 charging | The exact v4 candidate passes guarded charging and all tested dock role transitions; the complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
 | Cameras | S5K3M5 telephoto | 4208×3120 RAW10 capture, userspace processing and experimental autofocus work; production 3A/color and broader modes remain. |
 | Cameras | Sony IMX586 main | 4000×3000 RAW10 capture, processed 30 fps and experimental autofocus work; production color, touch focus and additional modes remain. |
 | Cameras | Sony IMX481 ultra-wide | 4656×3496 RAW10 and processed 30 fps runs work; production color and additional modes remain. |
@@ -178,7 +180,6 @@ function under **Working** and a broader integration or stability item under
 | Subsystem | Function | Notes |
 |---|---|---|
 | Input | Three-position Alert Slider | The ring/vibrate/silent switch is not described, exposed or hardware-validated. |
-| USB-C | Source VBUS for an unpowered peripheral | Not yet hardware-tested. |
 | Audio | Earpiece | Not yet brought up or validated. |
 | Audio | Headset and other headphone paths | Routing and detection are not hardware-validated. |
 | Audio | Other microphones, EC and NR | Remaining analogue/digital microphones and voice-processing policy remain open. |

@@ -68,6 +68,7 @@ Recent evidence that defines the 2026-08-13 checkpoint:
 - [IPA v4.1](evidence/2026-08-12-ipa-v41-scope.md)
 - [Dual-channel camera flash](evidence/2026-08-12-camera-flash.md)
 - [SMB5 v3 hardware validation](evidence/2026-08-13-smb5-v3-hardware-validation.md)
+- [SMB5 v4 dock and VBUS role validation](evidence/2026-08-20-smb5-v4-dock-validation.md)
 - [Writable Hexagon service](evidence/2026-08-13-hexagonrpcd-write.md)
 
 Raw dumps, serials, credentials, complete RAM captures and generated images
