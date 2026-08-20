@@ -73,6 +73,13 @@ private workstation session. Scripts must default to non-destructive behavior,
 validate the target identity, bound waits and writes, and leave enough evidence
 to understand failures.
 
+When shell tooling generates Markdown, manifests, or command examples, use
+literal quoted heredocs such as `<<'EOF'` or a structured data writer. Never
+allow backticks, command substitutions, or example commands in generated text
+to be evaluated by the shell, and never execute generated protocol text as a
+script. Add a regression check when a generator contains device-facing command
+examples such as `fastboot`, `adb`, `ssh`, or `dd`.
+
 Historical D-series, K1, kexec, RGB framebuffer, and downstream 4.14 tooling is
 retained for reproduction. Do not make it the default workflow or use it as
 evidence for the maintained mainline path.
