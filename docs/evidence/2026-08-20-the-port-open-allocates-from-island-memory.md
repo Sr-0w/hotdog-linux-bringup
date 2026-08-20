@@ -219,3 +219,52 @@ The extrapolation that produced the first wrong address is also worth
 recording: the offset between a root copy and a PD copy measured on
 file-backed segments does not carry to a neighbouring segment, and does not
 carry to BSS. Each segment's PD copy has to be located on its own content.
+
+## The instruction that actually refuses
+
+With the allocation cleared, the rest of `0xb205ee48` reads straight through,
+and the refusal is four instructions past it:
+
+```
+b205eeb0: r3 = #0x0
+b205eeb4: r2 = memw(r16+#0x14)
+b205eeb8: r1 = memub(r16+#0x18)          ; bus instance
+b205eebc: call 0xb205ef78                ; the real bring-up
+b205eec0: r0 = memub(r16+#0x4)
+b205eec8: p0 = cmp.eq(r0,#0x0)
+          if (!p0.new) jump 0xb205ef3c   ; <- non-zero at +0x4: give up
+...
+b205ef3c: call 0xb20658ec                ; free the block just allocated
+b205ef40: r0 = memw(r16+#0x20)
+b205ef44: r17 = #0x1                     ; return 1 = failure
+b205ef44: memw(r16+#0x20) = #0
+b205ef4c: r0 = r17 ; return
+```
+
+So the port object's **byte at `+0x4` must be zero**. If it is not, the freshly
+allocated block is released, the function returns 1, the caller clears bit 1
+instead of setting bits 0 and 1, the flag byte at `+0x24` never reaches 3, the
+transfer path at `0xb205e684` refuses, and nothing reaches the wire — silently,
+because the only complaint is a `(file, line)` diag descriptor, not a string
+that ULog would carry.
+
+The success path is the mirror: `r17 = #0x0` at `0xb205ef50`, reached when
+`memw(block+0) == 0`.
+
+The known port-object layout so far:
+
+```
++0x04  byte    must be zero, or the open refuses   <- the gate
++0x08  word    logged alongside +0x04 on the failure path
++0x14  word    passed to the bring-up call
++0x18  byte    bus instance
++0x1c  byte    bus type, indexes the handler table
++0x20  word    block allocated from pool 2, freed again on failure
++0x24  byte    flags; bits 0 and 1 both set means the port is usable
+```
+
+What `+0x4` holds is the next thing to name. The failure-path log takes it and
+`+0x8` as arguments, so the diag message would say it outright — the strings
+live in a table indexed by the file id in the descriptor (`0x7b` here), which
+is worth resolving on its own since it would give plain text for every message
+on this path.
