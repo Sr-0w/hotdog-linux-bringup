@@ -125,3 +125,50 @@ None of this needed the flash to discover, and all of it changes the plan:
 2. handle error 17 in the driver, not only 94;
 3. treat the remote state as sticky across reboot and always confirm it with
    `GET_ETM` rather than assuming a clean start.
+
+## Corrected: enable is stable with a sink armed, and disable is refused
+
+Two corrections to the section above, both from reading the replies properly.
+An inline decoder was taking the result TLV at the wrong offset and printing
+values like 256 and 4352; the helper parses correctly and the sequence below
+uses the right offsets throughout.
+
+**Enable is not inherently destabilising.** With `tmc_etr0` armed first —
+`echo 1 > /sys/bus/coresight/devices/tmc_etr0/enable_sink`, sink reads 1, phone
+steady for 60 s — the ETM was enabled and the phone stayed up through the whole
+sequence, uptime running from 518 s to 635 s with the state at 1 for most of
+it. The reboots happened in the earlier attempt, when the source was started
+with no sink armed. That is consistent with the trace having nowhere to go, and
+it makes arming the sink first a precondition rather than a nicety.
+
+**Disable is refused, reproducibly.** With correct decoding:
+
+```
+etat de depart : 0
+A. SET(1) direct       -> (result 0, error 0)   state = 1
+B. malformed 1 byte    -> (result 1, error 1)   MALFORMED_MSG
+C. SET(1) again        -> (result 0, error 0)   state = 1   (idempotent)
+D. SET(0)              -> (result 1, error 17)  state = 1
+```
+
+and three further attempts, with the sink armed and then disarmed, all returned
+`result: fail, error 17` with the state stuck at 1. Only a reboot cleared it,
+and even that took a second one — a first reboot still read 1.
+
+## What this means for the S63 milestone
+
+The milestone is "a remote ETM trace with disable confirmed". On this device,
+over this protocol, **the disable half cannot be confirmed**: `SET_ETM(0)` is
+answered with error 17 every time, and the hardening commit maps only error 94.
+The driver would return `-EREMOTEIO`, its `disable_pending` flag would stay
+set, and by its own logic the next enable must first complete `SET_ETM(0)` plus
+a `GET_ETM` confirmation — which cannot happen. The second enable would be
+refused by the driver itself.
+
+None of that needed the flash to find. It should be settled before the next
+hardware lease, because it changes what the lease can hope to demonstrate.
+
+## State left behind
+
+ETM back to 0 after a reboot, sink disarmed, all three remote processors
+running, `boot_b` unchanged at `d881abaf…`. Nothing persistent was modified.
