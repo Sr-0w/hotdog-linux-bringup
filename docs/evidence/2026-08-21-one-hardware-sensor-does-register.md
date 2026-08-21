@@ -207,3 +207,9 @@ received or from something it computed while parsing it.
 For the record, the strings around it name the whole OnePlus ALS surface:
 `alsps`, `oplus`, `ambient_light`, `wise_light`, `sns_ambient_light.proto`,
 `rgb`, `sns_std_sensor.proto`, with `LPM` and `NORMAL` power modes.
+
+The base register is the driver state, not the instance: at `0xb21d9ba0`,
+`r21 = memw(r16+#0xc)`, which is `sns_sensor->state`. So the selector lives at
+**state + 0x27c**, and nothing in the ALS code region writes that offset
+literally — it is set by a wider copy from the decoded registry data, which is
+where to look next.
