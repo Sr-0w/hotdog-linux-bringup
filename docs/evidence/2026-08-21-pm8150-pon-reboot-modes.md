@@ -137,3 +137,40 @@ still needs either physical bootloader entry, or a write to `boot_b` from the
 running system — which the phone permits, being root with the partition
 exposed, and which the existing readback and rollback hashes already cover.
 That first write is a protocol decision, not a technical obstacle.
+
+## What an S66 actually costs, measured
+
+The fix was applied to a scratch copy of the S63 `source-composed-v2` and the
+hotdog device tree rebuilt from it, then compared against the S63 artifact
+node for node. Normalising away `phandle` values and the `__symbols__` block —
+their build emits symbols, a plain `dtc` run does not — the delta is:
+
+```
+> mode-bootloader = <0x02>;
+> mode-recovery = <0x01>;
+   total additions: 2
+   real removals:   0
+```
+
+and the remote-ETM node is untouched:
+
+```
+compatible = "qcom,coresight-remote-etm";
+qcom,remote-pid = <0x03>;
+```
+
+So an S66 is S63 plus two device-tree properties and nothing else. Note the
+byte-level hashes will differ from this scratch build (`3698a557…` against the
+S63 `9fa1971c…`) purely because of the symbol table; a rebuild through the
+normal pipeline is what produces the comparable artifact.
+
+Scope of a rebuild, since only the device tree moved:
+
+- **unchanged**, hashes carry over from S63: `Image` `4e788900…`,
+  `System.map` `26def628…`, `config` `74767448…`, both modules, and the whole
+  rootfs `pmOS_root` `4cecfb95…`;
+- **changed**: the DTB, the raw and AVB boot images, `pmOS_boot` (p1 carries
+  copies of boot.img and the DTB), and therefore `full.img`.
+
+The kernel itself does not need recompiling — `kernel-out` from S63 is intact
+and only `dtbs` has to be remade.
