@@ -107,3 +107,33 @@ the running system and the existing readback and rollback hashes still apply.
 That is a destructive write to the partition the phone boots from, so it is a
 decision for the lease protocol rather than something to do in passing. Noting
 it here so the next lease does not plan around a fastboot gate it cannot reach.
+
+## Where the fix was placed, and what it costs
+
+Two trees carry it now, both as the same two-line change:
+
+- `build/2026-08-14-smb5-dwc3-icl-src`, commit `37ded7e3c731`, the tree the
+  current baseline is built from;
+- `hotdog-r6-rebaseline-sensors-slpi-kernel-v1` on
+  `bringup/sensors-slpi-kernel-v1`, commit `ae4fb94f7746`, whose parent is
+  `b7b59cea4027` — the exact PDR base that the S63 composition was built on.
+
+So a fresh composition off that branch picks the fix up with no further action.
+The S63 build output was deliberately not touched: `source-composed-v2` still
+reads `fcd868bc8099` with a clean tree, and every payload hash recorded by the
+S64 audit stands.
+
+The cost is honest: this changes the DTB, so folding it into the sensor line
+means an S66 rebuild rather than the documentation-only microfix S64 called
+for. The trade is one rebuild against needing physical bootloader entry for
+every flash cycle from here on, and the remote ETM work will take several
+cycles.
+
+## What this does not solve
+
+The first flash. The fix travels inside a boot image, so it only takes effect
+once that image is running. Getting S63 or S66 onto the phone the first time
+still needs either physical bootloader entry, or a write to `boot_b` from the
+running system — which the phone permits, being root with the partition
+exposed, and which the existing readback and rollback hashes already cover.
+That first write is a protocol decision, not a technical obstacle.
