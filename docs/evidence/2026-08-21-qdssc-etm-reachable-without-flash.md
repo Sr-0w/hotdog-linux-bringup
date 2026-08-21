@@ -74,3 +74,54 @@ Runtime device-tree overlays are not available on this build — there is no
 `/sys/kernel/config/device-tree/overlays` — so the `ssc-etm` node itself cannot
 be added without a flash. That only matters for the framework path, not for
 the QMI control.
+
+## Enabling it destabilises the phone
+
+`SET_ETM` was exercised against the sensor DSP, and the results matter for the
+S63 plan.
+
+**The driver's wire format is right.** Sending the state as one or two bytes is
+rejected with `MALFORMED_MSG`; the four-byte form the driver declares
+(`QMI_UNSIGNED_4_BYTE`, TLV type 0x01, request length 7) is accepted:
+
+```
+TLV 1 byte    -> result=1 error=1    (malformed)
+TLV 2 bytes   -> result=1 error=1    (malformed)
+TLV 4 bytes   -> result=0 error=0    (accepted)
+```
+
+**Enable works, and then the phone reboots.** `SET_ETM(1)` took the state from
+0 to 1, confirmed by `GET_ETM`. Within minutes the phone rebooted on its own,
+twice, and after the first of those the state still read 1. With the ETM back
+at 0 it has been stable — 339 s of continuous uptime, SLPI running, no reboot:
+
+```
++30s   uptime=189s  slpi=running  etm=0
++180s  uptime=339s  slpi=running  etm=0
+```
+
+The correlation is strong but not proof: this session had seen occasional
+spontaneous reboots before. The plausible mechanism is that a trace source was
+started with no sink path configured and, on mainline, no QDSS power or clock
+votes behind it.
+
+**Error 17 is not error 94.** The hardening commit maps
+`QMI_ERR_NOT_SUPPORTED_V01` (94) to `-EOPNOTSUPP`. This device answers **17**
+instead, on `SET_ETM(0)` while already disabled, and again on `SET_ETM(0)`
+immediately after a successful enable. The driver would map that to
+`-EREMOTEIO` and give up, and its pending-disable path would then never clear.
+Worth reproducing before the next hardware run, because it lands exactly on the
+disable-confirmation the S63 milestone depends on.
+
+**State can survive a reboot.** After one reboot `GET_ETM` still returned 1; a
+later boot returned 0. So the disable cannot be assumed to happen implicitly.
+
+## What to do with this before flashing
+
+None of this needed the flash to discover, and all of it changes the plan:
+
+1. establish the sink path and the QDSS power/clock votes **before** enabling
+   the remote ETM, or expect the phone to reboot under you;
+2. handle error 17 in the driver, not only 94;
+3. treat the remote state as sticky across reboot and always confirm it with
+   `GET_ETM` rather than assuming a clean start.
