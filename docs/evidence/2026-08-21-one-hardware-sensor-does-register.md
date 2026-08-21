@@ -145,3 +145,34 @@ missing or misnamed group.
 The `owner` field differs between them — `sns_sx932x` for the SAR against
 `lsm6dsm` for the IMU — but that comes straight from the vendor's own
 `msmnile_lsm6dsm.json`, so it is a naming convention rather than a defect.
+
+## The rail request is not it either, tested against the control
+
+With `sars` as a working control on the same bus, the one clean configuration
+asymmetry between it and the two failing drivers is the rail request:
+
+```
+sx932x_op (works)   rail_on_state=1  vdd_rail=/pmic/client/sensor_vddio
+alsps     (fails)   rail_on_state=2  vdd_rail=/pmic/client/sensor_vdd
+lsm6dsm   (fails)   rail_on_state=2  vdd_rail=/pmic/client/sensor_vdd
+```
+
+Both failing drivers ask for a second, real rail; the working one points both
+of its rails at `sensor_vddio`. The PMIC log has never shown activity for any
+rail but `ldoc8`, which is `sensor_vddio`, so a driver blocking on
+`sensor_vdd` would have been a single explanation covering both.
+
+Aligned `alsps` and `lsm6dsm` on the SAR's shape — `rail_on_state=1`,
+`vdd_rail` pointed at `sensor_vddio` — deleted the two registry entries so they
+would be rebuilt, and rebooted. The registry took the change:
+
+```
+alsps_platform.config      rail_on_state=1 vdd_rail=/pmic/client/sensor_vddio
+lsm6dsm_0_platform.config  rail_on_state=1 vdd_rail=/pmic/client/sensor_vddio
+```
+
+and nothing else moved: `sars` still registers, `accel`, `gyro`, `proximity`,
+`ambient_light`, `rgb` and `mag` still do not. Unlike the earlier version of
+this test, this one ran with the complete config set, the factory registry and
+a known-good control, so it settles the question. The vendor values have been
+restored.
