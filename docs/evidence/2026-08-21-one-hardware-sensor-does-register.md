@@ -176,3 +176,34 @@ and nothing else moved: `sars` still registers, `accel`, `gyro`, `proximity`,
 this test, this one ran with the complete config set, the factory registry and
 a known-good control, so it settles the question. The vendor values have been
 restored.
+
+## The ALS chooses its own data type at run time
+
+Comparing the two attribute-publication blocks — the SAR's at `0xb21e2140`
+onward, which ends in a registered sensor, and the ALS's at `0xb21d9bf0` — they
+have the same shape, except the ALS branches:
+
+```
+b21d9c30: r2 = memw(r21+#0x27c)
+b21d9c34: r2 = clrbit(r2,#0x0)
+b21d9c44: p0 = cmp.eq(r2,#0x2)
+b21d9c54: r7 = mux(p0,#0xb,#0xe)              ; string length
+b21d9c60: if (p0)  r5 = ##0xb222ac90          ; "wise_light",    11 bytes
+b21d9c68: if (!p0) r5 = ##0xb222ac80          ; "ambient_light", 14 bytes
+```
+
+So the driver advertises **either** `ambient_light` **or** `wise_light`,
+selected by a run-time value held at instance offset `+0x27c`, bit 0 cleared,
+compared against 2. The lengths match the strings exactly, so the reading is
+firm.
+
+Neither type registers a SUID — both were queried — so the branch is not the
+whole story, and publishing an attribute is not the same as publishing the
+sensor. But it is the first place the failing driver is seen making a decision
+the working one does not, and what writes `+0x27c` is a bounded thing to chase:
+it is an instance field, so it comes either from the registry data the driver
+received or from something it computed while parsing it.
+
+For the record, the strings around it name the whole OnePlus ALS surface:
+`alsps`, `oplus`, `ambient_light`, `wise_light`, `sns_ambient_light.proto`,
+`rgb`, `sns_std_sensor.proto`, with `LPM` and `NORMAL` power modes.
