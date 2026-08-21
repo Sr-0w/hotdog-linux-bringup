@@ -105,3 +105,43 @@ between `sx932x_op` and the rest is still unaccounted for.
 Worth carrying forward: **the registry must be restored from `persist` after
 any experiment that lets the DSP rewrite it**, or factory-only groups are lost
 for good.
+
+## Exactly which registry groups the firmware asks for
+
+String-scanning every loaded segment for platform group names gives the
+complete list this image can use:
+
+```
+ak0991x_0_platform          alsps_platform            lsm6dsm_0_platform
+stk2232_0_platform          sx9324_op_0_platform      sx932x_op_0_platform
+sns_device_orient_platform  sns_fmv_platform          sns_rotv_platform
+```
+
+and the per-sensor configuration groups:
+
+```
+alsps.als.config      alsps.prox.config     sx932x_0.sar.config
+lsm6dsm_0.accel.config  lsm6dsm_0.gyro.config
+lsm6dsm_0.md.config     lsm6dsm_0.temp.config
+```
+
+Three things follow.
+
+**The SAR mixes conventions.** Its platform group is the OnePlus `_op` variant
+and the firmware never references `sx932x_0_platform` at all, while its sensor
+group is the plain `sx932x_0.sar.config`. So "the working one uses `_op`" is
+only half true, and there is no `_op` platform group for the IMU or the ALS to
+be missing — the firmware does not ask for one.
+
+**`mmc5603x_0_platform` is never referenced.** The registry carries it and the
+config set builds it, but no code in this image reads it. Whatever drives the
+magnetometer on this board, it is not through that group, which also explains
+why the magnetometer was never going to appear no matter what we served it.
+
+**The IMU and ALS groups are exactly the ones the firmware wants**, and both
+are present in the registry with the right sub-groups. So the failure is not a
+missing or misnamed group.
+
+The `owner` field differs between them — `sns_sx932x` for the SAR against
+`lsm6dsm` for the IMU — but that comes straight from the vendor's own
+`msmnile_lsm6dsm.json`, so it is a naming convention rather than a defect.
