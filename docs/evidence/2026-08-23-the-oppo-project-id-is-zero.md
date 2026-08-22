@@ -1,9 +1,11 @@
-# The OnePlus project id is never set, and the firmware never asks for it
+# The OnePlus project id was never set — found, and fixed
 
 Date: 2026-08-23
 
-The most promising thread found so far. It is not proven to be the cause, but
-it is a concrete, named mechanism that is measurably not working.
+The board was never identified to the sensor DSP. `oppo_project` read zero in
+every coredump on file. It now reads `0x4d59` = 19801, verified in memory.
+This did **not** make the sensors register, so it is not the whole story, but
+it was a real defect and it is repaired.
 
 ## What the firmware wants
 
@@ -108,15 +110,86 @@ Separately, `hexagonrpcd` reads the whole registry directory in one sweep at
 startup — all 441 files within two seconds — so atimes cannot distinguish
 which groups a driver actually consulted either.
 
-## Where to pick this up
+## The guard, resolved
 
-The guard at `0xb21a98ec`, and what has to be true for the parser to reach
-the `prjName`/`pcbVersion` reads at `0xb21a98f0` and `0xb21a99e0`. The
-enclosing function is `0xb21a9648`; it walks the `sns_reg_config` entries,
-storing name/value pairs into a 12-byte-strided table before reaching this
-block. Resolving that guard says whether the project id can be made non-zero
-at all without patching firmware.
+`0xb216ede0` is `strncmp`. The call site assembles its arguments in the
+packet that performs the call, so the real test is:
 
-`pcbVersion` was deliberately **not** invented: its correct value is not
-derivable from anything on hand, and a wrong board revision could select the
-wrong hardware variant if the read ever does happen.
+```
+r2 = strlen(value)                                   ; value parsed from sns_reg_config
+strncmp("/proc/oppoVersion/prjName", value, r2)
+if (result != 0) skip the read
+```
+
+The firmware reads `prjName` **only if some entry in `sns_reg_config` has
+that exact path as its value**. Ours names the project source as
+`/sys/project_info/project_name`, so the comparison fails every time and the
+read is skipped. That is why supplying the file alone did nothing: the
+request was never made.
+
+`pcbVersion` is different — its `fopen` at `0xb21a99e0` is unconditional
+within the same per-entry block, which is why it is attempted once per entry.
+
+## The fix
+
+Two lines appended to `sensors/sns_reg.conf`, which add entries whose values
+are the paths the firmware compares against, leaving every existing entry
+untouched:
+
+```
+file=oppo_project=/proc/oppoVersion/prjName
+file=oppo_pcb=/proc/oppoVersion/pcbVersion
+```
+
+and the two files themselves, served under `oppoVersion/` where hexagonrpcd
+already maps the prefix. **Both values were measured, not invented** — the
+bootloader passes them on the kernel command line:
+
+```
+androidboot.prjname=19801
+androidboot.hw_version=14
+androidboot.rf_version=4
+androidboot.prj_version=19801
+```
+
+so `prjName` is `19801` and `pcbVersion` is `14`. Both sit inside the 1–7
+byte window the parser enforces. The device tree agrees:
+`/proc/device-tree/model` reads `SM8150 MTP 19801 EVT PVT DVT`.
+
+## Verified in memory
+
+`hexagonrpcd` went from zero `oppoVersion` requests to four successful reads
+and zero errors, and a fresh coredump shows the parsed value:
+
+```
+                             oppo_project   table        handle
+before (20 August)           0x00000000     0xe65f2648   0x00001030
+after  (prjName+pcbVersion)  0x00004d59     0xe65f2648   0x00001030
+```
+
+`0x4d59` = 19801. The sensor DSP now knows which board it is running on, for
+the first time.
+
+## What it did not fix
+
+Nothing changed in the census:
+
+```
+accel / gyro / mag / proximity / ambient_light / wise_light / rgb / cct   no SUID
+sars   7335663959f5698867456bc70a6c70ca
+```
+
+So the project id is necessary but not sufficient. It is worth keeping
+regardless — it is a genuine mismatch between what this firmware expects and
+what the port supplies, and any further hardware-selection logic that reads
+`oppo_project` now gets the right answer instead of zero.
+
+The registry parser does re-run on every boot, rewriting 218 of the 441
+registry files, so changes here do take effect without any cache-busting.
+
+## Operational note
+
+Crashing the SLPI to take a coredump leaves it `offline` and it will not
+restart in place — same wedge as a manual `stop`. Recovery is a reboot.
+Enable `coredump` (`echo inline > .../remoteproc0/coredump`) *before*
+triggering the crash, or the crash costs a reboot and produces nothing.
