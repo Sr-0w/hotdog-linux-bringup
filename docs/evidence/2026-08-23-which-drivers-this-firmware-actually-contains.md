@@ -82,13 +82,15 @@ experiments should work only from the five drivers above.
 `lsm6dsm` four, `mmc5603x` three, `ak0991x` two, `sx9324` three, `alsps` two.
 It is not what separates the two that instantiate from the three that do not.
 
-**The bus, for a structural reason rather than an empirical one.** A driver
-reads `<driver>_platform.config` — and therefore learns its `bus_type` and
-`bus_instance` — from the registry, in `init`, *after* the framework has
-created it. So the bus cannot gate instantiation: by the time the value is
-read, instantiation has already happened. The earlier experiment that moved
-`lsm6dsm_0` to I2C instance 3 and saw no change was not just negative, it
-could not have been positive.
+**The bus — ~~for a structural reason~~ RETRACTED.** This section argued
+that the bus could not gate instantiation, because a driver reads its
+`bus_type` and `bus_instance` from the registry during `init`, after the
+framework has created it. That was reasoning from an assumed ordering, and
+it is wrong: moving the working SAR onto instance 2 or instance 1 makes it
+stop registering entirely. See
+[only bus instance 3 works](2026-08-23-only-bus-instance-3-works.md). The
+LSM6DSM-on-instance-3 test still comes back negative, but that now means it
+has a *second* fault, not that the bus is irrelevant.
 
 That leaves the framework simply not calling three of the five drivers, for
 a reason that is upstream of anything the registry can express.
