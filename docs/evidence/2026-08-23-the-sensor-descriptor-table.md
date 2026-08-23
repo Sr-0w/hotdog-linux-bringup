@@ -90,14 +90,27 @@ pointer, in either the image or a live dump. They are reached by base plus
 index, with the base computed rather than stored. Finding the iterator, and
 what it consults before calling each `init`, is the remaining work.
 
-## Why no address search will find the iterator
+## Why no address search finds the iterator — corrected
 
-The descriptors are reached through Hexagon's **GP-relative** addressing.
-The disassembly contains 534 `gp+#offset` operands across 496 distinct
-offsets, and `GP` is a runtime register — set in the root PD at `0xb0100c50`
-(`gp = r1`) and `0xb0000544` / `0xb0000808` (`gp = r2`), with the sensor PD
-holding its own value that is not recoverable from a devcoredump (raw memory
-segments only, no saved thread context).
+**An earlier version of this section blamed GP-relative addressing. That was
+wrong.** All 498 `gp+#offset` operands are in `seg04` and `seg06`, which are
+**root-PD** segments at `0xb012d000` and `0xb0000000`. The sensor PD's code in
+`seg14` contains **none**, so GP-relative addressing cannot explain anything
+about the sensor PD's registration path.
+
+Two other candidates were checked and are also dead:
+
+- every executable segment carrying content in the image *is* disassembled
+  (2, 3, 4, 6, 7, 14, 20). Segment 21 is executable with `msz` `0x377000` but
+  `fsz` 0, which looked like 3.5 MB of runtime-loaded code never examined. It
+  is not: the coredump region assumed to be it turns out to hold the sensor
+  PD's **data** copy — it contains the ALS part-name table (`stk33502`,
+  `stk32600`) that also sits in the island static data, at a constant offset.
+  The VA assignment was mine and it was wrong.
+
+So the honest statement is narrower: nothing in the disassembled image
+references these descriptors by absolute address, and the reason is not yet
+known.
 
 So the negative results throughout this session are explained, not
 mysterious: searching the image or a dump for `0xe06b401c`, `0xe06b4044`,
