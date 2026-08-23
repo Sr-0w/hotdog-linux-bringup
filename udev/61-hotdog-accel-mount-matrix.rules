@@ -1,0 +1,21 @@
+# L'orientation rapportee par SEE est decalee de 180 degres par rapport a la
+# dalle : tenu droit, le telephone se declare "bottom-up", KWin applique donc
+# une rotation d'un demi-tour et l'image apparait a l'envers dans toutes les
+# positions -- la rotation suit correctement, elle est seulement decalee.
+#
+# Ce n'est pas la dalle. Si elle etait montee a l'envers et le capteur juste, le
+# capteur aurait annonce "normal" quand l'appareil etait tenu droit, et KWin
+# n'aurait rien tourne. Le journal dit "bottom-up", et l'image etait renversee :
+# les deux ensemble ne se recoupent que si c'est l'orientation rapportee qui est
+# fausse.
+#
+# On corrige ici plutot que dans lsm6dsm_0_platform.orient : ce groupe est
+# byte-identique a ce qu'OxygenOS a ecrit sur cette unite et il definit le
+# repere que partagent tous les consommateurs SEE, gyroscope et capteurs de
+# fusion compris. ACCEL_MOUNT_MATRIX ne corrige que le calcul d'orientation
+# ecran, ce qui est precisement le defaut observe.
+#
+# Demi-tour autour de Z : x et y changent de signe, z est inchange.
+
+SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp", ENV{ACCEL_MOUNT_MATRIX}="-1, 0, 0; 0, -1, 0; 0, 0, 1"
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp", ENV{ACCEL_MOUNT_MATRIX}="-1, 0, 0; 0, -1, 0; 0, 0, 1"
