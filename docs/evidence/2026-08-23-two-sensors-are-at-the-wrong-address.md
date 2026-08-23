@@ -61,3 +61,30 @@ possible is worth restating: **remove the drivers whose chips are absent
 before capturing** — their retry storms are what overwrite the ring buffer,
 and without that step every trace in this investigation started mid-way and
 lost the boot-time probing.
+
+## The transport is definitively cleared for the accelerometer
+
+The strongest version of the bus test, done properly this time with a capture
+rather than only a SUID check: `lsm6dsm_0_platform` set to `bus_type=0`,
+instance 3, `slave_config` 57 — I2C, on the bus the SAR works on, at the
+address where a device is now known to answer — with every other I2C driver
+removed so the bus is silent.
+
+```
+I2C        4 entries, no messages, no addresses
+I2C_error  empty
+SPI        the one inert NPA line
+```
+
+**It does not probe.** Not on SPI, not on a working I2C bus, not at an
+address that acknowledges. An earlier version of this test was read as
+negative on the SUID alone, without a capture; that was too weak a
+measurement to distinguish "never instantiates" from "instantiates and fails
+to reach the bus". This one distinguishes them.
+
+So for `sns_lsm6dsm` the transport, the bus instance, the address and the
+presence of a chip are all cleared. The same holds for `sns_mmc5603x`, whose
+chip is present and answering at exactly its configured address.
+
+Both never instantiate. Everything outside the SEE registration path is now
+eliminated by measurement.
