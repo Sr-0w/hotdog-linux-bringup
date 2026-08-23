@@ -52,6 +52,27 @@ it never reaches the attribute publication at `0xb21d9b84`. Which is exactly
 why the resolved dependency list in memory shows four entries and not five:
 `accel` was requested and never came back.
 
+## Counted in memory
+
+Dependency slots in the sensor PD are laid out as `{const char *name;
+uint32 len; sns_sensor_uid suid;}`. Scanning the live band
+`0x98690000`–`0x986a4000` for slots whose name pointer is one of the known
+dependency strings, and checking whether the SUID that follows has been
+filled in:
+
+| dependency | slots | still null |
+| --- | ---: | ---: |
+| `registry` | 19 | 0 |
+| `timer` | 9 | 0 |
+| `interrupt` | 1 | 0 |
+| `resampler` | 16 | 0 |
+| **`accel`** | **12** | **9** |
+
+Every other dependency resolves in every slot it appears in. `accel` is asked
+for twelve times and nine of those are still waiting. That is nine sensor
+objects sitting blocked on an accelerometer that never arrives — the finding
+above, counted rather than inferred.
+
 That also settles an earlier wrong conclusion of mine. I had reasoned that
 because the publication function has no guard, "if init ran, `ambient_light`
 would have a SUID, therefore init never runs". Init does run. It runs, sets
