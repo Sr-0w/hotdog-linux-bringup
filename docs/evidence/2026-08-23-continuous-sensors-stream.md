@@ -213,3 +213,20 @@ subscription running concurrently.
 That is the concrete thread to pull next — why `bus_iface_callback` cannot
 initialise a hardware context for this third port when the ALS's own port on
 the same address and bus works.
+
+### Not a com-port budget either
+
+The three failing contexts (`0xb0028f00`, `0xb0028f78`, `0xb0028fb4`) sit on
+the `0x3c` stride of the com-port context array at `0xb0028f20`, and the SPI
+module carries a `SPI: Exceeding max supported clients per pd` string, so a
+concurrent-port limit was the obvious next hypothesis.
+
+It is wrong. Removing all three SAR configs — freeing its I2C com port
+entirely — and rebooting leaves proximity at 0 events and the ambient light
+sensor at 24. Restored afterwards.
+
+So the proximity port fails to initialise its bus interface hardware context
+even when the bus is otherwise idle, and while a second port on the same
+address and bus works in the same boot. That narrows it to something specific
+to how `sns_alsps` brings up its second and third instances, and it is where
+this stops for now.
