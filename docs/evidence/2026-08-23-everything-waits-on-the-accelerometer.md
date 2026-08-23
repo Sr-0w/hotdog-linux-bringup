@@ -178,6 +178,26 @@ trace. The stock OxygenOS registry confirms the LSM6DSM is the part actually
 fitted: its groups alone carry the factory-written `accel.nom_val`,
 `gyro.nom_val`, `ff` and `hs` entries that the other IMU candidates lack.
 
+## The bus is not what gates instantiation
+
+Tested directly: `msmnile_lsm6dsm.json` was switched from `bus_type=1`
+instance 2 (SPI) to `bus_type=0` instance 3 address 106 — the same I2C
+instance the working SAR sits on — and rebooted. The regenerated registry
+confirms `bus_instance=3`, and `accel` still publishes no SUID. Restored to
+SPI instance 2 afterwards.
+
+So instantiation does not depend on the transport being reachable, and the
+earlier "only bus 3 works" reading does not survive either: `hall`
+(`bu52053nvx_0`, bus 3), `pressure` (`ifx_dps368_0`, bus 3 address 118) and
+`humidity` (`shtw2_0`, bus 3 address 112) are all on the working bus and none
+of them instantiate.
+
+What does correlate is which *driver* it is. The two that instantiate are the
+OnePlus-specific ones — `sns_alsps` and `sns_sx9324` via
+`sx9324_op_0_platform`. The stock Qualcomm drivers — `sns_lsm6dsm`,
+`sns_ak0991x`, `sns_mmc5603x`, `sns_tcs3701` — do not. That is a pattern, not
+yet an explanation, and it is where this picks up next.
+
 ## A data-loss trap, recorded
 
 Deleting files from `sensors/registry/` to force a clean regeneration
