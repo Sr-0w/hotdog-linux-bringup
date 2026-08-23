@@ -89,3 +89,32 @@ Nothing references these descriptors by address — no code immediate, no data
 pointer, in either the image or a live dump. They are reached by base plus
 index, with the base computed rather than stored. Finding the iterator, and
 what it consults before calling each `init`, is the remaining work.
+
+## Why no address search will find the iterator
+
+The descriptors are reached through Hexagon's **GP-relative** addressing.
+The disassembly contains 534 `gp+#offset` operands across 496 distinct
+offsets, and `GP` is a runtime register — set in the root PD at `0xb0100c50`
+(`gp = r1`) and `0xb0000544` / `0xb0000808` (`gp = r2`), with the sensor PD
+holding its own value that is not recoverable from a devcoredump (raw memory
+segments only, no saved thread context).
+
+So the negative results throughout this session are explained, not
+mysterious: searching the image or a dump for `0xe06b401c`, `0xe06b4044`,
+`0xe06b406c` or `0xe06b4094` as an immediate or as a stored pointer finds
+nothing because no such absolute reference exists. The same is true of the
+`init` addresses themselves — no `call 0xb21c7b14`, no data pointer to it
+outside its own descriptor.
+
+Assuming `GP` equals the island segment base `0xe06a8000` makes
+`gp+#0xc07c` land exactly on the `struct_len` field of the LSM6DSM
+descriptor at `0x97aa406c`, which looked like a hit. It is not one: the two
+matching operands are in `seg04`, which is **root-PD** code with a different
+`GP`, and their surrounding disassembly is desynchronised — data being
+decoded as instructions.
+
+**Practical consequence for whoever continues:** do not spend time on
+address-based searches for the registration path. Either recover the sensor
+PD's `GP` (from a thread context, or by anchoring one GP-relative access
+whose target is independently identifiable), or work forward from the SEE
+registration entry point rather than backward from the descriptors.
