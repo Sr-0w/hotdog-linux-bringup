@@ -127,6 +127,26 @@ Why `sns_lsm6dsm` never instantiates. Its attribute publication is at
 It is the only remaining root: the ALS chain, the registry, the QDI boundary
 and I2C are all proven working by a sensor that streams.
 
+### Its config had drifted from the one that worked on this phone
+
+The phone still carries the registry OxygenOS 10.0.13 wrote on this exact
+unit, at `/root/registry-backup-oos10`. Diffing our served platform configs
+against it:
+
+| group | difference |
+| --- | --- |
+| `sx9324_op_0_platform.config` (works) | none |
+| `alsps_platform.config` | none |
+| `lsm6dsm_0_platform.config` | `irq_pull_type` 3 vs **2**, `num_rail` 2 vs **1**, `rail_on_state` 2 vs **1** |
+
+The only config that had drifted was the one sensor at the root of the
+failure — our set comes from OxygenOS 11 blobs, the backup from the build
+that actually ran here. Aligned to the stock values in
+`msmnile_lsm6dsm.json` and rebooted; the regenerated registry confirms
+`num_rail=1`, and the accelerometer still does not register. So this is not
+the cause either, but the stock values are kept: they are the ones this
+hardware is known to have worked with, and the divergence was real.
+
 Its bus is the one thing structurally different from the working control —
 `bus_type=1` (SPI) instance 2, against `bus_type=0` (I2C) instance 3 for the
 SAR — and the `SPI` ULog holds 16 bytes against a populated I2C transfer
