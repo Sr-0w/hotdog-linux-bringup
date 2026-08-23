@@ -94,6 +94,10 @@ or a kexec bridge.
   a 900 mA input limit, with rising battery voltage and health `Good`.
 - SLPI boot, FastRPC, writable Hexagon service, registry regeneration, QRTR,
   SSC requests and ULog forensics work end to end.
+- Seven of the eight sensors stream, and Plasma Mobile auto-rotates from the
+  accelerometer. The blocker was never the configuration: `modem_b` carries an
+  OTA-updated SLPI build while the registry pairs with the OxygenOS 10.0.13
+  firmware, and swapping that one file took hardware sensors from 1 to 7.
 
 Support claims are evidence-based: an offline build, prepared DT change or
 successful probe alone is never marked as hardware support.
@@ -166,7 +170,8 @@ function under **Working** and a broader integration or stability item under
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
 | NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
 | Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
-| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work. The physical SX9324 SAR sensor publishes real on-change events. |
+| Sensors | Motion, rotation, magnetic field, light | Accelerometer, gyroscope, MMC5603 magnetometer, IMU temperature and ambient light stream; SAR and motion detect report on change. Validated by hand with a guided physical test, not by byte counts. Plasma Mobile auto-rotates through `iio-sensor-proxy`, which speaks SEE directly via `libssc`. Proximity does not work; see below. |
+| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work, and the board identity is provisioned from `/proc/cmdline`. Diag has no transport on this port, which is what now bounds the remaining sensor work. |
 
 ### 🔴 Broken
 
@@ -175,7 +180,7 @@ function under **Working** and a broader integration or stability item under
 | Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
-| Sensors | Motion / rotation / light / proximity | SX9324 SAR works. LSM6DSM, MMC5603x and TCS3701/ALSPS still publish no SUID: SPI platform NPA setup blocks the IMU, while the I2C families vote rails but never open a port. Sensor-PD diag/address-map work is next. |
+| Proximity | Near/far detection | `sns_tcs3701` publishes the sensor, accepts every request and emits nothing — no sample, no configuration event, no error. The driver runs and stores a failed calibration, and the chip sees a finger: covering it roughly triples the ALS channels on the same die. What remains is inside the driver, and its messages for that path go to diag, which this port cannot drain. |
 
 ### ⚪ Not yet supported
 
@@ -215,9 +220,11 @@ flowchart LR
 
 The active engineering frontier is:
 
-1. run the current SLPI firmware and sensor userspace on downstream Linux 4.14
-   with the stock DTBO to distinguish a mainline platform difference from a DSP
-   configuration fault;
+1. recover a diag transport for the SLPI, which is the only remaining way to
+   read what `sns_tcs3701` decides between accepting a proximity request and
+   emitting nothing. The paired mainline/downstream comparison that used to sit
+   here is no longer needed: the fault was the SLPI firmware version, and the
+   platform was never the difference;
 2. bridge GNSS and mobile data into standard services and test SIM, SMS, calls
    and data;
 3. close display wake, UFS ICE, remaining audio, dock, charging and
