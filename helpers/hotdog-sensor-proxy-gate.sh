@@ -44,6 +44,24 @@ while [ "$i" -lt 30 ]; do
 done
 echo "slpi a $(uptime_s)s"
 
+# 1bis. Liberer la broche d'interruption du SAR.
+#
+# sm8150 declare mmc@8804000, le controleur de carte SD, avec
+# cd-gpios = <&tlmm 96 ACTIVE_LOW>. Le OnePlus 7T Pro n'a pas de lecteur de
+# carte, mais GPIO 96 est le dri_irq_num du SX9324 : Linux prend donc la ligne
+# d'interruption du capteur SAR pour detecter une carte qui ne peut pas exister.
+# Mesure : gpioinfo montre la ligne 96 avec consumer="cd", et delier le pilote
+# la rend libre.
+#
+# Il faut la liberer avant que le SLPI n'arme ses interruptions, sinon il arme
+# sur une ligne deja prise et ne recoit rien. La vraie correction est dans le
+# device tree -- desactiver sdhc_2 sur cet appareil -- mais elle demande une
+# reconstruction ; ceci vaut en attendant et ne coute rien.
+if [ -e /sys/bus/platform/drivers/sdhci_msm/8804000.mmc ]; then
+	echo 8804000.mmc > /sys/bus/platform/drivers/sdhci_msm/unbind 2>/dev/null \
+		&& echo "sdhci_msm delie, GPIO 96 libere a $(uptime_s)s"
+fi
+
 # 2. Le PD capteurs resout son entree de registre de services a sa creation, et
 # echoue si personne ne sert ce registre. pd-mapper doit donc preceder tout
 # attachement FastRPC.
