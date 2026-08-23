@@ -85,8 +85,11 @@ ULog in every capture is empty:
 0x978543c0 SPI_error  write=0
 ```
 
-sixteen bytes is a header, not traffic. The SLPI's SPI path never carries
-anything, while its I2C path demonstrably works end to end.
+sixteen bytes is one message. **It does not mean the bus failed to come up** —
+see [the retraction](2026-08-23-the-spi-bus-never-initialises.md): that message
+is a non-fatal NPA diagnostic that the I2C driver also triggers and simply does
+not check. The empty SPI log means nothing ever asked the bus to do anything,
+which is a symptom of the accelerometer not instantiating rather than a cause.
 
 Tested and eliminated as causes of the accelerometer's absence, each by
 measurement: candidate collision (reduced by config file to `lsm6dsm_0` as
