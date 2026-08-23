@@ -40,6 +40,44 @@ The device-tree series intentionally excludes native panel support, audio,
 Type-C role switching, cameras, NFC, haptics and other experimental pieces.
 Those require focused follow-up series with their own bindings and evidence.
 
+## Userspace upstream
+
+Not kernel patches, so not part of the `b4` queue above, but found here and
+worth reporting.
+
+| Project | Issue | State |
+| --- | --- | --- |
+| iio-sensor-proxy 3.9 | A `Claim*` that arrives before the matching driver has registered is accepted and lost. The daemon owns its D-Bus name before it finishes enumerating SSC sensors, so any client watching the name wins the race | Local, reproduced repeatedly on hotdog |
+
+The daemon takes `net.hadess.SensorProxy` and only then discovers sensors. On a
+Qualcomm SSC device that discovery is a QMI round trip per sensor over QRTR —
+tens of milliseconds — while a client watching the bus name claims within ten.
+Measured on this phone, one restart under a running KWin:
+
+```
+15:09:20.410  Handling driver refcounting method 'ClaimAccelerometer'
+15:09:20.419  Found SSC proximity
+15:09:20.434  Found SSC accelerometer      <- 24 ms after the claim
+```
+
+No samples follow, and `AccelerometerOrientation` stays `undefined` for the
+life of the process. A second, later claim from `monitor-sensor` also failed
+to enable it, while `ClaimLight` in the same call enabled the light sensor
+normally — the light driver had registered before that client connected. The
+reading that fits is that the early claim takes the 0→1 client transition
+without a driver to enable, and every later claim is then only 1→2. That
+reading is not proven; what is measured is that a claim landing before
+registration is silently dropped and the client never retries.
+
+Two fixes are plausible upstream: own the bus name only after driver
+discovery, or re-check pending claims when a driver registers. The second is
+better — it also covers a sensor DSP that publishes late, which is the actual
+situation here.
+
+Worked around locally by [the boot gate](../helpers/hotdog-sensor-proxy-gate.sh),
+which restarts the daemon once SEE has published `accel` — early enough that
+the session, and therefore KWin's single claim, starts afterwards.
+
 ## Automated review follow-up
 
 The bot findings and an independent source audit are fully dispositioned. The
