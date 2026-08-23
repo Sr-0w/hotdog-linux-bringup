@@ -184,3 +184,32 @@ while subscribed:
 ```
 python3 ssc-subscribe.py 5f5f584f525031303733534354736d61 15
 ```
+
+### It is not "nothing approached it" — the bus context fails
+
+Capturing a coredump *while* a proximity subscription is open, and reading the
+`I2C_error` ULog, gives a named failure:
+
+```
+bus_iface_callback : failed to initialize bus interface hw context     x6
+Trying Synchronous Bus Reset:0x%08x:0x%08x                             x3
+bus_iface_callback : CLEANUP ERROR: failed to start RX chan            x3
+```
+
+three different com-port contexts (`0xb0028f00`, `0xb0028f78`, `0xb0028fb4`)
+— which matches the three logical instances the `sns_alsps` driver creates:
+ALS, proximity and CCT.
+
+So the silence is not an on-change sensor waiting for a hand. The proximity
+instance tries to bring up its I2C com port, the bus interface hardware
+context initialisation fails, the driver falls back to a synchronous bus
+reset, and the RX channel never starts. No config event is ever emitted
+because the instance never gets far enough to send one.
+
+The failure is contained: subscribing to proximity does not disturb the
+ambient light sensor, which returns 24 events alone and 23 with a proximity
+subscription running concurrently.
+
+That is the concrete thread to pull next — why `bus_iface_callback` cannot
+initialise a hardware context for this third port when the ALS's own port on
+the same address and bus works.
