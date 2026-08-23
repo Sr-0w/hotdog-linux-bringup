@@ -72,3 +72,44 @@ configuration was written for.
   sensors need `SNS_STD_SENSOR_CONFIG` (513) with a sample rate; the request
   is accepted (`result=0`) but no events follow yet, which is a client
   encoding problem, not a sensor one.
+
+## Vendor fidelity restored, and two of my "fixes" shown to be inert
+
+With 00083 running, every config change made during the investigation was
+reverted to the phone's own vendor set, taken from its pre-flash dump at
+`android-dumps/stock-before-flash/.../vendor-etc/sensors/config`. Five files
+differed and all five were restored: `msmnile_ak991x.json`,
+`msmnile_alsps.json`, `msmnile_lsm6dsm.json`, `msmnile_mmc5603nj.json` and
+`sns_cm.json`.
+
+Result: **still 7 of 9**. So the config edits were never load-bearing:
+
+- the ALS address. Measuring that a device answers at `0x39` and nothing at
+  `0x46` was correct, but changing `slave_config` to 57 was not what fixed
+  anything — with the vendor value 70 restored, `ambient_light` and
+  `proximity` both still register under 00083. The driver resolves the real
+  address itself once it is running.
+- the `rail_on_state` alignments on the LSM6DSM and both magnetometers.
+  Reverted to the vendor values, everything still works.
+
+Both were reasonable corrections against a downstream reference, and both
+turned out to be inert. Keeping the vendor set is the right baseline.
+
+## Census under the working firmware
+
+**41 of 59 SEE data types publish.** The 18 absent are mostly hardware this
+phone does not have — humidity, ambient temperature, ultraviolet, pressure,
+thermopile, radar, hall — plus `rgb` and `cct`.
+
+## rgb / cct
+
+Still absent, and not for want of trying: present or absent
+`alsps_platform.cct` group, vendor address or measured address, vendor config
+or modified — no combination produces them. The ALS itself is unambiguous
+about what it is: its SUIDs decode to ASCII, `amsTCS3701ALS___` and
+`amsTCS3701PROX__`, so the part is an ams TCS3701 and the driver is driving
+it. The colour channel is a third sensor the driver is not creating.
+
+The stock registry does carry a `devinfo.rgb` pointing at
+`alsps_platform.cct.fac_cal`, which says the colour sensor registered at some
+point under OxygenOS. What gates it here is not yet known.
