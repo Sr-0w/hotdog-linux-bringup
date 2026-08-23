@@ -1,21 +1,22 @@
-# The SPI bus never initialises, and that is the root cause
+# The SPI ULog's one message is a red herring
 
 Date: 2026-08-23
 
-One line of firmware log closes the whole chain:
+**This document originally claimed the SPI NPA failure was the root cause.
+That was wrong, and the correction is the useful part.** Keeping the whole
+thing because the disproof is worth more than the claim.
+
+## What the log says
+
+The SLPI's entire `SPI` ULog is 16 bytes — one message, present in every
+coredump on file including the earliest from 13 August:
 
 ```
 == SPI @ 0x97855ff0 ==
 +0x00000000 ts=197078030 spi_plat_init: npa_create_sync_client_ex failed
 ```
 
-That is the entire contents of the SLPI's `SPI` ULog — 16 bytes, one message,
-in every coredump on file including the earliest from 13 August.
-
-## What it means
-
-The strings immediately preceding it in the image name the resource being
-requested:
+The strings beside it in the image name the resource:
 
 ```
 0xb002cfb1 '/icb/arbiter'
@@ -23,74 +24,53 @@ requested:
 0xb002cfca 'spi_plat_init: npa_create_sync_client_ex failed'
 ```
 
-`spi_plat_init` creates an NPA (Node Power Architecture) synchronous client
-against `/icb/arbiter` named `SPI_QUP_DDR` — the interconnect bandwidth vote
-for the SPI QUP's path to DDR. The client creation fails, `spi_plat_init`
-aborts, and the SLPI's SPI transport is never brought up.
+so `spi_plat_init` asks the interconnect arbiter for a bandwidth-vote client
+called `SPI_QUP_DDR`, and gets nothing back. Read as "the SPI transport is
+never created", which is what I first concluded.
 
-## The chain, end to end
+## Why that reading is wrong
 
-```
-npa_create_sync_client_ex("/icb/arbiter", "SPI_QUP_DDR") fails
-  -> spi_plat_init aborts, SPI transport absent
-  -> sns_lsm6dsm (bus_type=1 SPI, instance 2) cannot probe
-  -> accel and gyro never instantiate, no SUID
-  -> sns_alsps blocks on its accel dependency, never publishes a data type
-  -> ambient_light, proximity, cct, rgb never answer a lookup
-  -> every fusion and motion sensor, all accel-derived, never appears
-```
-
-and the one sensor that works is the one outside the chain: `sns_sx9324` on
-**I2C** instance 3, whose dependency list is `timer`, `interrupt`, `registry`
-and nothing else. It probes, publishes, and streams real capacitance.
-
-This is why every configuration experiment produced the same result. Config
-set, registry contents, candidate collision, gating, rails, `placement`,
-`devinfo`, board identity — none of them could matter, because the transport
-the accelerometer needs was never created.
-
-## The arbiter itself is not broken
-
-Worth being precise, because an earlier note in this repo blamed the ICB
-arbiter and was superseded. The `ICB Arb Log` shows it working on both sides
-of the failure:
+The I2C driver makes the **identical** call. Same node, same client type,
+only the name differs:
 
 ```
-ts=196995980  master 0x83 slave 0x8f  val 0x00000001
-ts=196996025  master 0x70 slave 0x19  val 0x00000001
-ts=196996045  master 0x34 slave 0x2f  val 0x00000001
-ts=197078030  <- spi_plat_init fails here
-ts=197110606  master 0x83 slave 0x8f  val 0x00989680   (10 MB/s)
-ts=197251884  master 0x83 slave 0x8f  val 0xb2d05e00   (3 GB/s)
-ts=197417391  master 0x83 slave 0x8f  val 0x00000000   (released)
+I2C @ 0xb00312c8   r0 = "/icb/arbiter"  r1 = "I2C_QUP_DDR"  r3:2 = (0x10, 0x400)
+SPI @ 0xb0034d04   r0 = "/icb/arbiter"  r1 = "SPI_QUP_DDR"  r3:2 = (0x10, 0x400)
 ```
 
-Votes are placed and released normally. So the arbiter services clients; it
-is the creation of this particular client that fails. Note that master `0x34`
-appears only in the first batch and never again, while `0x4c` and `0xb4` join
-later — the master set changes across the failure point.
+The difference is only that the SPI path checks the return and logs, while
+the I2C path stores the handle without testing it. Both handles are in
+memory, and both are null:
 
-## What is not yet known
+```
+SPI handle  VA 0xb001b74c -> PA 0x97a5674c = 0x00000000
+I2C handle  VA 0xb083a4f0 -> PA 0x97a3a4f0 = 0x00000000
+```
 
-Why `npa_create_sync_client_ex` returns failure. Candidates, in the order
-worth checking:
+I2C has no NPA client either — and I2C works completely: SX9324 probes over
+it and streams live capacitance. So the client is a bandwidth optimisation,
+not a prerequisite.
 
-- the NPA node `/icb/arbiter` exists but the named resource `SPI_QUP_DDR` is
-  not defined on it, so the lookup fails;
-- the node exists but client creation is refused because a dependency of that
-  node has not been created yet — NPA is ordered, and `spi_plat_init` runs at
-  `ts=197078030`, *before* the 10 MB/s votes at `197110606`, so it may simply
-  be running too early;
-- a client limit, cf. the neighbouring string
-  `SPI: Exceeding max supported clients per pd`.
+The control flow confirms it is non-fatal. On failure the code stores the
+null handle, logs, and returns through the same epilogue as the success path:
 
-The timing detail is the most suggestive: the SPI init happens between the
-arbiter's first trivial votes and its first real bandwidth votes, which is
-consistent with the interconnect not being fully up when SPI asks for its
-client.
+```
+b0034d1c: p0 = cmp.eq(r0,#0x0); if (!p0.new) jump 0xb0034cfc   ; success -> return
+b0034d24: memw(##0xb001b74c) = r0                              ; failure -> store null
+b0034d30: jump 0xb0034cf8                                      ; -> log -> return
+```
 
-Neighbouring diagnostics in the same module, none of which appear in the log
-and all of which would if initialisation had got further:
+There is no abort, no error propagation, no early exit. `spi_plat_init`
+carries on.
+
+The arbiter is not broken either, which is consistent: the `ICB Arb Log`
+places votes 82 ms *before* the SPI message and continues afterwards, ramping
+to 10 MB/s and then 3 GB/s before releasing. It services clients throughout.
+
+## What the empty SPI log actually means
+
+Nothing about initialisation. The neighbouring diagnostics in the same module
+would all have fired had SPI got further and failed:
 
 ```
 spi_plat_init: DAL_ClockDeviceAttach failed for clock id %d
@@ -99,14 +79,20 @@ spi_power_on : clock enable failed, handle 0x%x
 spi_power_on : gpio enable failed, handle 0x%x
 ```
 
-So the failure is strictly at the NPA client step — before clocks, before
-TLMM, before any pin is touched. Nothing about pinctrl, GPIO ownership or
-the SPI wiring is implicated.
+None of them appear. So the SPI transport is not reporting a failure — it is
+reporting nothing, because **nobody ever asks it to do anything**. That is the
+same shape as the ALS on I2C: the bus is fine, the driver never reaches it.
+
+So the empty `SPI` ULog is a *symptom* of the accelerometer never
+instantiating, not its cause. The open question is unchanged and is still the
+one in
+[the accelerometer note](2026-08-23-everything-waits-on-the-accelerometer.md):
+why `sns_lsm6dsm` never creates its sensors.
 
 ## Method note
 
 The `SPI` ULog resolves with the same trusted format-string relocation as
 `I2C`, `0x185c5000`. The `ICB Arb Log` and `NPA Log` need a different one and
-their format pointers are still unresolved; the argument values above are
-raw and their meaning is inferred from the arbiter's known master/slave
-numbering, not from a decoded format string.
+their format pointers remain unresolved, so the arbiter argument values quoted
+above are raw and interpreted from the known master/slave numbering rather
+than from a decoded format string.
