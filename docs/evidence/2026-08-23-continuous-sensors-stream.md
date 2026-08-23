@@ -60,3 +60,39 @@ chip to read.
 
 Getting real magnetometer data needs `sns_mmc5603x` to be the driver that
 takes the slot.
+
+## The magnetometer does stream — that was my parser too
+
+197 events of type 1025 with real field readings:
+
+```
+mag x=-167.95 y=-14.67 z=-0.77   µT
+mag x= 168.00 y= 16.50 z=  2.93  µT
+```
+
+The earlier "all zeros" came from matching `0a 0c` anywhere in the datagram,
+which caught the **zero bias vector of the calibration event** (msg 1022)
+instead of the sample. Filtering strictly on message id 1025 fixes it. The
+section above claiming the magnetometer produces no samples is wrong and this
+supersedes it — and with it, the inference that `sns_ak0991x` holds a slot
+with no chip behind it. It reads a chip fine.
+
+## Final verification
+
+`helpers/ssc-verify.py`, one subscription per sensor, message id 1025 only:
+
+| sensor | samples / 6 s | first reading |
+| --- | ---: | --- |
+| accel (m/s²) | 151 | `0.335  -0.069   9.861` |
+| gyro (rad/s) | 151 | `-0.363  0.538   0.369` |
+| mag (µT) | 149 | `168.002 16.503  2.932` |
+| ambient_light | 23 | `3188.060 44.000 9.000 23.000` |
+| SAR | 2 | on-change |
+| motion_detect | 2 | on-change |
+| proximity | 0 | on-change, nothing approached it |
+| sensor_temperature | 0 | streaming request accepted, no samples |
+
+Six of eight deliver data. `proximity` is an on-change sensor and nothing came
+near it during the test — confirming it needs a hand over the sensor, which is
+a physical action. `sensor_temperature` accepts a streaming request at 5 and
+25 Hz, and with the accelerometer concurrently active, and emits nothing.
