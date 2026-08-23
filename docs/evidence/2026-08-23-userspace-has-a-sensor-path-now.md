@@ -144,6 +144,21 @@ The cost is boot time: the session now starts around 33 s instead of 14 s,
 because it waits for the sensor core. That is a deliberate trade and it is the
 gate's whole purpose.
 
+## Proof the sensor is live without reading a debug log
+
+With the daemon back in its normal quiet configuration, the property that
+settles it is `AccelerometerTilt`:
+
+```
+AccelerometerTilt        "face-up"
+AccelerometerOrientation "undefined"
+```
+
+`face-up` is computed from live samples and read `undefined` before the fix, so
+it is positive evidence that KWin's claim landed and the sensor is streaming.
+`undefined` orientation alongside it is the correct answer for a phone lying on
+a desk, not a failure — see below.
+
 ## Orientation is undefined when the phone lies flat
 
 Worth writing down because it looks like a failure and is not. With the
