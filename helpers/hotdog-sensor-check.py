@@ -306,17 +306,52 @@ def test_proximite(passif):
 
 
 def test_sar(passif):
+    """Le SAR est notre seul temoin d'interruption GPIO manipulable a la main.
+
+    Un capteur a evenement publie sa valeur courante des l'abonnement : compter
+    les echantillons ne prouve donc rien. On exige un changement APRES la valeur
+    initiale, ce qui n'arrive que si la puce a signale, donc si l'interruption
+    GPIO est bien remise au SLPI.
+
+    C'est le test decisif pour la proximite : elle est interrompue sur GPIO 117
+    et son etalonnage d'usine attend la puce en moins de 100 ms. Si le SAR ne
+    voit jamais de changement non plus, aucune interruption capteur n'arrive et
+    cela explique la proximite muette sans rien invoquer de propre a sa puce.
+    """
     suid = suid_de("sars")
     if not suid:
         return None, "pas de SUID"
     flux = Flux(suid, msgid=MSG_STD_ON_CHANGE_CONFIG, rate=None)
     try:
+        ok0, initiaux = epreuve(
+            "SAR - valeur initiale",
+            "Ne touchez pas le telephone.",
+            flux, lambda e: len(e) > 0, delai=12,
+            indice=lambda e: "valeur %s" % [round(v, 2) for v in e[-1][:2]])
+        if not ok0:
+            return False, "le capteur ne publie meme pas sa valeur initiale"
+        base = initiaux[-1][:2]
+        depart = len(initiaux)
+        if passif:
+            return None, "le changement demande un geste"
+
+        def a_change(tous):
+            for v in tous[depart:]:
+                if any(abs(v[i] - base[i]) > 0.5 for i in range(min(2, len(v)))):
+                    return True
+            return False
+
         ok, _ = epreuve(
-            "Capteur SAR",
-            "Posez la paume sur le bas du telephone, puis retirez-la.",
-            flux, lambda e: len(e) > 0, delai=20,
-            indice=lambda e: "valeur %s" % e[-1][:2])
-        return ok, "evenements recus"
+            "SAR - changement (temoin d'interruption GPIO)",
+            "Posez la paume sur le bas du telephone, tenez trois secondes, "
+            "puis retirez-la.",
+            flux, a_change, delai=25,
+            indice=lambda e: "valeur %s (initiale %s)" % (
+                [round(v, 2) for v in e[-1][:2]], [round(v, 2) for v in base]))
+        return ok, ("changement detecte : les interruptions arrivent"
+                    if ok else
+                    "valeur initiale seule, aucun changement : les "
+                    "interruptions capteur n'arrivent pas au SLPI")
     finally:
         flux.fermer()
 
@@ -335,6 +370,61 @@ def test_mouvement(passif):
             flux, lambda e: len(e) > 0, delai=20,
             indice=lambda e: "etat %s" % e[-1][:1])
         return ok, "evenements recus"
+    finally:
+        flux.fermer()
+
+
+def test_canaux(passif):
+    """Les quatre canaux du TCS3701 pendant qu'on couvre le capteur.
+
+    Le sous-capteur proximite de SEE ne repond pas, mais l'ALS est sur la meme
+    puce et le meme port. Si un de ses canaux reagit a l'occultation, la
+    fonction proximite reste atteignable sans lui -- et si aucun ne reagit,
+    c'est que la puce elle-meme ne voit rien approcher.
+    """
+    suid = suid_de("ambient_light")
+    if not suid:
+        return None, "pas de SUID"
+    if passif:
+        return None, "demande un geste"
+    flux = Flux(suid, rate=5.0)
+    try:
+        apercu = lambda e: "canaux " + " ".join("%8.1f" % v for v in e[-1][:4])
+        ok1, avant = epreuve(
+            "Canaux TCS3701 - reference",
+            "Laissez le capteur decouvert quelques secondes.",
+            flux, lambda e: len(e) > 8, delai=15, indice=apercu)
+        if not ok1:
+            return False, "pas de flux"
+        base = [sum(v[i] for v in avant[-8:]) / 8.0
+                for i in range(len(avant[-1]))]
+        depart = len(avant)
+
+        def reagit(tous):
+            recents = tous[depart:]
+            if len(recents) < 5:
+                return False
+            for i in range(len(base)):
+                moyen = sum(v[i] for v in recents[-5:]) / 5.0
+                seuil = max(3.0, abs(base[i]) * 0.30)
+                if abs(moyen - base[i]) > seuil:
+                    return True
+            return False
+
+        ok2, apres = epreuve(
+            "Canaux TCS3701 - occultation",
+            "Couvrez le capteur avec le doigt, en haut de l'ecran pres de "
+            "l'ecouteur, et maintenez.",
+            flux, reagit, delai=25, indice=apercu)
+        if not ok2:
+            return False, "aucun canal ne bouge"
+        recents = apres[depart:]
+        bouges = []
+        for i in range(len(base)):
+            moyen = sum(v[i] for v in recents[-5:]) / 5.0
+            if abs(moyen - base[i]) > max(3.0, abs(base[i]) * 0.30):
+                bouges.append("c%d %.0f->%.0f" % (i, base[i], moyen))
+        return True, "reagissent: " + ", ".join(bouges)
     finally:
         flux.fermer()
 
@@ -386,6 +476,7 @@ EPREUVES = [
     ("proximite", test_proximite),
     ("sar", test_sar),
     ("mouvement", test_mouvement),
+    ("canaux", test_canaux),
     ("pont", test_pont_systeme),
 ]
 
