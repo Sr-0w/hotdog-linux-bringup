@@ -153,3 +153,37 @@ The earlier retraction of the NPA root-cause claim is confirmed by this too.
 nothing about the bus, the transport, the NPA client, the registry, the board
 identity or the config explains it. `sns_alsps` and `sns_sx9324` do, from the
 same image, through the same framework.
+
+## Caveat: the I2C ULog is a ring buffer and it always wrapped
+
+The claim above that "both magnetometer drivers never open instance 1" rests
+on `close core 1` being absent from the stock captures. That absence is
+**not** established, because the `I2C` ULog is circular and had already
+wrapped in every capture taken, including one deliberately triggered ~20 s
+after the SLPI came up:
+
+```
+entrees I2C: 105    premier offset: +0x00001cc4
+```
+
+The buffer starts mid-way, so boot-time probing is overwritten by the time
+any coredump can be taken. Attempting to read the per-core context array
+instead does not help: the contexts at `0xb0028f20 + n*0x3c` are all zero in
+the dump, because ports are closed and released after probing — consistent
+with the two `close core 3` / `close handle` pairs for the SX9324 at `0x28`
+and the SX932x at `0x2c`, and with the SAR reopening its port only when a
+client subscribes.
+
+What survives unaffected:
+
+- **instance 1 works** — forcing the SAR onto it produced `close core 1`,
+  `close handle`, `reset lpi rsc 1`. That is positive evidence and does not
+  depend on the ring buffer.
+- the accelerometer never calls `spi_open`, since the SPI ULog is *not*
+  wrapped (16 bytes used of 2048) and contains only the inert NPA line.
+
+What is now open again: whether the magnetometers probe instance 1 and
+deregister, or never touch it. Settling it needs the log captured before it
+wraps — which means either a much earlier crash trigger than the SLPI's own
+boot allows, or reading the buffer through a path that does not require
+crashing the subsystem.
