@@ -92,3 +92,21 @@ could not have been positive.
 
 That leaves the framework simply not calling three of the five drivers, for
 a reason that is upstream of anything the registry can express.
+
+## The firmware is the phone's own
+
+Checked, because a version mismatch between the SLPI image and the OxygenOS
+config/registry set would have explained a lot. It is not one.
+
+`modem_b` is `/dev/sde31` (there is no `/dev/block/by-name` on this build).
+Mounted read-only, its `image/` directory holds the split segments
+`slpi.b00`–`slpi.b*`, and:
+
+```
+loaded    /lib/firmware/qcom/sm8150/oneplus/hotdog/slpi.mbn   SLPI.HY.2.2-00121
+partition /mnt/modem_b/image/slpi.b04, .b08                   SLPI.HY.2.2-00121
+b00 header identical to the first 756 bytes of the loaded mbn: yes
+```
+
+So the running firmware is the one this phone shipped with, and the drivers
+that fail to instantiate are failing under their own vendor image.
