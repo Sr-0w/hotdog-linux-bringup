@@ -5,7 +5,9 @@
 LOG=/var/log/hotdog-orientation.log
 exec </dev/null >>"$LOG" 2>&1
 U=$(id -u user); RT=/run/user/$U
-E="XDG_RUNTIME_DIR=$RT DBUS_SESSION_BUS_ADDRESS=unix:path=$RT/bus"
+# kscreen-doctor parle a KScreen par D-Bus et n'a pas besoin d'un ecran,
+# mais Qt tente xcb par defaut et avorte. offscreen evite cela.
+E="XDG_RUNTIME_DIR=$RT DBUS_SESSION_BUS_ADDRESS=unix:path=$RT/bus WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=offscreen"
 prev=""
 echo "--- $(date '+%F %T') en ecoute"
 i=0
