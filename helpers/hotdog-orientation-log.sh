@@ -13,8 +13,10 @@ while [ "$i" -lt 2400 ]; do
 	o=$(busctl --system get-property net.hadess.SensorProxy /net/hadess/SensorProxy \
 		net.hadess.SensorProxy AccelerometerOrientation 2>/dev/null | tr -d 's "')
 	if [ -n "$o" ] && [ "$o" != "$prev" ]; then
-		rot=$(su user -c "$E kscreen-doctor -o" 2>/dev/null | tr -d '\033' \
-			| sed -n 's/.*Rotation: *\([0-9]*\).*/\1/p' | head -1)
+		# kscreen-doctor colore sa sortie : le nombre suit un code ANSI, donc
+		# on saute tout ce qui n'est pas un chiffre apres l'etiquette.
+		rot=$(su user -c "$E kscreen-doctor -o" 2>/dev/null \
+			| sed -n 's/.*Rotation:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -1)
 		echo "$(date '+%T')  orientation=$o  rotation_ecran=$rot"
 		prev=$o
 	fi
