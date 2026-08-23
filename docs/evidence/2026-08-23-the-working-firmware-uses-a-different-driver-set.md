@@ -80,3 +80,28 @@ but they go to diag, which this port cannot drain.
 
 Its served calibration is `near_threshold` 200, `far_threshold` 150, and all
 four offsets zero.
+
+## Contention with iio-sensor-proxy eliminated
+
+Worth recording because it was a real unknown for the whole session and it is
+now closed. `iio-sensor-proxy` talks to SEE directly, and the Plasma shell
+claims proximity at session start, so the daemon was holding an on-change
+proximity subscription during **every** earlier proximity test. A second
+subscriber starving the first was a plausible reading of the silence.
+
+It is not the cause. With the daemon stopped and no other client attached:
+
+| subscription | reply |
+| --- | --- |
+| proximity, on-change (514) | 32 bytes — the QMI ack alone |
+| proximity, continuous 5 Hz (513) | 32 bytes |
+| proximity, continuous 1 Hz (513) | 32 bytes |
+| ambient_light, continuous 5 Hz — control, same chip | 2541 bytes |
+
+The request is accepted every time and produces no configuration event, no
+sample and no error. The ALS on the same `sns_tcs3701` instance, over the same
+I2C port, answers normally in the same conditions.
+
+So proximity is not being starved, out-configured or out-raced by anything in
+userspace. What is left is inside the driver, and reading it needs the SLPI diag
+channel that this port has no transport for.
