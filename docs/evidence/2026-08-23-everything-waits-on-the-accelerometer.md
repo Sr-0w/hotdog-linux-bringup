@@ -94,8 +94,42 @@ the only hardware sensor, 35 registry groups regenerated, still no SUID), the
 board identity (`oppo_project` now correctly 19801), and the config gate
 (`msmnile_lsm6dsm.json` accepts `MTP` and soc 339).
 
+## Two different failure modes
+
+Scanning the driver code for runs of `memb(rX+#n) = #imm` recovers each
+driver's hardcoded SUID. The method validates on the SAR: it yields
+`ca706c0ac76b45678869f55939663573`, which is the `sars` SUID the live census
+reports. Applied to the others:
+
+| driver | hardcoded SUID (byte 0 stored separately) | present in the runtime sensor list |
+| --- | --- | --- |
+| ALS | `…614354524c22353931912c435d525f` | yes — `0x97f51f61`, `0x9869d392` |
+| SAR | `…706c0ac76b45678869f55939663573` | yes — `0x97f57d01`, `0x9869fded` |
+| LSM6DSM | `…4b1a6d68da4a7785ab46e2cda5680b` | **no** |
+| LSM6DSM | `…32b89cdc0240afa38f80c0c0153697` | **no** |
+
+The two LSM6DSM matches land at `0x982e706d` / `0x9868e06d` and
+`0x982e7095` / `0x9868e095` — pairs separated by exactly `0x3A7000`, which is
+the root-PD/sensor-PD offset for the static data segments, and below the
+`0x98696000`–`0x986a3000` band where every live sensor object and dependency
+list sits. They are static image copies, not instantiated sensors.
+
+So the two failures are not the same:
+
+- the **ALS** creates its sensors, assigns their SUIDs, requests dependencies
+  and blocks on `accel`;
+- the **accelerometer** never creates its sensors at all.
+
 ## Next
 
-Why the SLPI's SPI bus instance 2 is silent. That is now the whole problem —
-not the ALS, not the registry, not the QDI boundary, all of which are proven
-working by a sensor that streams.
+Why `sns_lsm6dsm` never instantiates. Its attribute publication is at
+`0xb21c7d1c` and its driver body spans roughly `0xb21c0000`–`0xb21cf000`.
+It is the only remaining root: the ALS chain, the registry, the QDI boundary
+and I2C are all proven working by a sensor that streams.
+
+Its bus is the one thing structurally different from the working control —
+`bus_type=1` (SPI) instance 2, against `bus_type=0` (I2C) instance 3 for the
+SAR — and the `SPI` ULog holds 16 bytes against a populated I2C transfer
+trace. The stock OxygenOS registry confirms the LSM6DSM is the part actually
+fitted: its groups alone carry the factory-written `accel.nom_val`,
+`gyro.nom_val`, `ff` and `hs` entries that the other IMU candidates lack.
