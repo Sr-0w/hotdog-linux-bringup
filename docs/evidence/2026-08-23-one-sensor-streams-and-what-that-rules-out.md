@@ -89,16 +89,31 @@ wider list still. Gating does not discriminate.
 
 **Candidate collision.** The full OxygenOS config set serves platform groups
 for *every* candidate part — nine ALS/proximity families and five
-accelerometers — where a real device would have `devinfo` select one. Tested
-by moving 211 files aside, leaving exactly one candidate per category
-(`alsps`, `lsm6dsm_0`, `sx9324_op_0`, `ak0991x_0`), and rebooting:
+accelerometers — where a real device would have `devinfo` select one.
+
+The first attempt at this test was **invalid** and its result should not be
+relied on. It moved 211 files out of `sensors/registry/`, but the registry is
+not the input: the DSP's parser regenerates it from `sensors/config/*.json`
+on every boot, rewriting 218 of the 441 files. The removed groups were simply
+recreated. Measured directly — after moving the `alsps`, `stk2232` and
+`stk3331` registry groups aside and rebooting, they were back at 13, 6 and 7
+groups respectively.
+
+**The config JSON is the lever, not the registry group.** Redone properly by
+moving nine config files aside so that `tcs3701` was the only remaining
+ALS/proximity family, and clearing the stale groups:
 
 ```
+groupes alsps regeneres: 0    tcs3701: 12
+ambient_light / proximity / rgb / cct / accel / gyro   no SUID
 sars   7335663959f5698867456bc70a6c70ca
-accel / gyro / mag / proximity / ambient_light / wise_light / rgb / cct   no SUID
 ```
 
-No change. The registry was restored to its full 441 entries afterwards.
+`alsps` genuinely gone, one correct candidate left, board correctly
+identified — and the ALS still does not register. So candidate collision is
+eliminated, this time on a test that actually removed the candidates, and
+`sns_tcs3701` alone fails just as `sns_alsps` does. The full 66-file config
+set and 441-entry registry were restored afterwards.
 
 **The `default_sensors` attribute filter.** `default_sensors` is owned by the
 `suid` sensor and lists 18 data types, each with an attribute filter —
