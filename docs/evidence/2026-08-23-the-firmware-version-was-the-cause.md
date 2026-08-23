@@ -113,3 +113,54 @@ it. The colour channel is a third sensor the driver is not creating.
 The stock registry does carry a `devinfo.rgb` pointing at
 `alsps_platform.cct.fac_cal`, which says the colour sensor registered at some
 point under OxygenOS. What gates it here is not yet known.
+
+## Final: 8 of 8, and why rgb/cct were never in the denominator
+
+```
+accel                1fbb6afc01727ea69a418d19f8d7ba44
+gyro                 97d3c48969f972a0b9418a10491511c1
+sensor_temperature   973615c0c0808fa3af4002dc9cb83279
+motion_detect        0b68a5cde246ab85774ada686d1a4bcd
+mag                  64bba517c99048b0ac450869b71d795b
+ambient_light        5f5f5f534c4131303733534354736d61
+proximity            5f5f584f525031303733534354736d61
+sars                 7335663959f5698867456bc70a6c70ca
+```
+
+Every hardware sensor this firmware implements, registering, with the whole
+derived tail behind them — 41 of 59 SEE data types publish.
+
+`rgb` and `cct` are not a shortfall. Neither string exists as a data type in
+**either** SLPI build:
+
+```
+                00083   00121
+rgb                 0       0
+cct                 0       0
+ambient_light       6       5
+proximity           6       5
+wise_light          0       5
+```
+
+A SEE driver publishes its data type as a string attribute; no string means
+no such sensor. The colour channels would come from `sns_tmd3702`, which the
+[driver inventory](2026-08-23-which-drivers-this-firmware-actually-contains.md)
+shows is absent from the image. They appear in the served config set because
+that set describes a family of boards, not this one.
+
+Worth noting in passing: `wise_light` exists only in 00121 — it is the
+OnePlus dynamic ALS type selected by `als_type` in that build's disassembly.
+The build that works does not have it, and does not need it.
+
+Attempts made and reverted, all inert: adding `alsps_platform.cct`, adding
+the sensor-side `alsps.cct` and `alsps.cct.config`, the measured ALS address,
+and the `rail_on_state` alignments. The served config is now byte-identical
+to the phone's own pre-flash vendor dump.
+
+## Final state
+
+- firmware `SLPI.HY.2.2-00083`
+- 66 config files and 439 registry entries, vendor-identical
+- three remote processors running
+- `prjName` 19801 / `pcbVersion` 14 provisioned from the kernel command line
+  and read successfully by the DSP
