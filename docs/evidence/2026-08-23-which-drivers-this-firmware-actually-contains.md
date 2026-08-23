@@ -75,3 +75,20 @@ never instantiates.
 Most of the sixty-six served config files are inert — they cost registry
 parse time and clutter every comparison, but cannot cause anything. Future
 experiments should work only from the five drivers above.
+
+## Two more non-discriminators
+
+**Island mode.** All five drivers ship `_island.c` translation units —
+`lsm6dsm` four, `mmc5603x` three, `ak0991x` two, `sx9324` three, `alsps` two.
+It is not what separates the two that instantiate from the three that do not.
+
+**The bus, for a structural reason rather than an empirical one.** A driver
+reads `<driver>_platform.config` — and therefore learns its `bus_type` and
+`bus_instance` — from the registry, in `init`, *after* the framework has
+created it. So the bus cannot gate instantiation: by the time the value is
+read, instantiation has already happened. The earlier experiment that moved
+`lsm6dsm_0` to I2C instance 3 and saw no change was not just negative, it
+could not have been positive.
+
+That leaves the framework simply not calling three of the five drivers, for
+a reason that is upstream of anything the registry can express.
