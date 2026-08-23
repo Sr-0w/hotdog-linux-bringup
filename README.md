@@ -145,6 +145,12 @@ function under **Working** and a broader integration or stability item under
 | GNSS | QMI LOC engine sessions | The LOC service reports capabilities and accepts start/stop session requests. |
 | NFC | PN553 reader and ISO-DEP exchange | A real ISO 14443-4 document is detected, activated, typed and exchanges bidirectional ISO 7816-4 APDUs. The ePassport BAC/PACE refusal is expected. |
 | Haptics | AW8697 linear resonant actuator | The source-built `FF_RUMBLE` driver completes timed effects and physical vibration is confirmed by hand. |
+| Sensors | LSM6DSM accelerometer | Streams at 25 Hz through SEE. Gravity reads on Z lying flat and on Y held upright, so the axes are right; verified by hand with [the guided test](helpers/hotdog-sensor-check.py). |
+| Sensors | LSM6DSM gyroscope | Streams at 25 Hz. Responds to rotation and settles back to rest when the phone is put down. |
+| Sensors | MMC5603 magnetometer | Plausible field magnitude that tracks movement. The part is the MMC5603 at address `0x30`, not the AK0991x the config also describes. |
+| Sensors | IMU temperature | Reads plausible die temperature. Capped at 5 Hz: 10 Hz and above return error 130. |
+| Sensors | TCS3701 ambient light | Streams lux plus raw channels and reacts to occultation. Feeds `net.hadess.SensorProxy`, so `LightLevel` is live. |
+| Sensors | Screen auto-rotation | Plasma Mobile rotates from the accelerometer. `iio-sensor-proxy` speaks QMI to SEE directly through `libssc`, so no IIO or input device is involved; [a boot gate](helpers/hotdog-sensor-proxy-gate.sh) makes the daemon enumerate before KWin claims, and `ACCEL_MOUNT_MATRIX` corrects a half-turn offset. |
 | Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
 
 ### 🟡 Partial
@@ -170,7 +176,8 @@ function under **Working** and a broader integration or stability item under
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
 | NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
 | Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
-| Sensors | Motion, rotation, magnetic field, light | Accelerometer, gyroscope, MMC5603 magnetometer, IMU temperature and ambient light stream; SAR and motion detect report on change. Validated by hand with a guided physical test, not by byte counts. Plasma Mobile auto-rotates through `iio-sensor-proxy`, which speaks SEE directly via `libssc`. Proximity does not work; see below. |
+| Sensors | SX9324 SAR | Published a SUID and real on-change events for weeks, and was the first sensor ever validated here. In the most recent guided run it did not publish even its initial value, which is a different failure from "no change" and is not yet explained, so it is not counted as working. |
+| Sensors | Motion detect | `amd` and `rmd` publish SUIDs and answer on change. Not yet confirmed against a deliberate physical gesture. |
 | SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work, and the board identity is provisioned from `/proc/cmdline`. Diag has no transport on this port, which is what now bounds the remaining sensor work. |
 
 ### 🔴 Broken
