@@ -117,3 +117,39 @@ It was reasoning from an assumed ordering rather than from a measurement, and
 the measurement says otherwise. The earlier LSM6DSM-on-instance-3 test was
 read as confirming that reasoning; it does not — it shows a second fault,
 which is a different and more useful thing.
+
+## Bus instance 1 is proven functional, which closes the bus question
+
+Counting bus-core open/close events across two captures, with the root-PD
+strings resolved:
+
+| capture | cores touched |
+| --- | --- |
+| stock config | `close core 3` ×2 — **core 1 never opened** |
+| SAR forced onto instance 1 | `close core 1` ×1 **and** `close core 3` ×1 |
+
+The second row is the useful one: when a driver actually asks for instance 1,
+the SLPI opens it, uses it and releases it. **Instance 1 works.** It is simply
+never requested in the stock configuration.
+
+Both magnetometer drivers — `sns_ak0991x` and `sns_mmc5603x` — are configured
+on instance 1 and neither ever opens it. The accelerometer is on SPI instance
+2 and never calls `spi_open` either; the SPI module would have logged
+`spi_open : invalid execution level, instance %d` had it tried and failed, and
+its ULog holds only the one inert NPA line.
+
+So the three failing drivers never reach the bus at all, on any bus, working
+or not. The bus is definitively not the cause, this time on positive evidence
+rather than on an ordering argument.
+
+For completeness, the NPA handles both drivers fail to create are never read
+back: `0xb001b74c` (SPI) and `0xb083a4f0` (I2C) each appear exactly once in
+the whole image, as the store that writes them. Nothing dereferences either.
+The earlier retraction of the NPA root-cause claim is confirmed by this too.
+
+## Where that leaves it
+
+`sns_lsm6dsm`, `sns_ak0991x` and `sns_mmc5603x` do not instantiate, and
+nothing about the bus, the transport, the NPA client, the registry, the board
+identity or the config explains it. `sns_alsps` and `sns_sx9324` do, from the
+same image, through the same framework.
