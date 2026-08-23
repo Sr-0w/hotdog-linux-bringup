@@ -146,3 +146,41 @@ sensor, which streams normally, so the chip and the bus are not in question.
 Since it is an on-change sensor, the remaining possibility that cannot be
 tested remotely is simply that nothing has come near it. Confirming that needs
 a hand over the top of the screen while subscribed.
+
+## Proximity: everything remotely testable is eliminated
+
+It emits nothing — no sample, no configuration event, no error — where every
+other sensor at least acknowledges with a config event. What has been ruled
+out, each by measurement:
+
+| tried | result |
+| --- | --- |
+| `ON_CHANGE` (514) | silence |
+| `SENSOR_CONFIG` (513) at 1 and 5 Hz | silence |
+| `is_dri` 1 → 0 in `alsps.prox.config` | silence |
+| `dri_irq_num` 120 → 0 and `irq_is_chip_pin` → 0 | silence |
+| with the ambient light sensor concurrently active | silence |
+
+The interrupt path was the strongest hypothesis and it is dead: all four GPIO
+interrupt ULogs — `GPIOInt`, `PdcGpioInt`, `DirConnGpioInt`, `SummaryGpioInt`
+— are **completely empty** (`write=0`), and the `InterruptController` log
+shows ids 142, 144, 146, 148, 150 and 152 being configured, never 120. So no
+GPIO interrupt is ever registered on this SLPI. But removing the interrupt
+declaration entirely changed nothing, so that is a real defect and not this
+one.
+
+Its calibration is byte-identical to the OxygenOS original —
+`3cm_threshold` 160, `delta` 110, `cali_goal` 50, `cali_up_thrd` 30000 — so
+the thresholds are the vendor's.
+
+It shares the TCS3701 and the `sns_alsps` driver with the ambient light
+sensor, which streams 23–32 events per subscription in the same test run. The
+chip, the bus, the driver and the config are therefore all exonerated.
+
+What remains untestable from here: a proximity sensor is on-change, and
+nothing has approached it. Confirming needs a hand over the top of the screen
+while subscribed:
+
+```
+python3 ssc-subscribe.py 5f5f584f525031303733534354736d61 15
+```
