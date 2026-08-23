@@ -105,3 +105,47 @@ I2C port, answers normally in the same conditions.
 So proximity is not being starved, out-configured or out-raced by anything in
 userspace. What is left is inside the driver, and reading it needs the SLPI diag
 channel that this port has no transport for.
+
+## Two proximity settings eliminated properly, and why the earlier attempt did not count
+
+The earlier `is_dri` test in this note is **withdrawn as inconclusive**. The
+served registry is regenerated at boot from `sensors/config/*.json`, so editing
+the registry file alone is overwritten before the driver ever reads it. That is
+the same trap recorded for the candidate-collision experiment, and it caught
+this one too.
+
+Redone through the config JSON, with the served registry read back afterwards to
+confirm the value actually changed:
+
+| setting | stock | tested | served value confirmed | proximity |
+| --- | --- | --- | --- | --- |
+| `tcs3701.prox.config` `is_dri` | 1 | 0 | yes, `is_dri = 0` | silent |
+| `tcs3701.prox.config` `hw_id` | 1 | 0 | yes, `hw_id = 0` | silent |
+
+`hw_id` looked like the answer, and it is worth writing down why. The two
+sub-sensors of the one chip differ in exactly that field — the light sensor
+carries `hw_id 0` and works, proximity carries `hw_id 1` and does not — and
+`hw_id` selects the hardware instance a sensor binds to, with only one TCS3701
+fitted. It maps onto the disassembly finding that the failure surfaces as
+`r24 = memw(r16+#0x08) == 0`, "failed to initialize bus interface hw context".
+Aligning it on the light sensor's value changes nothing, so the correlation is
+not the cause. Both settings are restored to stock.
+
+The `is_dri` split is a real difference too and also not the cause: light is
+timer-driven (`is_dri 0`), proximity is interrupt-driven on GPIO 117
+(`is_dri 1`), and forcing proximity to polling leaves it just as silent. The
+accelerometer meanwhile runs `is_dri 1` on GPIO 132 and works, so interrupts
+reach the SLPI on this port.
+
+The served proximity groups are byte-identical to what OxygenOS 10.0.13 wrote on
+this unit — `tcs3701.prox.config`, `tcs3701_platform.prox.fac_cal` and
+`tcs3701_platform.config` all compare equal — so no drift explains it either.
+
+## The SEE self-test is not available in this build
+
+`sns_physical_sensor_test` looked like the way to ask the driver directly
+whether it can reach its chip. It is not usable here: the COM, hardware and
+factory tests all return the QMI ack and no event, **including on the ambient
+light sensor**, which demonstrably works. So the request is not accepted by this
+firmware rather than failing for proximity. Recorded because the control is what
+makes it a negative result about the method instead of about the sensor.
