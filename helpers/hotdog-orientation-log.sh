@@ -17,7 +17,9 @@ while [ "$i" -lt 2400 ]; do
 	if [ -n "$o" ] && [ "$o" != "$prev" ]; then
 		# kscreen-doctor colore sa sortie : le nombre suit un code ANSI, donc
 		# on saute tout ce qui n'est pas un chiffre apres l'etiquette.
-		rot=$(su user -c "$E kscreen-doctor -o" 2>/dev/null \
+		# borne dure : kscreen-doctor se bloque parfois hors session, et la
+		# boucle ne doit pas se figer dessus. Colonne vide plutot qu'arret.
+		rot=$(timeout 5 su user -c "$E kscreen-doctor -o" 2>/dev/null \
 			| sed -n 's/.*Rotation:[^0-9]*\([0-9][0-9]*\).*/\1/p' | head -1)
 		echo "$(date '+%T')  orientation=$o  rotation_ecran=$rot"
 		prev=$o
