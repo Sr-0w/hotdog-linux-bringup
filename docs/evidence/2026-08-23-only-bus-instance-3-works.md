@@ -1,9 +1,10 @@
-# Only bus instance 3 works, and that gates registration
+# A driver deregisters when its chip does not answer
 
 Date: 2026-08-23
 
-Two results, one of which overturns something I asserted confidently earlier
-in the day.
+**The title of this note was "Only bus instance 3 works, and that gates
+registration". That conclusion was wrong and is retracted below.** The
+measurements are sound; the reading of them was not.
 
 ## The bus does gate registration
 
@@ -30,7 +31,36 @@ So bus reachability is consulted before the sensor is published, whatever the
 ordering inside `init` looks like. Any driver placed on instance 1 or 2 fails
 to register at all.
 
-## Which explains most of the population
+## RETRACTED: the bus is not what fails
+
+A coredump taken *while* the SAR sat on instance 1 shows the resolved I2C log:
+
+```
+ts=412075478  cancel 0xb0028f5c
+ts=412075518  OFF 0xb0028f5c
+ts=412075853  close core 1
+ts=412078870  close handle 0xb0028f5c
+ts=412079055  reset lpi rsc 1
+```
+
+That is an **orderly teardown**, not a failed open: core 1 was opened, used,
+and released, with `I2C_error` carrying `ERROR nack` shortly before. The
+message strings resolve only without a relocation — they live in the root-PD
+pool around `0xb0315100`, while sensor-PD messages need `0x185c5000`, which
+is why the tool left them as raw pointers.
+
+So the simple explanation holds: **the SX9324 is not present on instance 1**,
+it did not answer, and the driver deregistered itself. Moving a driver to a
+bus where its chip is absent makes it deregister — which says nothing about
+whether that bus works.
+
+The genuinely useful thing this establishes is the mechanism: **a SEE driver
+that cannot reach its chip removes its own sensors**, so absence of a SUID is
+consistent with a failed probe and not only with a failed registration. That
+reframes the LSM6DSM: on I2C instance 3 at address 106 there is no LSM6DSM to
+answer, so deregistering there is expected and proves nothing either.
+
+## What the table below actually shows
 
 | driver | bus | registers |
 | --- | --- | --- |
@@ -40,12 +70,13 @@ to register at all.
 | `sns_ak0991x` | I2C instance 1 | no |
 | `sns_mmc5603x` | I2C instance 1 | no |
 
-Both magnetometers sit on instance 1 and the accelerometer on instance 2 —
-exactly the two buses that kill registration. That accounts for every failing
-driver's *primary* obstacle, and it is the first explanation in this
-investigation that covers the whole population rather than one sensor.
+The correlation with bus instance is real but is not causal on its own: it
+reflects which chips are where. What still needs explaining is why the
+accelerometer, on its **own** bus with its **own** chip present, produces no
+SPI traffic at all — the `SPI` ULog holds one benign NPA message and nothing
+else, while I2C instance 3 carries a populated transfer trace.
 
-## But the accelerometer has a second, separate blocker
+## The accelerometer on a foreign bus
 
 Moving `lsm6dsm_0_platform` the other way — onto I2C instance 3, address 106,
 the bus the SAR works on — does **not** bring it back:
