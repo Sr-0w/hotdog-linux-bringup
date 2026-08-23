@@ -153,3 +153,19 @@ SAR — and the `SPI` ULog holds 16 bytes against a populated I2C transfer
 trace. The stock OxygenOS registry confirms the LSM6DSM is the part actually
 fitted: its groups alone carry the factory-written `accel.nom_val`,
 `gyro.nom_val`, `ff` and `hs` entries that the other IMU candidates lack.
+
+## A data-loss trap, recorded
+
+Deleting files from `sensors/registry/` to force a clean regeneration
+destroys per-unit factory calibration. The parser recreates the groups from
+the config JSON, which carries defaults:
+
+```
+after deletion   "x":{"type":"flt","ver":"0","data":"0.000000"}
+from backup      "x":{"type":"flt","ver":"1","data":"-0.086188"}
+```
+
+Both the accelerometer and gyroscope bias groups were zeroed this way and
+restored from `/root/reg-full-backup`, verified to survive a reboot. The
+`ver:1` marker is what distinguishes measured calibration from a default.
+Remove a **config JSON** to drop a candidate; never a registry group.
