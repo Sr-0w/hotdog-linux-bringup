@@ -257,3 +257,21 @@ Everything else is eliminated by measurement: the bus (instance 1 proven
 working, and the ALS runs on this one), the address, the interrupt
 declaration, the DRI mode, the calibration thresholds, a concurrent-port
 budget, and subscription order.
+
+### Why the trace stops here
+
+Finding what should write that offset-8 pointer means reading the I2C open
+path around `0xb002e800`–`0xb002f100` in `seg07`. That region does not
+disassemble: `llvm-objdump` yields 22 instructions across 0x1a0 bytes and the
+rest comes out blank or as nonsense (`immext(#0x2e978000)`,
+`r7 = add(r7,##0x2e978014)`), and the result is identical starting at +0, +4,
++8 or +12, so it is not a packet-alignment problem. It is data embedded in the
+text segment.
+
+The `memw(rX+#0x8) = ...` candidates harvested from that range are therefore
+noise, not stores. Continuing needs a disassembler that handles this region,
+or the open path reconstructed from the QDI side instead.
+
+What stands: the guard at `0xb0033d2c`–`0xb0033d30` is in cleanly decoded
+code, and it says the proximity's client context reaches the callback with a
+null bus interface hardware context while its device config is populated.
