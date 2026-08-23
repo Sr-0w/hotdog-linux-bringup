@@ -96,3 +96,53 @@ Six of eight deliver data. `proximity` is an on-change sensor and nothing came
 near it during the test — confirming it needs a hand over the sensor, which is
 a physical action. `sensor_temperature` accepts a streaming request at 5 and
 25 Hz, and with the accelerometer concurrently active, and emits nothing.
+
+## The IMU temperature works too — parser again, and a rate ceiling
+
+Two things were wrong at once:
+
+- its sample payload is a **single** float (`0a 04`), not three (`0a 0c`), so
+  the pattern used for accel/gyro/mag never matched it;
+- above 5 Hz it answers `SNS_STD_ERROR_EVENT` (130). Its maximum rate is
+  5 Hz, and 10, 25 and 100 Hz are all rejected.
+
+```
+1 Hz  ->  7 samples  ->  30.54 °C
+5 Hz  -> 31 samples  ->  30.45 °C
+```
+
+## Final verification, vendor config, `helpers/ssc-verify.py`
+
+```
+accel  (m/s2)     152 ech.     0.340   -0.065    9.861
+gyro   (rad/s)    151 ech.    -0.373    0.514    0.366
+mag    (uT)       149 ech.  -167.925  -15.079   -1.710
+temperature (C)    30 ech.    31.551
+ambient_light      23 ech.  2939.784   44.000    9.000   29.000
+proximity           0 ech.  -
+motion_detect       0 ech.  -   (on-change; 2 events when polled separately)
+sars                0 ech.  -   (on-change; 2 events when polled separately)
+```
+
+Seven of eight sensors have produced real measurements. `motion_detect` and
+`sars` are on-change and only fire on a change — both answered with events
+when subscribed while something was happening.
+
+## Proximity is the one outlier
+
+It emits **nothing at all** — not a sample, not a configuration event (768),
+not an error (130). Every other sensor at least acknowledges with a config
+event. Tried and unchanged:
+
+- `SNS_STD_ON_CHANGE_CONFIG` (514)
+- `SNS_STD_SENSOR_CONFIG` (513) at 1 Hz and 5 Hz
+- `is_dri` switched from 1 to 0 in `alsps.prox.config`, so it polls like the
+  ALS instead of waiting on the IRQ — reverted to the vendor value afterwards
+- with the ambient light sensor concurrently active
+
+It shares the TCS3701 and the `sns_alsps` driver with the ambient light
+sensor, which streams normally, so the chip and the bus are not in question.
+
+Since it is an on-change sensor, the remaining possibility that cannot be
+tested remotely is simply that nothing has come near it. Confirming that needs
+a hand over the top of the screen while subscribed.
