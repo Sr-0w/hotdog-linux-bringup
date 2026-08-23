@@ -259,9 +259,12 @@ def main():
                 change = True
                 break
         if time.time() - affiche > 1.0:
-            print("     %-40s %2ds restantes\r" % (
-                [round(x, 2) for x in dernier], int(fin - time.time())),
-                end="", flush=True)
+            # dernier vaut None tant qu'aucun echantillon n'est arrive, ce qui
+            # est justement le cas que cette epreuve doit pouvoir traverser
+            vu = ([round(x, 2) for x in dernier] if dernier is not None
+                  else "aucun echantillon")
+            print("     %-40s %2ds restantes\r" % (vu, int(fin - time.time())),
+                  end="", flush=True)
             affiche = time.time()
         time.sleep(0.05)
     ab.fermer()
