@@ -187,3 +187,14 @@ deregister, or never touch it. Settling it needs the log captured before it
 wraps — which means either a much earlier crash trigger than the SLPI's own
 boot allows, or reading the buffer through a path that does not require
 crashing the subsystem.
+
+
+## The GPIO interrupt argument in this file is superseded
+
+A later capture under the working 00083 firmware shows that the SLPI's
+`InterruptController` log registers ids `3 7 40 126 142 144 146 148 150 152 164
+173 199` and never mentions the accelerometer's `dri_irq_num` of 132 — although
+the accelerometer streams at 25 Hz with `is_dri 1`. The same holds for the four
+empty GPIO interrupt buffers. So neither is evidence about any sensor's
+interrupt, and any reasoning in this file that leans on them is withdrawn. See
+[proximity reaches its chip](2026-08-23-proximity-reaches-its-chip.md).
