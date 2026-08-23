@@ -230,3 +230,30 @@ even when the bus is otherwise idle, and while a second port on the same
 address and bus works in the same boot. That narrows it to something specific
 to how `sns_alsps` brings up its second and third instances, and it is where
 this stops for now.
+
+### Localised to one NULL field
+
+The message comes from `0xb0033dcc` in `seg07` (root-PD I2C driver), reached
+by a three-way guard on the client context taken from the callback event:
+
+```
+b0033d1c: r16 = memw(r19+#0x18)                  ; client context
+b0033d20: if (r16 == 0) -> "failed to initialize hw_ctxt"
+b0033d24: r20 = memw(r16+#0x00)                  ; device config
+b0033d28: if (r20 == 0) -> "failed to initialize device config"
+b0033d2c: r24 = memw(r16+#0x08)                  ; bus interface hw context
+b0033d30: if (r24 == 0) -> "failed to initialize bus interface hw context"
+```
+
+The proximity takes the **third** branch. So its client context exists and
+its device config exists — the structure was allocated and partly filled —
+but the pointer at **offset 8**, the bus interface hardware context, is null.
+
+That is as precise as this gets without tracing the open path: one field, in
+one structure, for the second instance of one driver, while the first
+instance's equivalent is populated and streams.
+
+Everything else is eliminated by measurement: the bus (instance 1 proven
+working, and the ALS runs on this one), the address, the interrupt
+declaration, the DRI mode, the calibration thresholds, a concurrent-port
+budget, and subscription order.
