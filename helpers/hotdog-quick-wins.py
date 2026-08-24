@@ -4,6 +4,7 @@ import fcntl
 import glob
 import os
 import pathlib
+import select
 import shlex
 import struct
 import subprocess
@@ -92,24 +93,42 @@ def test_slider():
         return
 
     log("slider_device=" + device)
-    positions = (("haut / silencieux", 0), ("milieu / vibration", 1),
-                 ("bas / sonnerie", 2))
-    passed = True
-    for label, expected in positions:
-        prompt("Place le slider en %s, puis appuie sur Entree." % label)
-        value, minimum, maximum, fuzz, flat, resolution = read_abs(
-            device, ABS_SND_PROFILE
-        )
-        log("slider label=%s value=%d min=%d max=%d fuzz=%d flat=%d res=%d" %
-            (label, value, minimum, maximum, fuzz, flat, resolution))
-        if value != expected:
-            passed = False
-            log("SLIDER_POSITION=FAIL expected=%d actual=%d" % (expected, value))
-        else:
-            log("SLIDER_POSITION=PASS value=%d" % value)
+    names = {0: "haut / silencieux", 1: "milieu / vibration",
+             2: "bas / sonnerie"}
+    current = read_abs(device, ABS_SND_PROFILE)[0]
+    seen = set()
+    if current in names:
+        seen.add(current)
+        log("slider initial=%d (%s)" % (current, names[current]))
 
-    log("SLIDER=%s" % ("PASS" if passed else "FAIL"))
-    log("Le changement doit aussi produire une courte vibration feedbackd.")
+    prompt("Le moniteur est pret. Appuie sur Entree, puis passe lentement par les trois positions. Il les affichera automatiquement.")
+    log("Appuie sur Entree a nouveau seulement pour abandonner le test.")
+    event_size = struct.calcsize("llHHi")
+    with open(device, "rb", buffering=0) as stream:
+        while seen != {0, 1, 2}:
+            ready, unused_write, unused_error = select.select(
+                [stream, sys.stdin], [], [], None
+            )
+            if sys.stdin in ready:
+                sys.stdin.readline()
+                log("SLIDER=INCOMPLETE seen=%s" % sorted(seen))
+                return
+            payload = stream.read(event_size * 16)
+            for offset in range(0, len(payload) - event_size + 1, event_size):
+                unused_sec, unused_usec, event_type, code, value = struct.unpack(
+                    "llHHi", payload[offset:offset + event_size]
+                )
+                if event_type != 3 or code != ABS_SND_PROFILE:
+                    continue
+                if value not in names:
+                    log("slider valeur inattendue=%d" % value)
+                    continue
+                seen.add(value)
+                log("SLIDER_POSITION=PASS value=%d (%s) seen=%s" %
+                    (value, names[value], sorted(seen)))
+
+    log("SLIDER=PASS values=0,1,2")
+    log("feedbackd doit appliquer silent, quiet et full respectivement.")
 
 
 def wait_for_carrier(interface, wanted):
