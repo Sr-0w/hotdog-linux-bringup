@@ -43,6 +43,9 @@ _spec.loader.exec_module(SSC)
 MSG_SENSOR_CONFIG = 513
 MSG_ON_CHANGE_CONFIG = 514
 NOMS_EVENEMENT = {
+    772: "evenement amd",
+    776: "evenement orientation",
+    1026: "evenement SAR",
     128: "attributs",
     130: "ERREUR",
     768: "configuration",
@@ -72,34 +75,47 @@ def suid_de(type_donnee):
     return trouve.group(1) if trouve else None
 
 
-def decoder(donnees):
-    """Rend (identifiants de message vus, vecteurs d'echantillon).
+def decoder(d):
+    """Rend [(id_message, [valeurs])] pour toute indication SEE.
 
-    L'identifiant est un fixed32 en champ 1, donc introduit par l'octet 0x0d.
-    Un filtre plus lache attrape l'evenement d'etalonnage, dont le biais nul se
-    lit comme un capteur mort.
+    Chaque capteur a son PROPRE identifiant d'evenement : 772 pour amd, 776
+    pour device_orient, 1026 pour le SAR, 1025 pour le generique. Un decodeur
+    qui n'accepte que 1025 jette les donnees de tous les autres et les fait
+    passer pour muets -- c'est ce que faisaient mes outils, et cela a produit
+    plusieurs faux "capteur mort" sur des capteurs qui emettaient.
+
+    Structure de l'indication : champ 2 enveloppe { 0x0d id fixed32,
+    0x11 horodatage fixed64, 0x1a charge }, la charge portant soit un tableau
+    de flottants empaquetes (0x0a), soit un entier (0x08).
     """
-    ids, vecteurs = [], []
+    out = []
     pos = -1
     while True:
-        pos = donnees.find(b"\x0d", pos + 1)
-        if pos < 0 or pos + 5 > len(donnees):
+        pos = d.find(b"\x0d", pos + 1)
+        if pos < 0 or pos + 5 > len(d):
             break
-        mid = struct.unpack_from("<I", donnees, pos + 1)[0]
-        if mid not in NOMS_EVENEMENT:
+        mid = struct.unpack_from("<I", d, pos + 1)[0]
+        if not (100 <= mid <= 2048):
             continue
-        ids.append(mid)
-        if mid != 1025:
+        # 1022 est l'evenement d'etalonnage : son vecteur de biais, souvent
+        # nul, se lit comme un capteur mort si on le prend pour un echantillon
+        if mid == 1022:
+            out.append((mid, []))
             continue
-        tete = donnees.find(b"\x0a", pos)
-        if not (0 < tete < pos + 40) or tete + 2 >= len(donnees):
-            continue
-        longueur = donnees[tete + 1]
-        if 4 <= longueur <= 48 and longueur % 4 == 0 \
-                and tete + 2 + longueur <= len(donnees):
-            vecteurs.append(list(struct.unpack_from(
-                "<%df" % (longueur // 4), donnees, tete + 2)))
-    return ids, vecteurs
+        vals = []
+        # la charge suit l'horodatage, dans une fenetre courte
+        t = d.find(b"\x1a", pos, min(len(d), pos + 24))
+        if t >= 0 and t + 2 < len(d):
+            n = d[t + 1]
+            corps = d[t + 2:t + 2 + n]
+            if corps[:1] == b"\x0a" and len(corps) > 1:
+                m = corps[1]
+                if m % 4 == 0 and 4 <= m <= 48 and 2 + m <= len(corps):
+                    vals = list(struct.unpack_from("<%df" % (m // 4), corps, 2))
+            elif corps[:1] == b"\x08" and len(corps) > 1:
+                vals = [float(corps[1])]
+        out.append((mid, vals))
+    return out
 
 
 class Abonnement:
@@ -133,9 +149,9 @@ class Abonnement:
             if recu <= 0:
                 break
             self.octets += recu
-            i, v = decoder(self.tampon.raw[:recu])
-            ids.extend(i)
-            vecteurs.extend(v)
+            for mid, v in decoder(self.tampon.raw[:recu]):
+                ids.append(mid)
+                if v: vecteurs.append(v)
         return ids, vecteurs
 
     def fermer(self):
@@ -199,10 +215,15 @@ def main():
     print("  %sOUI%s  %s" % (VERT, NEUTRE, suid))
 
     titre("2. configuration servie")
+    # Le registre porte deux jeux de groupes, sx9324_0_* et sx9324_op_0_*, et
+    # ils sont identiques. Le firmware 00083 ne reference que la variante sans
+    # _op_ : c'est celle que le pilote lit, donc celle qu'il faut montrer.
     print("  plateforme : %s" % registre(
-        "sx9324_op_0_platform.config",
+        "sx9324_0_platform.config",
         ["bus_type", "bus_instance", "slave_config", "dri_irq_num",
          "irq_is_chip_pin", "num_rail"]))
+    print("  capteur    : %s" % registre(
+        "sx9324_0.sar.config", ["is_dri", "hw_id", "res_idx", "sync_stream"]))
 
     titre("3. la demande est-elle acceptee, et emet-il une valeur ?")
     vecteurs, vus, _ = ecouter(suid, MSG_ON_CHANGE_CONFIG, None, 10,

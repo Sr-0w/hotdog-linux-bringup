@@ -82,9 +82,18 @@ def suid_de(t):
 
 
 def decoder(d):
-    """Rend [(id_message, [flottants])]. L'identifiant est un fixed32 en champ 1,
-    donc introduit par 0x0d ; un filtre plus lache attrape l'evenement
-    d'etalonnage, dont le biais nul se lit comme un capteur mort."""
+    """Rend [(id_message, [valeurs])] pour toute indication SEE.
+
+    Chaque capteur a son PROPRE identifiant d'evenement : 772 pour amd, 776
+    pour device_orient, 1026 pour le SAR, 1025 pour le generique. Un decodeur
+    qui n'accepte que 1025 jette les donnees de tous les autres et les fait
+    passer pour muets -- c'est ce que faisaient mes outils, et cela a produit
+    plusieurs faux "capteur mort" sur des capteurs qui emettaient.
+
+    Structure de l'indication : champ 2 enveloppe { 0x0d id fixed32,
+    0x11 horodatage fixed64, 0x1a charge }, la charge portant soit un tableau
+    de flottants empaquetes (0x0a), soit un entier (0x08).
+    """
     out = []
     pos = -1
     while True:
@@ -92,15 +101,25 @@ def decoder(d):
         if pos < 0 or pos + 5 > len(d):
             break
         mid = struct.unpack_from("<I", d, pos + 1)[0]
-        if mid not in EVT:
+        if not (100 <= mid <= 2048):
+            continue
+        # 1022 est l'evenement d'etalonnage : son vecteur de biais, souvent
+        # nul, se lit comme un capteur mort si on le prend pour un echantillon
+        if mid == 1022:
+            out.append((mid, []))
             continue
         vals = []
-        if mid == 1025:
-            t = d.find(b"\x0a", pos)
-            if 0 < t < pos + 40 and t + 2 < len(d):
-                n = d[t + 1]
-                if 4 <= n <= 48 and n % 4 == 0 and t + 2 + n <= len(d):
-                    vals = list(struct.unpack_from("<%df" % (n // 4), d, t + 2))
+        # la charge suit l'horodatage, dans une fenetre courte
+        t = d.find(b"\x1a", pos, min(len(d), pos + 24))
+        if t >= 0 and t + 2 < len(d):
+            n = d[t + 1]
+            corps = d[t + 2:t + 2 + n]
+            if corps[:1] == b"\x0a" and len(corps) > 1:
+                m = corps[1]
+                if m % 4 == 0 and 4 <= m <= 48 and 2 + m <= len(corps):
+                    vals = list(struct.unpack_from("<%df" % (m // 4), corps, 2))
+            elif corps[:1] == b"\x08" and len(corps) > 1:
+                vals = [float(corps[1])]
         out.append((mid, vals))
     return out
 
