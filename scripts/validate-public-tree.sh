@@ -469,6 +469,25 @@ validate_modemmanager_slot_pin_contract() {
 		die "ModemManager populated-slot patch lacks the DSDS empty-slot guard"
 }
 
+validate_libqmi_pdc_subscription_contract() {
+	local apkbuild="aports/temp/libqmi/APKBUILD"
+	local patch="aports/temp/libqmi/0001-pdc-add-subscription-id.patch"
+
+	log "libqmi DSDS PDC subscription contract"
+	[ -f "$apkbuild" ] || die "missing libqmi override"
+	[ -f "$patch" ] || die "missing libqmi PDC subscription patch"
+	grep -q '0001-pdc-add-subscription-id.patch' "$apkbuild" ||
+		die "libqmi override does not apply the PDC subscription patch"
+	[ "$(grep -c '^+[[:space:]]*"id"[[:space:]]*:[[:space:]]*"0x11"' "$patch")" -eq 2 ] ||
+		die "libqmi patch does not add subscription TLV 0x11 to get and set"
+	grep -q 'qmi_message_pdc_get_selected_config_input_set_subscription_id' "$patch" ||
+		die "qmicli cannot query the selected config for a subscription"
+	grep -q 'qmi_message_pdc_set_selected_config_input_set_subscription_id' "$patch" ||
+		die "qmicli cannot select a config for a subscription"
+	grep -q 'pdc_subscription_id > 2' "$patch" ||
+		die "qmicli PDC subscription option is not bounded"
+}
+
 validate_hotdog_oos10_modem_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
 	local firmware_dir="aports/device/testing/firmware-oneplus-hotdog-modem-oos10"
@@ -854,6 +873,7 @@ main() {
 	validate_mainline616_aport_inputs
 	validate_hotdog_wifi_package_contract
 	validate_modemmanager_slot_pin_contract
+	validate_libqmi_pdc_subscription_contract
 	validate_hotdog_oos10_modem_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract

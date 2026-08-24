@@ -141,9 +141,34 @@ Read-only PDC enumeration on the failing mainline boot found 25 resident
 software configurations, including `Common-Commercial` and
 `Proximus_VoLTE`, but every configuration was inactive. `qmicli` implements
 activation as `Set Selected Config` followed by `Activate Config`, matching
-the OxygenOS sequence at the QMI protocol level. A missing selected/active
-MCFG before online radio bring-up is now the leading hypothesis. No PDC
-configuration has been changed yet.
+the high-level OxygenOS sequence.
+
+The PIN is not the direct crash trigger. With ModemManager masked and the SIM
+still locked at PIN 3/PUK 10, a direct DMS transition from `shutting-down` to
+`online` reproduced the same RFLM/QLINK assertion and reboot. The PIN had only
+caused ModemManager to request that transition. Selecting
+`Common-Commercial` through stock `qmicli` produced a pending config, but
+neither activation nor a reboot made it active before the assertion.
+
+Reverse engineering the OxygenOS `libqmiservices.so` service object and
+`libril-qc-qmi-1.so` request builder identified the missing protocol field.
+PDC `Get Selected Config` and `Set Selected Config` accept a token in TLV
+`0x10` and a separate subscription ID in TLV `0x11`. OxygenOS sets the
+subscription-valid field for software configurations; upstream libqmi knows
+the token but not the subscription TLV. The local libqmi override adds the
+IDL field and a bounded `qmicli --pdc-subscription-id=0..2` option so the
+selected software MCFG can be managed and verified per DSDS subscription.
+No PIN attempt has been consumed while developing this fix.
+
+The exact aarch64 packages built from libqmi commit
+`cff17a676e10d75081516dafa997fe9bc9043c38` are:
+
+```text
+libqmi-1.38.0_git20260414-r1.apk
+SHA256 fb92d5529b0d391029ddf0c5d9b2896e9aa6d43ba1839e9b7fbc94ef1a71ed34
+qmi-utils-1.38.0_git20260414-r1.apk
+SHA256 05423ab703ec1ace4c6e2d66d2034e3357f1255485185c5e827e23494273f841
+```
 
 The guarded phone-side test is installed as
 `/home/user/test-hotdog-sim-slot2`. It verifies the kernel, ModemManager and

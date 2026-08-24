@@ -1,0 +1,126 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Mon, 24 Aug 2026 22:55:00 +0200
+Subject: [PATCH] pdc: support subscription-scoped selected configs
+
+Qualcomm DSDS modems expose optional subscription identifiers in the PDC
+Get Selected Config and Set Selected Config requests. Add the upstream IDL
+fields and let qmicli target subscriptions 0 through 2 explicitly.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ data/qmi-service-pdc.json | 14 ++++++++++++--
+ src/qmicli/qmicli-pdc.c   | 33 +++++++++++++++++++++++++++++++--
+ 2 files changed, 43 insertions(+), 4 deletions(-)
+
+diff --git a/data/qmi-service-pdc.json b/data/qmi-service-pdc.json
+index 2d73dff..d31ef46 100644
+--- a/data/qmi-service-pdc.json
++++ b/data/qmi-service-pdc.json
+@@ -101,7 +101,12 @@
+      "input"   : [ { "common-ref" : "Config Type",
+                      "since"      : "1.18" },
+                    { "common-ref" : "Token",
+-                     "since"      : "1.18" }],
++                     "since"      : "1.18" },
++                   { "name"          : "Subscription ID",
++                     "id"            : "0x11",
++                     "type"          : "TLV",
++                     "since"         : "1.32",
++                     "format"        : "guint32" }],
+      "output"  : [ { "common-ref" : "Operation Result" },
+                    { "common-ref" : "Token",
+                      "since"      : "1.18" }]},
+@@ -138,7 +143,12 @@
+      "since"   : "1.18",
+      "input"   : [ { "common-ref" : "Config Type And Id" },
+                    { "common-ref" : "Token",
+-                     "since"      : "1.18" }],
++                     "since"      : "1.18" },
++                   { "name"          : "Subscription ID",
++                     "id"            : "0x11",
++                     "type"          : "TLV",
++                     "since"         : "1.32",
++                     "format"        : "guint32" }],
+      "output"  : [ { "common-ref" : "Operation Result" },
+                    { "common-ref" : "Token",
+                      "since"      : "1.18" }] },
+diff --git a/src/qmicli/qmicli-pdc.c b/src/qmicli/qmicli-pdc.c
+index 4e7a19c..3daad0c 100644
+--- a/src/qmicli/qmicli-pdc.c
++++ b/src/qmicli/qmicli-pdc.c
+@@ -95,6 +95,7 @@ static gchar *delete_config_str;
+ static gchar *activate_config_str;
+ static gchar *deactivate_config_str;
+ static gchar *load_config_str;
++static gint pdc_subscription_id = -1;
+ static gboolean monitor_refresh_flag;
+ static gboolean noop_flag;
+ 
+@@ -165,6 +166,11 @@ static GOptionEntry entries[] = {
+         "[Path to config]"
+     },
+ #endif
++    {
++        "pdc-subscription-id", 0, 0, G_OPTION_ARG_INT, &pdc_subscription_id,
++        "Use a subscription ID for selected software configs",
++        "[0-2]"
++    },
+ #if defined HAVE_QMI_ACTION_PDC_REFRESH
+     {
+         "pdc-monitor-refresh", 0, 0, G_OPTION_ARG_NONE, &monitor_refresh_flag,
+@@ -296,6 +302,17 @@ operation_shutdown (gboolean operation_status)
+     ctx = NULL;
+ }
+ 
++static gboolean
++validate_subscription_id (void)
++{
++    if (pdc_subscription_id < -1 || pdc_subscription_id > 2) {
++        g_printerr ("Subscription ID must be between 0 and 2\n");
++        return FALSE;
++    }
++
++    return TRUE;
++}
++
+ /******************************************************************************/
+ /* Common */
+ 
+@@ -656,10 +673,16 @@ get_selected_config_input_create (const gchar *str)
+ 
+     if (!qmicli_read_pdc_configuration_type_from_string (str, &config_type))
+         return NULL;
++    if (!validate_subscription_id ())
++        return NULL;
+ 
+     input = qmi_message_pdc_get_selected_config_input_new ();
+     if (!qmi_message_pdc_get_selected_config_input_set_config_type (input, config_type, &error) ||
+-        !qmi_message_pdc_get_selected_config_input_set_token (input, ctx->token++, &error)) {
++        !qmi_message_pdc_get_selected_config_input_set_token (input, ctx->token++, &error) ||
++        (pdc_subscription_id >= 0 &&
++         !qmi_message_pdc_get_selected_config_input_set_subscription_id (input,
++                                                                          pdc_subscription_id,
++                                                                          &error))) {
+         g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
+         return NULL;
+     }
+@@ -882,10 +905,16 @@ set_selected_config_input_create (const gchar *str)
+ 
+     if (!parse_type_and_id (str, &config_type, &id))
+         return NULL;
++    if (!validate_subscription_id ())
++        return NULL;
+ 
+     input = qmi_message_pdc_set_selected_config_input_new ();
+     if (!qmi_message_pdc_set_selected_config_input_set_type_with_id_v2 (input, config_type, id, &error) ||
+-        !qmi_message_pdc_set_selected_config_input_set_token (input, ctx->token++, &error)) {
++        !qmi_message_pdc_set_selected_config_input_set_token (input, ctx->token++, &error) ||
++        (pdc_subscription_id >= 0 &&
++         !qmi_message_pdc_set_selected_config_input_set_subscription_id (input,
++                                                                          pdc_subscription_id,
++                                                                          &error))) {
+         g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
+         return NULL;
+     }
+-- 
+2.51.0
