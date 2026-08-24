@@ -117,3 +117,54 @@ clears bit 1 and writes `state[0x239] = 0`, and nothing downstream ever runs.
 The question is now narrow and singular: why the driver counts no client for
 `amsTCS3701PROX__` while counting one for `amsTCS3701ALS___`, from the same
 request, in the same call.
+
+## The virtual call, identified
+
+Not by guessing at a vtable layout — the sensor PD holds no absolute pointers,
+so walking from the state back to the instance finds nothing — but from the
+call's own argument signature, which is unambiguous.
+
+The same slot, `memw(instance+0)` then `+0x8`, is called twice:
+
+```
+b20a93f4:  p0 = or(p0,!p0)      ; unconditionally TRUE
+b20a940c:  r2 = p0              ; third argument = true
+b20a9414:  callr r3             ; r0 = instance, r1 = &suid on the stack
+b20a9424:  if (result == 0) return with the flag still zero
+
+b20a9540:  p0 = and(p0,!p0)     ; unconditionally FALSE
+b20a954c:  r2 = p0              ; third argument = false
+b20a9554:  callr r3             ; same slot, same instance, same suid
+b20a955c:  if (result != 0) loop back to 0xb20a9464
+```
+
+Arguments `(instance, sensor_uid*, bool)`, called once with true and then
+repeatedly with false while the return stays non-null. That is
+`sns_sensor_instance_cb::get_client_request(this, suid, first)`, and the loop it
+drives is what produces the `num_clients` field in the log line.
+
+The second argument is a **16-byte SUID built on the stack**, not a string:
+`amsTCS3701` plus `ALS_` or `PROX`, padded to sixteen — which is exactly what
+the published UIDs decode to.
+
+## Where that leaves it
+
+The driver asks the framework, on the shared instance, for a client request
+against the proximity UID. It gets nothing. For the light UID, in the same call,
+a few instructions apart, it gets one.
+
+So this is no longer a driver question. **The framework holds no client request
+for `amsTCS3701PROX__` on that instance**, although a client — this port's own
+test client, and `iio-sensor-proxy` before it — subscribed to exactly that UID
+and received a QMI acknowledgement for it.
+
+Two readings fit and they are not distinguishable from here:
+
+- the request never reaches `sns_tcs3701` at all, so nothing is ever attached to
+  the instance. Consistent with there being no configuration event, no I2C
+  traffic and no error;
+- the request is attached to a different instance from the one this call
+  inspects, so the lookup is correct and looking in the wrong place.
+
+Separating them means observing whether `set_client_request` is entered for the
+proximity sensor, which is what diag would show and what this port cannot read.
