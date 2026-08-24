@@ -21,7 +21,7 @@
   <strong>OnePlus 7T Pro HD1913 · Snapdragon 855+ · Linux 6.16 · postmarketOS · Plasma Mobile</strong>
 </p>
 
-Last reviewed: **2026-08-20**
+Last reviewed: **2026-08-25**
 
 ## Project goals
 
@@ -53,9 +53,9 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r177` |
-| Device package | `device-oneplus-hotdog` `3-r23` |
-| Firmware package | `firmware-oneplus-hotdog` `20241212-r5` |
+| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r180` |
+| Device package | `device-oneplus-hotdog` `3-r29` |
+| Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
 | Historical paths | Downstream 4.14/kexec and Linux 6.17 K1, retained for recovery and evidence only |
@@ -193,7 +193,6 @@ function under **Working** and a broader integration or stability item under
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| Input | Three-position Alert Slider | The ring/vibrate/silent switch is not described, exposed or hardware-validated. |
 | Audio | Earpiece | Not yet brought up or validated. |
 | Audio | Headset and other headphone paths | Routing and detection are not hardware-validated. |
 | Audio | Other microphones, EC and NR | Remaining analogue/digital microphones and voice-processing policy remain open. |
@@ -268,10 +267,9 @@ bridge boundary.
 > dedicated test handset and read [device safety](docs/device-safety.md) before
 > any hardware operation.
 
-The first public image set is `v0.1.0-alpha.1`, pairing postmarketOS Plasma
-Mobile with the hardware-validated R108 Linux 6.16 boot chain. This release
-identity is historical and distinct from the current `r176` development
-package. Boot and rootfs artifacts form a matching UUID pair and must not be
+The current public image set is `v0.1.0-alpha.2`, pairing postmarketOS Plasma
+Mobile with kernel `r180`, the matching AVB boot image and the required
+filtered DTBO. The boot, DTBO and rootfs form one atomic set and must not be
 mixed across releases. Follow the [release installation guide](docs/release-install.md).
 
 Clone and bootstrap the host workspace:

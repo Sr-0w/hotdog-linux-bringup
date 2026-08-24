@@ -59,6 +59,7 @@ Halium.
 Recent evidence and current regression records:
 
 - [Alpha 1 validation](evidence/2026-08-10-v0.1.0-alpha.1.md)
+- [Alpha 2 validation and corrected DTBO contract](evidence/2026-08-25-v0.1.0-alpha.2.md)
 - [All four cameras and pop-up lifecycle](evidence/2026-08-10-mainline616-camera-imx471-popup.md)
 - [GNSS QMI engine](evidence/2026-08-10-gnss-qmi-loc.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
