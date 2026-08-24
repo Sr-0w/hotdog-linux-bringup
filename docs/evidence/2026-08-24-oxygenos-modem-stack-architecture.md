@@ -150,6 +150,13 @@ active MCFG IDs for all populated subscriptions, and clean retry counters.
 - both slots represented even when one is empty;
 - no implicit fallback that routes a security operation to slot 1.
 
+The transport-independent `hotdog-uim` model implements this inventory and
+session mapping. Replays cover two populated physical slots, a card only in
+slot 2, no-ATR failure, no-card state, explicit security routing and retry
+counter integrity. This model is shared by the future libqmi transport and the
+offline trace harness, so D-Bus presentation cannot silently alter the slot or
+subscription selected for a PIN operation.
+
 ### PDC/MCFG
 
 - parse stock MBN metadata types for carrier name, long IIN, IIN and MCC/MNC;

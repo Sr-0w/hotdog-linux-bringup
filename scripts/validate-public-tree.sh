@@ -527,6 +527,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-mbn.c hotdog-mbn.h hotdog-mbn-inspect.c; do
 		[ -f "$source_dir/$source" ] || die "missing MBN selector source: $source"
 	done
+	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
+		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
@@ -544,6 +547,9 @@ validate_hotdog_radio_state_contract() {
 	done
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
 		"$source_dir/hotdog-mbn.c" "$source_dir/hotdog-mbn-inspect.c" \
+		-o "$output"
+	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
+		"$source_dir/hotdog-uim.c" "$source_dir/hotdog-uim-replay.c" \
 		-o "$output"
 	rm -f "$output"
 	trap - RETURN
