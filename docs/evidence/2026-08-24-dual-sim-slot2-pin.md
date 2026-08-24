@@ -153,21 +153,23 @@ neither activation nor a reboot made it active before the assertion.
 Reverse engineering the OxygenOS `libqmiservices.so` service object and
 `libril-qc-qmi-1.so` request builder identified the missing protocol field.
 PDC `Get Selected Config` and `Set Selected Config` accept a token in TLV
-`0x10` and a separate subscription ID in TLV `0x11`. OxygenOS sets the
-subscription-valid field for software configurations; upstream libqmi knows
-the token but not the subscription TLV. The local libqmi override adds the
-IDL field and a bounded `qmicli --pdc-subscription-id=0..2` option so the
-selected software MCFG can be managed and verified per DSDS subscription.
-No PIN attempt has been consumed while developing this fix.
+`0x10` and a separate subscription ID in TLV `0x11`. `Activate Config` uses
+TLV `0x12` for its subscription, while `Deactivate Config` uses `0x11`.
+OxygenOS sets the subscription-valid field for both software selection and
+activation, using subscription 0 for the primary software configuration.
+Upstream libqmi lacks all four subscription fields. The local libqmi override
+adds them and a bounded `qmicli --pdc-subscription-id=0..2` option so software
+MCFG selection, activation, deactivation and readback operate on the same DSDS
+subscription. No PIN attempt has been consumed while developing this fix.
 
 The exact aarch64 packages built from libqmi commit
 `cff17a676e10d75081516dafa997fe9bc9043c38` are:
 
 ```text
-libqmi-1.38.0_git20260414-r1.apk
-SHA256 fb92d5529b0d391029ddf0c5d9b2896e9aa6d43ba1839e9b7fbc94ef1a71ed34
-qmi-utils-1.38.0_git20260414-r1.apk
-SHA256 05423ab703ec1ace4c6e2d66d2034e3357f1255485185c5e827e23494273f841
+libqmi-1.38.0_git20260414-r2.apk
+SHA256 9b6d73628f9d55bb263412b7b79e9bbd3a80fcd966747cdfbe838afb2e960ab8
+qmi-utils-1.38.0_git20260414-r2.apk
+SHA256 be232981e95cd91ad80aeaa40c6de69047eb2b1e6690d4d3457ccad524d81e7a
 ```
 
 The guarded phone-side test is installed as

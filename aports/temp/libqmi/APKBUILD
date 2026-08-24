@@ -3,7 +3,7 @@ maintainer="Achill Gilgenast <achill@achill.org>"
 pkgname=libqmi
 pkgver=1.38.0_git20260414
 _commit=cff17a676e10d75081516dafa997fe9bc9043c38
-pkgrel=1
+pkgrel=2
 pkgdesc="QMI modem protocol helper library"
 url="https://www.freedesktop.org/wiki/Software/libqmi"
 arch="all"
@@ -59,5 +59,5 @@ utils() {
 
 sha512sums="
 fc178689675b47faaa46c14b126dc054354044238ea00464b4cc4910c5f2c73faaa12d80a5219fbfad65ab575e38f7af3fd79ae7974ea80ed67bfffe027b85c3  libqmi-cff17a676e10d75081516dafa997fe9bc9043c38.tar.gz
-8ed4c887902fb31e59da21c2267bf2314ad17f3d30465f57221a487bd0f7b83d603bbb9fb27ebbbfd2ab6ad67544935dec851ecdc231d02fb3a2bb9715a952c0  0001-pdc-add-subscription-id.patch
+62d975277d7ffe4b6edca66638af78812428a179a426e6eee9b31017e3b6d27999882005fc2ea905302a5dc0901bc9a710df19ba548023e1115848708ce25bf0  0001-pdc-add-subscription-id.patch
 "

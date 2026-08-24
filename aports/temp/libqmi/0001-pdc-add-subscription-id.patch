@@ -8,12 +8,12 @@ fields and let qmicli target subscriptions 0 through 2 explicitly.
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
- data/qmi-service-pdc.json | 14 ++++++++++++--
- src/qmicli/qmicli-pdc.c   | 33 +++++++++++++++++++++++++++++++--
- 2 files changed, 43 insertions(+), 4 deletions(-)
+ data/qmi-service-pdc.json | 28 +++++++++++++++++++++++----
+ src/qmicli/qmicli-pdc.c   | 49 +++++++++++++++++++++++++++++++++++++++++++----
+ 2 files changed, 69 insertions(+), 8 deletions(-)
 
 diff --git a/data/qmi-service-pdc.json b/data/qmi-service-pdc.json
-index 2d73dff..d31ef46 100644
+index 2d73dff..8702369 100644
 --- a/data/qmi-service-pdc.json
 +++ b/data/qmi-service-pdc.json
 @@ -101,7 +101,12 @@
@@ -44,8 +44,36 @@ index 2d73dff..d31ef46 100644
       "output"  : [ { "common-ref" : "Operation Result" },
                     { "common-ref" : "Token",
                       "since"      : "1.18" }] },
+@@ -283,7 +293,12 @@
+      "input"   : [ { "common-ref" : "Config Type",
+                      "since"      : "1.18" },
+                    { "common-ref" : "Token",
+-                     "since"      : "1.18" }],
++                     "since"      : "1.18" },
++                   { "name"          : "Subscription ID",
++                     "id"            : "0x12",
++                     "type"          : "TLV",
++                     "since"         : "1.32",
++                     "format"        : "guint32" }],
+      "output"  : [ { "common-ref" : "Operation Result" },
+                    { "common-ref" : "Token",
+                      "since"      : "1.18" }] },
+@@ -399,7 +414,12 @@
+      "input"   : [ { "common-ref" : "Config Type",
+                      "since"      : "1.18" },
+                    { "common-ref" : "Token",
+-                     "since"      : "1.18" }],
++                     "since"      : "1.18" },
++                   { "name"          : "Subscription ID",
++                     "id"            : "0x11",
++                     "type"          : "TLV",
++                     "since"         : "1.32",
++                     "format"        : "guint32" }],
+      "output"  : [ { "common-ref" : "Operation Result" },
+                    { "common-ref" : "Token",
+                      "since"      : "1.18" }] },
 diff --git a/src/qmicli/qmicli-pdc.c b/src/qmicli/qmicli-pdc.c
-index 4e7a19c..3daad0c 100644
+index 4e7a19c..8c221d0 100644
 --- a/src/qmicli/qmicli-pdc.c
 +++ b/src/qmicli/qmicli-pdc.c
 @@ -95,6 +95,7 @@ static gchar *delete_config_str;
@@ -104,6 +132,24 @@ index 4e7a19c..3daad0c 100644
          g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
          return NULL;
      }
+@@ -802,10 +825,16 @@ activate_config_input_create (const gchar *str)
+     /* Note: id not needed here really */
+     if (!parse_type_and_id (str, &config_type, &id))
+         return NULL;
++    if (!validate_subscription_id ())
++        return NULL;
+ 
+     input = qmi_message_pdc_activate_config_input_new ();
+     if (!qmi_message_pdc_activate_config_input_set_config_type (input, config_type, &error) ||
+-        !qmi_message_pdc_activate_config_input_set_token (input, ctx->token++, &error)) {
++        !qmi_message_pdc_activate_config_input_set_token (input, ctx->token++, &error) ||
++        (pdc_subscription_id >= 0 &&
++         !qmi_message_pdc_activate_config_input_set_subscription_id (input,
++                                                                      pdc_subscription_id,
++                                                                      &error))) {
+         g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
+         return NULL;
+     }
 @@ -882,10 +905,16 @@ set_selected_config_input_create (const gchar *str)
  
      if (!parse_type_and_id (str, &config_type, &id))
@@ -119,6 +165,24 @@ index 4e7a19c..3daad0c 100644
 +         !qmi_message_pdc_set_selected_config_input_set_subscription_id (input,
 +                                                                          pdc_subscription_id,
 +                                                                          &error))) {
+         g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
+         return NULL;
+     }
+@@ -982,10 +1017,16 @@ deactivate_config_input_create (const gchar *str)
+     /* Note: id not needed here really */
+     if (!parse_type_and_id (str, &config_type, &id))
+         return NULL;
++    if (!validate_subscription_id ())
++        return NULL;
+ 
+     input = qmi_message_pdc_deactivate_config_input_new ();
+     if (!qmi_message_pdc_deactivate_config_input_set_config_type (input, config_type, &error) ||
+-        !qmi_message_pdc_deactivate_config_input_set_token (input, ctx->token++, &error)) {
++        !qmi_message_pdc_deactivate_config_input_set_token (input, ctx->token++, &error) ||
++        (pdc_subscription_id >= 0 &&
++         !qmi_message_pdc_deactivate_config_input_set_subscription_id (input,
++                                                                        pdc_subscription_id,
++                                                                        &error))) {
          g_printerr ("error: couldn't create input data bundle: '%s'\n", error->message);
          return NULL;
      }
