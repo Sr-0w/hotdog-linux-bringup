@@ -1,0 +1,190 @@
+# OxygenOS modem stack architecture - 2026-08-24
+
+## Scope
+
+This is the implementation contract for reconstructing the complete Hotdog
+telephony stack on mainline Linux. It covers modem storage and transport,
+dual-SIM UIM, PIN and PUK security, PDC/MCFG selection, radio registration,
+packet data, SMS, circuit-switched voice, IMS/VoLTE, recovery after subsystem
+restart, service supervision and the Plasma-facing D-Bus surface.
+
+The reference is the European OxygenOS 10.0.13 HD1913 vendor image. Proprietary
+executables are behavioral evidence only. The mainline implementation uses
+upstream kernel interfaces and libqmi/ModemManager rather than loading Android
+binaries.
+
+Run the reproducible inventory without embedding the host path in its output:
+
+```sh
+scripts/inventory-oxygenos-modem-stack.py /private/oxygenos/vendor \
+  --output /private/evidence/hotdog-oos10-modem-stack.json
+```
+
+The current source produced 19 binary components, 20 init service or property
+actions, 18 radio/data/IMS VINTF entries and the following dynamic-symbol
+coverage:
+
+| Family | Matching symbols |
+| --- | ---: |
+| UIM/SIM/PBM/GSTK | 1294 |
+| NAS/DMS/RFRPE/SAR | 920 |
+| IMS/IMSA/IMSS/RCS | 895 |
+| WDS/data/rmnet/DPM/IPA | 737 |
+| Voice/calls | 696 |
+| PDC/MBN/MCFG | 544 |
+| WMS/SMS | 250 |
+| SSR/restart/recovery | 46 |
+
+## Stock service graph
+
+### Storage and transport
+
+1. `rmt_storage` serves modem EFS through the modemst/fsg partitions.
+2. QRTR exposes QMI services from MPSS.
+3. `libqmiservices.so` supplies the generated Qualcomm service schemas.
+4. `qcrild`, `netmgrd`, DPM and IMS daemons allocate independent QMI clients.
+
+`rmt_storage` is not optional state. PDC selections, NV radio configuration,
+SMS storage and provisioning survive subsystem restart through this layer.
+
+### Radio orchestration
+
+OxygenOS declares three qcrild commands: the primary instance and `-c 2`/`-c
+3` secondary instances. The HD1913 VINTF surface exposes two IMS radio
+instances. `libril-qc-qmi-1.so` owns the large state machines while
+`libril-qc-hal-qmi.so` and `libqcrilFramework.so` bridge Android HAL requests,
+indications and asynchronous completion.
+
+The primary boot sequence is:
+
+1. wait for QMI services and bind each client to its subscription;
+2. discover physical UIM slots and applications;
+3. create provisioning sessions and cache ICCID/MCC/MNC per subscription;
+4. load the MBN database and select software MCFG by long IIN, IIN, then
+   MCC/MNC fallback;
+5. count pending configurations across every APSS subscription;
+6. activate each pending subscription and complete modem-switch recovery;
+7. transition DMS online and start NAS registration;
+8. expose Android radio and IMS interfaces only after the state is coherent.
+
+The order matters. Mainline previously let ModemManager transition DMS online
+without reproducing the UIM/MBN orchestration, exposing a repeatable MPSS RFLM
+QLINK assertion.
+
+### Packet data
+
+`dpmQmiMgr`, `qti`, `adpl`, `netmgrd`, `ipacm` and `cnd` form the stock data
+plane around IPA and rmnet. QCRIL owns WDS profiles, default-data-subscription
+policy and data-call requests; netmgrd owns link setup, recovery state and
+kernel-facing rmnet configuration. IPA connection management is a separate
+service, not part of SIM authentication.
+
+The mainline equivalent must preserve:
+
+- APN profiles and authentication;
+- IPv4, IPv6 and dual-stack calls;
+- QMAP/rmnet mux ownership per subscription;
+- default-data subscription switching;
+- DNS, MTU and route lifetime;
+- disconnect reasons and automatic recovery after SSR;
+- tethering/offload as an optional layer, not a prerequisite for handset data.
+
+### SMS and cell broadcast
+
+QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and
+unsolicited incoming messages. The parity surface includes GSM and CDMA PDU
+paths exposed by the modem, multipart messages, status reports, storage-full
+handling, SMSC configuration and cell-broadcast indications.
+
+### Voice and supplementary services
+
+QMI Voice covers dial, answer, hangup, call state, DTMF, call waiting,
+forwarding, CLIR/CLIP, conference and emergency call state. Voice is coupled
+to the audio graph: a successful QMI call without the matching Q6 audio route
+is not a complete call implementation.
+
+### IMS, VoLTE and RCS
+
+OxygenOS splits IMS into `imsqmidaemon`, `imsdatadaemon`, `ims_rtp_daemon` and
+`imsrcsd`, with two `IImsRadio` instances plus IMS call-info and RTP HIDL
+services. The required reconstruction surface is:
+
+- IMS registration and capability indications;
+- IMS APN/bearer lifecycle;
+- VoLTE call setup and RTP media control;
+- SMS over IMS with circuit-switched fallback;
+- emergency registration/call fallback;
+- per-subscription IMS state;
+- RCS as a separable feature after core IMS parity.
+
+## Mainline ownership model
+
+The implementation deliberately keeps proven generic components and replaces
+only the missing Qualcomm/Hotdog orchestration:
+
+| Mainline component | Ownership |
+| --- | --- |
+| Kernel remoteproc/rmtfs/QRTR/IPA/rmnet | MPSS lifecycle, storage and packet transport |
+| `hotdog-radio-bootstrapd` | UIM provisioning, per-subscription PDC/MCFG, DMS online gate and SSR recovery |
+| libqmi | Typed QMI protocol implementation, including Hotdog-validated missing PDC fields |
+| ModemManager QMI plugin | Standard modem, SIM, bearer, SMS, voice and D-Bus objects |
+| NetworkManager | IP configuration, routes and user-visible connectivity |
+| `hotdog-imsd` | Per-subscription IMS registration, IMS bearer and media-control bridge |
+| Plasma Mobile | Standard ModemManager/NetworkManager/Calls/Spacebar user interface |
+
+`hotdog-radio-bootstrapd` must be the sole owner of the pre-online state. It
+hands the modem to ModemManager only after an explicit readiness record
+contains the boot ID, MPSS identity, UIM slot/application mapping, selected and
+active MCFG IDs for all populated subscriptions, and clean retry counters.
+
+## Required state machines
+
+### UIM and dual SIM
+
+- physical slot discovery independent of logical subscription;
+- application choice for USIM, SIM, CSIM and ISIM;
+- primary and secondary GW provisioning sessions;
+- hotplug and no-ATR recovery;
+- PIN1/PIN2, PUK1/PUK2 and retry-count preservation;
+- card-slot-scoped verify, unblock, change and protection operations;
+- both slots represented even when one is empty;
+- no implicit fallback that routes a security operation to slot 1.
+
+### PDC/MCFG
+
+- parse stock MBN metadata types for carrier name, long IIN, IIN and MCC/MNC;
+- select by the same precedence as qcrild;
+- get/set/activate/deactivate on the same subscription;
+- enumerate and activate every pending APSS subscription;
+- verify active ID after modem switch;
+- retain the previous active ID for rollback;
+- never transition online with an unresolved pending configuration.
+
+### Radio and SSR
+
+- DMS state transitions are explicit and validated;
+- NAS registration starts only after UIM and PDC readiness;
+- QRTR service disappearance invalidates all QMI clients;
+- recovery recreates provisioning sessions and verifies active MCFG state;
+- data, SMS, calls and IMS receive deterministic loss/recovery notifications;
+- repeated modem failure remains stopped instead of inducing a phone reboot
+  loop.
+
+## Parity gates
+
+Offline replay must cover every request/response/indication family before a SIM
+is reinserted. Hardware validation then proceeds in this order:
+
+1. card discovery and retry counters, no PIN submission;
+2. selected/active MCFG proof for every populated subscription;
+3. one PIN verification with unchanged counter on success;
+4. stable registration and operator identity;
+5. IPv4/IPv6 data and reconnect;
+6. outgoing and incoming SMS with delivery report;
+7. outgoing and incoming circuit-switched or IMS call with audio and DTMF;
+8. VoLTE registration and call, then optional RCS;
+9. SIM removal/reinsert, slot swap and modem SSR recovery.
+
+No function is marked working from API success alone. Data requires traffic,
+SMS requires remote receipt, calls require bidirectional audio, and recovery
+requires the same operation to succeed after a controlled service loss.

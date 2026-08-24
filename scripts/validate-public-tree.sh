@@ -494,6 +494,27 @@ validate_libqmi_pdc_subscription_contract() {
 		die "qmicli PDC subscription option is not bounded"
 }
 
+validate_oxygenos_modem_inventory_contract() {
+	local inventory="scripts/inventory-oxygenos-modem-stack.py"
+	local evidence="docs/evidence/2026-08-24-oxygenos-modem-stack-architecture.md"
+
+	log "OxygenOS modem stack inventory contract"
+	[ -x "$inventory" ] || die "missing executable OxygenOS modem stack inventory"
+	[ -f "$evidence" ] || die "missing OxygenOS modem stack architecture evidence"
+	for marker in qcrild netmgrd imsqmidaemon imsdatadaemon rmt_storage; do
+		grep -q "\"bin/.*$marker\|\"bin/hw/$marker" "$inventory" ||
+			die "modem inventory lacks component: $marker"
+	done
+	for family in uim pdc-mbn radio-nas data sms voice ims ssr; do
+		grep -q "\"$family\"" "$inventory" ||
+			die "modem inventory lacks symbol family: $family"
+	done
+	grep -q 'hotdog-radio-bootstrapd' "$evidence" ||
+		die "modem architecture lacks the pre-online owner"
+	grep -q 'hotdog-imsd' "$evidence" ||
+		die "modem architecture lacks the IMS owner"
+}
+
 validate_hotdog_oos10_modem_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
 	local firmware_dir="aports/device/testing/firmware-oneplus-hotdog-modem-oos10"
@@ -880,6 +901,7 @@ main() {
 	validate_hotdog_wifi_package_contract
 	validate_modemmanager_slot_pin_contract
 	validate_libqmi_pdc_subscription_contract
+	validate_oxygenos_modem_inventory_contract
 	validate_hotdog_oos10_modem_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract
