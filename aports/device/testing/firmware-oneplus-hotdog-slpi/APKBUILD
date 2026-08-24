@@ -1,0 +1,25 @@
+pkgname=firmware-oneplus-hotdog-slpi
+pkgver=2.2.00083
+pkgrel=0
+pkgdesc="Sensor DSP firmware for OnePlus 7T Pro"
+url="https://www.oneplus.com/global/support/softwareupgrade"
+arch="aarch64"
+license="proprietary"
+maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
+options="!check !strip !archcheck !tracedeps"
+
+source="
+	slpi-oos10.0.13.mbn
+	README.md
+	"
+builddir="$srcdir"
+
+package() {
+	install -Dm644 "$srcdir/slpi-oos10.0.13.mbn" \
+		"$pkgdir/usr/lib/firmware/qcom/sm8150/oneplus/hotdog/slpi.mbn"
+}
+
+sha512sums="
+d3056baa9eaf81b0eef1dd848b0d0236ee4f4b564dedab1d18e08b314a241e06472d5f16bba1c5f92b08d71498ed2e5384195a7d6e42518b46ade07f2cc4f30a  slpi-oos10.0.13.mbn
+b3600631ecd878499b98708830e8822d546401b1f7c07e90e63dca052d6a43c48e3edbba6c950ee731c2c0a7e5ae523b4350604a80e1f6660e0ed2cf2b9eebcb  README.md
+"

@@ -153,6 +153,7 @@ nonfree_firmware() {
 		firmware-oneplus-hotdog-cdsp
 		firmware-oneplus-hotdog-modem
 		firmware-oneplus-hotdog-nfc
+		firmware-oneplus-hotdog-slpi
 		firmware-oneplus-hotdog-pd-maps
 		firmware-oneplus-hotdog-wlan
 		firmware-oneplus-hotdog-bluetooth

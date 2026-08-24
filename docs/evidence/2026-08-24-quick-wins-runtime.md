@@ -59,3 +59,17 @@ unblocked, and the NXP NCI modules remained loaded.
 This closes clean reader down/up recovery. HCE and secure-element operation are
 separate product features and are not required for the Linux reader-mode
 support claim.
+
+## SLPI 00083 is now package-owned
+
+The working `SLPI.HY.2.2-00083-SM8150AZL-1` image used to be an unowned manual
+replacement. A dedicated private-source APK now stages only the exact
+6263044-byte OxygenOS image after checking SHA256
+`1b17eb7bd003af9092e074645d88b92474a1cf3c2ad97356bdd3b36430c8e249`.
+The proprietary source remains excluded from Git.
+
+`firmware-oneplus-hotdog-slpi-2.2.00083-r0` was built and installed on the
+phone. `apk info -W` identifies it as the owner, the installed hash is
+unchanged, remoteproc reports `slpi/running`, and QRTR service 400 remains at
+node 9 port 12. Thus a future image can reproduce the working firmware instead
+of depending on a post-install manual copy.

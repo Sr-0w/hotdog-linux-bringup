@@ -70,3 +70,59 @@ from physical contact through feedbackd.
 The guided helper at `/home/user/test-hotdog-quick-wins` now monitors events
 live and finishes only after values 0, 1 and 2 have all been observed. Final
 three-position validation remains pending that log.
+
+## The lower contact is electrically absent under mainline
+
+The live monitor repeatedly saw values 0 and 1, but never 2. Two guided raw
+GPIO passes made the failure specific:
+
+```text
+top     gpio27=1 gpio125=0 gpio134=1
+middle  gpio27=1 gpio125=1 gpio134=0
+bottom  gpio27=1 gpio125=1 gpio134=1
+```
+
+GPIO125 and GPIO134 accumulated interrupts; GPIO27 remained at zero
+interrupts. With the slider held at the bottom and the input driver briefly
+unbound, GPIO27 still read high with internal pull-up, pull-down and bias
+disabled. Its TLMM control register is `0x00000000` and IO register
+`0x00000001`: GPIO mode, input, no pull, physical high.
+
+Treating all contacts open as Ring was tested and rejected. It produces a false
+Ring event in the break-before-make gap between top and middle, and it does not
+match OxygenOS. The generic fallback driver and its DT change were reverted in
+kernel commits `cf895477e6b8` and `cec17152dbd5`; the phone was restored to the
+honest `gpio-keys` boot with SHA256
+`628402b510a971901fbe8c2ed6dfc2c50632d97f5313ab978c82a7c53bf2ca68`.
+
+## OxygenOS reverse engineering
+
+This is not a wrong-GPIO guess. Four independent vendor sources agree:
+
+1. The exact OxygenOS 10.0.13 `dtbo.img` has 38 entries. Entry 5, the overlay
+   selected on this phone, defines `gpio_key1=<TLMM 27>`,
+   `gpio_key2=<TLMM 134>`, `gpio_key3=<TLMM 125>` and configures all three as
+   GPIO, 2 mA, bias disabled.
+2. The archived merged live DT contains the same values.
+3. The OnePlus Q and S/12.1 source branches keep the same mapping for project
+   19801.
+4. Kallsyms reconstructed from the exact OxygenOS 10.0.13 boot kernel exposes
+   `extcon_dev_work`. Its disassembly reads key1/key2/key3 raw and explicitly
+   accepts only `0,1,1` as the lower position; `1,1,1` returns without a
+   report.
+
+The downstream and mainline pinctrl group tables also agree that GPIO27 is on
+the East tile at TLMM register `0x351b000`. The downstream-only eGPIO metadata
+is not relevant here: bit 11 (`egpio_present`) is clear in the live control
+register. There is therefore no evidence for another GPIO or a tile-address
+bug.
+
+A host-only kexec attempt using the boot-proven downstream Image and a DT rebuilt
+from the archived OxygenOS live tree did not reach userspace; the device made
+one normal return to mainline, produced no pstore record and then remained
+stable for a 90-second boot-id window. It is not used as slider evidence.
+
+Current conclusion: OxygenOS requires GPIO27 low, while this handset currently
+drives GPIO27 high in the physical lower position under mainline. The remaining
+work is to identify the missing board-level enable or a contact/path fault; an
+absence-of-contact software mapping is not an accepted fix.

@@ -35,3 +35,6 @@ helpers/**/.tmp_versions/
 helpers/**/Module.symvers
 helpers/**/modules.order
 helpers/**/.*.cmd
+
+# Proprietary local source staged only for the private SLPI APK build
+aports/device/testing/firmware-oneplus-hotdog-slpi/slpi-oos10.0.13.mbn

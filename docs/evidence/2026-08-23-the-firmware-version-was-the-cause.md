@@ -160,6 +160,9 @@ to the phone's own pre-flash vendor dump.
 ## Final state
 
 - firmware `SLPI.HY.2.2-00083`
+- installed as `firmware-oneplus-hotdog-slpi-2.2.00083-r0`; the package owns
+  `/usr/lib/firmware/qcom/sm8150/oneplus/hotdog/slpi.mbn` and verifies the
+  source SHA256 before build
 - 66 config files and 439 registry entries, vendor-identical
 - three remote processors running
 - `prjName` 19801 / `pcbVersion` 14 provisioned from the kernel command line
