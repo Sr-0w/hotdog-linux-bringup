@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=179
+pkgrel=180
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -225,10 +225,10 @@ package() {
 		ARCH="$_carch" \
 		LLVM=1 LLVM_IAS=1 \
 		INSTALL_PATH="$pkgdir"/boot/ \
-		INSTALL_MOD_PATH="$pkgdir/usr" \
+		INSTALL_MOD_PATH="$pkgdir" \
 		INSTALL_MOD_STRIP=1 \
 		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
-	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
 	install -D "$builddir"/include/config/kernel.release \
 		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
@@ -237,7 +237,7 @@ package() {
 		"$pkgdir/boot/vmlinuz" \
 		"$builddir/.config" \
 		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" \
-		"$pkgdir/usr/lib/modules/$(cat "$builddir/include/config/kernel.release")"
+		"$pkgdir/lib/modules/$(cat "$builddir/include/config/kernel.release")"
 }
 
 sha512sums="
