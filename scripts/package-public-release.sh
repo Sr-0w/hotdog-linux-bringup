@@ -3,13 +3,14 @@ set -Eeuo pipefail
 
 usage() {
 	cat <<'USAGE'
-Usage: package-public-release.sh --version VERSION --boot IMAGE --rootfs IMAGE --apk APK --outdir DIR
+Usage: package-public-release.sh --version VERSION --boot IMAGE --dtbo IMAGE \
+  --rootfs IMAGE --apk APK --outdir DIR
 
 Validate and package a matching OnePlus 7T Pro postmarketOS release set.
-The boot image and rootfs are an atomic pair: this script rejects mismatched
-pmOS UUIDs, non-AVB boot images, or APK kernel/DTB payloads that do not match
-the boot image. It compresses the rootfs and splits an archive only when it is
-too large for a conservative GitHub release asset limit.
+The boot image, filtered DTBO and rootfs are an atomic set: this script rejects
+mismatched pmOS UUIDs, non-AVB boot/DTBO images, or APK kernel/DTB payloads that
+do not match the boot image. It compresses the rootfs and splits an archive
+only when it is too large for a conservative GitHub release asset limit.
 USAGE
 }
 
@@ -24,6 +25,7 @@ note() {
 
 version=""
 boot=""
+dtbo=""
 rootfs=""
 apk=""
 outdir=""
@@ -32,6 +34,7 @@ while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--version) version="${2:-}"; shift ;;
 		--boot) boot="${2:-}"; shift ;;
+		--dtbo) dtbo="${2:-}"; shift ;;
 		--rootfs) rootfs="${2:-}"; shift ;;
 		--apk) apk="${2:-}"; shift ;;
 		--outdir) outdir="${2:-}"; shift ;;
@@ -46,7 +49,7 @@ done
 for tool in avbtool blkid cmp e2fsck losetup partprobe sha256sum sgdisk stat tar unpack_bootimg zstd; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required command: $tool"
 done
-for input in "$boot" "$rootfs" "$apk"; do
+for input in "$boot" "$dtbo" "$rootfs" "$apk"; do
 	[ -f "$input" ] || die "missing input: $input"
 	[ -s "$input" ] || die "empty input: $input"
 done
@@ -54,6 +57,7 @@ done
 [ ! -e "$outdir" ] || die "output directory already exists: $outdir"
 
 boot="$(realpath "$boot")"
+dtbo="$(realpath "$dtbo")"
 rootfs="$(realpath "$rootfs")"
 apk="$(realpath "$apk")"
 mkdir -p "$outdir/reports"
@@ -71,6 +75,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 avbtool verify_image --image "$boot" > "$outdir/reports/avbtool-verify.txt"
+dtbo_size="$(stat -c '%s' "$dtbo")"
+[ "$dtbo_size" -eq 25165824 ] ||
+	die "DTBO image must fill the 24 MiB HD1913 dtbo partition"
+avbtool verify_image --image "$dtbo" > "$outdir/reports/avbtool-verify-dtbo.txt"
+avbtool info_image --image "$dtbo" > "$outdir/reports/avbtool-info-dtbo.txt"
+grep -Eq '^[[:space:]]+Partition Name:[[:space:]]+dtbo$' \
+	"$outdir/reports/avbtool-info-dtbo.txt" ||
+	die "DTBO AVB descriptor does not name the dtbo partition"
 unpack_bootimg --boot_img "$boot" --out "$unpack_dir" > "$outdir/reports/unpack_bootimg.txt"
 cmdline="$(sed -n 's/^command line args: //p' "$outdir/reports/unpack_bootimg.txt")"
 boot_uuid="$(printf '%s\n' "$cmdline" | tr ' ' '\n' | sed -n 's/^pmos_boot_uuid=//p')"
@@ -123,8 +135,10 @@ cmp -s "$unpack_dir/dtb" "$apk_dir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" ||
 
 prefix="oneplus-7t-pro-hotdog-${version}"
 boot_asset="$outdir/${prefix}-boot.img"
+dtbo_asset="$outdir/${prefix}-dtbo.img"
 apk_asset="$outdir/${prefix}-kernel-${apk_version}.apk"
 install -m 0644 "$boot" "$boot_asset"
+install -m 0644 "$dtbo" "$dtbo_asset"
 install -m 0644 "$apk" "$apk_asset"
 root_archive="$outdir/${prefix}-rootfs.img.zst"
 note "compressing rootfs image"
@@ -140,7 +154,7 @@ if [ "$(stat -c '%s' "$root_archive")" -gt "$max_asset_size" ]; then
 fi
 
 {
-	for file in "$boot_asset" "$apk_asset"; do
+	for file in "$boot_asset" "$dtbo_asset" "$apk_asset"; do
 		[ -e "$file" ] || continue
 		(cd "$outdir" && sha256sum "$(basename "$file")")
 	done
@@ -156,17 +170,21 @@ fi
 boot_kernel_sha="$(sha256sum "$unpack_dir/kernel" | awk '{print $1}')"
 boot_dtb_sha="$(sha256sum "$unpack_dir/dtb" | awk '{print $1}')"
 boot_sha="$(sha256sum "$boot_asset" | awk '{print $1}')"
+dtbo_sha="$(sha256sum "$dtbo_asset" | awk '{print $1}')"
 root_sha="$(sha256sum "$rootfs" | awk '{print $1}')"
 cat > "$outdir/MANIFEST.md" <<EOF
 # ${version} release manifest
 
 This is an experimental postmarketOS release for the OnePlus 7T Pro HD1913
-(\`hotdog\`) only. The boot image and rootfs image are an atomic pair.
+(\`hotdog\`) only. The boot image, filtered DTBO and rootfs image are an atomic
+set and must not be mixed with another release.
 
 | Property | Value |
 |---|---|
 | Kernel APK | \`${apk_version}\` |
 | Boot image SHA-256 | \`${boot_sha}\` |
+| Filtered DTBO SHA-256 | \`${dtbo_sha}\` |
+| Filtered DTBO size | \`${dtbo_size}\` bytes |
 | Kernel SHA-256 | \`${boot_kernel_sha}\` |
 | DTB SHA-256 | \`${boot_dtb_sha}\` |
 | Rootfs raw SHA-256 | \`${root_sha}\` |

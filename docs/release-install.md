@@ -7,10 +7,10 @@ HD1913** with the `hotdog` codename and an **unlocked bootloader**. Do not use
 them on another OnePlus model solely because it looks similar. A wrong boot
 image or a failed test kernel can require fastboot or recovery to regain access.
 
-The project publishes a boot image and rootfs image as one atomic release set.
-The boot command line contains the UUIDs of the `pmOS_boot` and `pmOS_root`
-filesystems inside the rootfs image. Never mix a boot image from one release
-with a rootfs asset from another release.
+The project publishes a boot image, a filtered DTBO image and a rootfs image as
+one atomic release set. The boot command line contains the UUIDs of the
+`pmOS_boot` and `pmOS_root` filesystems inside the rootfs image. Never mix any
+of these three images with an asset from another release.
 
 ## Version policy
 
@@ -43,14 +43,42 @@ replaced, not silently edited, when any asset changes.
    project does not distribute proprietary factory images.
 4. Install Android Platform Tools (`fastboot`), `zstd`, `sha256sum`, and keep
    at least 20 GiB of free host storage for the expanded rootfs image.
-5. Enter bootloader fastboot and verify the target. Stop unless it reports an
-   unlocked `hotdog` device.
+5. Enter bootloader fastboot and verify the target. The OnePlus bootloader
+   reports the platform product `msmnile`, not the Linux codename `hotdog`.
+   Stop unless the physical phone is an HD1913, `product` is `msmnile`, the
+   bootloader is unlocked and `is-userspace` is `no`.
 
 ```bash
 fastboot devices
 fastboot getvar product
 fastboot getvar unlocked
+fastboot getvar is-userspace
 ```
+
+Do not use `fastboot getvar all` in a public log: it prints the device serial.
+
+## Back up slot B before changing it
+
+This release intentionally uses slot B and leaves slot A untouched. Before
+flashing, make complete local backups of the current `boot_b` and `dtbo_b` and
+record their hashes. Recent Android Platform Tools can read a physical
+partition with `fastboot fetch`:
+
+```bash
+mkdir hotdog-slot-b-backup
+fastboot fetch boot_b hotdog-slot-b-backup/boot_b.img
+fastboot fetch dtbo_b hotdog-slot-b-backup/dtbo_b.img
+sha256sum hotdog-slot-b-backup/boot_b.img \
+  hotdog-slot-b-backup/dtbo_b.img \
+  > hotdog-slot-b-backup/SHA256SUMS
+test "$(stat -c %s hotdog-slot-b-backup/boot_b.img)" -eq 100663296
+test "$(stat -c %s hotdog-slot-b-backup/dtbo_b.img)" -eq 25165824
+```
+
+On macOS, use `shasum -a 256` and `stat -f %z` for the equivalent checks. If
+the installed `fastboot` does not support `fetch`, stop and back up both
+partitions from a trusted recovery shell before continuing. Do not flash first
+and plan the rollback later.
 
 ## Verify and expand the download
 
@@ -73,10 +101,13 @@ zstd -d --keep oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst
 sha256sum oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 ```
 
-## Flash the matching pair
+## Flash the matching set
 
-The rootfs is written to physical `super`. The mainline boot image is written
-to `boot_b`, leaving `boot_a` untouched as an additional recovery option.
+The rootfs is written to physical `super`. The filtered DTBO and mainline boot
+image are written to `dtbo_b` and `boot_b`, leaving slot A untouched as an
+additional recovery option. Flashing `super` replaces the Android system
+layout and is destructive. Confirm that the backups above are readable before
+continuing.
 
 Use userspace fastboot (`fastbootd`) for `super`. The HD1913 bootloader accepted
 the first large sparse segment during release validation but stopped responding
@@ -91,6 +122,9 @@ fastboot getvar is-userspace  # must report: yes
 fastboot -S 128M flash super \
   oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 fastboot reboot bootloader
+fastboot getvar is-userspace  # must report: no
+fastboot getvar product       # must report: msmnile
+fastboot flash dtbo_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-dtbo.img
 fastboot flash boot_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-boot.img
 fastboot set_active b
 fastboot reboot
@@ -128,12 +162,21 @@ Normal software reboot is validated. Reboot-to-bootloader/recovery from the
 running Alpha is not; enter those modes with the physical key sequence when
 maintenance is required.
 
-Do not repeatedly reset a device that has enumerated as Qualcomm `900e`.
-Disconnect it, use the physical HD1913 key sequence to return to bootloader
-fastboot, then confirm `fastboot devices` before writing anything. A failed
-Alpha boot can be recovered by reflashing the same complete release pair,
-switching to an intact `boot_a`, or restoring official software for the exact
-model. Do not flash a boot image from another release against this rootfs.
+If the phone enumerates as Qualcomm `05c6:900e` or `05c6:9008`, inspect it
+read-only only. Never issue a protocol reset, reboot or flash command in that
+state. Disconnect it and use the physical HD1913 key sequence to return to
+bootloader fastboot, then confirm `fastboot devices` before writing anything.
+A failed Alpha boot can be recovered by restoring both saved slot-B images:
+
+```bash
+fastboot flash dtbo_b hotdog-slot-b-backup/dtbo_b.img
+fastboot flash boot_b hotdog-slot-b-backup/boot_b.img
+fastboot set_active b
+```
+
+Alternatively select an intact slot A or restore official software for the
+exact model. Do not restore only one half of the boot/DTBO pair, and do not
+flash a boot or DTBO image from another release against this rootfs.
 
 ## Current Alpha limitations
 
