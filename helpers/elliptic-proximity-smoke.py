@@ -211,7 +211,7 @@ def wait_for_state(event_file, expected, timeout, output):
     return False
 
 
-def smoke(duration, log_path=None, interactive=False):
+def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -286,6 +286,26 @@ def smoke(duration, log_path=None, interactive=False):
                                          "in cycle %d" % cycle)
                     events += 1
                     print("Far recu.", flush=True)
+            elif electronic_probe:
+                log_line(output, "electronic-probe: covered warmup")
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    if read_proximity_event(event_file, 0.5, output):
+                        events += 1
+
+                log_line(output, "electronic-probe: transducer off")
+                set_control(card, MIXER_CONTROL, "0")
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    if read_proximity_event(event_file, 0.5, output):
+                        events += 1
+
+                log_line(output, "electronic-probe: transducer on")
+                set_control(card, MIXER_CONTROL, "1")
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if read_proximity_event(event_file, 0.5, output):
+                        events += 1
             else:
                 deadline = time.monotonic() + duration
                 while time.monotonic() < deadline:
@@ -333,10 +353,13 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--interactive", action="store_true", dest="interactive")
     mode.add_argument("--monitor", action="store_false", dest="interactive")
+    mode.add_argument("--electronic-probe", action="store_true")
     parser.set_defaults(interactive=True)
     args = parser.parse_args(argv)
     if args.duration <= 0 or args.duration > 300:
         parser.error("duration must be in ]0, 300] seconds")
+    if args.electronic_probe:
+        args.interactive = False
     if args.interactive and args.log is None:
         args.log = pathlib.Path("/home/user/proximity-test-%s.log"
                                 % time.strftime("%Y%m%d-%H%M%S"))
@@ -345,7 +368,8 @@ def main(argv=None):
         command.extend(sys.argv[1:])
         os.execvp(command[0], command)
     try:
-        result = smoke(args.duration, args.log, args.interactive)
+        result = smoke(args.duration, args.log, args.interactive,
+                       args.electronic_probe)
         if args.interactive:
             print("\nPASS: trois cycles near/far recus.")
             print("Journal: %s" % args.log)
