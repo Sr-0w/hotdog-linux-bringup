@@ -46,7 +46,7 @@ done
 
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta)\.[0-9]+$ ]] ||
 	die "version must use vMAJOR.MINOR.PATCH-alpha.N or -beta.N"
-for tool in avbtool blkid cmp e2fsck losetup partprobe sha256sum sgdisk stat tar unpack_bootimg zstd; do
+for tool in avbtool blkid cmp debugfs e2fsck losetup partprobe sha256sum sgdisk stat tar unpack_bootimg zstd; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required command: $tool"
 done
 for input in "$boot" "$dtbo" "$rootfs" "$apk"; do
@@ -125,6 +125,10 @@ e2fsck -fn "${part_prefix}2" > "$outdir/reports/e2fsck-pmOS_root.txt" || {
 	status=$?
 	[ "$status" -eq 1 ] || die "pmOS_root filesystem check failed"
 }
+debugfs -R "dump -p /boot.img $unpack_dir/pmOS_boot-boot.img" \
+	"${part_prefix}1" > "$outdir/reports/debugfs-pmOS_boot.txt" 2>&1
+cmp -s "$boot" "$unpack_dir/pmOS_boot-boot.img" ||
+	die "pmOS_boot /boot.img does not match the release boot image"
 losetup --detach "$loop_dev"
 loop_dev=""
 
