@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=24
+pkgrel=25
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -32,6 +32,9 @@ source="
 	hotdog-no-sleep.initd
 	hotdog-plasma-no-sleep
 	hotdog-plasma-no-sleep.desktop
+	hotdog-usb-acm
+	hotdog-usb-acm-login
+	hotdog-usb-acm.initd
 	powerdevilrc
 "
 
@@ -57,6 +60,12 @@ package() {
 		"$pkgdir/usr/share/alsa/ucm2/conf.d/sm8150/OnePlus 7T Pro.conf"
 	install -Dm755 "$srcdir/postprocess-boot-avb.sh" \
 		"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"
+	install -Dm755 "$srcdir/hotdog-usb-acm" \
+		"$pkgdir/usr/libexec/hotdog-usb-acm"
+	install -Dm755 "$srcdir/hotdog-usb-acm-login" \
+		"$pkgdir/usr/libexec/hotdog-usb-acm-login"
+	install -Dm755 "$srcdir/hotdog-usb-acm.initd" \
+		"$pkgdir/etc/init.d/hotdog-usb-acm"
 }
 
 kernel_downstream() {
@@ -181,5 +190,8 @@ d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270c
 cd45e4428d503b234793b7f6ddc2e85dbb7c79cc262805371a5c608837d2a858772d406c419d90331a7bc7113434e8e3a1fcef15af2d534526bf4d9ffd7fb71a  hotdog-no-sleep.initd
 cb46318d64e85e3fd432aa650784268710aa91226c35aa76d548a289d021f655f3e0c3fc1d4788f8da427c1b7b019a231d190c329ee839d761da310b27325073  hotdog-plasma-no-sleep
 9af850d3d1508748cce0823a82d846872859306fa781c0cd96435c628f96030b7df7826c884b4de530fd54aab316740a4eff193f299850fbee76744fb8ee9523  hotdog-plasma-no-sleep.desktop
+94afe445336105e157977aafcc28324d0f702f35e81358b22afd16e6f9f2f5f08223f80aaf19f461031158aa754e5015d3b61e10972c5500d756a4f3a0ed7ca3  hotdog-usb-acm
+30cca79c18d824332630f4d03c4694663e29cd9132d532479d1687da8dc24756e221ecfd11e880a1ba52a2446ec5d2bf8fc933b451501892bd1a9621e2b9cbda  hotdog-usb-acm-login
+dd43abf81951fd66890965916c88d4b290c873b45585be788ce2a7ea7ff3f5943fe0f01ef347d02f655f0921f0176cca0bb37d06a914cb6bc11580748e39fc51  hotdog-usb-acm.initd
 17911bdd6476f5b0067e584d1c55e2e7a0e3d6ae2f6d0944b66b707ce1433bb98fe3fb5327d39ca4a81e7650dbecde65196b474e940cbf38ba4d04c092bba2b3  powerdevilrc
 "

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+printf 'OnePlus hotdog USB ACM console\n'
+printf 'kernel: '
+uname -r
+printf 'tty: ttyGS0\n'
+exec /bin/login -f root

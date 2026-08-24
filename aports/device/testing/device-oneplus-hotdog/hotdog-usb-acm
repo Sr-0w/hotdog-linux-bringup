@@ -1,0 +1,65 @@
+#!/bin/sh
+
+set -eu
+
+gadget=/sys/kernel/config/usb_gadget/g1
+config="$gadget/configs/c.1"
+function="$gadget/functions/acm.GS0"
+link="$config/acm.GS0"
+
+log() {
+	logger -t hotdog-usb-acm "$*" 2>/dev/null || true
+}
+
+first_udc() {
+	for path in /sys/class/udc/*; do
+		[ -e "$path" ] || continue
+		printf '%s\n' "${path##*/}"
+		return 0
+	done
+	return 1
+}
+
+ensure_acm() {
+	bound_udc=""
+	restore_udc=""
+
+	[ -d "$config" ] || return 1
+	[ -e "$link" ] && return 0
+
+	bound_udc="$(cat "$gadget/UDC" 2>/dev/null || true)"
+	restore_udc="$bound_udc"
+	[ -n "$restore_udc" ] || restore_udc="$(first_udc 2>/dev/null || true)"
+
+	if [ -n "$bound_udc" ]; then
+		printf '\n' > "$gadget/UDC"
+	fi
+
+	mkdir -p "$function"
+	if ! ln -s "$function" "$link" 2>/dev/null && [ ! -e "$link" ]; then
+		[ -n "$bound_udc" ] && printf '%s\n' "$bound_udc" > "$gadget/UDC"
+		return 1
+	fi
+
+	if [ -n "$restore_udc" ] && [ -z "$(cat "$gadget/UDC" 2>/dev/null || true)" ]; then
+		printf '%s\n' "$restore_udc" > "$gadget/UDC"
+	fi
+
+	log "added ACM to the existing gadget configuration"
+}
+
+while :; do
+	if ensure_acm; then
+		waited=0
+		while [ ! -c /dev/ttyGS0 ] && [ "$waited" -lt 30 ]; do
+			sleep 1
+			waited=$((waited + 1))
+		done
+		if [ -c /dev/ttyGS0 ]; then
+			log "starting root console on ttyGS0"
+			/sbin/getty -n -l /usr/libexec/hotdog-usb-acm-login \
+				ttyGS0 115200 vt100 || true
+		fi
+	fi
+	sleep 2
+done

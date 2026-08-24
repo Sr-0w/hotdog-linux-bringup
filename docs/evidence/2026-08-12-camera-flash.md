@@ -58,8 +58,18 @@ The one log line mentioning the flash is a udev timing message at 1.37 s about
 ordering artefact the NFC module produces, and the module loads normally
 afterwards.
 
-## Not yet validated
+## Runtime follow-up - 2026-08-24
 
-Light output has not been confirmed by eye, only electrically. The currents
-are deliberately conservative and can be raised once the stock tree's figures
-are read back from the OxygenOS device tree.
+Both channels completed a brightness-32 torch test and a 100 mA, 100 ms strobe,
+then returned to disabled state with no residual fault. The user confirmed that
+the flash was visibly emitted.
+
+The remaining gap is normal integration rather than electrical operation.
+Plasma Camera presents no flash control. Plasma Mobile installs a flashlight
+quick setting, but its backend matches only LED names ending exactly in
+`:flash` or `:torch`; the two Hotdog channels enumerate as `white:flash-0` and
+`white:flash-1`, so the backend reports no available flashlight.
+
+The currents remain deliberately conservative and can be refined once the
+stock figures are recovered. Camera synchronization and the Plasma quick
+setting are the remaining support gaps.
