@@ -59,18 +59,27 @@ and no sample is ever produced.
 `sns_sx932x` is not an alternative: byte for byte the same comparison, at the
 same address `0x28`. There is no second driver to try.
 
-## Proximity is gated on a byte in the sensor state
+## Proximity: RETRACTED, the byte at +0x23d is not the gate
 
-`sns_tcs3701`'s `set_client_req`, line 763, at `0xb20a9c40`:
+An earlier version of this note read `sns_tcs3701`'s `set_client_req` at
+`0xb20a9c40` as returning early when a byte at `state+0x23d` is zero, and called
+that the reason no instance is created. **Reading the full branch shows both
+paths converge:**
 
 ```
-r2 = memb(r19+#0x23d)
-p0 = cmp.eq(r2,#0x0)
-if (p0.new) jump 0xb20aa264     ; return without creating an instance
+b20a9c4c:  if (byte == 0)  jump 0xb20aa264
+b20a9c68:  else            call 0xb20aa404      ; which does memb(r18+#0) = 0
+b20a9c70:                  jump 0xb20aa264
 ```
 
-An instance that is never created emits no configuration event, which is
-exactly what proximity does and what distinguishes it from the SAR.
+Zero or not, execution continues at the same address. So `+0x23d` is a
+"something is pending" flag that gets serviced and cleared, not a gate. The
+location is right — that code is genuinely `sns_tcs3701`'s `set_client_req`,
+confirmed by the descriptor it loads at `0xb2052934` — but the meaning was
+over-read from a partial branch.
+
+Proximity's failure is still that no instance is created and no configuration
+event is emitted. Where that is decided is not established.
 
 **RETRACTED: the capability-bit story below was a different driver.** An
 earlier version of this note said the byte was written at `0xb21c81c4` from a
