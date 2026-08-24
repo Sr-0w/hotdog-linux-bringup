@@ -51,7 +51,8 @@ Options:
   --image-sha256 SHA Require this exact local, transferred and remote SHA256.
   --host HOST        postmarketOS SSH host. Default: 172.16.42.1.
   --user USER        SSH user. Default: user.
-  --password PASS    SSH password. Defaults to PMOS_PASSWORD.
+  --password PASS    SSH password. Defaults to PMOS_PASSWORD. If omitted,
+                     use non-interactive public-key authentication.
   --serial SERIAL    Require androidboot.serialno to match this serial.
   --expected-source-boot-id ID
                       Require this exact source boot_id immediately before dd.
@@ -568,21 +569,7 @@ remote_quote() {
 }
 
 ssh_base() {
-  sshpass -p "$PMOS_PASSWORD" ssh \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile="$run_dir/known_hosts" \
-    -o ConnectTimeout=8 \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    "$PMOS_USER@$PMOS_HOST" "$@"
-}
-
-guarded_ssh_base() {
-  local label="$1"
-  local output="$2"
-  shift 2
-
-  run_guarded_transport "$label" "$output" \
+  if [ -n "$PMOS_PASSWORD" ]; then
     sshpass -p "$PMOS_PASSWORD" ssh \
       -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile="$run_dir/known_hosts" \
@@ -590,6 +577,37 @@ guarded_ssh_base() {
       -o PreferredAuthentications=password \
       -o PubkeyAuthentication=no \
       "$PMOS_USER@$PMOS_HOST" "$@"
+  else
+    ssh -o BatchMode=yes \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile="$run_dir/known_hosts" \
+      -o ConnectTimeout=8 \
+      "$PMOS_USER@$PMOS_HOST" "$@"
+  fi
+}
+
+guarded_ssh_base() {
+  local label="$1"
+  local output="$2"
+  shift 2
+
+  if [ -n "$PMOS_PASSWORD" ]; then
+    run_guarded_transport "$label" "$output" \
+      sshpass -p "$PMOS_PASSWORD" ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile="$run_dir/known_hosts" \
+        -o ConnectTimeout=8 \
+        -o PreferredAuthentications=password \
+        -o PubkeyAuthentication=no \
+        "$PMOS_USER@$PMOS_HOST" "$@"
+  else
+    run_guarded_transport "$label" "$output" \
+      ssh -o BatchMode=yes \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile="$run_dir/known_hosts" \
+        -o ConnectTimeout=8 \
+        "$PMOS_USER@$PMOS_HOST" "$@"
+  fi
 }
 
 remote_run() {
@@ -597,7 +615,9 @@ remote_run() {
 }
 
 detect_remote_sudo_mode() {
-  if remote_run 'sudo -n true' >/dev/null 2>&1; then
+  if [ "$PMOS_USER" = root ]; then
+    REMOTE_SUDO_MODE="direct"
+  elif remote_run 'sudo -n true' >/dev/null 2>&1; then
     REMOTE_SUDO_MODE="noninteractive"
   elif printf '%s\n' "$PMOS_PASSWORD" |
     remote_run "sudo -S -p '' true" >/dev/null 2>&1; then
@@ -612,6 +632,9 @@ remote_sudo_sh() {
   local script="$1"
 
   case "$REMOTE_SUDO_MODE" in
+    direct)
+      remote_run "sh -c $(remote_quote "$script")"
+      ;;
     noninteractive)
       remote_run "sudo -n sh -c $(remote_quote "$script")"
       ;;
@@ -631,6 +654,9 @@ guarded_remote_sudo_sh() {
   local script="$3"
 
   case "$REMOTE_SUDO_MODE" in
+    direct)
+      guarded_ssh_base "$label" "$output" "sh -c $(remote_quote "$script")"
+      ;;
     noninteractive)
       guarded_ssh_base "$label" "$output" "sudo -n sh -c $(remote_quote "$script")"
       ;;
@@ -646,6 +672,9 @@ guarded_remote_sudo_sh() {
 
 run_guarded_sudo_transport() {
   case "$REMOTE_SUDO_MODE" in
+    direct)
+      run_guarded_transport "$@"
+      ;;
     noninteractive)
       run_guarded_transport "$@"
       ;;
@@ -833,7 +862,6 @@ main() {
   [ -n "$IMAGE" ] || die "Missing --image" 2
   [ -s "$IMAGE" ] || die "Missing or empty image: $IMAGE" 2
   [ "$PARTITION_LABEL" = "boot_b" ] || die "Refusing to flash anything except boot_b" 2
-  [ -n "$PMOS_PASSWORD" ] || die "Set PMOS_PASSWORD or use --password" 2
   [ -n "$SERIAL" ] || die "Set ANDROID_SERIAL, HOTDOG_TARGET_SERIAL, or use --serial" 2
   if [ -n "$IMAGE_EXPECTED_SHA256" ] && ! [[ "$IMAGE_EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
     die "--image-sha256 must be exactly 64 hexadecimal characters" 2
@@ -845,7 +873,9 @@ main() {
   validate_watcher_contract_configuration
 
   require_cmd ssh
-  require_cmd sshpass
+  if [ -n "$PMOS_PASSWORD" ]; then
+    require_cmd sshpass
+  fi
   require_cmd sha256sum
   require_cmd stat
   require_cmd awk
