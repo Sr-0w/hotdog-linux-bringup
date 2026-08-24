@@ -222,6 +222,14 @@ reactivates the complete set. The public replay covers precedence, version
 tie-breaking, an already-active no-op, two-subscription activation, unmatched
 cards, malformed bounds, verification and rollback without any private MBN.
 
+`hotdog-qmi-pdc` is the corresponding libqmi boundary. It constructs software
+Get Selected, Set Selected, Activate and Deactivate requests with the same
+subscription ID and caller-owned token, then decodes Get Selected indications
+into bounded active/pending IDs. Missing fields, stale tokens, a nonzero remote
+result and oversized IDs fail closed before they can advance the radio state.
+Its compile-check uses the public libqmi API plus exactly the four generated
+subscription setters carried by the local libqmi patch.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;

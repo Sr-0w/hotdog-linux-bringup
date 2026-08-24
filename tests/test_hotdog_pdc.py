@@ -94,5 +94,47 @@ class HotdogPdcTests(unittest.TestCase):
         self.assertEqual(bad_subscription.returncode, 2)
 
 
+class HotdogQmiPdcBuildTests(unittest.TestCase):
+    def test_subscription_scoped_adapter_compiles(self) -> None:
+        flags = subprocess.run(
+            ["pkg-config", "--cflags", "qmi-glib", "glib-2.0"],
+            capture_output=True, text=True,
+        )
+        if flags.returncode:
+            self.skipTest("libqmi development files are unavailable")
+        compatibility = """\
+#include <libqmi-glib.h>
+gboolean qmi_message_pdc_get_selected_config_input_set_subscription_id(
+    QmiMessagePdcGetSelectedConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_set_selected_config_input_set_subscription_id(
+    QmiMessagePdcSetSelectedConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_activate_config_input_set_subscription_id(
+    QmiMessagePdcActivateConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_deactivate_config_input_set_subscription_id(
+    QmiMessagePdcDeactivateConfigInput *, guint32, GError **);
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / "hotdog-patched-pdc-api.h"
+            header.write_text(compatibility)
+            subprocess.run(
+                [
+                    "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                    "-fsyntax-only", "-include", str(header), "-I", str(SOURCE),
+                    str(SOURCE / "hotdog-qmi-pdc.c"), *flags.stdout.split(),
+                ],
+                check=True,
+            )
+
+    def test_libqmi_patch_defines_every_subscription_field(self) -> None:
+        patch = (ROOT / "aports/temp/libqmi/0001-pdc-add-subscription-id.patch").read_text()
+        for operation in (
+            "get_selected_config",
+            "set_selected_config",
+            "activate_config",
+            "deactivate_config",
+        ):
+            self.assertIn(f"qmi_message_pdc_{operation}_input_set_subscription_id", patch)
+
+
 if __name__ == "__main__":
     unittest.main()
