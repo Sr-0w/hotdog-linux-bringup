@@ -101,6 +101,42 @@ remaining path is the polling timer. The instance state carries the interval at
 back at `0xb20a4560`; reading those needs the *instance* state base, which this
 note does not have — the calibration above locates the *sensor* state.
 
+## Field map, for whoever picks this up
+
+Two structures, and confusing them wastes an evening. Offsets are from the
+driver's own logging, which reloads what it parsed before printing it.
+
+**Sensor state** — located in a coredump by the signature below, which matched
+exactly two instances:
+
+| field | offset | source |
+| --- | --- | --- |
+| `bus_type` | `+0x50` | `sns_sx9324_sensor.c` line 319 handler at `0xb21d6728` |
+| `slave_control` | `+0x54` | same |
+| `min`/`max_bus_speed_KHz` | `+0x5c`, `+0x60` | same |
+| `bus_instance` | `+0x64` | same |
+| `dri_irq_num` | `+0x72` | line 328 handler |
+| **hardware-present flag** | `+0xb7` | set at `0xb20a48f8` |
+| **identity read from the chip** | `+0x19c` | stored at `0xb20a4910` |
+
+**Instance state** — different structure, not yet located in memory:
+
+| field | offset | source |
+| --- | --- | --- |
+| `is_dri` | `+0x0` | `inst_set_client_config` logging at `0xb20a41f0` |
+| **sampling interval** | `+0x4c` | written `0xb20a45e8`, read back `0xb20a4560` |
+| **timer value**, 64-bit | `+0x50` | written `0xb20a45f4` |
+| `config_step` | `+0xa4` | `0xb20a41f8` |
+
+The remaining measurement is the interval and timer value in a dump taken with
+a subscription live. A zero interval would mean the polling timer never fires,
+which is the last path left that fits: hardware present and identified, request
+accepted, configuration event returned, chip transacted with, no sample ever.
+
+Finding the instance state needs an anchor the way the registry handler
+anchored the sensor state. `is_dri` at `+0x0` is too weak on its own — one byte
+equal to 1 matches everywhere.
+
 ## Proximity: RETRACTED, the byte at +0x23d is not the gate
 
 An earlier version of this note read `sns_tcs3701`'s `set_client_req` at
