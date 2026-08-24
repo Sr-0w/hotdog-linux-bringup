@@ -227,10 +227,14 @@ def smoke(duration, log_path=None, interactive=False):
 
     card = playback["card"]
     enable = find_driver_enable()
+    rx_port = enable.parent / "rx_port"
+    if not rx_port.exists():
+        raise SmokeError("missing Elliptic RX port control")
     event_path = find_input_event()
     output = open(log_path, "a") if log_path else None
     hostless = None
     armed = False
+    rx_armed = False
     control_prestates = []
     events = 0
 
@@ -254,6 +258,8 @@ def smoke(duration, log_path=None, interactive=False):
         for name, value in controls:
             control_prestates.append((name, read_control(card, name)))
             set_control(card, name, value)
+        rx_port.write_text("1\n")
+        rx_armed = True
         hostless = AlsaHostless()
         hostless.start(card, playback["device"], capture["device"])
         event_stats = enable.parent / "event_stats"
@@ -293,11 +299,6 @@ def smoke(duration, log_path=None, interactive=False):
                          % event_stats.read_text().strip())
             except OSError as error:
                 log_line(output, "ERROR event stats: %s" % error)
-        if armed:
-            try:
-                enable.write_text("0\n")
-            except OSError as error:
-                log_line(output, "ERROR disable: %s" % error)
         if hostless:
             hostless.close()
         for name, value in reversed(control_prestates):
@@ -306,6 +307,16 @@ def smoke(duration, log_path=None, interactive=False):
             except (OSError, subprocess.CalledProcessError) as error:
                 log_line(output, "ERROR mixer rollback %s: %s"
                          % (name, error))
+        if rx_armed:
+            try:
+                rx_port.write_text("0\n")
+            except OSError as error:
+                log_line(output, "ERROR RX port disable: %s" % error)
+        if armed:
+            try:
+                enable.write_text("0\n")
+            except OSError as error:
+                log_line(output, "ERROR disable: %s" % error)
         STATE_FILE.write_text("unknown\n")
         if output:
             output.close()
