@@ -48,6 +48,7 @@ snapshot_rels=(
 	"main/hexagonrpcd"
 	"temp/iio-sensor-proxy"
 	"temp/libcamera"
+	"temp/modemmanager"
 )
 selected_rels=()
 
@@ -123,6 +124,10 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-no-sleep.initd | \
 		device/testing/device-oneplus-hotdog:hotdog-plasma-no-sleep | \
 		device/testing/device-oneplus-hotdog:hotdog-plasma-no-sleep.desktop | \
+		device/testing/device-oneplus-hotdog:hotdog-alert-slider.desktop | \
+		device/testing/device-oneplus-hotdog:hotdog-usb-acm | \
+		device/testing/device-oneplus-hotdog:hotdog-usb-acm-login | \
+		device/testing/device-oneplus-hotdog:hotdog-usb-acm.initd | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
 		device/testing/device-oneplus-hotdog:HiFi.conf | \
@@ -160,7 +165,11 @@ allowed_snapshot_file() {
 		temp/libcamera:*.patch | \
 		temp/libcamera:*.yaml | \
 		temp/libcamera:*.desktop | \
-		temp/libcamera:*.rules)
+		temp/libcamera:*.rules | \
+		temp/modemmanager:APKBUILD | \
+		temp/modemmanager:*.patch | \
+		temp/modemmanager:*.initd | \
+		temp/modemmanager:*.rules)
 			return 0
 			;;
 		*)

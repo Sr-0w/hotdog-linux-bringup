@@ -415,6 +415,19 @@ validate_hotdog_wifi_package_contract() {
 	grep -q '^rc-update add rmtfs boot$' \
 		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
 		die "device firmware package does not enable RMTFS at boot"
+	grep -q '^[[:space:]]*msm-modem-uim-selection$' "$device_apkbuild" ||
+		die "device firmware package does not depend on UIM slot selection"
+	grep -q '^rc-update add msm-modem-uim-selection boot$' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
+		die "device firmware package does not enable UIM slot selection"
+	grep -q '^[[:space:]]*modemmanager-openrc$' "$device_apkbuild" ||
+		die "device firmware package does not depend on the ModemManager OpenRC service"
+	grep -q '^rc-update del modemmanager default' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
+		die "device firmware package leaves ModemManager racing in the default runlevel"
+	grep -q '^rc-update add modemmanager boot$' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
+		die "device firmware package does not start ModemManager after boot UIM selection"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||
@@ -423,6 +436,62 @@ validate_hotdog_wifi_package_contract() {
 		die "WLAN package does not install wlanmdsp.mbn"
 	grep -q '"$builddir"/modem.mbn' "$firmware_apkbuild" ||
 		die "modem package does not install modem.mbn"
+}
+
+validate_modemmanager_slot_pin_contract() {
+	local apkbuild="aports/temp/modemmanager/APKBUILD"
+	local patch="aports/temp/modemmanager/0002-qmi-use-the-SIM-slot-for-PIN-operations.patch"
+
+	log "ModemManager QMI SIM-slot PIN contract"
+	[ -f "$apkbuild" ] || die "missing ModemManager override"
+	[ -f "$patch" ] || die "missing ModemManager SIM-slot PIN patch"
+	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
+		die "ModemManager override does not apply the SIM-slot PIN patch"
+	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
+		die "ModemManager patch does not cover PIN verification"
+	grep -q 'qmi_message_uim_unblock_pin_input_set_session' "$patch" ||
+		die "ModemManager patch does not cover PIN unblock"
+	grep -q 'qmi_message_uim_change_pin_input_set_session' "$patch" ||
+		die "ModemManager patch does not cover PIN changes"
+	grep -q 'qmi_message_uim_set_pin_protection_input_set_session' "$patch" ||
+		die "ModemManager patch does not cover PIN protection"
+	[ "$(grep -c '^+[[:space:]]*get_uim_card_session_type (self),' "$patch")" -eq 4 ] ||
+		die "ModemManager patch does not route all four PIN operations through the SIM slot"
+	for slot in 2 3 4 5; do
+		grep -q "QMI_UIM_SESSION_TYPE_CARD_SLOT_$slot" "$patch" ||
+			die "ModemManager patch does not map card slot $slot"
+	done
+}
+
+validate_hotdog_oos10_modem_contract() {
+	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
+	local firmware_dir="aports/device/testing/firmware-oneplus-hotdog-modem-oos10"
+	local firmware_apkbuild="$firmware_dir/APKBUILD"
+	local private_blob="$firmware_dir/modem-oos10.0.13.mbn"
+	local stage_helper="scripts/stage-private-modem-firmware.sh"
+	local sim_helper="helpers/hotdog-sim-slot2-check.sh"
+
+	log "Hotdog OxygenOS 10 modem firmware contract"
+	[ -f "$firmware_apkbuild" ] || die "missing OOS10 modem firmware APKBUILD"
+	[ -f "$firmware_dir/README.md" ] || die "missing OOS10 modem firmware provenance"
+	[ -x "$stage_helper" ] || die "missing executable OOS10 modem stage helper"
+	[ -x "$sim_helper" ] || die "missing executable guarded SIM slot 2 helper"
+	grep -q '^[[:space:]]*firmware-oneplus-hotdog-modem-oos10$' "$device_apkbuild" ||
+		die "Hotdog device does not select the OOS10 modem firmware"
+	if grep -q '^[[:space:]]*firmware-oneplus-hotdog-modem$' "$device_apkbuild"; then
+		die "Hotdog device still selects the OOS12 modem firmware"
+	fi
+	grep -q '559a517c2d4ca5c22d25e0a9b3383bbf7591a632f688b629a19c3e51e3dba9e5' "$stage_helper" ||
+		die "OOS10 modem stage helper lacks the output hash gate"
+	grep -q '7920f87d8544d17efbe93ec9d7365190a43016eb9d286b1361de5fc96ca6a7b9' "$stage_helper" ||
+		die "OOS10 modem stage helper lacks the source hash gate"
+	grep -q 'expected_modem_sha=559a517c' "$sim_helper" ||
+		die "SIM helper does not attest the OOS10 modem firmware"
+	grep -q 'PIN1 retries are' "$sim_helper" ||
+		die "SIM helper does not fail closed on retry changes"
+	if git ls-files --error-unmatch "$private_blob" >/dev/null 2>&1; then
+		die "private OOS10 modem firmware is tracked by Git"
+	fi
 }
 
 validate_hotdog_plasma_apps_contract() {
@@ -778,6 +847,8 @@ main() {
 	validate_k1_aport_inputs
 	validate_mainline616_aport_inputs
 	validate_hotdog_wifi_package_contract
+	validate_modemmanager_slot_pin_contract
+	validate_hotdog_oos10_modem_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract
 	validate_hotdog_avb_contract

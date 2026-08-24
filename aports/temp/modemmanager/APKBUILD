@@ -1,0 +1,107 @@
+# Contributor: Stuart Cardall <developer@it-offshore.co.uk>
+maintainer="Achill Gilgenast <achill@achill.org>"
+pkgname=modemmanager
+pkgver=1.25.95_git20260709
+pkgrel=1
+_commit=d776ea38d29ca472a12323c1d45002ee19a66f57
+pkgdesc="ModemManager library"
+url="https://www.freedesktop.org/wiki/Software/ModemManager"
+arch="all"
+license="GPL-2.0-or-later AND LGPL-2.1-or-later"
+# Three unrelated daemon/plugin tests abort under qemu-aarch64 in pmbootstrap.
+options="!check"
+depends="
+	dbus
+	libmm-glib=$pkgver-r$pkgrel
+	mobile-broadband-provider-info
+	polkit
+	"
+depends_dev="libmm-glib=$pkgver-r$pkgrel"
+makedepends="
+	$depends_dev
+	bash-completion-dev
+	dbus-dev
+	elogind-dev
+	gobject-introspection-dev
+	gtk-doc
+	libgudev-dev
+	libmbim-dev
+	libqmi-dev
+	linux-headers
+	meson
+	polkit-dev
+	vala
+	"
+checkdepends="glib-dev py3-gobject3 py3-dbus"
+subpackages="
+	$pkgname-lang
+	$pkgname-doc
+	libmm-glib:libmm
+	$pkgname-dbg
+	$pkgname-dev
+	$pkgname-openrc
+	$pkgname-bash-completion
+	$pkgname-systemd
+	$pkgname-udev
+	"
+#source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$pkgver/ModemManager-$pkgver.tar.gz
+source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$_commit/ModemManager-$_commit.tar.gz
+	$pkgname.rules
+	$pkgname.initd
+
+	0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+	0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
+	"
+#builddir="$srcdir"/ModemManager-$pkgver
+builddir="$srcdir"/ModemManager-$_commit
+
+build() {
+	# Temporarily disable gtkdoc generation due to error in helper script
+	# https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/issues/902
+	abuild-meson \
+		-Db_lto=true \
+		-Dsystemdsystemunitdir=/usr/lib/systemd/system \
+		-Ddbus_policy_dir=/usr/share/dbus-1/system.d \
+		-Dgtk_doc=false \
+		-Dpolkit=permissive \
+		-Dsystemd_journal=false \
+		-Dsystemd_suspend_resume=true \
+		-Dvapi=true \
+		. output
+	meson compile -C output
+}
+
+check() {
+	meson test -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+	install -m644 -D "$srcdir/$pkgname.rules" \
+		"$pkgdir/usr/share/polkit-1/rules.d/01-org.freedesktop.ModemManager.rules"
+	install -m755 -D "$srcdir/$pkgname.initd" \
+		"$pkgdir/etc/init.d/$pkgname"
+
+	# post-install message
+	mkdir -p "$pkgdir/usr/share/doc/$pkgname"
+	cat > "$pkgdir"/usr/share/doc/$pkgname/README.alpine <<- EOF
+	If your USB modem shows up as a Flash drive when you plug it in:
+
+	install 'usb-modeswitch' to automatically switch to USB modem mode whenever you plug it in.
+	To control your modem without the root password: add your user account to the 'plugdev' group.
+	EOF
+}
+
+libmm() {
+	depends=""
+	amove usr/lib/girepository-1.0
+	amove usr/lib/libmm-glib.so*
+}
+
+sha512sums="
+fd659330b2ec4e8368807053ec01498241dec153f6f2491bb17c42e2b81c8d9a98ff5f8c153874a6d092e17c545c5ae19734bc23c85c459eb1c7b9b709e5ff58  ModemManager-d776ea38d29ca472a12323c1d45002ee19a66f57.tar.gz
+6fab86c27502b29be0c6610d835a3249a4a81993eb986cff2c3ea9393fadd3f693ba4bb0532ae0e50a83d359559511859dd05f7ea2f0cb52839f535a7e49f8a0  modemmanager.rules
+6e234cebcdec6d1afbca164ee5c13c96f7132ef31231d5c043cc5750ebe99e362a384d0463874b3c1c30799b433e0d3286add03af13c97fa406b4b5d2b78880c  modemmanager.initd
+5d79cb678af356a8350ea9c9f41b1af64d72ff5db4f16a5655481e2f7533f32d6ea45c10352d20a15233392cb02fd1d3c490c1268185787b1cc711e0bbda5f7f  0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+c5c2f560a7979b20067dc0f0b26fd621e92d7c08717ccd6740758a09faa01fd5ef642820e686f7973ad8ba22b3442c869f3167a1898fa87adc888fd3310e0348  0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
+"

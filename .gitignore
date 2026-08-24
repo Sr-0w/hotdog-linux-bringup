@@ -38,3 +38,6 @@ helpers/**/.*.cmd
 
 # Proprietary local source staged only for the private SLPI APK build
 aports/device/testing/firmware-oneplus-hotdog-slpi/slpi-oos10.0.13.mbn
+
+# Proprietary local source staged only for the private OOS10 modem APK build
+aports/device/testing/firmware-oneplus-hotdog-modem-oos10/modem-oos10.0.13.mbn
