@@ -31,6 +31,7 @@ Usage:
 import ctypes
 import importlib.util
 import json
+import os
 import pathlib
 import re
 import socket
@@ -43,9 +44,30 @@ HERE = pathlib.Path(__file__).resolve().parent
 CLIENT = HERE / "ssc-client.py"
 if not CLIENT.exists():
     CLIENT = pathlib.Path("/root/ssc-client.py")
-SEUILS = pathlib.Path("/etc/hotdog-proximite.json")
-ETAT = pathlib.Path("/run/hotdog-proximite")
-JOURNAL = pathlib.Path("/var/log/hotdog-proximite.log")
+def _chemin(systeme, repli):
+    """Chemin systeme si on peut y ecrire, sinon un repli dans le compte.
+
+    L'etalonnage se fait naturellement depuis la session graphique, donc en
+    utilisateur ordinaire : imposer /etc ferait echouer la seule etape qui
+    demande une presence humaine.
+    """
+    p = pathlib.Path(systeme)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        t = p.parent / (".ecriture-%d" % os.getpid())
+        t.touch(); t.unlink()
+        return p
+    except OSError:
+        q = pathlib.Path(repli).expanduser()
+        q.parent.mkdir(parents=True, exist_ok=True)
+        return q
+
+
+SEUILS = _chemin("/etc/hotdog-proximite.json",
+                 "~/.config/hotdog-proximite.json")
+ETAT = _chemin("/run/hotdog-proximite", "~/.cache/hotdog-proximite")
+JOURNAL = _chemin("/var/log/hotdog-proximite.log",
+                  "~/.cache/hotdog-proximite.log")
 
 _spec = importlib.util.spec_from_file_location("ssc_client", CLIENT)
 SSC = importlib.util.module_from_spec(_spec)
@@ -197,9 +219,16 @@ def calibrer():
 
 
 def demon():
-    if not SEUILS.exists():
+    src = SEUILS
+    if not src.exists():
+        # l'etalonnage se fait en utilisateur, le demon tourne souvent en root
+        for autre in ("/etc/hotdog-proximite.json",
+                      "/home/user/.config/hotdog-proximite.json"):
+            if pathlib.Path(autre).exists():
+                src = pathlib.Path(autre); break
+    if not src.exists():
         sys.exit("pas de seuils : lancez d'abord proximite.py --calibrer")
-    s = json.loads(SEUILS.read_text())
+    s = json.loads(src.read_text())
     canal, sens = s["canal"], s["sens"]
     proche_s, loin_s = s["seuil_proche"], s["seuil_loin"]
     suid = suid_lumiere()
