@@ -205,8 +205,8 @@ set and must not be mixed with another release.
 | pmOS_root UUID | \`${root_uuid}\` |
 
 Run \`sha256sum -c SHA256SUMS\` before flashing. If the rootfs archive is split,
-reassemble the parts in numeric order before decompressing it. See
-\`docs/release-install.md\` in the matching source tag for the full procedure.
+reassemble the parts in numeric order before decompressing it. Read the
+attached \`INSTALL.md\` before writing any phone partition.
 EOF
 
 note "release assets prepared in $outdir"
