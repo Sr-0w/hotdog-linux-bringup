@@ -255,6 +255,10 @@ def smoke(duration, log_path=None, interactive=False):
             set_control(card, name, value)
         hostless = AlsaHostless()
         hostless.start(card, playback["device"], capture["device"])
+        event_stats = enable.parent / "event_stats"
+        if event_stats.exists():
+            log_line(output, "event-stats-armed: %s"
+                     % event_stats.read_text().strip())
 
         with event_path.open("rb", buffering=0) as event_file:
             if interactive:
@@ -281,6 +285,13 @@ def smoke(duration, log_path=None, interactive=False):
                     if read_proximity_event(event_file, 0.5, output):
                         events += 1
     finally:
+        event_stats = enable.parent / "event_stats"
+        if event_stats.exists():
+            try:
+                log_line(output, "event-stats-final: %s"
+                         % event_stats.read_text().strip())
+            except OSError as error:
+                log_line(output, "ERROR event stats: %s" % error)
         if armed:
             try:
                 enable.write_text("0\n")
