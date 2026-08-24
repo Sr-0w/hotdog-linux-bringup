@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=28
+pkgrel=29
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -58,6 +58,7 @@ package() {
 	# mkinitfs 2.11 still names the pre-usrmerge util-linux path.
 	mkdir -p "$pkgdir/usr/sbin"
 	ln -s /sbin/losetup "$pkgdir/usr/sbin/losetup"
+	ln -s /usr/share/deviceinfo/deviceinfo "$pkgdir/etc/deviceinfo"
 	install -Dm644 "$srcdir/HiFi.conf" \
 		"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"
 	install -Dm644 "$srcdir/hotdog.conf" \
