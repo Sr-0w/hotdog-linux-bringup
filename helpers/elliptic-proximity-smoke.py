@@ -234,6 +234,9 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     mode_control = enable.parent / "operation_mode"
     if not mode_control.exists():
         raise SmokeError("missing Elliptic operation mode control")
+    ramp_down = enable.parent / "ramp_down"
+    if not ramp_down.exists():
+        raise SmokeError("missing Elliptic ramp-down control")
     event_path = find_input_event()
     output = open(log_path, "a") if log_path else None
     hostless = None
@@ -325,6 +328,12 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
                          % event_stats.read_text().strip())
             except OSError as error:
                 log_line(output, "ERROR event stats: %s" % error)
+        if armed:
+            try:
+                ramp_down.write_text("1\n")
+                time.sleep(0.02)
+            except OSError as error:
+                log_line(output, "ERROR ramp down: %s" % error)
         if hostless:
             hostless.close()
         for name, value in reversed(control_prestates):
