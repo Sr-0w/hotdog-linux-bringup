@@ -67,11 +67,10 @@ feedbackd D-Bus `Profile` property read `quiet`. IRQ counters also increased
 on the Silent and Vibrate contacts. Thus the middle position already works
 from physical contact through feedbackd.
 
-The guided helper at `/home/user/test-hotdog-quick-wins` now monitors events
-live and finishes only after values 0, 1 and 2 have all been observed. Final
-three-position validation remains pending that log.
+The guided helper at `/home/user/test-hotdog-quick-wins` monitors events live
+and finishes only after values 0, 1 and 2 have all been observed.
 
-## The lower contact is electrically absent under mainline
+## The lower contact was intermittently open
 
 The live monitor repeatedly saw values 0 and 1, but never 2. Two guided raw
 GPIO passes made the failure specific:
@@ -87,6 +86,11 @@ interrupts. With the slider held at the bottom and the input driver briefly
 unbound, GPIO27 still read high with internal pull-up, pull-down and bias
 disabled. Its TLMM control register is `0x00000000` and IO register
 `0x00000001`: GPIO mode, input, no pull, physical high.
+
+That observation was real but transient. It did not establish a mainline
+electrical defect. Immediately before the later downstream control, with the
+slider still physically at the bottom, GPIO27 had started reading low under
+mainline.
 
 Treating all contacts open as Ring was tested and rejected. It produces a false
 Ring event in the break-before-make gap between top and middle, and it does not
@@ -117,12 +121,46 @@ is not relevant here: bit 11 (`egpio_present`) is clear in the live control
 register. There is therefore no evidence for another GPIO or a tile-address
 bug.
 
-A host-only kexec attempt using the boot-proven downstream Image and a DT rebuilt
-from the archived OxygenOS live tree did not reach userspace; the device made
-one normal return to mainline, produced no pstore record and then remained
-stable for a 90-second boot-id window. It is not used as slider evidence.
+A host-only kexec attempt using the boot-proven downstream Image and a DT
+rebuilt from the archived OxygenOS live tree did not reach userspace. It is not
+used as slider evidence.
 
-Current conclusion: OxygenOS requires GPIO27 low, while this handset currently
-drives GPIO27 high in the physical lower position under mainline. The remaining
-work is to identify the missing board-level enable or a contact/path fault; an
-absence-of-contact software mapping is not an accepted fix.
+## Downstream control and immediate mainline comparison
+
+The decisive control used the exact previously booted R6 pair rather than a
+reconstructed DT:
+
+- boot image SHA256
+  `28c08d1668955a791f24d0d392658b06d1e452921f04be60c44278d27014966b`;
+- stock `dtbo_b` SHA256
+  `95a111deb5302d0fc677c3d58f880a049461ffcaba856c75471d2789040ae672`;
+- Linux `4.14.357-openela-perf #6-postmarketOS`;
+- ABL-selected `androidboot.dtb_idx=12` and `androidboot.dtbo_idx=5`.
+
+With the slider left in the bottom position, the OnePlus driver reported:
+
+```text
+key[0]=0,key[1]=1,key[2]=1
+report down key successful!
+```
+
+`/proc/tristatekey/tri_state` returned `3` for 20 consecutive reads, GPIO27's
+TLMM IO register was low, and the registered IRQ was named `tristate_key1`.
+This proves both that GPIO27 is the lower contact and that the contact can
+close electrically on this handset.
+
+The exact mainline boot and no-op DTBO were then restored without moving the
+slider. Linux 6.16 read GPIO27 low in 50 consecutive samples. Therefore the
+downstream boot did not supply a persistent rail, pinmux, pull or other
+electrical enable missing from mainline. Both kernels see the same closed
+contact when the mechanism reaches it.
+
+The earlier all-high bottom samples are best explained by intermittent
+mechanical travel or contact at the lower detent. Mapping all contacts open to
+Ring remains rejected because it creates a false Ring report during normal
+break-before-make travel. The honest `gpio-keys` implementation is retained.
+
+The alert slider is now **Working**: Silent and Vibrate were physically
+validated in the guided run, and Ring is validated by the stock downstream
+driver followed immediately by 50 stable mainline GPIO27-low reads in the same
+physical position.

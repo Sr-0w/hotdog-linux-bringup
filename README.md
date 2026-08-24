@@ -125,7 +125,9 @@ function under **Working** and a broader integration or stability item under
 | Input | Power key | PM8150 PON power-key input and physical button interaction are hardware-validated. |
 | Input | Volume Down | The corrected PM8150 GPIO7 mapping is physically tested and functional. |
 | Input | Volume Up | PM8150 GPIO6 / `KEY_VOLUMEUP` is physically tested and functional. |
+| Input | Three-position alert slider | The generic `ABS_SND_PROFILE` device and feedbackd bridge provide Silent, Vibrate and Ring. The lower GPIO27 contact is mechanically intermittent at its detent, but both the stock downstream driver and an immediate mainline comparison read the valid low state. |
 | USB | USB gadget / NCM networking | Stable host ping and SSH at `172.16.42.1` through the translated DWC3 SMMU path. |
+| USB | USB ACM serial | The packaged OpenRC service provides a bidirectional root console and recreates ACM after complete function removal while NCM remains usable. |
 | USB-C | Type-C dual role and USB-PD detection | Type-C partner/PD state is exposed and device/sink negotiation works. |
 | USB-C | Host mode through powered dock | xHCI, a hub and attached devices enumerate while the handset remains a power sink. |
 | USB-C | Source VBUS for an unpowered dock | The handset remains data host, becomes power source and powers the hub, storage and Ethernet adapter in both plug orientations. |
@@ -144,7 +146,8 @@ function under **Working** and a broader integration or stability item under
 | Modem | MPSS remote processor / QRTR services | MPSS, RMTFS, QRTR, PD mapper and QMI services run; ModemManager enumerates the modem and reads its IMEI. |
 | GNSS | QMI LOC engine sessions | The LOC service reports capabilities and accepts start/stop session requests. |
 | NFC | PN553 reader and ISO-DEP exchange | A real ISO 14443-4 document is detected, activated, typed and exchanges bidirectional ISO 7816-4 APDUs. The ePassport BAC/PACE refusal is expected. |
-| Haptics | AW8697 linear resonant actuator | The source-built `FF_RUMBLE` driver completes timed effects and physical vibration is confirmed by hand. |
+| Haptics | AW8697 linear resonant actuator | Physical vibration is confirmed across 10-100 percent strength, twenty stop/start pulses, feedbackd and a real suspend/resume cycle. |
+| Lighting | Plasma flashlight | The standard quick setting discovers `white:torch` and physically controls the rear light. |
 | Sensors | LSM6DSM accelerometer | Streams at 25 Hz through SEE. Gravity reads on Z lying flat and on Y held upright, so the axes are right; verified by hand with [the guided test](helpers/hotdog-sensor-check.py). |
 | Sensors | LSM6DSM gyroscope | Streams at 25 Hz. Responds to rotation and settles back to rest when the phone is put down. |
 | Sensors | MMC5603 magnetometer | Plausible field magnitude that tracks movement. The part is the MMC5603 at address `0x30`, not the AK0991x the config also describes. |
@@ -162,7 +165,6 @@ function under **Working** and a broader integration or stability item under
 | Boot | Reboot modes / recovery integration | Clean normal reboot and A/B marking work; direct recovery selection, all reboot modes and the final installer rollback flow remain incomplete. |
 | Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
-| USB | USB ACM serial | CDC ACM enumerates and `ttyGS0` exists; an interactive serial session remains unvalidated. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
 | Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
@@ -172,12 +174,10 @@ function under **Working** and a broader integration or stability item under
 | Cameras | Sony IMX586 main | 4000×3000 RAW10 capture, processed 30 fps and experimental autofocus work; production color, touch focus and additional modes remain. |
 | Cameras | Sony IMX481 ultra-wide | 4656×3496 RAW10 and processed 30 fps runs work; production color and additional modes remain. |
 | Cameras | Sony IMX471 front | Automatic pop-up capture works; production 3A/color and broader application/recovery testing remain. |
-| Camera flash | Dual PM8150L flash | Both channels register and pass electrical torch/strobe tests without a fault; visible-light confirmation, stock-current calibration and camera synchronization remain. |
+| Camera flash | Dual PM8150L flash | Both channels pass electrical and visible torch/strobe tests, and Plasma's flashlight control works. Plasma Camera exposes no flash control, so capture synchronization remains. |
 | Mobile data | IPA / rmnet / RF integration | The modem scans operators and camps without a SIM; SIM registration, LTE data and upstream IPA acceptance remain. |
 | Telephony | SIM, SMS, calls and IMS | QMI services answer, but SIM/PIN handling, registration, data, SMS, calls and IMS are unvalidated. |
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
-| NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
-| Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
 | SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work, and the board identity is provisioned from `/proc/cmdline`. Diag has no transport on this port, which is what now bounds the remaining sensor work. |
 
 ### 🔴 Broken
