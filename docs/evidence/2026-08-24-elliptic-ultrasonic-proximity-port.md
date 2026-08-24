@@ -57,7 +57,7 @@ The narrow contract needed by Linux is:
 | set-parameter id | `2` |
 | sensor-hub event parameter | `16` |
 | pseudo RX/TX ports | `0x8001`, `0x8002` |
-| proximity operation mode | `693` |
+| proximity operation mode | `699` |
 | PCM format | mono, 48 kHz, S16_LE |
 
 The asynchronous event starts with three little-endian words: module id,
@@ -79,10 +79,12 @@ A clean worktree based on the exact running-kernel source commit
   `SLIMBUS_2_TX` to WCD9340 `AIF2_CAP` microphone backend;
 - DT schemas for the Elliptic child and hostless DAI provider.
 
-The local series ends at commit
+The original local series ended at commit
 `fb21f74d442e94b48245b65dbb6809c59fedd0c2`, tree
-`9bd59678620c61b8e70a03fbb146e6151ff8a5ab`. Its four commits keep the
-generic Q6AFE API, bindings, drivers and hotdog DT changes separate.
+`9bd59678620c61b8e70a03fbb146e6151ff8a5ab`. Runtime bring-up subsequently
+fixed the hostless PCM implementation and corrected the proximity operation
+mode from the handset-only value `693` to the global OxygenOS proximity value
+`699`.
 
 A full `Image modules qcom/sm8150-oneplus-hotdog.dtb` build completed with
 kernel release `6.16.0-sm8150`. Key artifacts:
