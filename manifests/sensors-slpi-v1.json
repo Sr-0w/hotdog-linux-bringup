@@ -90,7 +90,7 @@
       {"path": "sns_tilt_to_wake.json", "source": "firmware/sensors/config/sns_tilt_to_wake.json", "size": 1439, "sha256": "b33b7ef0ab0aeb85d167b75a0aff34467eac3a3a94b6b9043d298b2216b0c80b"},
       {"path": "sns_wrist_pedo.json", "source": "firmware/sensors/config/sns_wrist_pedo.json", "size": 654, "sha256": "801ed332d173c0e8d09d22e0a67ebdcf14efaf02456385bc488a3e7b4e34fc49"},
       {"path": "sx932x_0.json", "source": "firmware/sensors/config/sx932x_0.json", "size": 572, "sha256": "bca39ee3dd0277f36abbb2cc2901d60cf3cde951df52fe63a378dd5244889e0d"},
-      {"path": "tcs3701.json", "source": "firmware/sensors/config/tcs3701.json", "size": 1064, "sha256": "ec19d281c483fe11c7419e3f7e1ebcf6a3a9479c027bb2bca5ec35437ddb92f2"}
+      {"path": "tcs3701.json", "source": "firmware/sensors/config/tcs3701.json", "size": 1074, "sha256": "c5ef4a461251637d123b439d9424ba27a004e054aab4f27cafc903e71a4435b6"}
     ],
     "alsps_variant_47_additions": [
       {"path": "alsps.json", "source": "firmware/sensors/config/alsps.json", "size": 961, "sha256": "2df496e3c4a0c10cf73692884f34f0039928ffd0f36804d81f6fe46594006f3e"},
