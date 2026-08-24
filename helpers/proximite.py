@@ -29,6 +29,7 @@ Usage:
     proximite.py --etat         lit l'etat courant
 """
 import ctypes
+import collections
 import importlib.util
 import json
 import os
@@ -110,7 +111,7 @@ class Flux:
         SSC.libc.sendto(self.fd, ctypes.create_string_buffer(pkt), len(pkt), 0,
                         ctypes.byref(dst), ctypes.sizeof(dst))
         SSC.libc.setsockopt(self.fd, socket.SOL_SOCKET, socket.SO_RCVTIMEO,
-                            struct.pack("qq", 1, 0), 16)
+                            struct.pack("qq", 0, 100000), 16)
         self.buf = ctypes.create_string_buffer(4096)
 
     def echantillons(self):
@@ -146,6 +147,77 @@ class Flux:
 def moyenne(vecteurs, i):
     vals = [v[i] for v in vecteurs if len(v) > i]
     return sum(vals) / len(vals) if vals else 0.0
+
+
+def mediane(valeurs):
+    valeurs = sorted(valeurs)
+    return valeurs[len(valeurs) // 2]
+
+
+def parametres_detection(seuils=None):
+    """Retourne canal, sens et rapports d'hysteresis.
+
+    Le rapport est toujours superieur a un: ``courant/base`` quand couvrir
+    fait monter le canal, ``base/courant`` quand cela le fait descendre.
+    """
+    canal, sens = 6, 1
+    rapport = 1.92
+    if seuils:
+        canal = int(seuils.get("canal", canal))
+        loin = float(seuils.get("loin", 0))
+        proche = float(seuils.get("proche", 0))
+        if loin > 0 and proche > 0 and loin != proche:
+            sens = 1 if proche > loin else -1
+            rapport = proche / loin if sens > 0 else loin / proche
+    r_proche = 1.0 + (rapport - 1.0) * 0.55
+    r_loin = 1.0 + (rapport - 1.0) * 0.30
+    return canal, sens, r_proche, r_loin
+
+
+class Detecteur:
+    """Filtre median, ligne de base glissante et hysteresis."""
+
+    def __init__(self, sens, r_proche, r_loin, base_initiale=None):
+        self.sens = sens
+        self.r_proche = r_proche
+        self.r_loin = r_loin
+        self.fenetre = collections.deque(maxlen=5)
+        self.base_ech = collections.deque(maxlen=150)
+        if base_initiale is not None and base_initiale > 0:
+            self.base_ech.extend([float(base_initiale)] * 5)
+        self.etat = False
+        self.courant = None
+        self.base = None
+        self.rapport = None
+
+    def ajouter(self, valeur):
+        self.fenetre.append(float(valeur))
+        if len(self.fenetre) < 3:
+            return None
+
+        self.courant = mediane(self.fenetre)
+        if len(self.base_ech) < 5:
+            self.base_ech.append(self.courant)
+            return None
+
+        self.base = mediane(self.base_ech)
+        if self.courant <= 0 or self.base <= 0:
+            return None
+        if self.sens > 0:
+            self.rapport = self.courant / self.base
+        else:
+            self.rapport = self.base / self.courant
+
+        nouvel_etat = (self.rapport > self.r_proche if not self.etat
+                       else self.rapport > self.r_loin)
+        changement = nouvel_etat != self.etat
+        self.etat = nouvel_etat
+
+        # Ne jamais incorporer l'echantillon qui vient de declencher "near".
+        # La base ne suit que le regime que nous avons effectivement classe loin.
+        if not self.etat:
+            self.base_ech.append(self.courant)
+        return self.etat if changement else None
 
 
 def recolter(flux, secs, etiquette):
@@ -210,8 +282,12 @@ def calibrer():
         SEUILS.write_text(json.dumps(seuils, indent=2))
         print("\n  %scanal c%d retenu%s, separation %.2f"
               % (VERT, meilleur, NEUTRE, score_max))
-        print("  proche au-dela de %.1f, loin en deca de %.1f"
-              % (seuils["seuil_proche"], seuils["seuil_loin"]))
+        if seuils["sens"] > 0:
+            print("  proche au-dela de %.1f, loin en deca de %.1f"
+                  % (seuils["seuil_proche"], seuils["seuil_loin"]))
+        else:
+            print("  proche en deca de %.1f, loin au-dela de %.1f"
+                  % (seuils["seuil_proche"], seuils["seuil_loin"]))
         print("  seuils ecrits dans %s" % SEUILS)
         return 0
     finally:
@@ -219,51 +295,82 @@ def calibrer():
 
 
 def demon():
+    """Detection sur ligne de base glissante, pas sur seuil absolu.
+
+    Deux lecons de la trace des canaux :
+
+    - c6 commence par un echantillon aberrant a 64 avant de se stabiliser vers
+      1050. Decider sur un echantillon isole est donc fragile ; on decide sur
+      la mediane d'une courte fenetre.
+    - un seuil absolu etalonne a un instant donne ne survit pas a un changement
+      d'eclairage. On garde une ligne de base des periodes "loin" et on compare
+      en rapport, ce qui rend le niveau ambiant sans importance.
+
+    L'etalonnage sert alors a mesurer le RAPPORT couvert/decouvert, pas des
+    valeurs : sur l'exemplaire de developpement il vaut 1.92, d'ou des bascules
+    a 1.5 et 1.25 qui laissent de la marge des deux cotes.
+    """
     src = SEUILS
     if not src.exists():
-        # l'etalonnage se fait en utilisateur, le demon tourne souvent en root
         for autre in ("/etc/hotdog-proximite.json",
                       "/home/user/.config/hotdog-proximite.json"):
             if pathlib.Path(autre).exists():
                 src = pathlib.Path(autre); break
-    if not src.exists():
-        sys.exit("pas de seuils : lancez d'abord proximite.py --calibrer")
-    s = json.loads(src.read_text())
-    canal, sens = s["canal"], s["sens"]
-    proche_s, loin_s = s["seuil_proche"], s["seuil_loin"]
+    seuils = None
+    if src.exists():
+        seuils = json.loads(src.read_text())
+    canal, sens, r_proche, r_loin = parametres_detection(seuils)
+
     suid = suid_lumiere()
     if not suid:
         sys.exit("le capteur de lumiere ne publie pas d'identifiant")
     flux = Flux(suid)
     jrn = open(JOURNAL, "a")
-    etat = False
-    ETAT.write_text("far\n")
-    jrn.write("--- %s demarrage, canal c%d, proche>%.1f loin<%.1f\n"
-              % (time.strftime("%F %T"), canal, proche_s, loin_s))
+    base_initiale = None
+    if seuils and float(seuils.get("loin", 0)) > 0:
+        base_initiale = float(seuils["loin"])
+    detecteur = Detecteur(sens, r_proche, r_loin, base_initiale)
+    ETAT.write_text("unknown\n")
+    jrn.write("--- %s demarrage, canal c%d, sens=%s, proche x%.2f, loin x%.2f\n"
+              % (time.strftime("%F %T"), canal,
+                 "hausse" if sens > 0 else "baisse", r_proche, r_loin))
     jrn.flush()
+
+    battement = 0.0
+    etat_publie = None
     try:
         while True:
             for v in flux.echantillons():
                 if len(v) <= canal:
                     continue
-                x = v[canal]
-                # le sens depend de l'eclairage : sous forte lumiere ambiante
-                # l'occultation fait baisser le canal, dans le noir la
-                # reflexion infrarouge le fait monter. L'etalonnage l'a mesure.
-                if sens > 0:
-                    neuf = x > proche_s if not etat else x > loin_s
-                else:
-                    neuf = x < proche_s if not etat else x < loin_s
-                if neuf != etat:
-                    etat = neuf
-                    ETAT.write_text("near\n" if etat else "far\n")
-                    jrn.write("%s %-5s c%d=%.1f\n"
+                changement = detecteur.ajouter(v[canal])
+                if (detecteur.rapport is not None
+                        and detecteur.etat != etat_publie):
+                    etat_publie = detecteur.etat
+                    ETAT.write_text("near\n" if etat_publie else "far\n")
+                    jrn.write("%s %-5s c%d=%.0f base=%.0f rapport=%.2f\n"
                               % (time.strftime("%T"),
-                                 "near" if etat else "far", canal, x))
+                                 "near" if etat_publie else "far", canal,
+                                 detecteur.courant, detecteur.base,
+                                 detecteur.rapport))
                     jrn.flush()
+            # un battement periodique, pour pouvoir diagnostiquer a distance
+            # sans demander un geste a qui que ce soit
+            if time.time() - battement > 15:
+                battement = time.time()
+                if detecteur.base is not None:
+                    jrn.write("%s .     c%d=%.0f base=%.0f rapport=%.2f etat=%s\n"
+                              % (time.strftime("%T"), canal, detecteur.courant,
+                                 detecteur.base, detecteur.rapport,
+                                 "near" if detecteur.etat else "far"))
+                else:
+                    jrn.write("%s .     pas encore d'echantillons\n"
+                              % time.strftime("%T"))
+                jrn.flush()
             time.sleep(0.05)
     finally:
         flux.fermer()
+        ETAT.write_text("unknown\n")
         jrn.close()
 
 
