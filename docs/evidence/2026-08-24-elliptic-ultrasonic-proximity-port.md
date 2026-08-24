@@ -86,8 +86,8 @@ A clean worktree based on the exact running-kernel source commit
 - DT schemas for the Elliptic child and hostless DAI provider.
 
 The current local series ends at commit
-`648c410d4e0392869ea1ccb68c88747ad7e824b3`, tree
-`7d89c48a57d7381bda4d818cc5b72f0d62e73629`. Runtime bring-up fixed the
+`61cb2d608fc0b240b9d4520720cd856b1886897b`, tree
+`f537816b3790ccd5d0af4e2cfe477adfa5598c0a`. Runtime bring-up fixed the
 hostless PCM implementation, reproduced the stock startup handshake and
 ordering, and corrected the proximity operation mode from the handset-only
 value `693` to the global OxygenOS proximity value `699`.
@@ -99,11 +99,11 @@ kernel release `6.16.0-sm8150`. Key artifacts:
 | --- | --- |
 | Image | `60b2750b95c8e9ba76cf0dba16b5a4263b7a44442191e1eef0b2ea39428145ee` |
 | hotdog DTB | `bd8a964cc21384b6ecc838c5eefbdffd8cc9415335c07025d8e73f3fc702eb05` |
-| q6afe.ko | `e9ab31255a586599142fce1df6d8cc16131ad064b4796ce60edd22f3f1b381c9` |
+| q6afe.ko | `59fba65100bc23da9baf19a22fde3e2300099b32e7bd5329c71b436cabb43d49` |
 | q6routing.ko | `60c44a7e532f22ba6559054a44589f6b114ea00700da90b7c704075b592e751f` |
 | q6hostless.ko | `2e2cd8a619d5f6db084c76c69e271e6b948e36856a8500f825dbd79445f95439` |
 | q6elliptic.ko | `b571f3faa40e8fa48659b2deaa6a673e8002e4d9506307ca2da3410329b3d767` |
-| snd-soc-sm8150.ko | `88e22a04e69b1cc4bc1653657c184ec21ed673d19d61721c052e8f2521176fb1` |
+| snd-soc-sm8150.ko | `a6d830115f9a1c6d7d62c6b151371ca1bcd3bc36da688c36b55826c407b59ff5` |
 
 All four modules have the exact running release vermagic. The full build reached
 the real vmlinux `MODPOST`; no new unresolved symbol or driver-specific warning
@@ -167,6 +167,9 @@ The next candidate test starts from a fresh temporary boot and first validates
 the known handset microphone through its packaged UCM profile. It then runs
 the guided Elliptic test without unloading any audio module. This separates a
 general AFE/capture regression from the remaining TX2-specific silence.
+`prepare-proximity-fastboot.sh` records the phone identity and staged module
+hashes, explains the physical transition and waits indefinitely for the user
+before powering off; it never invokes fastboot itself.
 
 `elliptic-proximity-smoke.py` defaults to a guided three-cycle test, records
 APR counters, waits for each physical gesture and always rolls back in a
