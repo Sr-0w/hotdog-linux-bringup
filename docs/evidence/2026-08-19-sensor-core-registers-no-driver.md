@@ -84,8 +84,8 @@ node +0x00  key = (master << 32) | slave      64-bit, ordered on the whole word
 ```
 
 and the first level is a bounds-checked array: `if (count <= master) return
-NULL; rec = table[master]`. The master record holds `(root, count)` at `+0x08`
-and `+0x0c`.
+NULL; rec = table[master]`. The master record holds `root` at `+0x08` and
+`count` at `+0x0c`.
 
 ## Two more benign findings, so they are not chased again
 
