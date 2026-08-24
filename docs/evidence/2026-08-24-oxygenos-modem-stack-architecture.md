@@ -170,9 +170,12 @@ active MCFG IDs for all populated subscriptions, and clean retry counters.
 The first transport slice is implemented with libqrtr-glib and libqmi. It
 discovers the configured QRTR node, opens a QMI device with indications,
 allocates UIM, decodes the complete card/application/retry structure and feeds
-the transport-independent dual-SIM model. It neither submits a PIN nor changes
-DMS state. This same process will retain the QRTR/UIM/PDC clients when the PDC,
-online gate and SSR phases are added.
+the transport-independent dual-SIM model. With the subscription-capable libqmi
+build it then retains the same device, allocates PDC and queries active/pending
+software config IDs sequentially for every GW subscription. Each request has a
+subscription ID, unique token and bounded indication timeout. It neither
+submits a PIN, changes a selected config nor changes DMS state. Mutation,
+online gating and SSR re-entry remain later daemon phases.
 
 ## Required state machines
 

@@ -1,9 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "hotdog-qmi-uim.h"
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+#include "hotdog-qmi-pdc.h"
+#endif
 
 #include <gio/gio.h>
 #include <libqmi-glib.h>
 #include <libqrtr-glib.h>
+#include <errno.h>
 #include <stdio.h>
 
 struct bootstrap {
@@ -12,15 +16,154 @@ struct bootstrap {
 	QrtrBus *bus;
 	QmiDevice *device;
 	QmiClientUim *uim;
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	QmiClientPdc *pdc;
+	struct hotdog_uim_inventory inventory;
+	uint32_t pdc_token;
+	uint32_t pdc_expected_token;
+	size_t pdc_query_index;
+	gulong pdc_indication_id;
+	guint pdc_timeout_id;
+#endif
 	unsigned int node;
 	int result;
+	bool finished;
 };
 
 static void finish(struct bootstrap *bootstrap, int result)
 {
+	if (bootstrap->finished)
+		return;
+	bootstrap->finished = true;
 	bootstrap->result = result;
 	g_main_loop_quit(bootstrap->loop);
 }
+
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+static void pdc_query_next(struct bootstrap *bootstrap);
+
+static void print_pdc_id(const struct hotdog_pdc_id *id)
+{
+	if (!id->length) {
+		printf("-");
+		return;
+	}
+	printf("%.*s", (int)id->length, (const char *)id->value);
+}
+
+static gboolean pdc_query_timeout(gpointer user_data)
+{
+	struct bootstrap *bootstrap = user_data;
+
+	bootstrap->pdc_timeout_id = 0;
+	g_printerr("PDC selected-config indication timed out for subscription %u\n",
+		   bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index].subscription);
+	finish(bootstrap, 1);
+	return G_SOURCE_REMOVE;
+}
+
+static void pdc_selected_indication(QmiClientPdc *client,
+				    QmiIndicationPdcGetSelectedConfigOutput *output,
+				    struct bootstrap *bootstrap)
+{
+	struct hotdog_pdc_id active, pending;
+	const struct hotdog_uim_session *session;
+	int result;
+
+	(void)client;
+	result = hotdog_qmi_pdc_decode_selected(output, bootstrap->pdc_expected_token,
+						 &active, &pending);
+	if (result == -ESTALE)
+		return;
+	if (result) {
+		g_printerr("PDC selected-config indication rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	if (bootstrap->pdc_timeout_id) {
+		g_source_remove(bootstrap->pdc_timeout_id);
+		bootstrap->pdc_timeout_id = 0;
+	}
+	session = &bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index];
+	printf("pdc-sub%u=active:", session->subscription);
+	print_pdc_id(&active);
+	printf(" pending:");
+	print_pdc_id(&pending);
+	printf("\n");
+	bootstrap->pdc_query_index++;
+	pdc_query_next(bootstrap);
+}
+
+static void pdc_get_selected_ready(QmiClientPdc *client, GAsyncResult *res,
+				   struct bootstrap *bootstrap)
+{
+	QmiMessagePdcGetSelectedConfigOutput *output;
+	GError *error = NULL;
+
+	output = qmi_client_pdc_get_selected_config_finish(client, res, &error);
+	if (!output) {
+		g_printerr("PDC selected-config request failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	if (!qmi_message_pdc_get_selected_config_output_get_result(output, &error)) {
+		g_printerr("PDC selected-config response failed: %s\n", error->message);
+		g_clear_error(&error);
+		qmi_message_pdc_get_selected_config_output_unref(output);
+		finish(bootstrap, 1);
+		return;
+	}
+	qmi_message_pdc_get_selected_config_output_unref(output);
+}
+
+static void pdc_query_next(struct bootstrap *bootstrap)
+{
+	QmiMessagePdcGetSelectedConfigInput *input = NULL;
+	const struct hotdog_uim_session *session;
+	int result;
+
+	if (bootstrap->pdc_query_index >= bootstrap->inventory.gw_count) {
+		finish(bootstrap, 0);
+		return;
+	}
+	session = &bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index];
+	bootstrap->pdc_expected_token = ++bootstrap->pdc_token;
+	result = hotdog_qmi_pdc_get_selected_input(session->subscription,
+						   bootstrap->pdc_expected_token, &input);
+	if (result) {
+		g_printerr("PDC selected-config input rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	bootstrap->pdc_timeout_id = g_timeout_add_seconds(12, pdc_query_timeout, bootstrap);
+	qmi_client_pdc_get_selected_config(bootstrap->pdc, input, 10,
+					   bootstrap->cancellable,
+					   (GAsyncReadyCallback)pdc_get_selected_ready,
+					   bootstrap);
+	qmi_message_pdc_get_selected_config_input_unref(input);
+}
+
+static void pdc_client_ready(QmiDevice *device, GAsyncResult *res,
+			     struct bootstrap *bootstrap)
+{
+	QmiClient *client;
+	GError *error = NULL;
+
+	client = qmi_device_allocate_client_finish(device, res, &error);
+	if (!client) {
+		g_printerr("PDC client allocation failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	bootstrap->pdc = QMI_CLIENT_PDC(client);
+	bootstrap->pdc_indication_id = g_signal_connect(
+		bootstrap->pdc, "get-selected-config",
+		G_CALLBACK(pdc_selected_indication), bootstrap);
+	pdc_query_next(bootstrap);
+}
+#endif
 
 static void print_inventory(const struct hotdog_uim_inventory *inventory)
 {
@@ -66,7 +209,18 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 		return;
 	}
 	print_inventory(&inventory);
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	bootstrap->inventory = inventory;
+	if (!inventory.gw_count) {
+		finish(bootstrap, 0);
+		return;
+	}
+	qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_PDC, QMI_CID_NONE, 10,
+				   bootstrap->cancellable,
+				   (GAsyncReadyCallback)pdc_client_ready, bootstrap);
+#else
 	finish(bootstrap, 0);
+#endif
 }
 
 static void client_ready(QmiDevice *device, GAsyncResult *res,
@@ -171,6 +325,13 @@ int main(int argc, char **argv)
 	qrtr_bus_new(1000, bootstrap.cancellable,
 		     (GAsyncReadyCallback)bus_ready, &bootstrap);
 	g_main_loop_run(bootstrap.loop);
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap.pdc_timeout_id)
+		g_source_remove(bootstrap.pdc_timeout_id);
+	if (bootstrap.pdc && bootstrap.pdc_indication_id)
+		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_indication_id);
+	g_clear_object(&bootstrap.pdc);
+#endif
 	g_clear_object(&bootstrap.uim);
 	g_clear_object(&bootstrap.device);
 	g_clear_object(&bootstrap.bus);

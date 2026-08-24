@@ -135,6 +135,40 @@ gboolean qmi_message_pdc_deactivate_config_input_set_subscription_id(
         ):
             self.assertIn(f"qmi_message_pdc_{operation}_input_set_subscription_id", patch)
 
+    def test_uim_pdc_bootstrap_syntax_with_patched_api(self) -> None:
+        flags = subprocess.run(
+            ["pkg-config", "--cflags", "qmi-glib", "qrtr-glib", "gio-2.0", "glib-2.0"],
+            capture_output=True, text=True,
+        )
+        if flags.returncode:
+            self.skipTest("libqmi/qrtr development files are unavailable")
+        compatibility = """\
+#include <libqmi-glib.h>
+gboolean qmi_message_pdc_get_selected_config_input_set_subscription_id(
+    QmiMessagePdcGetSelectedConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_set_selected_config_input_set_subscription_id(
+    QmiMessagePdcSetSelectedConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_activate_config_input_set_subscription_id(
+    QmiMessagePdcActivateConfigInput *, guint32, GError **);
+gboolean qmi_message_pdc_deactivate_config_input_set_subscription_id(
+    QmiMessagePdcDeactivateConfigInput *, guint32, GError **);
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / "hotdog-patched-pdc-api.h"
+            header.write_text(compatibility)
+            subprocess.run(
+                [
+                    "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                    "-fsyntax-only", "-DHOTDOG_QMI_PDC_SUBSCRIPTIONS", "-include",
+                    str(header), "-I", str(SOURCE),
+                    str(SOURCE / "hotdog-radio-bootstrapd.c"),
+                    str(SOURCE / "hotdog-qmi-uim.c"), str(SOURCE / "hotdog-uim.c"),
+                    str(SOURCE / "hotdog-qmi-pdc.c"), str(SOURCE / "hotdog-pdc.c"),
+                    str(SOURCE / "hotdog-mbn.c"), *flags.stdout.split(),
+                ],
+                check=True,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
