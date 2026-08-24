@@ -31,8 +31,9 @@ effects completed successfully. `feedbackd` was then exercised through
 `fbcli -E button-pressed -t 1 -w 2` and returned zero.
 
 The user physically confirmed that the handset vibrated through the complete
-sequence. This closes strength range, repeated start/stop and the normal
-feedbackd path.
+sequence. A separate guided 20-second `s2idle` cycle produced a confirmed
+50-percent pulse both before suspend and after resume. This closes strength
+range, repeated start/stop, the normal feedbackd path and suspend/resume.
 
 ## Camera flash hardware is visible, but integration remains partial
 
