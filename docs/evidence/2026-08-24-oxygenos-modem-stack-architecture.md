@@ -160,6 +160,14 @@ active MCFG IDs for all populated subscriptions, and clean retry counters.
 - retain the previous active ID for rollback;
 - never transition online with an unresolved pending configuration.
 
+The clean-room `hotdog-mbn` parser implements the stock trailer and metadata
+TLVs without embedding any proprietary MBN. Synthetic tests cover malformed
+input and selection precedence. External validation against private stock MBNs
+recovered the expected carrier name, six-digit IIN, PLMN, versions and
+capability, then selected that carrier by IIN. Runtime code therefore discovers
+the profile from card and MBN metadata instead of carrying device-owner or
+operator-specific constants.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;

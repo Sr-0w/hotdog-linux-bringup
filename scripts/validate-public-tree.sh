@@ -524,6 +524,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-radio-state.c hotdog-radio-state.h hotdog-radio-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing radio state source: $source"
 	done
+	for source in hotdog-mbn.c hotdog-mbn.h hotdog-mbn-inspect.c; do
+		[ -f "$source_dir/$source" ] || die "missing MBN selector source: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
@@ -539,6 +542,9 @@ validate_hotdog_radio_state_contract() {
 		printf '%s\n' "$result" | tail -n 1 | grep -q "$action" ||
 			die "radio SSR replay lacks action: $action"
 	done
+	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
+		"$source_dir/hotdog-mbn.c" "$source_dir/hotdog-mbn-inspect.c" \
+		-o "$output"
 	rm -f "$output"
 	trap - RETURN
 }
