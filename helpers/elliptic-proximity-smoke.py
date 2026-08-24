@@ -243,14 +243,18 @@ def smoke(duration, log_path=None, interactive=False):
                   "de l'ecran.", flush=True)
             input("Quand le capteur est bien DECOUVERT, appuie sur Entree... ")
 
+        # OxygenOS enables the Elliptic engine before opening its hostless
+        # TX/RX PCMs. Some firmware revisions do not begin processing when
+        # that order is reversed.
+        enable.write_text("1\n")
+        armed = True
+
         controls = ((MIXER_CONTROL, "1"),) + MIC_CONTROLS
         for name, value in controls:
             control_prestates.append((name, read_control(card, name)))
             set_control(card, name, value)
         hostless = AlsaHostless()
         hostless.start(card, playback["device"], capture["device"])
-        enable.write_text("1\n")
-        armed = True
 
         with event_path.open("rb", buffering=0) as event_file:
             if interactive:
