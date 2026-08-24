@@ -132,8 +132,8 @@ Runtime investigation found and fixed several independent defects:
   responses for parameter ids 12, 14 and 18 prove the asynchronous transport;
 - operation mode 699, the active-screen event and the private 448-byte factory
   calibration are sent before proximity processing;
-- the physical ultrasound microphone backend is mono/S24 while its hostless
-  frontend remains mono/S16, matching the split stock contract;
+- the physical ultrasound microphone backend and hostless frontend are both
+  mono/S16;
 - the stock ADC3 gain and AIF2/DEC2/AMIC3 routing are applied and rolled back.
 
 Repeated live replacement of the machine driver exposed a separate AFE state
@@ -154,9 +154,14 @@ Proximity is still `Partial`, not `Working`. Repeated guided top-edge cover
 tests have produced no parameter-id 16 sensorhub event. The ADSP does return
 version/branch/tag and diagnostics, and its processing counters increase while
 the two hostless PCMs run. Direct AP capture confirms that the remaining fault
-is in the physical SLIMBUS2 microphone data path: the AFE port starts with the
-stock mono/S24 backend format and the complete WCD9340 DAPM chain powers on,
-but the captured samples are still all zero.
+was narrowed to the physical SLIMBUS2 microphone data path. The first direct
+capture used mono/S24 and returned only zeros while the complete WCD9340 DAPM
+chain was powered. Re-reading the exact OxygenOS mixer configuration showed
+that this format was wrong: stock sets `SLIM_2_TX SampleRate=KHZ_48` and
+`Channels=One`, but unlike the transducer's `QUAT_MI2S_RX` path it never sets
+`SLIM_2_TX Format=S24_LE`. The WCD9340 capture DAIs also advertise S16. The
+next candidate therefore restores mono/S16 and must be evaluated on a fresh
+AFE state before the silence can be called a hardware-path failure.
 
 The next candidate test starts from a fresh temporary boot and first validates
 the known handset microphone through its packaged UCM profile. It then runs
