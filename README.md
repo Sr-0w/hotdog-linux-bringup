@@ -150,6 +150,8 @@ function under **Working** and a broader integration or stability item under
 | Sensors | MMC5603 magnetometer | Plausible field magnitude that tracks movement. The part is the MMC5603 at address `0x30`, not the AK0991x the config also describes. |
 | Sensors | IMU temperature | Reads plausible die temperature. Capped at 5 Hz: 10 Hz and above return error 130. |
 | Sensors | TCS3701 ambient light | Streams lux plus raw channels and reacts to occultation. Feeds `net.hadess.SensorProxy`, so `LightLevel` is live. |
+| Sensors | SX9324 SAR | Reports raw capacitance, `11865` on this unit, under its own event id 1026. |
+| Sensors | Motion detect and orientation | `amd`, `rmd` and `device_orient` answer under event ids 772 and 776. |
 | Sensors | Screen auto-rotation | Plasma Mobile rotates from the accelerometer. `iio-sensor-proxy` speaks QMI to SEE directly through `libssc`, so no IIO or input device is involved; [a boot gate](helpers/hotdog-sensor-proxy-gate.sh) makes the daemon enumerate before KWin claims, and `ACCEL_MOUNT_MATRIX` corrects a half-turn offset. |
 | Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
 
@@ -176,8 +178,6 @@ function under **Working** and a broader integration or stability item under
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
 | NFC | Lifecycle, HCE and secure element | Reader/APDU operation works; clean down/up recovery, common-tag coverage, HCE and secure-element scope remain. |
 | Haptics | Full userspace integration | Physical vibration works; strength range, repeated stop/start, feedbackd/Lomiri integration and suspend remain. |
-| Sensors | SX9324 SAR | Published a SUID and real on-change events for weeks, and was the first sensor ever validated here. In the most recent guided run it did not publish even its initial value, which is a different failure from "no change" and is not yet explained, so it is not counted as working. |
-| Sensors | Motion detect | `amd` and `rmd` publish SUIDs and answer on change. Not yet confirmed against a deliberate physical gesture. |
 | SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work, and the board identity is provisioned from `/proc/cmdline`. Diag has no transport on this port, which is what now bounds the remaining sensor work. |
 
 ### 🔴 Broken
