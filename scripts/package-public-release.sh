@@ -65,11 +65,12 @@ mkdir -p "$outdir/reports"
 loop_dev=""
 unpack_dir="$(mktemp -d "${TMPDIR:-/tmp}/hotdog-release-unpack.XXXXXX")"
 apk_dir="$(mktemp -d "${TMPDIR:-/tmp}/hotdog-release-apk.XXXXXX")"
+dtbo_verify_dir="$(mktemp -d "${TMPDIR:-/tmp}/hotdog-release-dtbo.XXXXXX")"
 cleanup() {
 	local status=$?
 	trap - EXIT INT TERM
 	[ -z "$loop_dev" ] || losetup --detach "$loop_dev" >/dev/null 2>&1 || true
-	rm -rf "$unpack_dir" "$apk_dir"
+	rm -rf "$unpack_dir" "$apk_dir" "$dtbo_verify_dir"
 	exit "$status"
 }
 trap cleanup EXIT INT TERM
@@ -78,7 +79,9 @@ avbtool verify_image --image "$boot" > "$outdir/reports/avbtool-verify.txt"
 dtbo_size="$(stat -c '%s' "$dtbo")"
 [ "$dtbo_size" -eq 25165824 ] ||
 	die "DTBO image must fill the 24 MiB HD1913 dtbo partition"
-avbtool verify_image --image "$dtbo" > "$outdir/reports/avbtool-verify-dtbo.txt"
+ln -s "$dtbo" "$dtbo_verify_dir/dtbo.img"
+avbtool verify_image --image "$dtbo_verify_dir/dtbo.img" \
+	> "$outdir/reports/avbtool-verify-dtbo.txt"
 avbtool info_image --image "$dtbo" > "$outdir/reports/avbtool-info-dtbo.txt"
 grep -Eq '^[[:space:]]+Partition Name:[[:space:]]+dtbo$' \
 	"$outdir/reports/avbtool-info-dtbo.txt" ||
