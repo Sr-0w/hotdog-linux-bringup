@@ -86,8 +86,8 @@ A clean worktree based on the exact running-kernel source commit
 - DT schemas for the Elliptic child and hostless DAI provider.
 
 The current local series ends at commit
-`61cb2d608fc0b240b9d4520720cd856b1886897b`, tree
-`f537816b3790ccd5d0af4e2cfe477adfa5598c0a`. Runtime bring-up fixed the
+`7c029394f7f0be3d1de169bb0534c4403976519b`, tree
+`4b8852b36acf2a4967b23ba22b3e29b3b13c6366`. Runtime bring-up fixed the
 hostless PCM implementation, reproduced the stock startup handshake and
 ordering, and corrected the proximity operation mode from the handset-only
 value `693` to the global OxygenOS proximity value `699`.
@@ -102,8 +102,9 @@ kernel release `6.16.0-sm8150`. Key artifacts:
 | q6afe.ko | `59fba65100bc23da9baf19a22fde3e2300099b32e7bd5329c71b436cabb43d49` |
 | q6routing.ko | `60c44a7e532f22ba6559054a44589f6b114ea00700da90b7c704075b592e751f` |
 | q6hostless.ko | `2e2cd8a619d5f6db084c76c69e271e6b948e36856a8500f825dbd79445f95439` |
-| q6elliptic.ko | `b571f3faa40e8fa48659b2deaa6a673e8002e4d9506307ca2da3410329b3d767` |
-| snd-soc-sm8150.ko | `a6d830115f9a1c6d7d62c6b151371ca1bcd3bc36da688c36b55826c407b59ff5` |
+| q6elliptic.ko | `a24f0cf38bec562ca626269ed2a6c2fc00f5f7b1e4034770fd4ea76c0fb4e92d` |
+| snd-soc-sm8150.ko | `61e1901adcd6436f526e3b1928cafd347f2ba9c05caf8b879d6040aa96c6d1cd` |
+| snd-soc-wcd934x.ko | `7aac12ac4ece2b8e23ee79ff7b1ebde28379e93073565a09533997b640741eb2` |
 
 All four modules have the exact running release vermagic. The full build reached
 the real vmlinux `MODPOST`; no new unresolved symbol or driver-specific warning
@@ -145,23 +146,49 @@ bounded stop/reconfigure/start recovery. This recovery and the TX2 data path
 must be verified from a fresh boot; audio modules must not be hot-replaced
 during that validation.
 
+The candidate was then written directly to `boot_b` from the running mainline
+system because the baseline DTB has no PM8150 reboot-mode properties. The
+100663296-byte partition readback matched the candidate boot image SHA256
+`c85355b665190e645ed7e0aa66057bac6b8582f4bab8751bec28af80e5be8c29`
+before reboot. The known rollback image remained available with SHA256
+`d881abafd3496a24cd4620e5adb4f56afbf4279e6c7136ac9197af0ab726b1f6`.
+
+Fresh-boot signal measurements corrected the last capture-format error. All
+SLIMbus TX backends are mono/S16, while playback backends retain stereo/S24.
+With that split the packaged handset microphone produced 188794 nonzero
+samples out of 189888, and the dedicated TX2 path produced 185462 nonzero
+samples out of 192000. The latter measured about 13.1 raw-count RMS with the
+physical cover held still. `wcd934x` now rejects a zero-channel stream and
+propagates SLIM prepare/enable/disable errors instead of silently returning a
+successful all-zero capture.
+
+The OxygenOS `audio_q6.ko` object was independently decoded. Its engine-enable
+payload is the same 16-byte value used here; operation-mode controls use the
+same 12-byte `{type, value, reserved}` layout; calibration-v2 is sent as 448
+raw bytes; and proximity events are parameter id 16. The normal proximity
+path opens pseudo-RX `0x8001` only, after engine activation and route setup.
+Opening pseudo-TX `0x8002` produced no event and made AFE shutdown time out, so
+that diagnostic branch was reverted and the phone rebooted to a clean RX-only
+state.
+
 The private calibration bytes and phone-specific paths are deliberately not
 stored in Git. The driver loads them through the documented firmware name.
 
 ## Remaining blocker
 
-Proximity is still `Partial`, not `Working`. Repeated guided top-edge cover
-tests have produced no parameter-id 16 sensorhub event. The ADSP does return
-version/branch/tag and diagnostics, and its processing counters increase while
-the two hostless PCMs run. Direct AP capture confirms that the remaining fault
-was narrowed to the physical SLIMBUS2 microphone data path. The first direct
-capture used mono/S24 and returned only zeros while the complete WCD9340 DAPM
-chain was powered. Re-reading the exact OxygenOS mixer configuration showed
-that this format was wrong: stock sets `SLIM_2_TX SampleRate=KHZ_48` and
-`Channels=One`, but unlike the transducer's `QUAT_MI2S_RX` path it never sets
-`SLIM_2_TX Format=S24_LE`. The WCD9340 capture DAIs also advertise S16. The
-next candidate therefore restores mono/S16 and must be evaluated on a fresh
-AFE state before the silence can be called a hardware-path failure.
+Proximity is still `Partial`, not `Working`. The former all-zero microphone
+blocker is fixed. During active tests the complete AIF2/ADC3/TX2 path is on,
+both hostless PCMs run at mono/48 kHz/S16, the QUAT MI2S backend is connected,
+and both TFA9874 amplifiers report unmuted. Diagnostics processing counters
+advance and asynchronous parameters 3, 12, 14, 17 and 18 are observed.
+
+Despite that, neither mode 699 nor the receiver mode 693 produced parameter 16.
+This remained true during electronic transducer off/on transitions and during
+several real cover/uncover gestures. The user therefore does not need to
+repeat physical gestures until a further software change first produces a
+plausible sensor event. The remaining fault is after physical capture and
+before sensor-event classification, most likely in the engine's output/profile
+or an as-yet missing configuration step.
 
 The next candidate test starts from a fresh temporary boot and first validates
 the known handset microphone through its packaged UCM profile. It then runs
