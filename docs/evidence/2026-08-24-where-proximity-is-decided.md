@@ -85,3 +85,35 @@ state. A dump taken with a proximity subscription live would show whether
 `0x231` is zero, confirming the gate, and whether `0x230` is one beside it.
 
 That is the next step, and it is a measurement rather than another reading.
+
+## Measured: the proximity enable byte is zero
+
+A coredump taken with both the light sensor and proximity subscribed, and the
+instance state located by its calibration block — the nine floats of
+`tcs3701_platform.als.fac_cal` in registry order, starting `1156.547607`,
+`0.000000`, `1.378319`.
+
+A single byte signature is far too weak here: scanning for
+`state[0x238] == 1` alone produced a hundred candidates. Requiring instead that
+the offset from the calibration block to the state base be **the same across
+several anchors** leaves two, and one of them carries exactly the `state[0]` the
+code predicts:
+
+```
+base 0x986a902c   state[0] = 0x01   [0x238] = 1 (ALS)   [0x239] = 0 (PROX)
+base 0x986a938c   state[0] = 0x01   [0x238] = 1 (ALS)   [0x239] = 0 (PROX)
+```
+
+`state[0] = 0x01` is bit 0 set and bit 1 clear: light enabled, proximity not.
+That is the same fact stated twice in the same structure, by two fields the
+driver writes from the same flag, on two independent instances.
+
+The other surviving offset gives `state[0] = 0xf5`, which is not a coherent
+enable word, and is treated as coincidence.
+
+**So the reading is confirmed by measurement rather than by another reading.**
+The decision function returns zero for the proximity sub-sensor, the caller
+clears bit 1 and writes `state[0x239] = 0`, and nothing downstream ever runs.
+The question is now narrow and singular: why the driver counts no client for
+`amsTCS3701PROX__` while counting one for `amsTCS3701ALS___`, from the same
+request, in the same call.
