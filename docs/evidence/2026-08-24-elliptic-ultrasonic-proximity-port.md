@@ -24,6 +24,12 @@ contains six OnePlus firmware packages: EU, NA and IN variants of OOS 11.0.9.1
 and OOS 12 F.22. Their 64 MiB `dsp.img` files are valid ext4 filesystems. They
 contain normal ADSP dynamic libraries but no separately loadable Elliptic
 library, consistent with the engine being part of the ADSP firmware image.
+The EU OOS 11 and OOS 12 DSP partition hashes are respectively
+`818b67e08baebae5b12b934ad4ef8024b3aba1be2619778792eddae8b080e8fa`
+and `1ec56bbb1e84527c870d61bb66556a44b5e13f974069e0eb71b71b800697307e`.
+Their ADSP library sets differ substantially, so results must always identify
+which firmware generation was used rather than treating all OxygenOS releases
+as byte-identical reference material.
 
 The OOS 10.0.13 HD1913 vendor partition recovered from the MSM package supplies
 the missing AP-side truth:
@@ -130,6 +136,15 @@ Runtime investigation found and fixed several independent defects:
   frontend remains mono/S16, matching the split stock contract;
 - the stock ADC3 gain and AIF2/DEC2/AMIC3 routing are applied and rolled back.
 
+Repeated live replacement of the machine driver exposed a separate AFE state
+bug. The DSP returned status 9 (`ADSP_EALREADY`) for the ordinary handset-mic
+port after Linux had lost the corresponding local started flag. That made the
+later handset-mic control captures invalid as comparisons with TX2. The Q6AFE
+candidate now preserves `ADSP_EALREADY` as a distinct errno and performs one
+bounded stop/reconfigure/start recovery. This recovery and the TX2 data path
+must be verified from a fresh boot; audio modules must not be hot-replaced
+during that validation.
+
 The private calibration bytes and phone-specific paths are deliberately not
 stored in Git. The driver loads them through the documented firmware name.
 
@@ -142,6 +157,11 @@ the two hostless PCMs run. Direct AP capture confirms that the remaining fault
 is in the physical SLIMBUS2 microphone data path: the AFE port starts with the
 stock mono/S24 backend format and the complete WCD9340 DAPM chain powers on,
 but the captured samples are still all zero.
+
+The next candidate test starts from a fresh temporary boot and first validates
+the known handset microphone through its packaged UCM profile. It then runs
+the guided Elliptic test without unloading any audio module. This separates a
+general AFE/capture regression from the remaining TX2-specific silence.
 
 `elliptic-proximity-smoke.py` defaults to a guided three-cycle test, records
 APR counters, waits for each physical gesture and always rolls back in a
