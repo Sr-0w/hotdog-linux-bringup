@@ -86,8 +86,8 @@ A clean worktree based on the exact running-kernel source commit
 - DT schemas for the Elliptic child and hostless DAI provider.
 
 The current local series ends at commit
-`7c029394f7f0be3d1de169bb0534c4403976519b`, tree
-`4b8852b36acf2a4967b23ba22b3e29b3b13c6366`. Runtime bring-up fixed the
+`4bed42c5991bf55f1e5fb6cf0bec22d6ab59a161`, tree
+`1a9d042236c5a9bd1f5ca2b7649019cffed71078`. Runtime bring-up fixed the
 hostless PCM implementation, reproduced the stock startup handshake and
 ordering, and corrected the proximity operation mode from the handset-only
 value `693` to the global OxygenOS proximity value `699`.
@@ -102,7 +102,7 @@ kernel release `6.16.0-sm8150`. Key artifacts:
 | q6afe.ko | `59fba65100bc23da9baf19a22fde3e2300099b32e7bd5329c71b436cabb43d49` |
 | q6routing.ko | `60c44a7e532f22ba6559054a44589f6b114ea00700da90b7c704075b592e751f` |
 | q6hostless.ko | `2e2cd8a619d5f6db084c76c69e271e6b948e36856a8500f825dbd79445f95439` |
-| q6elliptic.ko | `a24f0cf38bec562ca626269ed2a6c2fc00f5f7b1e4034770fd4ea76c0fb4e92d` |
+| q6elliptic.ko | `f34ec54415803941646a6ffe3ffadb0a16e7aa857f91c193ce530403faace9a6` |
 | snd-soc-sm8150.ko | `61e1901adcd6436f526e3b1928cafd347f2ba9c05caf8b879d6040aa96c6d1cd` |
 | snd-soc-wcd934x.ko | `7aac12ac4ece2b8e23ee79ff7b1ebde28379e93073565a09533997b640741eb2` |
 
@@ -162,6 +162,14 @@ physical cover held still. `wcd934x` now rejects a zero-channel stream and
 propagates SLIM prepare/enable/disable errors instead of silently returning a
 successful all-zero capture.
 
+That signal result is not yet repeatable. Subsequent fresh boots sometimes
+return exact digital zero on TX2 until a successful capture sequence has
+initialised the shared WCD/SLIM state. Repeated direct TX0/TX2 probes also
+caused automatic reboots with no pstore record; the preceding boot logged Q6ASM
+responses that were not expected by the client. The phone returns with ADSP and
+SLPI running and taint 512, but active capture probing is stopped until this
+stream lifecycle bug is understood.
+
 The OxygenOS `audio_q6.ko` object was independently decoded. Its engine-enable
 payload is the same 16-byte value used here; operation-mode controls use the
 same 12-byte `{type, value, reserved}` layout; calibration-v2 is sent as 448
@@ -170,6 +178,12 @@ path opens pseudo-RX `0x8001` only, after engine activation and route setup.
 Opening pseudo-TX `0x8002` produced no event and made AFE shutdown time out, so
 that diagnostic branch was reverted and the phone rebooted to a clean RX-only
 state.
+
+Stock also sends a four-word ramp-down payload beginning with `-1` before
+tearing down the audio paths, waits 10 ms, and only then closes the streams.
+The helper now exposes and sends that exact command before closing its hostless
+PCMs. This corrects the teardown contract but does not by itself establish a
+sensor event.
 
 The private calibration bytes and phone-specific paths are deliberately not
 stored in Git. The driver loads them through the documented firmware name.
@@ -186,9 +200,9 @@ Despite that, neither mode 699 nor the receiver mode 693 produced parameter 16.
 This remained true during electronic transducer off/on transitions and during
 several real cover/uncover gestures. The user therefore does not need to
 repeat physical gestures until a further software change first produces a
-plausible sensor event. The remaining fault is after physical capture and
-before sensor-event classification, most likely in the engine's output/profile
-or an as-yet missing configuration step.
+plausible sensor event. The remaining work includes both the intermittent
+WCD/SLIM capture lifecycle and the engine's output/profile or an as-yet missing
+configuration step.
 
 The next candidate test starts from a fresh temporary boot and first validates
 the known handset microphone through its packaged UCM profile. It then runs
