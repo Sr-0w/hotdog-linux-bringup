@@ -530,6 +530,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
 	done
+	for source in hotdog-qmi-uim.c hotdog-qmi-uim.h hotdog-radio-bootstrapd.c; do
+		[ -f "$source_dir/$source" ] || die "missing QRTR/UIM transport source: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \

@@ -137,6 +137,13 @@ hands the modem to ModemManager only after an explicit readiness record
 contains the boot ID, MPSS identity, UIM slot/application mapping, selected and
 active MCFG IDs for all populated subscriptions, and clean retry counters.
 
+The first transport slice is implemented with libqrtr-glib and libqmi. It
+discovers the configured QRTR node, opens a QMI device with indications,
+allocates UIM, decodes the complete card/application/retry structure and feeds
+the transport-independent dual-SIM model. It neither submits a PIN nor changes
+DMS state. This same process will retain the QRTR/UIM/PDC clients when the PDC,
+online gate and SSR phases are added.
+
 ## Required state machines
 
 ### UIM and dual SIM

@@ -63,5 +63,30 @@ class HotdogUimTests(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "retry-safe=0")
 
 
+class HotdogQmiUimBuildTests(unittest.TestCase):
+    def test_qrtr_uim_bootstrap_builds(self) -> None:
+        flags = subprocess.run(
+            ["pkg-config", "--cflags", "--libs", "qmi-glib", "qrtr-glib", "gio-2.0", "glib-2.0"],
+            capture_output=True, text=True,
+        )
+        if flags.returncode:
+            self.skipTest("libqmi/qrtr development files are unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / "hotdog-radio-bootstrapd"
+            subprocess.run(
+                [
+                    "cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                    "-I", str(SOURCE),
+                    str(SOURCE / "hotdog-radio-bootstrapd.c"),
+                    str(SOURCE / "hotdog-qmi-uim.c"),
+                    str(SOURCE / "hotdog-uim.c"),
+                    "-o", str(binary), *flags.stdout.split(),
+                ],
+                check=True,
+            )
+            help_output = subprocess.run([str(binary), "--help"], check=True, capture_output=True, text=True)
+            self.assertIn("--node=ID", help_output.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
