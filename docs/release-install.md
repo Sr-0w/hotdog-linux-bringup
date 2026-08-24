@@ -89,6 +89,8 @@ extracting or flashing:
 sha256sum -c SHA256SUMS
 ```
 
+On macOS, the equivalent command is `shasum -a 256 -c SHA256SUMS`.
+
 For split rootfs assets, reconstruct the archive in numeric order, verify it,
 then expand it. The expanded file is a raw 4096-byte-sector GPT image containing
 `pmOS_boot` and `pmOS_root`; it is not an Android sparse image.

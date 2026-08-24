@@ -4,7 +4,7 @@ set -Eeuo pipefail
 usage() {
 	cat <<'USAGE'
 Usage: package-public-release.sh --version VERSION --boot IMAGE --dtbo IMAGE \
-  --rootfs IMAGE --apk APK --outdir DIR
+  --rootfs IMAGE --apk APK --install-guide FILE --outdir DIR
 
 Validate and package a matching OnePlus 7T Pro postmarketOS release set.
 The boot image, filtered DTBO and rootfs are an atomic set: this script rejects
@@ -28,6 +28,7 @@ boot=""
 dtbo=""
 rootfs=""
 apk=""
+install_guide=""
 outdir=""
 
 while [ "$#" -gt 0 ]; do
@@ -37,6 +38,7 @@ while [ "$#" -gt 0 ]; do
 		--dtbo) dtbo="${2:-}"; shift ;;
 		--rootfs) rootfs="${2:-}"; shift ;;
 		--apk) apk="${2:-}"; shift ;;
+		--install-guide) install_guide="${2:-}"; shift ;;
 		--outdir) outdir="${2:-}"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) usage >&2; die "unknown argument: $1" ;;
@@ -49,7 +51,7 @@ done
 for tool in avbtool blkid cmp debugfs e2fsck losetup partprobe sha256sum sgdisk stat tar unpack_bootimg zstd; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required command: $tool"
 done
-for input in "$boot" "$dtbo" "$rootfs" "$apk"; do
+for input in "$boot" "$dtbo" "$rootfs" "$apk" "$install_guide"; do
 	[ -f "$input" ] || die "missing input: $input"
 	[ -s "$input" ] || die "empty input: $input"
 done
@@ -60,6 +62,7 @@ boot="$(realpath "$boot")"
 dtbo="$(realpath "$dtbo")"
 rootfs="$(realpath "$rootfs")"
 apk="$(realpath "$apk")"
+install_guide="$(realpath "$install_guide")"
 mkdir -p "$outdir/reports"
 
 loop_dev=""
@@ -144,9 +147,11 @@ prefix="oneplus-7t-pro-hotdog-${version}"
 boot_asset="$outdir/${prefix}-boot.img"
 dtbo_asset="$outdir/${prefix}-dtbo.img"
 apk_asset="$outdir/${prefix}-kernel-${apk_version}.apk"
+install_asset="$outdir/INSTALL.md"
 install -m 0644 "$boot" "$boot_asset"
 install -m 0644 "$dtbo" "$dtbo_asset"
 install -m 0644 "$apk" "$apk_asset"
+install -m 0644 "$install_guide" "$install_asset"
 root_archive="$outdir/${prefix}-rootfs.img.zst"
 note "compressing rootfs image"
 zstd --no-progress --threads=0 --long=27 -19 --force -o "$root_archive" "$rootfs"
@@ -161,7 +166,7 @@ if [ "$(stat -c '%s' "$root_archive")" -gt "$max_asset_size" ]; then
 fi
 
 {
-	for file in "$boot_asset" "$dtbo_asset" "$apk_asset"; do
+	for file in "$boot_asset" "$dtbo_asset" "$apk_asset" "$install_asset"; do
 		[ -e "$file" ] || continue
 		(cd "$outdir" && sha256sum "$(basename "$file")")
 	done
