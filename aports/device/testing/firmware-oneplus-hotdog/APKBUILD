@@ -1,6 +1,6 @@
 pkgname=firmware-oneplus-hotdog
 pkgver=20241212
-pkgrel=6
+pkgrel=7
 pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
 url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
 arch="aarch64"
@@ -33,7 +33,7 @@ source="
 	slpius.jsn
 "
 builddir="$srcdir/$pkgname-$_commit"
-_fwdir="/usr/lib/firmware/qcom/sm8150/oneplus/hotdog"
+_fwdir="/lib/firmware/qcom/sm8150/oneplus/hotdog"
 
 package() {
 	mkdir -p "$pkgdir"
@@ -43,9 +43,9 @@ adreno() {
 	pkgdesc="OnePlus hotdog adreno firmware"
 
 	install -Dm644 "$builddir"/a630_sqe.fw -t \
-		"$subpkgdir/usr/lib/firmware/qcom/"
+		"$subpkgdir/lib/firmware/qcom/"
 	install -Dm644 "$builddir"/a640_gmu.bin -t \
-		"$subpkgdir/usr/lib/firmware/qcom/"
+		"$subpkgdir/lib/firmware/qcom/"
 	install -Dm644 "$builddir"/a640_zap.mbn -t \
 		"$subpkgdir/$_fwdir/"
 }
@@ -60,9 +60,9 @@ bluetooth() {
 	pkgdesc="OnePlus hotdog Bluetooth firmware"
 
 	install -Dm644 "$builddir"/crbtfw*.tlv -t \
-		"$subpkgdir/usr/lib/firmware/qca/"
+		"$subpkgdir/lib/firmware/qca/"
 	install -Dm644 "$builddir"/crnv*.bin -t \
-		"$subpkgdir/usr/lib/firmware/qca/"
+		"$subpkgdir/lib/firmware/qca/"
 }
 
 cdsp() {
@@ -81,7 +81,7 @@ nfc() {
 	pkgdesc="OnePlus hotdog NFC configuration firmware"
 
 	install -Dm644 "$srcdir"/pn553-hotdog.nci -t \
-		"$subpkgdir/usr/lib/firmware/nxp/"
+		"$subpkgdir/lib/firmware/nxp/"
 }
 
 pd_maps() {
@@ -108,9 +108,9 @@ wlan() {
 	pkgdesc="OnePlus hotdog WLAN firmware"
 
 	install -Dm644 "$builddir"/firmware-5.bin -t \
-		"$subpkgdir/usr/lib/firmware/ath10k/WCN3990/hw1.0/"
+		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
 	install -Dm644 "$builddir"/board-2.bin -t \
-		"$subpkgdir/usr/lib/firmware/ath10k/WCN3990/hw1.0/"
+		"$subpkgdir/lib/firmware/ath10k/WCN3990/hw1.0/"
 	install -Dm644 "$builddir"/wlanmdsp.mbn -t "$subpkgdir/$_fwdir/"
 }
 
