@@ -182,6 +182,16 @@ capability, then selected that carrier by IIN. Runtime code therefore discovers
 the profile from card and MBN metadata instead of carrying device-owner or
 operator-specific constants.
 
+The transport-independent `hotdog-pdc` model now turns that selection into an
+auditable multi-subscription transaction. It saves each previous active ID,
+sets each populated subscription independently, issues one bounded global
+activation with the exact pending-indication count, models modem-switch
+completion and verifies every active ID before the online gate. Rollback
+deactivates each changed subscription, restores its previous selected ID and
+reactivates the complete set. The public replay covers precedence, version
+tie-breaking, an already-active no-op, two-subscription activation, unmatched
+cards, malformed bounds, verification and rollback without any private MBN.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;
