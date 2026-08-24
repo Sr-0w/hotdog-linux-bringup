@@ -11,10 +11,13 @@ DSP audio. Le sous-capteur SEE est publie parce que la puce en a la capacite, et
 personne ne le demande -- ni OxygenOS, ni nous. Voir
 docs/evidence/2026-08-24-proximity-is-ultrasonic.md.
 
-Ce que fait ce programme
-------------------------
-La meme puce voit parfaitement un doigt : couvrir le capteur change ses canaux
-bruts d'un facteur deux a trois, mesure. On s'en sert.
+Limite de ce programme
+----------------------
+La meme puce voit un doigt : couvrir le capteur change ses canaux bruts d'un
+facteur deux a trois. Mais elle est passive. Un telephone decouvert dans le
+sombre a ensuite reproduit exactement le niveau c6=2204 classe "proche" par le
+demon. L'obscurite et l'occultation ne sont donc pas separables de facon fiable
+avec ces seules mesures.
 
 Le sens du changement depend de l'eclairage : dans le noir, la reflexion
 infrarouge domine et les canaux montent ; en plein jour, l'occultation domine et
@@ -25,7 +28,8 @@ pour ne pas osciller a la frontiere.
 
 Usage:
     proximite.py --calibrer     mesure decouvert/couvert, ecrit les seuils
-    proximite.py                demon : publie proche/loin
+    proximite.py --forcer-als-experimental
+                                demon passif, diagnostic uniquement
     proximite.py --etat         lit l'etat courant
 """
 import ctypes
@@ -303,8 +307,8 @@ def demon():
       1050. Decider sur un echantillon isole est donc fragile ; on decide sur
       la mediane d'une courte fenetre.
     - un seuil absolu etalonne a un instant donne ne survit pas a un changement
-      d'eclairage. On garde une ligne de base des periodes "loin" et on compare
-      en rapport, ce qui rend le niveau ambiant sans importance.
+      d'eclairage. Une ligne de base glissante limite ce probleme, mais ne peut
+      pas distinguer un passage brusque dans le sombre d'une occultation.
 
     L'etalonnage sert alors a mesurer le RAPPORT couvert/decouvert, pas des
     valeurs : sur l'exemplaire de developpement il vaut 1.92, d'ou des bascules
@@ -380,6 +384,11 @@ def main():
     if "--etat" in sys.argv:
         print(ETAT.read_text().strip() if ETAT.exists() else "inconnu")
         return 0
+    if "--forcer-als-experimental" not in sys.argv:
+        sys.exit("demon ALS desactive : un telephone decouvert dans le sombre "
+                 "produit le meme signal qu'une occultation. Utilisez "
+                 "--forcer-als-experimental seulement pour le diagnostic ; "
+                 "la proximite reelle est l'ultrason Elliptic sur l'ADSP.")
     return demon()
 
 
