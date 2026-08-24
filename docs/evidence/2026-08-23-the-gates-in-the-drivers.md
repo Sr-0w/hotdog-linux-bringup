@@ -59,6 +59,48 @@ and no sample is ever produced.
 `sns_sx932x` is not an alternative: byte for byte the same comparison, at the
 same address `0x28`. There is no second driver to try.
 
+## RETRACTED by measurement: the SAR chip is present and correctly identified
+
+The identity gate above is real code, but it is **not** what stops the SAR. The
+driver stores what it read at `state+0x19c` and raises a flag at `state+0xb7`,
+and both can be read out of a coredump once the state is located.
+
+Locating it needed a calibration, and the registry handler provides one. At
+`0xb21d6728` the SAR's own `sns_sx9324_sensor.c` logging reloads the values it
+parsed, which names their offsets:
+
+| field | offset | value on this unit |
+| --- | --- | --- |
+| `bus_type` | `+0x50` | 0 |
+| `slave_control` | `+0x54` | 40 (`0x28`) |
+| `min`/`max_bus_speed_KHz` | `+0x5c`, `+0x60` | 400, 400 |
+| `bus_instance` | `+0x64` | 3 |
+
+Scanning the coredump for that signature finds exactly two `sns_sx9324` states:
+
+```
+base 0x986a7f9c   present(+0xb7)=0   who_am_i(+0x19c)=0x0000
+base 0x986a8860   present(+0xb7)=1   who_am_i(+0x19c)=0x0023
+```
+
+**`0x23` is precisely what the driver accepts**, and the present flag is set. So
+the chip is fitted, powered, addressed correctly and identified — the `HW absent`
+branch is not taken. The I2C traffic to `0x28` seen earlier was this successful
+read.
+
+The second state, all zeros, is the duplicate candidate: `sx932x_0_platform.config`
+and `sx9324_0_platform.config` are identical, both bus 3 slave `0x28`, so two
+drivers probe the same chip. Removing the three `sx932x` config files and
+rebooting changes nothing, so the collision is not the cause either, and they
+were restored.
+
+What this leaves: a SAR whose hardware is present and identified, whose request
+is accepted, which transacts with its chip, and which never reports. The
+remaining path is the polling timer. The instance state carries the interval at
+`+0x4c` and a 64-bit timer value at `+0x50`, written at `0xb20a45e8` and read
+back at `0xb20a4560`; reading those needs the *instance* state base, which this
+note does not have — the calibration above locates the *sensor* state.
+
 ## Proximity: RETRACTED, the byte at +0x23d is not the gate
 
 An earlier version of this note read `sns_tcs3701`'s `set_client_req` at
