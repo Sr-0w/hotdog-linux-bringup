@@ -4,6 +4,7 @@ import fcntl
 import glob
 import os
 import pathlib
+import re
 import select
 import shlex
 import struct
@@ -254,6 +255,42 @@ def test_nfc_tags():
     log("NFC_TAGS=%s" % ("PASS" if passed else "FAIL"))
 
 
+def gpio_snapshot():
+    values = {}
+    text = pathlib.Path("/sys/kernel/debug/gpio").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    for line in text.splitlines():
+        match = re.match(r"\s*gpio(\d+)\s*:.*\s(low|high)\s", line)
+        if match:
+            values[int(match.group(1))] = 1 if match.group(2) == "high" else 0
+    return values
+
+
+def test_slider_raw_gpios():
+    require_root()
+    snapshots = {}
+    for label in ("haut", "milieu", "bas"):
+        prompt("Place le slider en position %s, attends une seconde, puis appuie sur Entree." % label)
+        time.sleep(1)
+        snapshots[label] = gpio_snapshot()
+        log("GPIO_SLIDER_%s gpio27=%s gpio125=%s gpio134=%s" %
+            (label.upper(), snapshots[label].get(27),
+             snapshots[label].get(125), snapshots[label].get(134)))
+
+    changed = []
+    all_lines = set().union(*(snapshot.keys() for snapshot in snapshots.values()))
+    for line in sorted(all_lines):
+        states = tuple(snapshots[label].get(line) for label in
+                       ("haut", "milieu", "bas"))
+        if len(set(states)) > 1:
+            changed.append((line, states))
+            log("GPIO_CHANGE line=%d top=%s middle=%s bottom=%s" %
+                ((line,) + states))
+    log("SLIDER_RAW_GPIO=%s changed=%s" %
+        ("PASS" if changed else "NO_CHANGE", changed))
+
+
 def main():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log("Hotdog quick wins - kernel=" + os.uname().release)
@@ -264,6 +301,7 @@ def main():
         "3": ("Plasma flashlight", test_flashlight),
         "4": ("haptics suspend/resume", test_haptics_suspend),
         "5": ("deux tags NFC", test_nfc_tags),
+        "6": ("diagnostic brut des GPIO du slider", test_slider_raw_gpios),
     }
     while True:
         print("\nTests disponibles:")
