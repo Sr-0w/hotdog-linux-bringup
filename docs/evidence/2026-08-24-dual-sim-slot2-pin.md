@@ -63,6 +63,14 @@ The final ModemManager APK SHA256 is
 The installed `/usr/sbin/ModemManager` SHA256 is
 `25cb578e9cf3354b7de14653ab500ab6c911c24d0386ea99ab99554e61d24ef9`.
 
+The firmware also reports both physical slots as active even when one is
+empty. The original slot loader selected the last active slot, which made a
+card in slot 1 plus an empty slot 2 appear as `PrimarySimSlot=2`. The `r2`
+override instead prefers the first active slot with an ICCID, while retaining
+the first-active fallback for firmware that does not expose card contents.
+The final aarch64 `r2` APK SHA256 is
+`ede40f2fec625f14318770866591838c5c436a795a61986cd50faf9723236d11`.
+
 ## PIN success exposes a modem firmware crash
 
 With the corrected binary, the same PIN produced no unlock error. The modem
@@ -109,9 +117,9 @@ size 75953080
 SHA256 559a517c2d4ca5c22d25e0a9b3383bbf7591a632f688b629a19c3e51e3dba9e5
 ```
 
-Mixing OOS12 MPSS with the OOS10 low-level baseline is now the leading cause
-of the registration-time RFLM/QLINK assertion. The OOS10 image is packaged by
-the private-source, hash-gated
+Mixing OOS12 MPSS with the OOS10 low-level baseline was a testable firmware
+provenance mismatch. The OOS10 image is packaged by the private-source,
+hash-gated
 `firmware-oneplus-hotdog-modem-oos10-1.0.11.1.7-r0`. No proprietary modem bytes
 are committed.
 
@@ -120,6 +128,22 @@ the exact OOS10 revision, MPSS and the UIM/NAS/WDS/DMS/Voice services were
 running, and a 120-second window produced 24 of 24 healthy samples with zero
 modem crash. This proves the image boots and serves QMI; registration with a
 SIM remains deliberately deferred.
+
+After a card was inserted in slot 1, the correct PIN reproduced the same
+RFLM/QLINK assertion and reboot with the exact OOS10 MPSS. PIN and PUK counters
+remained 3/10. The firmware-generation mismatch is therefore disproved as the
+root cause of the post-PIN crash.
+
+OxygenOS performs another preparation step that mainline currently omits.
+Its `libril-qc-qmi-1.so` initializes the Qualcomm PDC/MCFG machinery and
+contains explicit select/activate flows for software MBN configurations.
+Read-only PDC enumeration on the failing mainline boot found 25 resident
+software configurations, including `Common-Commercial` and
+`Proximus_VoLTE`, but every configuration was inactive. `qmicli` implements
+activation as `Set Selected Config` followed by `Activate Config`, matching
+the OxygenOS sequence at the QMI protocol level. A missing selected/active
+MCFG before online radio bring-up is now the leading hypothesis. No PDC
+configuration has been changed yet.
 
 The guarded phone-side test is installed as
 `/home/user/test-hotdog-sim-slot2`. It verifies the kernel, ModemManager and

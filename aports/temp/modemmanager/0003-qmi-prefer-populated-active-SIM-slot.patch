@@ -1,0 +1,71 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Mon, 24 Aug 2026 22:05:00 +0200
+Subject: [PATCH] qmi: prefer a populated active SIM slot
+
+Some DSDS firmware reports every physical slot as active, including empty
+slots. The slot loader currently overwrites the primary slot on every active
+entry, so a device with a card in slot 1 and an empty active slot 2 exposes
+PrimarySimSlot=2.
+
+Prefer the first active slot containing an ICCID. Fall back to the first
+active slot only when no populated active slot was found.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ src/mm-shared-qmi.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/src/mm-shared-qmi.c b/src/mm-shared-qmi.c
+index d93698a..6b9b137 100644
+--- a/src/mm-shared-qmi.c
++++ b/src/mm-shared-qmi.c
+@@ -3350,6 +3350,8 @@ uim_get_slot_status_ready (QmiClientUim *client,
+     GArray              *physical_slots = NULL;
+     GArray              *ext_information = NULL;
+     GArray              *slot_eids = NULL;
++    guint                first_active_logical_id = 0;
++    guint                first_active_slot_number = 0;
+     guint                i;
+ 
+     self = g_task_get_source_object (task);
+@@ -3406,8 +3408,10 @@ uim_get_slot_status_ready (QmiClientUim *client,
+         slot_status = &g_array_index (physical_slots, QmiPhysicalSlotStatusSlot, i);
+         if (slot_status->physical_slot_status == QMI_UIM_SLOT_STATE_ACTIVE) {
+             sim_active = TRUE;
+-            ctx->active_logical_id = slot_status->logical_slot;
+-            ctx->active_slot_number = i + 1;
++            if (!first_active_slot_number) {
++                first_active_logical_id = slot_status->logical_slot;
++                first_active_slot_number = i + 1;
++            }
+         }
+ 
+         if (!slot_status->iccid->len) {
+@@ -3416,6 +3420,13 @@ uim_get_slot_status_ready (QmiClientUim *client,
+             continue;
+         }
+ 
++        /* Some DSDS firmwares report every physical slot as active, including
++         * empty slots. Prefer the first active slot that actually has a card. */
++        if (sim_active && !ctx->active_slot_number) {
++            ctx->active_logical_id = slot_status->logical_slot;
++            ctx->active_slot_number = i + 1;
++        }
++
+         /* This is supposed to be BCD, but some carriers have non-spec-compliant ICCIDs that use
+          * A-F characters as part of the operator-specific part of the ICCID. Parse it as hex and
+          * let mm_3gpp_parse_iccid take care of handling the A-F characters properly. */
+@@ -3460,6 +3471,11 @@ uim_get_slot_status_ready (QmiClientUim *client,
+     }
+     g_assert_cmpuint (ctx->sim_slots->len, ==, physical_slots->len);
+ 
++    if (!ctx->active_slot_number) {
++        ctx->active_logical_id = first_active_logical_id;
++        ctx->active_slot_number = first_active_slot_number;
++    }
++
+     g_task_return_boolean (task, TRUE);
+     g_object_unref (task);
+ }
+-- 
+2.51.0

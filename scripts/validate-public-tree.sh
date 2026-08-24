@@ -441,10 +441,12 @@ validate_hotdog_wifi_package_contract() {
 validate_modemmanager_slot_pin_contract() {
 	local apkbuild="aports/temp/modemmanager/APKBUILD"
 	local patch="aports/temp/modemmanager/0002-qmi-use-the-SIM-slot-for-PIN-operations.patch"
+	local slot_patch="aports/temp/modemmanager/0003-qmi-prefer-populated-active-SIM-slot.patch"
 
 	log "ModemManager QMI SIM-slot PIN contract"
 	[ -f "$apkbuild" ] || die "missing ModemManager override"
 	[ -f "$patch" ] || die "missing ModemManager SIM-slot PIN patch"
+	[ -f "$slot_patch" ] || die "missing ModemManager populated-slot patch"
 	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
 		die "ModemManager override does not apply the SIM-slot PIN patch"
 	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
@@ -461,6 +463,10 @@ validate_modemmanager_slot_pin_contract() {
 		grep -q "QMI_UIM_SESSION_TYPE_CARD_SLOT_$slot" "$patch" ||
 			die "ModemManager patch does not map card slot $slot"
 	done
+	grep -q '0003-qmi-prefer-populated-active-SIM-slot.patch' "$apkbuild" ||
+		die "ModemManager override does not apply the populated-slot patch"
+	grep -q 'empty slots. Prefer the first active slot that actually has a card' "$slot_patch" ||
+		die "ModemManager populated-slot patch lacks the DSDS empty-slot guard"
 }
 
 validate_hotdog_oos10_modem_contract() {
