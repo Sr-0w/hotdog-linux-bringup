@@ -1,0 +1,37 @@
+From 9fd6f2f7e76b91f58e3cf1f333f79a4e73d226c8 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 00:34:00 +0200
+Subject: [PATCH] power: supply: qcom_smbx: define SMB5 ICL status bits
+
+The AICL rerun and USB3 SDP selection paths use two documented SMB5 bits that
+the older ClearStaff qcom_smbx register table does not define. Add the missing
+definitions beside their registers.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/power/supply/qcom_smbx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index c87e37ff84b8..660fa7d0f2fb 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -112,6 +112,7 @@ enum smb_generation {
+ #define ICL_OVERRIDE_AFTER_APSD_BIT			BIT(4)
+ 
+ #define USBIN_ICL_OPTIONS				0x366
++#define CFG_USB3P0_SEL_BIT				BIT(2)
+ #define USB51_MODE_BIT					BIT(1)
+ #define USBIN_MODE_CHG_BIT				BIT(0)
+ 
+@@ -146,6 +147,7 @@ enum smb_generation {
+ #define INPUT_CURRENT_LIMIT_MASK			GENMASK(7, 0)
+ 
+ #define POWER_PATH_STATUS(smb)				(SMB_REG_OFFSET(smb) + 0x0B)
++#define P_PATH_USBIN_SUSPEND_STS_BIT			BIT(6)
+ #define P_PATH_USE_USBIN_BIT				BIT(4)
+ #define P_PATH_VALID_INPUT_POWER_SOURCE_STS_BIT		BIT(0)
+ 
+-- 
+2.51.0
+

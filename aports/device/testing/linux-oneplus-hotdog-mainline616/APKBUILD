@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=178
+pkgrel=179
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -188,6 +188,7 @@ source="
 	0152-power-supply-qcom-smbx-expose-input-current-limit.patch
 	0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
 	0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
+	0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -393,5 +394,6 @@ a518a9ca2c05750d70642522bddc9e1f6e696bc1119f003d2693db2786183a9d3a5cbb3c4757e3c8
 32df8a22c04c97f98be7cf9c15f81788961f8cf79b599887cd99252db61ad39907d1c494c853acaa223b64ee0993b1235068fc91612ec45d082f2c844e47c724  0152-power-supply-qcom-smbx-expose-input-current-limit.patch
 ef627f849a19f47bd0adca0e80727a0e5f4370f94e3ed81634fd7380707e1069577c1b9fceb00870b9e04f83cf0c8fe7708bf812bd645fb75b5205ecc0d9a273  0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
 97f2d38ab45b699ec2de073ddf78f79bbdeefa9b6a06e2c84ebf14960f1107e3aabbd2067ce6d51de7c6a3085d191dd6db1cdee05f0a8161af9e80d8b8495ce8  0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
+8291240ee9800ea21e2b72347931fd32990605e8bb1a72a1c207b01ca2d253cabd8d7a56b966406e478577cea478d57fddf0e4adcd235c7b64bec68383c148d3  0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
 4157b11eb8c60a567343f8452d29d8c30f2b7e30cef8a5789eefddad123ad8a85f77c9b4736eae469435c5f9d1a9e335811822bd20ab3dd27995cdcf9d9d6c78  validate-mainline616-build.sh
 "
