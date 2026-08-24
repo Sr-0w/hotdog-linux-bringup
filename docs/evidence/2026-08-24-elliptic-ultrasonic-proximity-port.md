@@ -79,12 +79,12 @@ A clean worktree based on the exact running-kernel source commit
   `SLIMBUS_2_TX` to WCD9340 `AIF2_CAP` microphone backend;
 - DT schemas for the Elliptic child and hostless DAI provider.
 
-The original local series ended at commit
-`fb21f74d442e94b48245b65dbb6809c59fedd0c2`, tree
-`9bd59678620c61b8e70a03fbb146e6151ff8a5ab`. Runtime bring-up subsequently
-fixed the hostless PCM implementation and corrected the proximity operation
-mode from the handset-only value `693` to the global OxygenOS proximity value
-`699`.
+The current local series ends at commit
+`648c410d4e0392869ea1ccb68c88747ad7e824b3`, tree
+`7d89c48a57d7381bda4d818cc5b72f0d62e73629`. Runtime bring-up fixed the
+hostless PCM implementation, reproduced the stock startup handshake and
+ordering, and corrected the proximity operation mode from the handset-only
+value `693` to the global OxygenOS proximity value `699`.
 
 A full `Image modules qcom/sm8150-oneplus-hotdog.dtb` build completed with
 kernel release `6.16.0-sm8150`. Key artifacts:
@@ -94,22 +94,55 @@ kernel release `6.16.0-sm8150`. Key artifacts:
 | Image | `60b2750b95c8e9ba76cf0dba16b5a4263b7a44442191e1eef0b2ea39428145ee` |
 | hotdog DTB | `bd8a964cc21384b6ecc838c5eefbdffd8cc9415335c07025d8e73f3fc702eb05` |
 | q6afe.ko | `e9ab31255a586599142fce1df6d8cc16131ad064b4796ce60edd22f3f1b381c9` |
-| q6routing.ko | `6484d18b8e6064ede86a1b5579ff4a1c05aa2f3b0faa0e63faee0565b9a65234` |
-| q6hostless.ko | `cfe46e7c42997163e41e2c97983c30b416591136758f55b62a24e2b906b51c22` |
-| q6elliptic.ko | `baf68693bd088c69523a498072ab4adb5af34feb46e0bd1dfde43bd828a7d7c1` |
+| q6routing.ko | `60c44a7e532f22ba6559054a44589f6b114ea00700da90b7c704075b592e751f` |
+| q6hostless.ko | `2e2cd8a619d5f6db084c76c69e271e6b948e36856a8500f825dbd79445f95439` |
+| q6elliptic.ko | `b571f3faa40e8fa48659b2deaa6a673e8002e4d9506307ca2da3410329b3d767` |
+| snd-soc-sm8150.ko | `88e22a04e69b1cc4bc1653657c184ec21ed673d19d61721c052e8f2521176fb1` |
 
 All four modules have the exact running release vermagic. The full build reached
 the real vmlinux `MODPOST`; no new unresolved symbol or driver-specific warning
 was reported.
 
-## What is not proved yet
+## Runtime checkpoint
 
-Nothing from this build has been booted. There is no claim yet that the ADSP
-accepts mode 693, that both hostless PCMs reach `RUNNING`, that the transducer
-emits, or that opcode `0x0ff10204` returns events on this Linux stack.
+The candidate booted temporarily through bootloader `fastboot boot`; neither
+boot slot was written. The first attempted same-kernel kexec hung before SSH
+and was recovered manually to real fastboot without entering Qualcomm crash
+dump mode. The bootloader path then reached a fresh Linux boot and exposed:
 
-`elliptic-proximity-smoke.py` is prepared for that future boot. It discovers
-the PCM ids by exact name, arms the mixer and engine for at most five minutes,
-reads only the Elliptic input device, and rolls engine, PCM processes and mixer
-back in a `finally` block. A hardware run still requires a separately reviewed
-boot image and the normal explicit phone lease.
+- the `q6elliptic`, `q6hostless`, `q6afe` and `q6routing` modules;
+- the `Elliptic ultrasonic proximity` input device;
+- the dedicated SLIMBUS2 capture and Quaternary MI2S playback PCMs;
+- successful bounded rollback to disabled engine, closed PCMs and restored
+  mixer controls after every failure.
+
+Runtime investigation found and fixed several independent defects:
+
+- hostless DAPM widgets were moved to their owning frontend component;
+- dummy PCM constraints, copy and pointer callbacks now let both no-DMA PCMs
+  reach and remain in `RUNNING`;
+- the startup order now matches OxygenOS: engine, routes, then TX/RX PCMs;
+- the first enable sends the stock version, branch and tag triggers; APR
+  responses for parameter ids 12, 14 and 18 prove the asynchronous transport;
+- operation mode 699, the active-screen event and the private 448-byte factory
+  calibration are sent before proximity processing;
+- the physical ultrasound microphone backend is mono/S24 while its hostless
+  frontend remains mono/S16, matching the split stock contract;
+- the stock ADC3 gain and AIF2/DEC2/AMIC3 routing are applied and rolled back.
+
+The private calibration bytes and phone-specific paths are deliberately not
+stored in Git. The driver loads them through the documented firmware name.
+
+## Remaining blocker
+
+Proximity is still `Partial`, not `Working`. Repeated guided top-edge cover
+tests have produced no parameter-id 16 sensorhub event. The ADSP does return
+version/branch/tag and diagnostics, and its processing counters increase while
+the two hostless PCMs run. Direct AP capture confirms that the remaining fault
+is in the physical SLIMBUS2 microphone data path: the AFE port starts with the
+stock mono/S24 backend format and the complete WCD9340 DAPM chain powers on,
+but the captured samples are still all zero.
+
+`elliptic-proximity-smoke.py` defaults to a guided three-cycle test, records
+APR counters, waits for each physical gesture and always rolls back in a
+`finally` block. A PASS still requires three observed `near`/`far` cycles.
