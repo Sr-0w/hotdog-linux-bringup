@@ -212,7 +212,7 @@ def wait_for_state(event_file, expected, timeout, output):
 
 
 def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
-          operation_mode=699, tx_port_enabled=False):
+          operation_mode=699):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -231,9 +231,6 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     rx_port = enable.parent / "rx_port"
     if not rx_port.exists():
         raise SmokeError("missing Elliptic RX port control")
-    tx_port = enable.parent / "tx_port"
-    if not tx_port.exists():
-        raise SmokeError("missing Elliptic TX port control")
     mode_control = enable.parent / "operation_mode"
     if not mode_control.exists():
         raise SmokeError("missing Elliptic operation mode control")
@@ -242,7 +239,6 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     hostless = None
     armed = False
     rx_armed = False
-    tx_armed = False
     control_prestates = []
     events = 0
     mode_prestate = mode_control.read_text().strip()
@@ -270,9 +266,6 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
             set_control(card, name, value)
         rx_port.write_text("1\n")
         rx_armed = True
-        if tx_port_enabled:
-            tx_port.write_text("1\n")
-            tx_armed = True
         hostless = AlsaHostless()
         hostless.start(card, playback["device"], capture["device"])
         event_stats = enable.parent / "event_stats"
@@ -340,11 +333,6 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
             except (OSError, subprocess.CalledProcessError) as error:
                 log_line(output, "ERROR mixer rollback %s: %s"
                          % (name, error))
-        if tx_armed:
-            try:
-                tx_port.write_text("0\n")
-            except OSError as error:
-                log_line(output, "ERROR TX port disable: %s" % error)
         if rx_armed:
             try:
                 rx_port.write_text("0\n")
@@ -374,8 +362,6 @@ def main(argv=None):
     parser.add_argument("--log", type=pathlib.Path)
     parser.add_argument("--operation-mode", type=int, choices=(693, 699),
                         default=699)
-    parser.add_argument("--tx-port", action="store_true",
-                        help="also open the diagnostic Elliptic TX pseudo-port")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--interactive", action="store_true", dest="interactive")
     mode.add_argument("--monitor", action="store_false", dest="interactive")
@@ -395,8 +381,7 @@ def main(argv=None):
         os.execvp(command[0], command)
     try:
         result = smoke(args.duration, args.log, args.interactive,
-                       args.electronic_probe, args.operation_mode,
-                       args.tx_port)
+                       args.electronic_probe, args.operation_mode)
         if args.interactive:
             print("\nPASS: trois cycles near/far recus.")
             print("Journal: %s" % args.log)
