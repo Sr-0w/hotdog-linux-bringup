@@ -72,19 +72,22 @@ if (p0.new) jump 0xb20aa264     ; return without creating an instance
 An instance that is never created emits no configuration event, which is
 exactly what proximity does and what distinguishes it from the SAR.
 
-That byte is written at `0xb21c81c4`, and its value is chosen by a capability
-bit:
+**RETRACTED: the capability-bit story below was a different driver.** An
+earlier version of this note said the byte was written at `0xb21c81c4` from a
+capability bit at `r22+0x87`. That write is in
+`sns_lsm6dsm_sensor_instance.c:inst_init`, identified from the message
+descriptor its neighbouring code loads — the accelerometer, not the ALS. The
+offsets coincided; a read in one driver was linked to a write in another. The
+same mistake produced a wrong attribution twice in one session, because several
+drivers carry byte-identical message text: searching the image for
+`interrupt_num:%d interrupt_pull_type` finds `sns_mmc5603x_sensor.c` first, not
+the `sns_sx9324` copy. **Resolve the descriptor, never the string fragment.**
 
-```
-r3 = memub(r22+#0x87)
-p0 = !tstbit(r3,#0x1)
-if (!p0.new) jump 0xb21c81c4    ; bit set   -> one value
-if (p0.new)  memb(r19+##0x23d) = r24   ; bit clear -> another
-```
-
-So proximity is enabled or disabled by configuration, not by a hardware fault —
-which agrees with the measurement that the chip sees a finger perfectly well:
-covering it roughly triples the ALS channels on the same die.
+What survives is the read, which is in `sns_tcs3701` and is real: a zero byte at
+`state+0x23d` returns from `set_client_req` without creating an instance. What
+sets it is not yet known. The code passes `add(r19,#0x23d)` to a function at
+`0xb20aa404`, so `+0x23d` is the start of a structure rather than a lone flag,
+and that function is where to look next.
 
 ## The driver listens to the display
 
