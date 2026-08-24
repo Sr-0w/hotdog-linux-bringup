@@ -106,12 +106,26 @@ unsolicited incoming messages. The parity surface includes GSM and CDMA PDU
 paths exposed by the modem, multipart messages, status reports, storage-full
 handling, SMSC configuration and cell-broadcast indications.
 
+The `hotdog-telephony` model implements the shared WMS/Voice/IMS lifetime. SMS
+selects IMS only when the subscription is registered with SMS capability and
+otherwise falls back to circuit-switched service. It records PDU size,
+multipart identity, storage, modem reference, delivery-report state and strict
+queued/submitted/sent/delivered/failed transitions. Incoming messages retain
+their subscription, transport and SIM/modem storage identity.
+
 ### Voice and supplementary services
 
 QMI Voice covers dial, answer, hangup, call state, DTMF, call waiting,
 forwarding, CLIR/CLIP, conference and emergency call state. Voice is coupled
 to the audio graph: a successful QMI call without the matching Q6 audio route
 is not a complete call implementation.
+
+The same model tracks MO/MT calls by subscription, CS or IMS domain, emergency
+status, video, strict dial/alert/incoming/active/held/disconnecting/end
+transitions and a separate audio-ready gate. DTMF is rejected outside an
+active call. Call waiting, CLIP and CLIR state are subscription-scoped; the
+remaining forwarding, conference and transfer request payloads stay in the
+transport parity queue rather than being collapsed into call state.
 
 ### IMS, VoLTE and RCS
 
@@ -126,6 +140,12 @@ services. The required reconstruction surface is:
 - emergency registration/call fallback;
 - per-subscription IMS state;
 - RCS as a separable feature after core IMS parity.
+
+IMSA registration, RAT, SIP failure and the voice/video/SMS/UT/RCS capability
+mask are represented independently for every subscription. Automatic SMS and
+call domain selection consumes that state. SSR clears registration and
+capabilities, fails in-flight SMS with `ENETRESET`, ends calls, drops audio and
+advances the generation so stale indications cannot complete new operations.
 
 ## Mainline ownership model
 
