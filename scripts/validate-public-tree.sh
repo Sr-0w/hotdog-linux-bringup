@@ -515,6 +515,34 @@ validate_oxygenos_modem_inventory_contract() {
 		die "modem architecture lacks the IMS owner"
 }
 
+validate_hotdog_radio_state_contract() {
+	local source_dir="helpers/hotdog-radio"
+	local output=""
+	local result=""
+
+	log "Hotdog radio state replay contract"
+	for source in hotdog-radio-state.c hotdog-radio-state.h hotdog-radio-replay.c; do
+		[ -f "$source_dir/$source" ] || die "missing radio state source: $source"
+	done
+	output="$(mktemp)"
+	trap 'rm -f "$output"' RETURN
+	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
+		"$source_dir/hotdog-radio-state.c" "$source_dir/hotdog-radio-replay.c" \
+		-o "$output"
+	result="$(printf '%s\n' \
+		'QRTR_UP' 'UIM_READY 1 1' 'PDC_STATUS 1 0' 'DMS_ONLINE' \
+		'NAS_REGISTERED' 'DATA_UP' 'SMS_BEGIN' 'CALL_BEGIN' \
+		'IMS_REGISTERED' 'QRTR_DOWN' | "$output")"
+	printf '%s\n' "$result" | grep -q 'phase=ready result=0 actions=publish-ready' ||
+		die "radio replay does not reach ready"
+	for action in teardown-data fail-sms drop-calls clear-ims; do
+		printf '%s\n' "$result" | tail -n 1 | grep -q "$action" ||
+			die "radio SSR replay lacks action: $action"
+	done
+	rm -f "$output"
+	trap - RETURN
+}
+
 validate_hotdog_oos10_modem_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
 	local firmware_dir="aports/device/testing/firmware-oneplus-hotdog-modem-oos10"
@@ -902,6 +930,7 @@ main() {
 	validate_modemmanager_slot_pin_contract
 	validate_libqmi_pdc_subscription_contract
 	validate_oxygenos_modem_inventory_contract
+	validate_hotdog_radio_state_contract
 	validate_hotdog_oos10_modem_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract
