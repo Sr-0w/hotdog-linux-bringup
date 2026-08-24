@@ -156,19 +156,21 @@ before reboot. The known rollback image remained available with SHA256
 Fresh-boot signal measurements corrected the last capture-format error. All
 SLIMbus TX backends are mono/S16, while playback backends retain stereo/S24.
 With that split the packaged handset microphone produced 188794 nonzero
-samples out of 189888, and the dedicated TX2 path produced 185462 nonzero
-samples out of 192000. The latter measured about 13.1 raw-count RMS with the
-physical cover held still. `wcd934x` now rejects a zero-channel stream and
+samples out of 189888. One switched-route TX2 capture also appeared nonzero,
+but it is not accepted as TX2 proof: isolated captures with PulseAudio stopped,
+TX0 explicitly disconnected and a clean ALSA-duration close remained exact
+digital zero. The earlier data can therefore have been stale TX0 data during
+the route transition. `wcd934x` now rejects a zero-channel stream and
 propagates SLIM prepare/enable/disable errors instead of silently returning a
 successful all-zero capture.
 
-That signal result is not yet repeatable. Subsequent fresh boots sometimes
-return exact digital zero on TX2 until a successful capture sequence has
-initialised the shared WCD/SLIM state. Repeated direct TX0/TX2 probes also
-caused automatic reboots with no pstore record; the preceding boot logged Q6ASM
-responses that were not expected by the client. The phone returns with ADSP and
-SLPI running and taint 512, but active capture probing is stopped until this
-stream lifecycle bug is understood.
+Repeated direct TX0/TX2 probes caused automatic reboots with no pstore record;
+the preceding boots logged Q6ASM responses that were not expected by the
+client. Replacing a SIGTERM timeout with native ALSA duration made one isolated
+close clean, but a later ADC sweep still rebooted before writing its first
+sample file. The phone returns with ADSP and SLPI running and taint 512, but
+active capture probing is stopped until this stream lifecycle bug is
+understood.
 
 The OxygenOS `audio_q6.ko` object was independently decoded. Its engine-enable
 payload is the same 16-byte value used here; operation-mode controls use the
@@ -190,11 +192,12 @@ stored in Git. The driver loads them through the documented firmware name.
 
 ## Remaining blocker
 
-Proximity is still `Partial`, not `Working`. The former all-zero microphone
-blocker is fixed. During active tests the complete AIF2/ADC3/TX2 path is on,
-both hostless PCMs run at mono/48 kHz/S16, the QUAT MI2S backend is connected,
-and both TFA9874 amplifiers report unmuted. Diagnostics processing counters
-advance and asynchronous parameters 3, 12, 14, 17 and 18 are observed.
+Proximity is still `Partial`, not `Working`. The general SLIM capture format is
+fixed and the handset microphone works, but isolated TX2 data remains exact
+zero. During active tests the complete AIF2/ADC3/TX2 DAPM path is on, both
+hostless PCMs run at mono/48 kHz/S16, the QUAT MI2S backend is connected, and
+both TFA9874 amplifiers report unmuted. Diagnostics processing counters advance
+and asynchronous parameters 3, 12, 14, 17 and 18 are observed.
 
 Despite that, neither mode 699 nor the receiver mode 693 produced parameter 16.
 This remained true during electronic transducer off/on transitions and during
