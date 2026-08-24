@@ -25,6 +25,7 @@ MIC_CONTROLS = (
     ("CDC_IF TX2 MUX", "DEC2"),
     ("ADC MUX2", "AMIC"),
     ("AMIC MUX2", "ADC3"),
+    ("ADC3 Volume", "12"),
 )
 INPUT_NAME = "Elliptic ultrasonic proximity"
 STATE_FILE = pathlib.Path("/run/hotdog-proximity")
