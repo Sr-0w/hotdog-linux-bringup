@@ -211,7 +211,8 @@ def wait_for_state(event_file, expected, timeout, output):
     return False
 
 
-def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
+def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
+          operation_mode=699):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -230,6 +231,9 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
     rx_port = enable.parent / "rx_port"
     if not rx_port.exists():
         raise SmokeError("missing Elliptic RX port control")
+    mode_control = enable.parent / "operation_mode"
+    if not mode_control.exists():
+        raise SmokeError("missing Elliptic operation mode control")
     event_path = find_input_event()
     output = open(log_path, "a") if log_path else None
     hostless = None
@@ -237,11 +241,12 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
     rx_armed = False
     control_prestates = []
     events = 0
+    mode_prestate = mode_control.read_text().strip()
 
     try:
-        log_line(output, "kernel=%s card=%d playback=%d capture=%d event=%s"
+        log_line(output, "kernel=%s card=%d playback=%d capture=%d event=%s mode=%d"
                  % (release, card, playback["device"], capture["device"],
-                    event_path))
+                    event_path, operation_mode))
         if interactive:
             print("\nTest de proximite ultrasonique Elliptic", flush=True)
             print("Pose le telephone face vers toi, sans rien devant le haut "
@@ -251,6 +256,7 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
         # OxygenOS enables the Elliptic engine before opening its hostless
         # TX/RX PCMs. Some firmware revisions do not begin processing when
         # that order is reversed.
+        mode_control.write_text("%d\n" % operation_mode)
         enable.write_text("1\n")
         armed = True
 
@@ -337,6 +343,10 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False):
                 enable.write_text("0\n")
             except OSError as error:
                 log_line(output, "ERROR disable: %s" % error)
+        try:
+            mode_control.write_text(mode_prestate + "\n")
+        except OSError as error:
+            log_line(output, "ERROR mode rollback: %s" % error)
         STATE_FILE.write_text("unknown\n")
         if output:
             output.close()
@@ -350,6 +360,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=60.0)
     parser.add_argument("--log", type=pathlib.Path)
+    parser.add_argument("--operation-mode", type=int, choices=(693, 699),
+                        default=699)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--interactive", action="store_true", dest="interactive")
     mode.add_argument("--monitor", action="store_false", dest="interactive")
@@ -369,7 +381,7 @@ def main(argv=None):
         os.execvp(command[0], command)
     try:
         result = smoke(args.duration, args.log, args.interactive,
-                       args.electronic_probe)
+                       args.electronic_probe, args.operation_mode)
         if args.interactive:
             print("\nPASS: trois cycles near/far recus.")
             print("Journal: %s" % args.log)
