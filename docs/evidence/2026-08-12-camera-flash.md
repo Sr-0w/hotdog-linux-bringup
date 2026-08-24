@@ -64,12 +64,13 @@ Both channels completed a brightness-32 torch test and a 100 mA, 100 ms strobe,
 then returned to disabled state with no residual fault. The user confirmed that
 the flash was visibly emitted.
 
-The remaining gap is normal integration rather than electrical operation.
-Plasma Camera presents no flash control. Plasma Mobile installs a flashlight
-quick setting, but its backend matches only LED names ending exactly in
-`:flash` or `:torch`; the two Hotdog channels enumerate as `white:flash-0` and
-`white:flash-1`, so the backend reports no available flashlight.
+Plasma Mobile's existing flashlight quick setting originally ignored the two
+enumerated names `white:flash-0` and `white:flash-1`, because its backend
+matches names ending exactly in `:flash` or `:torch`. Naming the first channel
+`white:torch` through its standard LED function makes the backend available
+without changing the QCOM flash driver. The user confirmed that the resulting
+quick-setting button controls visible light.
 
 The currents remain deliberately conservative and can be refined once the
-stock figures are recovered. Camera synchronization and the Plasma quick
-setting are the remaining support gaps.
+stock figures are recovered. Plasma Camera still presents no flash control, so
+camera synchronization is the remaining support gap.

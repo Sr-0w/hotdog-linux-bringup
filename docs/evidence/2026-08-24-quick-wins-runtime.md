@@ -42,12 +42,11 @@ zero with no residual fault. The timeout report observed after deliberately
 waiting longer than the programmed pulse cleared normally. The user confirmed
 visible light from the test.
 
-This does not make the camera flash fully integrated. Plasma Camera exposes no
-flash control on this device, and Plasma Mobile's installed flashlight quick
-setting searches only for LED names ending exactly in `:flash` or `:torch`.
-Hotdog has two enumerated LEDs named `white:flash-0` and `white:flash-1`, so the
-backend currently declares the quick setting unavailable. Those normal UI
-paths remain the next work item.
+Plasma Camera still exposes no flash control on this device. The separate
+flashlight integration is now fixed: one channel is named `white:torch`, so
+Plasma Mobile's existing quick-setting backend discovers it. The user
+confirmed that the quick-setting button is present and controls visible light.
+Camera synchronization remains a separate open item.
 
 ## NFC down/up recovery
 
