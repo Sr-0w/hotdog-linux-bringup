@@ -62,6 +62,16 @@ one accepting every plausible id, the other refusing to treat 1022 as data.
 
 ## What is still silent
 
-`proximity` and `tilt`, and their silence is a different shape: proximity
-returns the QMI acknowledgement and no indication at all, which is what the
-earlier work established. `tilt` behaves the same and has not been investigated.
+**`proximity`, and only proximity.** `tilt` was listed here too and that was
+wrong as well: it answers under event id **774** with an empty payload, since it
+is a trigger and the event itself is the signal. It fires rarely enough that a
+six-second window saw nothing and a fifteen-second one caught two — a third way
+for a working sensor to look dead, after the wrong event id and the calibration
+event.
+
+Proximity is different in kind, verified over fifteen seconds on-change and ten
+seconds each at 5 Hz and 1 Hz: thirty-two bytes every time, the QMI
+acknowledgement alone, no indication under any id. Working sensors sampled in
+the same conditions answered normally.
+
+That makes it ten of eleven, with proximity the single exception.

@@ -151,7 +151,7 @@ function under **Working** and a broader integration or stability item under
 | Sensors | IMU temperature | Reads plausible die temperature. Capped at 5 Hz: 10 Hz and above return error 130. |
 | Sensors | TCS3701 ambient light | Streams lux plus raw channels and reacts to occultation. Feeds `net.hadess.SensorProxy`, so `LightLevel` is live. |
 | Sensors | SX9324 SAR | Reports raw capacitance, `11865` on this unit, under its own event id 1026. |
-| Sensors | Motion detect and orientation | `amd`, `rmd` and `device_orient` answer under event ids 772 and 776. |
+| Sensors | Motion, orientation, tilt | `amd`, `rmd`, `device_orient` and `tilt` answer under event ids 772, 776 and 774. Tilt fires rarely and needs a window of at least fifteen seconds to be seen. |
 | Sensors | Screen auto-rotation | Plasma Mobile rotates from the accelerometer. `iio-sensor-proxy` speaks QMI to SEE directly through `libssc`, so no IIO or input device is involved; [a boot gate](helpers/hotdog-sensor-proxy-gate.sh) makes the daemon enumerate before KWin claims, and `ACCEL_MOUNT_MATRIX` corrects a half-turn offset. |
 | Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
 
