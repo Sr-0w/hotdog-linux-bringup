@@ -89,6 +89,16 @@ The mainline equivalent must preserve:
 - disconnect reasons and automatic recovery after SSR;
 - tethering/offload as an optional layer, not a prerequisite for handset data.
 
+The transport-independent `hotdog-network` model now covers the NAS/WDS/netmgr
+ownership boundary. A populated subscription must be home or roaming and PS
+attached before WDS can start. The default-data subscription is explicit,
+QMAP mux IDs are unique, IPv4/IPv6/dual-stack runtime settings and MTU are
+validated, and changing DDS with a live bearer is refused unless the caller
+explicitly tears it down. SSR advances a generation counter, clears NAS
+attachment and fails every live bearer with no stale addresses left behind.
+The public replay covers registration and DDS gates, dual-stack completeness,
+forced and refused DDS switching, mux collision and SSR invalidation.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and
