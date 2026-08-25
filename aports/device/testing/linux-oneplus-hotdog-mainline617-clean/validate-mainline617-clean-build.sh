@@ -98,6 +98,9 @@ for symbol in mdss_dsi0 mdss_dsi1 mdss_mdp pcie0 sdhc_2 soc spmi_bus tlmm; do
 		die "missing bootloader-overlay symbol: $symbol"
 done
 
+[ "$(fdtget -t s "$dtb" /soc@0/geniqup@8c0000 status)" = okay ] ||
+	die "QUP0 haptics wrapper is not enabled"
+
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	touch_module=$(find "$modules_dir" -type f -name 's6sy761.ko' -print -quit)
