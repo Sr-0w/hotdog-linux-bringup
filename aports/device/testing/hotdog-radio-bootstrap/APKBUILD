@@ -1,5 +1,5 @@
 pkgname=hotdog-radio-bootstrap
-pkgver=0.21
+pkgver=0.22
 pkgrel=0
 pkgdesc="Verified radio bootstrap and lifecycle supervisor for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
@@ -11,7 +11,7 @@ depends="libqmi libqrtr-glib"
 makedepends="glib-dev libqmi-dev libqrtr-glib-dev pkgconf"
 subpackages="$pkgname-openrc"
 
-_commit="5e570c9f2d67d3baa082b2c0b216fd8684538943"
+_commit="3748debfc4883e6d96a601329a90cb1fb067293d"
 source="
 	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
 	hotdog-radio-bootstrap.initd
@@ -70,6 +70,11 @@ build() {
 		helpers/hotdog-radio/hotdog-qmi-imsa.c \
 		helpers/hotdog-radio/hotdog-qmi-wds-discovery.c \
 		helpers/hotdog-radio/hotdog-qmi-wds-profile.c \
+		helpers/hotdog-radio/hotdog-qmi-wds.c \
+		helpers/hotdog-radio/hotdog-qmi-ims-session.c \
+		helpers/hotdog-radio/hotdog-qmi-rmnet.c \
+		helpers/hotdog-radio/hotdog-ims-executor.c \
+		helpers/hotdog-radio/hotdog-ims-netconfig.c \
 		helpers/hotdog-radio/hotdog-ims-bearer.c \
 		helpers/hotdog-radio/hotdog-network.c \
 		helpers/hotdog-radio/hotdog-radio-readiness.c \
@@ -113,7 +118,7 @@ openrc() {
 }
 
 sha512sums="
-df4583cdbabafac86ba417dceaae1130a8eb240e5bf00386363acebe7022f50cbb04333a45ce3b8a630e05db4bfe92d1d6ccd7f13bea4731f1ae750fdd2d79fc  hotdog-radio-bootstrap-5e570c9f2d67d3baa082b2c0b216fd8684538943.tar.gz
+693e87714c3ee8e5c29899d3c55c5b65bc0b156384e792eb09629551381356bba94a5e5b33212e2dbb3f68b6750d111f35b7c90d55dbba95efe479d4142e2ad8  hotdog-radio-bootstrap-3748debfc4883e6d96a601329a90cb1fb067293d.tar.gz
 4daa5a5aad64e5b804de6d08c2ed4224dfda36f45edca3af7cfe0bc47820f5407f9e6ecdf5f02fe3e2fe67f9f483009b7656b9a051c796e2b90ba9d54cfb21a0  hotdog-radio-bootstrap.initd
 5bc713a246425e9748689aad0a95b30e184cc1322c6b0e9c1080f2f9b7a5724a866b2c01d66305b25abee39c265fac27df280e172967202d96980f9a9c3b96b8  hotdog-radio-supervisor.initd
 65c68b25a4f8d8b914da5b7aa2f4bb3193cd7205da3f048904b812f92a8d3dcaa36003d40862133f791f8ac260a49eb9d322848b68cd18bd43f517fe3d1f7a5c  hotdog-imsd.initd

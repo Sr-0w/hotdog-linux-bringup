@@ -463,7 +463,9 @@ validate_hotdog_wifi_package_contract() {
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap package does not build the IMSA owner"
 	for source in hotdog-ims-bearer-state.c hotdog-qmi-wds-discovery.c \
-		hotdog-qmi-wds-profile.c hotdog-ims-bearer.c; do
+		hotdog-qmi-wds-profile.c hotdog-ims-bearer.c \
+		hotdog-qmi-ims-session.c hotdog-ims-executor.c \
+		hotdog-ims-netconfig.c hotdog-qmi-rmnet.c; do
 		sed -n '/-o hotdog-radio-supervisord$/,/-o hotdog-imsd$/p' \
 			"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" |
 			grep -q "$source" ||
