@@ -41,7 +41,7 @@ class HotdogRadioStateTests(unittest.TestCase):
     def test_complete_locked_then_unlocked_boot(self) -> None:
         result = self.replay(
             "START\nQRTR_UP\nUIM_READY 1 0\nPDC_STATUS 1 0\n"
-            "DMS_ONLINE\nUIM_UNLOCKED 1\nNAS_REGISTERED\n"
+            "DMS_ONLINE\nHANDOFF_STARTED\nUIM_UNLOCKED 1\nNAS_REGISTERED\n"
         )
         self.assertIn("phase=locked result=0 actions=publish-ready", result.stdout)
         self.assertIn("phase=registering result=0 actions=start-registration", result.stdout)
@@ -50,12 +50,35 @@ class HotdogRadioStateTests(unittest.TestCase):
     def test_ssr_tears_down_every_runtime_domain(self) -> None:
         result = self.replay(
             "QRTR_UP\nUIM_READY 1 1\nPDC_STATUS 1 0\nDMS_ONLINE\nNAS_REGISTERED\n"
-            "DATA_UP\nSMS_BEGIN\nCALL_BEGIN\nIMS_REGISTERED\nQRTR_DOWN\n"
+            "HANDOFF_STARTED\nDATA_UP\nSMS_BEGIN\nCALL_BEGIN\nIMS_REGISTERED\nQRTR_DOWN\n"
         )
         last = result.stdout.splitlines()[-1]
         self.assertIn("phase=recovering", last)
         for action in ("teardown-data", "fail-sms", "drop-calls", "clear-ims"):
             self.assertIn(action, last)
+        self.assertIn("revoke-ready", last)
+        self.assertIn("stop-modemmanager", last)
+
+    def test_handoff_requires_current_readiness_and_is_single_owner(self) -> None:
+        result = self.replay("QRTR_UP\nHANDOFF_STARTED\n")
+        self.assertTrue(result.stdout.rstrip().endswith("result=-71 actions=none"))
+
+        result = self.replay(
+            "QRTR_UP\nUIM_READY 1 0\nPDC_STATUS 1 0\nDMS_ONLINE\n"
+            "HANDOFF_STARTED\nHANDOFF_STARTED\nHANDOFF_STOPPED\n"
+        )
+        lines = result.stdout.splitlines()
+        self.assertIn("result=-71 actions=none", lines[-2])
+        self.assertTrue(lines[-1].endswith("result=0 actions=none"))
+
+    def test_registration_phase_changes_republish_readiness(self) -> None:
+        result = self.replay(
+            "QRTR_UP\nUIM_READY 1 0\nPDC_STATUS 1 0\nDMS_ONLINE\n"
+            "UIM_UNLOCKED 1\nNAS_REGISTERED\nNAS_LOST\n"
+        )
+        publish_lines = [line for line in result.stdout.splitlines()
+                         if "publish-ready" in line]
+        self.assertEqual(len(publish_lines), 4)
 
     def test_requests_are_rejected_before_registration(self) -> None:
         result = self.replay("QRTR_UP\nUIM_READY 1 0\nSMS_BEGIN\n")

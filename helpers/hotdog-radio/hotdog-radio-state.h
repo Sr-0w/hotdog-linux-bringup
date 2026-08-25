@@ -32,6 +32,8 @@ enum hotdog_radio_event_type {
 	HOTDOG_EVENT_PDC_ACTIVATED,
 	HOTDOG_EVENT_MODEM_SWITCHED,
 	HOTDOG_EVENT_DMS_ONLINE,
+	HOTDOG_EVENT_HANDOFF_STARTED,
+	HOTDOG_EVENT_HANDOFF_STOPPED,
 	HOTDOG_EVENT_NAS_REGISTERED,
 	HOTDOG_EVENT_NAS_LOST,
 	HOTDOG_EVENT_DATA_UP,
@@ -61,6 +63,8 @@ enum hotdog_radio_action {
 	HOTDOG_ACTION_CLEAR_IMS = 1U << 11,
 	HOTDOG_ACTION_REJECT_REQUEST = 1U << 12,
 	HOTDOG_ACTION_STOP = 1U << 13,
+	HOTDOG_ACTION_REVOKE_READY = 1U << 14,
+	HOTDOG_ACTION_STOP_MODEMMANAGER = 1U << 15,
 };
 
 struct hotdog_radio_event {
@@ -81,6 +85,8 @@ struct hotdog_radio_state {
 	unsigned int active_calls;
 	bool qrtr_up;
 	bool dms_online;
+	bool readiness_published;
+	bool modemmanager_active;
 	bool nas_registered;
 	bool data_active;
 	bool ims_registered;

@@ -216,15 +216,17 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The current slice is packaged as `hotdog-radio-bootstrap-0.14-r0` plus an
-OpenRC oneshot service. The aarch64 APKs have SHA-256
-`437f5d839325caa2eb3398e06ff463715f3a27a8802ac37090909cbbbfc18102`
-and `58ad00d4fb71dbc8c206702ff0f4654cec9ff90e1fb184b27571a2dfcb623e5d`.
-The binary links to the four subscription setters from libqmi `r2`. The
-disabled service writes boot ID, kernel identity, UIM and PDC output atomically
-to `/run/hotdog-radio/observation`. It deliberately does not create the future
-`readiness` record: that name is reserved for a completed active-ID and DMS
-verification, not a read-only snapshot.
+The current slice is packaged as `hotdog-radio-bootstrap-0.15-r3` plus its
+OpenRC service. The aarch64 APKs have SHA-256
+`64fcf843f88e8f9da71760f2431698a1a7a73209dac648a713be1017e89ae5ba`
+and `035986313a2fde021b057c6ddcb08ac55c644eff8cae557667f891008d260b9a`.
+The default service writes boot ID, kernel identity, UIM and PDC output
+atomically to `/run/hotdog-radio/observation`; it remains read-only. PDC
+mutation requires a separate boot-bound approval manifest. The OpenRC
+subpackage orders the generic Plasma Mobile policy first, removes
+ModemManager from its runlevel afterwards, and leaves D-Bus activation disabled.
+Only a verified apply path may create schema-2 `readiness` and explicitly hand
+the modem to ModemManager.
 For that validation, `--pdc-subscription=0..2` performs one explicit read-only
 Get Selected even when no UIM application is populated. A build without the
 patched API rejects the option before opening QRTR.
@@ -467,12 +469,20 @@ call site for any mutating PDC request.
 - repeated modem failure remains stopped instead of inducing a phone reboot
   loop.
 
-`hotdog-qmi-dms` provides the next typed boundary. It decodes Get Operating
-Mode and constructs an Online request, but the packaged daemon currently
-exposes only `--probe-dms`. The read-only probe runs after the same UIM identity
-checks and reports whether MPSS is online, offline or in a low-power mode.
-Set Operating Mode is not wired to runtime until the PDC active-ID verification
-and readiness record are complete.
+Readiness and ModemManager ownership are represented in the same reducer as
+PDC, NAS, data, SMS, calls and IMS. DMS Online publishes a phase-specific
+readiness record before handoff. A handoff acknowledgement is accepted only
+while QRTR, DMS and that attestation are current. Any unexpected `QRTR_DOWN`
+then emits `revoke-ready` and `stop-modemmanager` together with teardown of
+data, in-flight SMS, calls and IMS. Locked-to-registering, registration success
+and registration loss each republish the phase instead of leaving a stale
+ready-state file behind. The next transport step must execute these actions and
+reattest UIM/PDC/DMS before restarting the generic daemon.
+
+`hotdog-qmi-dms` provides the typed operating-mode boundary. The standalone
+`--probe-dms` remains read-only. The approved PDC path invokes Set Online only
+after commit, rereads DMS, publishes readiness only after confirmed Online and
+then starts ModemManager explicitly. Any unsafe or unknown mode fails closed.
 The no-SIM hardware probe reports stable `shutting-down` while remoteproc and
 all MPSS QRTR services remain alive. This is the intended pre-online state, not
 a remoteproc failure. Earlier Set Online evidence crashed the modem when no

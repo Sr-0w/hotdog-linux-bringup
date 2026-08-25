@@ -13,6 +13,10 @@ static bool subscriptions_ready(const struct hotdog_radio_state *state,
 
 static void clear_runtime(struct hotdog_radio_state *state, uint32_t *actions)
 {
+	if (state->readiness_published)
+		*actions |= HOTDOG_ACTION_REVOKE_READY;
+	if (state->modemmanager_active)
+		*actions |= HOTDOG_ACTION_STOP_MODEMMANAGER;
 	if (state->data_active)
 		*actions |= HOTDOG_ACTION_TEARDOWN_DATA;
 	if (state->pending_sms)
@@ -22,6 +26,8 @@ static void clear_runtime(struct hotdog_radio_state *state, uint32_t *actions)
 	if (state->ims_registered)
 		*actions |= HOTDOG_ACTION_CLEAR_IMS;
 	state->dms_online = false;
+	state->readiness_published = false;
+	state->modemmanager_active = false;
 	state->nas_registered = false;
 	state->data_active = false;
 	state->ims_registered = false;
@@ -135,20 +141,34 @@ int hotdog_radio_reduce(struct hotdog_radio_state *state,
 		    !subscriptions_ready(state, state->active_pdc_subscriptions))
 			return -EPROTO;
 		state->dms_online = true;
+		state->readiness_published = true;
 		if (subscriptions_ready(state, state->unlocked_subscriptions)) {
 			state->phase = HOTDOG_RADIO_REGISTERING;
-			*actions = HOTDOG_ACTION_START_REGISTRATION;
+			*actions = HOTDOG_ACTION_PUBLISH_READY |
+				HOTDOG_ACTION_START_REGISTRATION;
 		} else {
 			state->phase = HOTDOG_RADIO_LOCKED;
 			*actions = HOTDOG_ACTION_PUBLISH_READY;
 		}
+		return 0;
+	case HOTDOG_EVENT_HANDOFF_STARTED:
+		if (!state->qrtr_up || !state->dms_online ||
+		    !state->readiness_published || state->modemmanager_active)
+			return -EPROTO;
+		state->modemmanager_active = true;
+		return 0;
+	case HOTDOG_EVENT_HANDOFF_STOPPED:
+		if (!state->modemmanager_active)
+			return -ENOENT;
+		state->modemmanager_active = false;
 		return 0;
 	case HOTDOG_EVENT_UIM_UNLOCKED:
 		state->unlocked_subscriptions |= event->value;
 		if (state->phase == HOTDOG_RADIO_LOCKED &&
 		    subscriptions_ready(state, state->unlocked_subscriptions)) {
 			state->phase = HOTDOG_RADIO_REGISTERING;
-			*actions = HOTDOG_ACTION_START_REGISTRATION;
+			*actions = HOTDOG_ACTION_PUBLISH_READY |
+				HOTDOG_ACTION_START_REGISTRATION;
 		}
 		return 0;
 	case HOTDOG_EVENT_NAS_REGISTERED:
@@ -163,8 +183,10 @@ int hotdog_radio_reduce(struct hotdog_radio_state *state,
 		state->nas_registered = false;
 		state->data_active = false;
 		state->ims_registered = false;
-		if (state->phase == HOTDOG_RADIO_READY)
+		if (state->phase == HOTDOG_RADIO_READY) {
 			state->phase = HOTDOG_RADIO_REGISTERING;
+			*actions = HOTDOG_ACTION_PUBLISH_READY;
+		}
 		return 0;
 	case HOTDOG_EVENT_DATA_UP:
 		if (state->phase != HOTDOG_RADIO_READY || !state->nas_registered) {
@@ -251,6 +273,8 @@ const char *hotdog_radio_action_name(enum hotdog_radio_action action)
 	case HOTDOG_ACTION_CLEAR_IMS: return "clear-ims";
 	case HOTDOG_ACTION_REJECT_REQUEST: return "reject-request";
 	case HOTDOG_ACTION_STOP: return "stop";
+	case HOTDOG_ACTION_REVOKE_READY: return "revoke-ready";
+	case HOTDOG_ACTION_STOP_MODEMMANAGER: return "stop-modemmanager";
 	case HOTDOG_ACTION_NONE: break;
 	}
 	return "none";

@@ -14,26 +14,24 @@ should use `Exec=/bin/false`, but the generated package contained
 
 ## Package correction
 
-`modemmanager-1.25.95_git20260709-r3` now rewrites the system-bus activation
+`modemmanager-1.25.95_git20260709-r4` rewrites the system-bus activation
 entry to `Exec=/bin/false`. OpenRC remains the only daemon start path.
 
 | Package | SHA-256 |
 |---|---|
-| `modemmanager-1.25.95_git20260709-r3.apk` | `0e2cb572d678d12a4ca403999b74eb6b572e3c05068d4777473e1d69aabb2057` |
-| `libmm-glib-1.25.95_git20260709-r3.apk` | `a5f513720400f88fed8247b6cf2b386e978f8984a4e0fe2123e554f205ef4c2c` |
-| `modemmanager-lang-1.25.95_git20260709-r3.apk` | `65dc8a1197cb83f4991ddccbc70217a3293ed6e267ed267c586e9b32af368f68` |
-| `modemmanager-openrc-1.25.95_git20260709-r3.apk` | `21fba0ec1c3471327e18941ecc21ca18087bcf5cc7619159ded4562cd8f59502` |
-| `modemmanager-udev-1.25.95_git20260709-r3.apk` | `4d24e3552c28dd9618e3508ced56c3fed4cc4aa32583fbd0a3bec09a788aecb4` |
+| `modemmanager-1.25.95_git20260709-r4.apk` | `8d104e104f8a8fd3afb14377b16d1ce57beca390a76071f627d8635d7c78cfd1` |
+| `modemmanager-openrc-1.25.95_git20260709-r4.apk` | `9370806b733c1a40a909d417c84c838af2617e7492db49ee432b2534770778c7` |
 
 The APORT also drops its own exact-version `libmm-glib` from build
 dependencies, removing the circular dependency that otherwise made every new
 `pkgrel` impossible to build. Runtime split-package dependencies remain exact.
 
-`device-oneplus-hotdog-nonfree-firmware-3-r30` SHA256
-`b94c472557d17078cf9278a8314c28363eef5159c3b5c26ef4bf8898cfc56e3b`
+`device-oneplus-hotdog-nonfree-firmware-3-r31` SHA256
+`950e6553e0567bdbc8ca393e93dd726f50fba15f6259a8e19659e35e111deb8f`
 depends on the radio bootstrap packages and removes ModemManager from both boot
-and default runlevels. It does not enable the bootstrap automatically while
-the PDC mutation path is still incomplete.
+and default runlevels. `hotdog-radio-bootstrap-openrc-0.15-r3` repeats that
+policy after Plasma's generic post-install and enables only the read-only
+bootstrap at boot. The clean Alpha 4 rootfs confirms that final ordering.
 
 ## Hardware validation
 
