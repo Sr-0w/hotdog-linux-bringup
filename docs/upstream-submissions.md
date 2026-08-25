@@ -75,24 +75,25 @@ the patch is right, `hotdog-sensor-gate` no longer needs to exist for the
 accelerometer either. It goes to the project as a merge request, not to a
 mailing list.
 
-The gate is currently blocked by a second, unrelated defect. The local aport
-carries an SSC driver series written against libssc 0.1.6, and the repositories
-now ship 0.4.4. Two things changed: the pkg-config module was renamed from
-`libssc-glib` to `libssc`, which is a one-word fix, and something behind the
-same headers no longer behaves as the series expects. A package rebuilt against
-0.4.4 segfaults during SSC discovery:
+Building it against current libssc needed one repair first: the pkg-config
+module was renamed from `libssc-glib` to `libssc` between 0.1.6, which the
+aport pins, and the 0.4.4 the repositories ship. The headers and every
+signature the SSC series uses are unchanged, so that one word is the whole
+compatibility gap.
+
+The rebuilt package runs. It discovers the IIO proximity device, both SSC
+sensors and the compass, and serves D-Bus normally. It does crash, but on
+`SIGTERM`, in the shutdown path the local series added:
 
 ```
+(../src/drv-ssc-accel.c:122):ssc_accelerometer_set_polling: runtime check failed: (drv_data->measurement_id > 0)
 GLib-GObject-CRITICAL: invalid (NULL) pointer instance
-GLib-GObject-CRITICAL: g_signal_handler_disconnect: assertion 'G_TYPE_CHECK_INSTANCE (instance)' failed
 Segmentation fault
 ```
 
-A control build of the same aport **without** the ordering patch crashes
-identically, so the crash is the libssc gap and not the patch under test. The
-running phone stays on the distribution's 3.9-r2, which predates the libssc
-bump. Repairing the SSC series against current libssc is the prerequisite for
-verifying anything else in this aport.
+That is a separate defect in patch 0009 of the local series, not in the
+ordering fix, and it does not stop the daemon from working. A control build
+without the ordering patch crashes identically.
 
 ```
 15:09:20.410  Handling driver refcounting method 'ClaimAccelerometer'
