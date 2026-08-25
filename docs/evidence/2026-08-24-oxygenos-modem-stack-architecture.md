@@ -166,6 +166,11 @@ only the missing Qualcomm/Hotdog orchestration:
 hands the modem to ModemManager only after an explicit readiness record
 contains the boot ID, MPSS identity, UIM slot/application mapping, selected and
 active MCFG IDs for all populated subscriptions, and clean retry counters.
+ModemManager is therefore absent from the boot and default OpenRC runlevels
+while this gate is incomplete. Its system-bus activation file uses
+`Exec=/bin/false`, as intended by the upstream service-file comment, so Plasma
+or another D-Bus client cannot silently start the daemon around the OpenRC
+policy. A later readiness transition starts ModemManager explicitly.
 
 The first transport slice is implemented with libqrtr-glib and libqmi. It
 discovers the configured QRTR node, opens a QMI device with indications,

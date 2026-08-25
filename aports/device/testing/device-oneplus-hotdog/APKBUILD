@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=29
+pkgrel=30
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -164,6 +164,8 @@ nonfree_firmware() {
 		firmware-oneplus-hotdog-venus
 		modemmanager
 		modemmanager-openrc
+		hotdog-radio-bootstrap
+		hotdog-radio-bootstrap-openrc
 		msm-modem-uim-selection
 		msm-modem
 		rmtfs

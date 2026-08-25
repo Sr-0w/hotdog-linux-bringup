@@ -425,9 +425,17 @@ validate_hotdog_wifi_package_contract() {
 	grep -q '^rc-update del modemmanager default' \
 		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
 		die "device firmware package leaves ModemManager racing in the default runlevel"
-	grep -q '^rc-update add modemmanager boot$' \
+	grep -q '^rc-update del modemmanager boot' \
 		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
-		die "device firmware package does not start ModemManager after boot UIM selection"
+		die "device firmware package leaves ModemManager racing in the boot runlevel"
+	if grep -q '^rc-update add modemmanager ' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install"; then
+		die "device firmware package enables ModemManager before PDC readiness"
+	fi
+	grep -q '^[[:space:]]*hotdog-radio-bootstrap$' "$device_apkbuild" ||
+		die "device firmware package lacks the radio bootstrap"
+	grep -q '^[[:space:]]*hotdog-radio-bootstrap-openrc$' "$device_apkbuild" ||
+		die "device firmware package lacks the radio bootstrap service"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||
@@ -467,6 +475,8 @@ validate_modemmanager_slot_pin_contract() {
 		die "ModemManager override does not apply the populated-slot patch"
 	grep -q 'empty slots. Prefer the first active slot that actually has a card' "$slot_patch" ||
 		die "ModemManager populated-slot patch lacks the DSDS empty-slot guard"
+	grep -q "sed -i 's|\^Exec=\.\*|Exec=/bin/false|'" "$apkbuild" ||
+		die "ModemManager D-Bus activation bypasses the pre-online gate"
 }
 
 validate_libqmi_pdc_subscription_contract() {

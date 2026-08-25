@@ -4,5 +4,5 @@ rc-update add tqftpserv boot
 rc-update add pd-mapper boot
 rc-update add msm-modem-uim-selection boot
 rc-update del modemmanager default 2>/dev/null || true
-rc-update add modemmanager boot
+rc-update del modemmanager boot 2>/dev/null || true
 rc-update add hotdog-usb-acm default
