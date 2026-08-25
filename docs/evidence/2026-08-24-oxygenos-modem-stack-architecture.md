@@ -323,6 +323,13 @@ profile alive across chunks and refuses a next chunk until the previous
 indication has advanced the load state. Clearing a request unreferences every
 typed libqmi object and profile buffer deterministically.
 
+`hotdog-qmi-pdc-backend` sends one dispatched request at a time. Responses and
+indications both validate their tokens; protocol errors are preserved. Load
+indications advance the bounded chunk state and refresh a per-chunk timeout,
+while Verify requires the exact active ID and an empty pending ID. The backend
+deliberately returns modem-switch ownership to the outer QRTR lifecycle rather
+than pretending a dead PDC client can confirm its own reconnect.
+
 Execution also requires a root-owned approval manifest that is neither a
 symlink nor group/world writable. `hotdog-radio-approval` accepts only schema,
 boot ID, modem SHA-256, MCFG archive SHA-256 and one selected ID (or `-`) for
