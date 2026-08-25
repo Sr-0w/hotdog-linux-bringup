@@ -30,9 +30,27 @@ libqmi Bind Subscription, Get Profile List and Get Profile Settings methods.
 The package does not enable a new OpenRC service; execution remains an explicit
 diagnostic action so it cannot race ModemManager at every boot.
 
-## Hardware scope
+## No-SIM hardware smoke
 
-No phone was accessed for this checkpoint. A later no-SIM run may prove QRTR,
-WDS CID allocation, per-subscription binding, profile enumeration and clean CID
-release without a crash. It cannot prove registration, default data, IMS data,
-SMS or calls, and it must not be reported as such.
+The packaged probe was then installed on the running mainline 6.16 Hotdog and
+executed once with both physical SIM slots empty. Preflight independently
+reported `no-atr-received` for slots 1 and 2, MPSS running, WDS service 1 on
+QRTR node 0 and ModemManager stopped.
+
+The probe returned zero. Subscription 0 exposed one profile, rejected as
+incomplete; subscription 1 exposed four profiles, three structurally usable.
+Neither inventory contained an IMS candidate without a SIM. The different
+counts prove that each WDS CID was bound to its requested subscription rather
+than reading one global inventory twice.
+
+The boot ID did not change, MPSS remained running, both slots remained empty,
+and the network-device set remained exactly `lo rmnet_ipa0 usb0 wlan0`. No probe
+process or temporary APK remained after cleanup. This proves QRTR/WDS wiring,
+per-subscription profile enumeration and clean CID release without a crash. It
+does not prove registration, default data, an IMS data call, SMS or voice.
+
+Private run directory: `logs/2026-08-25-modem-nosim-wds-profile-smoke`.
+The authoritative probe log `08-wds-profile-probe-run.txt` has SHA-256
+`85a7a929274e3b28005df87d036184d52ce4273ac11b1c243ffe6ef47b495b40`;
+the corrected final-state log `11-corrected-final-state.txt` has SHA-256
+`0d31f7a7a8d46197319aa7b4d847bc92b435611d524b5129ff3558ea787298b0`.
