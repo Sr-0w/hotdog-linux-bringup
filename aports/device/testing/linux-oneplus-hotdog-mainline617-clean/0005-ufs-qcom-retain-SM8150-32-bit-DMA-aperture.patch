@@ -1,9 +1,12 @@
-From 645436d1fef74ac88a129f83945909ac386e5218 Mon Sep 17 00:00:00 2001
+From 6a1a6138fbd63a9fdcfeb65a321ce136c0106fd5 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:36 +0200
-Subject: [PATCH 5/7] ufs: qcom: retain SM8150 32-bit DMA aperture
+Subject: [PATCH 05/12] ufs: qcom: retain SM8150 32-bit DMA aperture
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/ufs/host/ufs-qcom.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
 diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
 index 9574fdc2bb0f..fa57afc33add 100644
@@ -48,6 +51,3 @@ index 9574fdc2bb0f..fa57afc33add 100644
  	.init                   = ufs_qcom_init,
  	.exit                   = ufs_qcom_exit,
  	.get_ufs_hci_version	= ufs_qcom_get_ufs_hci_version,
--- 
-2.54.0
-

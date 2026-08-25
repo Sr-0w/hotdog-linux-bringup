@@ -15,10 +15,10 @@ hardware-tested package and is not selected by the device package yet.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The ten patches are exported from the local kernel branch
+name. The twelve patches are exported from the local kernel branch
 `bringup/hotdog-sm8150-clean-baseline` at commit
-`78685397b43d2798a903da4032a7c1647db4186e`, tree
-`53f860b1f181d940276fe3f75f8a1310c66be005`, and retain their commit
+`1c869546edb1127c15d28e68b21f1efb3b25ceba`, tree
+`5c5776653e12bbf4aae4d557477f1c3637a61948`, and retain their commit
 identities.
 
 ## Included foundation
@@ -35,14 +35,18 @@ identities.
 - alert slider, PM8150/IMEM bootloader and recovery modes;
 - SMB5 charging policy, external fuel gauge and Type-C role switching;
 - AW8697 haptics and PN553 NFC;
+- IPA 4.1, the hotdog MPSS/ADSP firmware paths and QRTR radio foundation;
+- WCN3990 Wi-Fi and Bluetooth wiring with modem-restart recovery;
+- WCD9340 handset audio, DisplayPort audio and dual TFA9874 speakers;
 - the pmaports LLVM prototype fix required by the shared configuration.
 
 ## Deliberately deferred
 
-The next blocks still need audio, modem/data/calls/SMS, Wi-Fi, Bluetooth,
-cameras, popup motor, SLPI sensors and Elliptic proximity. Those remain
-available in the immutable r181 checkpoint and are restored only in bounded,
-independently tested groups.
+The next blocks still need cameras, popup motor, SLPI sensors and Elliptic
+proximity. Radio userspace for data/calls/SMS remains in the device packages;
+this kernel block restores the hardware and transport foundation it requires.
+The remaining pieces stay available in the immutable r181 checkpoint and are
+restored only in bounded, independently tested groups.
 
 ## Validation state
 
@@ -70,3 +74,24 @@ vermagic, Hotdog DTB and the exact direct-boot header fields.
 
 These hashes describe the offline package checkpoint, not a hardware-approved
 boot image or release.
+
+## Radio and audio package build
+
+Revision r4 adds the hotdog modem/ADSP firmware contract, IPA 4.1, WCN3990 and
+the complete handset audio topology. A strict isolated build completed on
+2026-08-26. The strengthened validator checked the new config, DT nodes,
+firmware paths and installed modules both before and after packaging.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r4.apk` | 22,955,690 | `958d2eb4ab469f8465df9a5e2389fe29b5bc411a45006241ed2529083f3cb438` |
+| packaged `boot/vmlinuz` | 31,492,608 | `3a5b107bee5cacdce84a834db86d7c00fa82c5b320bb51651a373ad1116f4466` |
+| packaged Hotdog DTB | 149,236 | `577d6498505b8143f9c62f994a54a6a6cb2ed6a9c881944ed61a11c4a1a711b4` |
+| packaged `ipa.ko` | - | `175d81875d0d17111c87177f9ef346f630a52a87295d203c127422a077a7412c` |
+| packaged `qcom_q6v5_pas.ko` | - | `3524c42e1dafcfa4389610bac514e179a0a877c3b56e80cb815be59bd9965acb` |
+| packaged `snd-soc-tfa9874.ko` | - | `b9b70c071504a07c082f603dca82c2e79e19239ace3ea031cbdd1d6bc8000d79` |
+
+The package contains 829 modules, all with vermagic
+`6.17.0-sm8150-hotdog-clean SMP preempt mod_unload aarch64`. This remains an
+offline checkpoint until the staged phone boot confirms modem, QRTR, IPA,
+Wi-Fi and audio enumeration.

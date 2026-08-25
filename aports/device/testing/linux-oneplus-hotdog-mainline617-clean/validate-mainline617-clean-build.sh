@@ -33,6 +33,14 @@ expect_config 'CONFIG_TOUCHSCREEN_S6SY761=m'
 expect_config 'CONFIG_INPUT_AW8697_HAPTICS=y'
 expect_config 'CONFIG_SCSI_UFS_QCOM=y'
 expect_config 'CONFIG_ARM_SMMU=y'
+expect_config 'CONFIG_QCOM_IPA=m'
+expect_config 'CONFIG_ATH10K_SNOC=m'
+expect_config 'CONFIG_BT_QCA=m'
+expect_config 'CONFIG_QCOM_Q6V5_ADSP=m'
+expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
+expect_config 'CONFIG_SND_SOC_SM8150=m'
+expect_config 'CONFIG_SND_SOC_TFA9874=m'
+expect_config 'CONFIG_SND_SOC_WCD934X=m'
 expect_config 'CONFIG_USB_CONFIGFS_ACM=y'
 expect_config 'CONFIG_USB_CONFIGFS_NCM=y'
 expect_config '# CONFIG_RAID6_PQ_BENCHMARK is not set'
@@ -76,6 +84,13 @@ for contract in \
 	'compatible = "samsung,s6sy761"' \
 	'compatible = "awinic,aw8697"' \
 	'compatible = "nxp,pn553", "nxp,nxp-nci-i2c"' \
+	'compatible = "qcom,sm8150-ipa"' \
+	'compatible = "qcom,sm8150-sndcard"' \
+	'compatible = "nxp,tfa9874"' \
+	'compatible = "qcom,wcn3990-bt"' \
+	'firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn"' \
+	'firmware-name = "qcom/sm8150/oneplus/hotdog/adsp.mbn"' \
+	'firmware-name = "qcom/sm8150/oneplus/hotdog/ipa_fws.mbn"' \
 	'label = "Alert slider"' \
 	'linux,code = <0x22>' \
 	'compatible = "usb-c-connector"' \
@@ -103,13 +118,16 @@ done
 
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
-	touch_module=$(find "$modules_dir" -type f -name 's6sy761.ko' -print -quit)
-	[ -n "$touch_module" ] || die "s6sy761.ko is absent"
-	vermagic=$(modinfo -F vermagic "$touch_module")
-	case "$vermagic" in
-		6.17.0-sm8150-hotdog-clean\ *) ;;
-		*) die "unexpected touch module vermagic: $vermagic" ;;
-	esac
+	for module_name in s6sy761.ko ipa.ko ath10k_snoc.ko qcom_q6v5_pas.ko \
+			snd-soc-sm8150.ko snd-soc-tfa9874.ko snd-soc-wcd934x.ko; do
+		module=$(find "$modules_dir" -type f -name "$module_name" -print -quit)
+		[ -n "$module" ] || die "$module_name is absent"
+		vermagic=$(modinfo -F vermagic "$module")
+		case "$vermagic" in
+			6.17.0-sm8150-hotdog-clean\ *) ;;
+			*) die "unexpected $module_name vermagic: $vermagic" ;;
+		esac
+	done
 fi
 
 echo "hotdog clean 6.17 validation: PASS"

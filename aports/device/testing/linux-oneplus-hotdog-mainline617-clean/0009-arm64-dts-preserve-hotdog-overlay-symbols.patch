@@ -1,9 +1,12 @@
-From f01bb6f3bd0443e473f9c566c181358a13cf0d56 Mon Sep 17 00:00:00 2001
+From 7571d55580276650882698838a78b071601c12e5 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 26 Aug 2026 00:17:56 +0200
-Subject: [PATCH] arm64: dts: preserve hotdog overlay symbols
+Subject: [PATCH 09/12] arm64: dts: preserve hotdog overlay symbols
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
 
 diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
 index fa13fa398406..4357b237c9df 100644
@@ -17,6 +20,3 @@ index fa13fa398406..4357b237c9df 100644
  dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdog.dtb
  dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdogb.dtb
  dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
--- 
-2.54.0
-

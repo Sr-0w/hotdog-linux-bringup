@@ -1,0 +1,2567 @@
+From 1c869546edb1127c15d28e68b21f1efb3b25ceba Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 00:56:29 +0200
+Subject: [PATCH 12/12] arm64: qcom: restore hotdog radio and audio stack
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../devicetree/bindings/net/qcom,ipa.yaml     |   1 +
+ .../bindings/sound/nxp,tfa9874.yaml           |  47 ++
+ .../bindings/sound/qcom,sm8250.yaml           |   1 +
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 305 ++++++++++
+ arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi  |   3 +-
+ arch/arm64/boot/dts/qcom/sm8150.dtsi          |  47 +-
+ drivers/net/ipa/Makefile                      |   4 +-
+ drivers/net/ipa/data/ipa_data-v4.1.c          | 354 ++++++++++++
+ drivers/net/ipa/gsi_reg.c                     |   1 +
+ drivers/net/ipa/gsi_trans.c                   |  24 +-
+ drivers/net/ipa/gsi_trans.h                   |   4 +
+ drivers/net/ipa/ipa_data.h                    |   1 +
+ drivers/net/ipa/ipa_main.c                    |   4 +
+ drivers/net/ipa/ipa_reg.c                     |   2 +
+ drivers/net/ipa/ipa_reg.h                     |   1 +
+ drivers/net/ipa/reg/ipa_reg-v4.1.c            | 479 ++++++++++++++++
+ drivers/net/wireless/ath/ath10k/qmi.c         |  80 ++-
+ drivers/net/wireless/ath/ath10k/qmi.h         |   2 +
+ drivers/net/wireless/ath/ath10k/snoc.c        |  20 +
+ drivers/remoteproc/qcom_q6v5_pas.c            |  12 +-
+ sound/soc/codecs/Kconfig                      |   9 +
+ sound/soc/codecs/Makefile                     |   2 +
+ sound/soc/codecs/tfa9874.c                    | 532 ++++++++++++++++++
+ sound/soc/codecs/wcd934x.c                    |  38 +-
+ sound/soc/qcom/qdsp6/q6afe-dai.c              |   2 +-
+ sound/soc/qcom/sm8150.c                       |  36 +-
+ 26 files changed, 1992 insertions(+), 19 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/sound/nxp,tfa9874.yaml
+ create mode 100644 drivers/net/ipa/data/ipa_data-v4.1.c
+ create mode 100644 drivers/net/ipa/reg/ipa_reg-v4.1.c
+ create mode 100644 sound/soc/codecs/tfa9874.c
+
+diff --git a/Documentation/devicetree/bindings/net/qcom,ipa.yaml b/Documentation/devicetree/bindings/net/qcom,ipa.yaml
+index b4a79912d473..98ec534b512f 100644
+--- a/Documentation/devicetree/bindings/net/qcom,ipa.yaml
++++ b/Documentation/devicetree/bindings/net/qcom,ipa.yaml
+@@ -49,6 +49,7 @@ properties:
+           - qcom,sc7180-ipa
+           - qcom,sc7280-ipa
+           - qcom,sdm845-ipa
++          - qcom,sm8150-ipa
+           - qcom,sdx55-ipa
+           - qcom,sdx65-ipa
+           - qcom,sm6350-ipa
+diff --git a/Documentation/devicetree/bindings/sound/nxp,tfa9874.yaml b/Documentation/devicetree/bindings/sound/nxp,tfa9874.yaml
+new file mode 100644
+index 000000000000..735a05164cfd
+--- /dev/null
++++ b/Documentation/devicetree/bindings/sound/nxp,tfa9874.yaml
+@@ -0,0 +1,47 @@
++# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/sound/nxp,tfa9874.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: NXP TFA9874 class-D audio amplifier
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++description: |
++  The TFA9874 is a smart class-D speaker amplifier without an internal audio
++  DSP. Speaker protection and calibration can be provided by an external DSP.
++
++allOf:
++  - $ref: dai-common.yaml#
++
++properties:
++  compatible:
++    const: nxp,tfa9874
++
++  reg:
++    maxItems: 1
++
++  '#sound-dai-cells':
++    const: 0
++
++required:
++  - compatible
++  - reg
++  - '#sound-dai-cells'
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        audio-codec@34 {
++            compatible = "nxp,tfa9874";
++            reg = <0x34>;
++            #sound-dai-cells = <0>;
++        };
++    };
+diff --git a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+index 5d3dbb6cb1ae..8b731eaddcd6 100644
+--- a/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,sm8250.yaml
+@@ -41,6 +41,7 @@ properties:
+           - qcom,sc7180-qdsp6-sndcard
+           - qcom,sc8280xp-sndcard
+           - qcom,sdm845-sndcard
++          - qcom,sm8150-sndcard
+           - qcom,sm8250-sndcard
+           - qcom,sm8450-sndcard
+           - qcom,x1e80100-sndcard
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 031a8a5782e1..1d87d9366b64 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -13,8 +13,12 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/sound/qcom,q6afe.h>
++#include <dt-bindings/sound/qcom,q6asm.h>
++#include <dt-bindings/sound/qcom,wcd934x.h>
+ #include <dt-bindings/usb/pd.h>
+ #include "sm8150-oneplus-common.dtsi"
++#include "sm8150-wcd9340.dtsi"
+ 
+ /delete-node/ &rmtfs_mem;
+ /delete-node/ &tp_1v8_active;
+@@ -280,6 +284,10 @@ &qupv3_id_0 {
+ 	status = "okay";
+ };
+ 
++&qupv3_id_1 {
++	/delete-property/ iommus;
++};
++
+ &tlmm {
+ 	alert_slider_default: alert-slider-default-state {
+ 		pins = "gpio27", "gpio125", "gpio134";
+@@ -311,6 +319,66 @@ clk-req-pins {
+ 		};
+ 	};
+ 
++	fsa_usbc_ana_en: fsa-usbc-ana-en-state {
++		pins = "gpio100";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-low;
++	};
++
++	quat_mi2s_active: quat-mi2s-active-state {
++		pins = "gpio137", "gpio138";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++		output-high;
++	};
++
++	quat_mi2s_sd0_active: quat-mi2s-sd0-active-state {
++		pins = "gpio139";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
++	quat_mi2s_sd1_active: quat-mi2s-sd1-active-state {
++		pins = "gpio140";
++		function = "qua_mi2s";
++		drive-strength = <8>;
++		bias-disable;
++	};
++
++	qup_uart13_sleep: qup-uart13-sleep-state {
++		cts-pins {
++			pins = "gpio43";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		rts-pins {
++			pins = "gpio44";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-down;
++		};
++
++		tx-pins {
++			pins = "gpio45";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		rx-pins {
++			pins = "gpio46";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++	};
++
+ 	panel_avdd_default: panel-avdd-default-state {
+ 		pins = "gpio130";
+ 		function = "gpio";
+@@ -394,6 +462,40 @@ nfc@28 {
+ 	};
+ };
+ 
++&i2c4 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <100000>;
++	status = "okay";
++
++	speaker_top: audio-codec@34 {
++		compatible = "nxp,tfa9874";
++		reg = <0x34>;
++		#sound-dai-cells = <0>;
++	};
++
++	speaker_bottom: audio-codec@35 {
++		compatible = "nxp,tfa9874";
++		reg = <0x35>;
++		#sound-dai-cells = <0>;
++	};
++
++	typec-mux@42 {
++		compatible = "fcs,fsa4480";
++		reg = <0x42>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&fsa_usbc_ana_en>;
++		mode-switch;
++		orientation-switch;
++
++		port {
++			fsa4480_sbu_mux: endpoint {
++				remote-endpoint = <&pm8150b_sbu_mux_in>;
++			};
++		};
++	};
++};
++
+ &i2c17 {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+@@ -411,6 +513,193 @@ touchscreen@48 {
+ 	};
+ };
+ 
++&remoteproc_adsp {
++	firmware-name = "qcom/sm8150/oneplus/hotdog/adsp.mbn";
++	status = "okay";
++};
++
++&remoteproc_mpss {
++	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
++	status = "okay";
++};
++
++&q6afedai {
++	dai@7 {
++		reg = <SLIMBUS_2_TX>;
++	};
++
++	dai@22 {
++		reg = <QUATERNARY_MI2S_RX>;
++		qcom,sd-lines = <1>;
++	};
++};
++
++&q6asmdai {
++	dai@0 {
++		reg = <MSM_FRONTEND_DAI_MULTIMEDIA1>;
++	};
++
++	dai@1 {
++		reg = <MSM_FRONTEND_DAI_MULTIMEDIA2>;
++	};
++};
++
++&sound {
++	compatible = "qcom,sm8150-sndcard";
++	model = "OnePlus 7T Pro";
++	pinctrl-names = "default";
++	pinctrl-0 = <&quat_mi2s_active>, <&quat_mi2s_sd0_active>,
++		    <&quat_mi2s_sd1_active>;
++	status = "okay";
++
++	audio-routing = "RX_BIAS", "MCLK",
++			"AMIC1", "MIC BIAS1",
++			"AMIC2", "MIC BIAS2",
++			"AMIC3", "MIC BIAS4",
++			"AMIC4", "MIC BIAS1",
++			"AMIC5", "MIC BIAS1";
++
++	mm1-dai-link {
++		link-name = "MultiMedia1";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
++		};
++	};
++
++	mm2-dai-link {
++		link-name = "MultiMedia2";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
++		};
++	};
++
++	dp-dai-link {
++		link-name = "DisplayPort Playback";
++
++		cpu {
++			sound-dai = <&q6afedai DISPLAY_PORT_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&mdss_dp>;
++		};
++	};
++
++	speaker-dai-link {
++		link-name = "Speaker Playback";
++
++		cpu {
++			sound-dai = <&q6afedai QUATERNARY_MI2S_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&speaker_top>, <&speaker_bottom>;
++		};
++	};
++
++	slim-dai-link {
++		link-name = "SLIM Playback 6";
++
++		cpu {
++			sound-dai = <&q6afedai SLIMBUS_6_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&wcd9340 AIF4_PB>;
++		};
++	};
++
++	slimcap-dai-link {
++		link-name = "SLIM Capture 1";
++
++		cpu {
++			sound-dai = <&q6afedai SLIMBUS_0_TX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&wcd9340 AIF1_CAP>;
++		};
++	};
++
++	mic-dai-link {
++		link-name = "SLIM Capture 2";
++
++		cpu {
++			sound-dai = <&q6afedai SLIMBUS_2_TX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&wcd9340 AIF2_CAP>;
++		};
++	};
++};
++
++&wcd9340 {
++	reset-gpios = <&tlmm 143 GPIO_ACTIVE_HIGH>;
++	vdd-buck-sido-supply = <&vreg_s4a_1p8>;
++	vdd-buck-supply = <&vreg_s4a_1p8>;
++	vdd-tx-supply = <&vreg_s4a_1p8>;
++	vdd-rx-supply = <&vreg_s4a_1p8>;
++	vdd-io-supply = <&vreg_s4a_1p8>;
++};
++
++&wifi {
++	status = "okay";
++	vdd-0.8-cx-mx-supply = <&vreg_l1a_0p75>;
++	vdd-1.8-xo-supply = <&vreg_l7a_1p8>;
++	vdd-1.3-rfa-supply = <&vreg_l2c_1p3>;
++	vdd-3.3-ch0-supply = <&vreg_l11c_3p3>;
++	vdd-3.3-ch1-supply = <&vreg_l10c_3p3>;
++};
++
++&uart13 {
++	status = "okay";
++	/delete-property/ interrupts;
++	interrupts-extended = <&intc GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>,
++			      <&tlmm 46 IRQ_TYPE_EDGE_FALLING>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-1 = <&qup_uart13_sleep>;
++
++	bluetooth {
++		compatible = "qcom,wcn3990-bt";
++		firmware-name = "crnv21.bin", "crbtfw21.tlv";
++		vddio-supply = <&vreg_l1a_0p75>;
++		vddxo-supply = <&vreg_l7a_1p8>;
++		vddrf-supply = <&vreg_l2c_1p3>;
++		vddch0-supply = <&vreg_l11c_3p3>;
++		max-speed = <3200000>;
++	};
++};
++
++&ipa {
++	status = "okay";
++	qcom,gsi-loader = "self";
++	memory-region = <&ipa_fw_mem>;
++	firmware-name = "qcom/sm8150/oneplus/hotdog/ipa_fws.mbn";
++};
++
+ &gmu {
+ 	status = "okay";
+ };
+@@ -445,6 +734,14 @@ &usb_1_dwc3_hs {
+ 	remote-endpoint = <&pm8150b_role_switch_in>;
+ };
+ 
++&mdss_dp {
++	status = "okay";
++};
++
++&mdss_dp_out {
++	data-lanes = <0 1>;
++};
++
+ &pm8150b_vbus {
+ 	status = "okay";
+ };
+@@ -485,6 +782,14 @@ pm8150b_typec_mux_in: endpoint {
+ 					remote-endpoint = <&usb_1_qmpphy_out>;
+ 				};
+ 			};
++
++			port@2 {
++				reg = <2>;
++
++				pm8150b_sbu_mux_in: endpoint {
++					remote-endpoint = <&fsa4480_sbu_mux>;
++				};
++			};
+ 		};
+ 	};
+ };
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi b/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
+index cde7e55bf849..746039309dfe 100755
+--- a/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
+@@ -54,7 +54,7 @@ wcdgpio: gpio-controller@42 {
+ 				reg = <0x42 0x2>;
+ 			};
+ 
+-			swm: swm@c85 {
++			swm: soundwire@c85 {
+ 				compatible = "qcom,soundwire-v1.3.0";
+ 				reg = <0xc85 0x40>;
+ 				interrupts-extended = <&wcd9340 20>;
+@@ -81,6 +81,5 @@ wcd_intr_default: wcd-intr-default-state {
+ 		function = "gpio";
+ 		drive-strength = <2>;
+ 		bias-pull-down;
+-		input-enable;
+ 	};
+ };
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+index f742117834b9..bfbbfd573727 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -872,6 +872,18 @@ modem_smp2p_in: slave-kernel {
+ 			interrupt-controller;
+ 			#interrupt-cells = <2>;
+ 		};
++
++		ipa_smp2p_out: ipa-ap-to-modem {
++			qcom,entry-name = "ipa";
++			#qcom,smem-state-cells = <1>;
++		};
++
++		ipa_smp2p_in: ipa-modem-to-ap {
++			qcom,entry-name = "ipa";
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++		};
+ 	};
+ 
+ 	smp2p-slpi {
+@@ -2073,6 +2085,39 @@ pcie1_phy: phy@1c0e000 {
+ 			status = "disabled";
+ 		};
+ 
++		ipa: ipa@1e40000 {
++			compatible = "qcom,sm8150-ipa";
++
++			iommus = <&apps_smmu 0x520 0x0>,
++				 <&apps_smmu 0x522 0x0>;
++			reg = <0 0x01e40000 0 0x7000>,
++			      <0 0x01e47000 0 0x4000>,
++			      <0 0x01e04000 0 0x2c000>;
++			reg-names = "ipa-reg", "ipa-shared", "gsi";
++
++			interrupts-extended = <&intc GIC_SPI 311 IRQ_TYPE_EDGE_RISING>,
++					      <&intc GIC_SPI 432 IRQ_TYPE_LEVEL_HIGH>,
++					      <&ipa_smp2p_in 0 IRQ_TYPE_EDGE_RISING>,
++					      <&ipa_smp2p_in 1 IRQ_TYPE_EDGE_RISING>;
++			interrupt-names = "ipa", "gsi", "ipa-clock-query",
++					  "ipa-setup-ready";
++
++			clocks = <&rpmhcc RPMH_IPA_CLK>;
++			clock-names = "core";
++
++			interconnects = <&aggre2_noc MASTER_IPA 0 &mc_virt SLAVE_EBI_CH0 0>,
++					<&aggre2_noc MASTER_IPA 0 &system_noc SLAVE_OCIMEM 0>,
++					<&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_IPA_CFG 0>;
++			interconnect-names = "memory", "imem", "config";
++
++			qcom,qmp = <&aoss_qmp>;
++			qcom,smem-states = <&ipa_smp2p_out 0>, <&ipa_smp2p_out 1>;
++			qcom,smem-state-names = "ipa-clock-enabled-valid",
++						"ipa-clock-enabled";
++
++			status = "disabled";
++		};
++
+ 		ufs_mem_hc: ufshc@1d84000 {
+ 			compatible = "qcom,sm8150-ufshc", "qcom,ufshc",
+ 				     "jedec,ufs-2.0";
+@@ -3590,7 +3635,7 @@ sdhc_2: mmc@8804000 {
+ 			iommus = <&apps_smmu 0x6a0 0x0>;
+ 			qcom,dll-config = <0x0007642c>;
+ 			qcom,ddr-config = <0x80040868>;
+-			power-domains = <&rpmhpd 0>;
++			power-domains = <&rpmhpd SM8150_CX>;
+ 			operating-points-v2 = <&sdhc2_opp_table>;
+ 
+ 			status = "disabled";
+diff --git a/drivers/net/ipa/Makefile b/drivers/net/ipa/Makefile
+index d3abb38633e0..0dbf109b8281 100644
+--- a/drivers/net/ipa/Makefile
++++ b/drivers/net/ipa/Makefile
+@@ -2,12 +2,12 @@
+ #
+ # Makefile for the Qualcomm IPA driver.
+ 
+-IPA_REG_VERSIONS	:=	3.1 3.5.1 4.2 4.5 4.7 4.9 4.11 5.0 5.5
++IPA_REG_VERSIONS	:=	3.1 3.5.1 4.1 4.2 4.5 4.7 4.9 4.11 5.0 5.5
+ 
+ # Some IPA versions can reuse another set of GSI register definitions.
+ GSI_REG_VERSIONS	:=	3.1 3.5.1 4.0 4.5 4.9 4.11 5.0
+ 
+-IPA_DATA_VERSIONS	:=	3.1 3.5.1 4.2 4.5 4.7 4.9 4.11 5.0 5.5
++IPA_DATA_VERSIONS	:=	3.1 3.5.1 4.1 4.2 4.5 4.7 4.9 4.11 5.0 5.5
+ 
+ obj-$(CONFIG_QCOM_IPA)	+=	ipa.o
+ 
+diff --git a/drivers/net/ipa/data/ipa_data-v4.1.c b/drivers/net/ipa/data/ipa_data-v4.1.c
+new file mode 100644
+index 000000000000..69ec3716812c
+--- /dev/null
++++ b/drivers/net/ipa/data/ipa_data-v4.1.c
+@@ -0,0 +1,354 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
++ * Copyright (C) 2026 Robin Snyders
++ */
++
++#include <linux/array_size.h>
++#include <linux/log2.h>
++
++#include "../ipa_data.h"
++#include "../ipa_endpoint.h"
++#include "../ipa_mem.h"
++#include "../ipa_version.h"
++
++/** enum ipa_resource_type - IPA resource types for an SoC having IPA v4.1 */
++enum ipa_resource_type {
++	/* Source resource types; first must have value 0 */
++	IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS		= 0,
++	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_LISTS,
++	IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_BUFF,
++	IPA_RESOURCE_TYPE_SRC_HPS_DMARS,
++	IPA_RESOURCE_TYPE_SRC_ACK_ENTRIES,
++
++	/* Destination resource types; first must have value 0 */
++	IPA_RESOURCE_TYPE_DST_DATA_SECTORS		= 0,
++	IPA_RESOURCE_TYPE_DST_DPS_DMARS,
++};
++
++/* Resource groups used for an SoC having IPA v4.1 */
++enum ipa_rsrc_group_id {
++	/* Source resource group identifiers */
++	IPA_RSRC_GROUP_SRC_LWA_DL	= 0,
++	IPA_RSRC_GROUP_SRC_UL_DL,
++	IPA_RSRC_GROUP_SRC_UNUSED_2,
++	IPA_RSRC_GROUP_SRC_UC_RX_Q,
++	IPA_RSRC_GROUP_SRC_COUNT,	/* Last in set; not a source group */
++
++	/* Destination resource group identifiers */
++	IPA_RSRC_GROUP_DST_LWA_DL	= 0,
++	IPA_RSRC_GROUP_DST_UL_DL_DPL,
++	IPA_RSRC_GROUP_DST_UNUSED_2,
++	IPA_RSRC_GROUP_DST_COUNT,	/* Last; not a destination group */
++};
++
++/* QSB configuration data for an SoC having IPA v4.1 */
++static const struct ipa_qsb_data ipa_qsb_data[] = {
++	[IPA_QSB_MASTER_DDR] = {
++		.max_writes	= 8,
++		.max_reads	= 12,
++	},
++	[IPA_QSB_MASTER_PCIE] = {
++		.max_writes	= 4,
++		.max_reads	= 12,
++	},
++};
++
++/* Endpoint data for an SoC having IPA v4.1 */
++static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
++	[IPA_ENDPOINT_AP_COMMAND_TX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 4,
++		.endpoint_id	= 5,
++		.toward_ipa	= true,
++		.channel = {
++			.tre_count	= 512,
++			.event_count	= 256,
++			.tlv_count	= 20,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_SRC_UL_DL,
++				.dma_mode	= true,
++				.dma_endpoint	= IPA_ENDPOINT_AP_LAN_RX,
++				.tx = {
++					.seq_type = IPA_SEQ_DMA,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_LAN_RX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 5,
++		.endpoint_id	= 10,
++		.toward_ipa	= false,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 9,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_DST_UL_DL_DPL,
++				.aggregation	= true,
++				.status_enable	= true,
++				.rx = {
++					.buffer_size	= 8192,
++					.pad_align	= ilog2(sizeof(u32)),
++					.aggr_time_limit = 500,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_MODEM_TX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 3,
++		.endpoint_id	= 2,
++		.toward_ipa	= true,
++		.channel = {
++			.tre_count	= 512,
++			.event_count	= 512,
++			.tlv_count	= 16,
++		},
++		.endpoint = {
++			.filter_support	= true,
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_SRC_UL_DL,
++				.checksum	= true,
++				.qmap		= true,
++				.status_enable	= true,
++				.tx = {
++					.seq_type = IPA_SEQ_2_PASS_SKIP_LAST_UC,
++					.seq_rep_type = IPA_SEQ_REP_DMA_PARSER,
++					.status_endpoint =
++						IPA_ENDPOINT_MODEM_AP_RX,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_MODEM_RX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 6,
++		.endpoint_id	= 11,
++		.toward_ipa	= false,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 9,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_DST_UL_DL_DPL,
++				.checksum	= true,
++				.qmap		= true,
++				.aggregation	= true,
++				.rx = {
++					.buffer_size	= 8192,
++					.aggr_time_limit = 500,
++					.aggr_close_eof	= true,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_MODEM_COMMAND_TX] = {
++		.ee_id		= GSI_EE_MODEM,
++		.channel_id	= 1,
++		.endpoint_id	= 4,
++		.toward_ipa	= true,
++	},
++	[IPA_ENDPOINT_MODEM_LAN_RX] = {
++		.ee_id		= GSI_EE_MODEM,
++		.channel_id	= 4,
++		.endpoint_id	= 14,
++		.toward_ipa	= false,
++	},
++	[IPA_ENDPOINT_MODEM_AP_TX] = {
++		.ee_id		= GSI_EE_MODEM,
++		.channel_id	= 0,
++		.endpoint_id	= 3,
++		.toward_ipa	= true,
++		.endpoint = {
++			.filter_support	= true,
++		},
++	},
++	[IPA_ENDPOINT_MODEM_AP_RX] = {
++		.ee_id		= GSI_EE_MODEM,
++		.channel_id	= 3,
++		.endpoint_id	= 13,
++		.toward_ipa	= false,
++	},
++};
++
++/* Source resource configuration data for an SoC having IPA v4.1 */
++static const struct ipa_resource ipa_resource_src[] = {
++	[IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS] = {
++		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
++			.min = 1,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UL_DL] = {
++			.min = 1,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UC_RX_Q] = {
++			.min = 1,	.max = 63,
++		},
++	},
++	[IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_LISTS] = {
++		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
++			.min = 10,	.max = 10,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UL_DL] = {
++			.min = 10,	.max = 10,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UC_RX_Q] = {
++			.min = 8,	.max = 8,
++		},
++	},
++	[IPA_RESOURCE_TYPE_SRC_DESCRIPTOR_BUFF] = {
++		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
++			.min = 12,	.max = 12,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UL_DL] = {
++			.min = 14,	.max = 14,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UC_RX_Q] = {
++			.min = 8,	.max = 8,
++		},
++	},
++	[IPA_RESOURCE_TYPE_SRC_HPS_DMARS] = {
++		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
++			.min = 0,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UL_DL] = {
++			.min = 0,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UNUSED_2] = {
++			.min = 0,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UC_RX_Q] = {
++			.min = 0,	.max = 63,
++		},
++	},
++	[IPA_RESOURCE_TYPE_SRC_ACK_ENTRIES] = {
++		.limits[IPA_RSRC_GROUP_SRC_LWA_DL] = {
++			.min = 14,	.max = 14,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UL_DL] = {
++			.min = 20,	.max = 20,
++		},
++		.limits[IPA_RSRC_GROUP_SRC_UC_RX_Q] = {
++			.min = 14,	.max = 14,
++		},
++	},
++};
++
++/* Destination resource configuration data for an SoC having IPA v4.1 */
++static const struct ipa_resource ipa_resource_dst[] = {
++	[IPA_RESOURCE_TYPE_DST_DATA_SECTORS] = {
++		.limits[IPA_RSRC_GROUP_DST_LWA_DL] = {
++			.min = 4,	.max = 4,
++		},
++		.limits[IPA_RSRC_GROUP_DST_UL_DL_DPL] = {
++			.min = 4,	.max = 4,
++		},
++		.limits[IPA_RSRC_GROUP_DST_UNUSED_2] = {
++			.min = 3,	.max = 3,
++		},
++	},
++	[IPA_RESOURCE_TYPE_DST_DPS_DMARS] = {
++		.limits[IPA_RSRC_GROUP_DST_LWA_DL] = {
++			.min = 2,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_DST_UL_DL_DPL] = {
++			.min = 1,	.max = 63,
++		},
++		.limits[IPA_RSRC_GROUP_DST_UNUSED_2] = {
++			.min = 1,	.max = 2,
++		},
++	},
++};
++
++/* Resource configuration data for an SoC having IPA v4.1 */
++static const struct ipa_resource_data ipa_resource_data = {
++	.rsrc_group_src_count	= IPA_RSRC_GROUP_SRC_COUNT,
++	.rsrc_group_dst_count	= IPA_RSRC_GROUP_DST_COUNT,
++	.resource_src_count	= ARRAY_SIZE(ipa_resource_src),
++	.resource_src		= ipa_resource_src,
++	.resource_dst_count	= ARRAY_SIZE(ipa_resource_dst),
++	.resource_dst		= ipa_resource_dst,
++};
++
++/* IPA-resident memory region data for an SoC having IPA v4.1 */
++static const struct ipa_mem ipa_mem_local_data[] = {
++	{ .id = IPA_MEM_UC_SHARED,         .offset = 0x0000, .size = 0x0080, .canary_count = 0, },
++	{ .id = IPA_MEM_UC_INFO,           .offset = 0x0080, .size = 0x0200, .canary_count = 0, },
++	{ .id = IPA_MEM_V4_FILTER_HASHED,  .offset = 0x0288, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V4_FILTER,         .offset = 0x0308, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V6_FILTER_HASHED,  .offset = 0x0388, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V6_FILTER,         .offset = 0x0408, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V4_ROUTE_HASHED,   .offset = 0x0488, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V4_ROUTE,          .offset = 0x0508, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V6_ROUTE_HASHED,   .offset = 0x0588, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_V6_ROUTE,          .offset = 0x0608, .size = 0x0078, .canary_count = 2, },
++	{ .id = IPA_MEM_MODEM_HEADER,      .offset = 0x0688, .size = 0x0140, .canary_count = 2, },
++	{ .id = IPA_MEM_MODEM_PROC_CTX,    .offset = 0x07d0, .size = 0x0200, .canary_count = 2, },
++	{ .id = IPA_MEM_AP_PROC_CTX,       .offset = 0x09d0, .size = 0x0200, .canary_count = 0, },
++	{ .id = IPA_MEM_PDN_CONFIG,        .offset = 0x0bd8, .size = 0x0050, .canary_count = 2, },
++	{ .id = IPA_MEM_STATS_QUOTA_MODEM, .offset = 0x0c30, .size = 0x0060, .canary_count = 2, },
++	{ .id = IPA_MEM_STATS_TETHERING,   .offset = 0x0c90, .size = 0x0140, .canary_count = 0, },
++	{ .id = IPA_MEM_STATS_V4_FILTER,   .offset = 0x0dd0, .size = 0x0180, .canary_count = 0, },
++	{ .id = IPA_MEM_STATS_V6_FILTER,   .offset = 0x0f50, .size = 0x0180, .canary_count = 0, },
++	{ .id = IPA_MEM_STATS_V4_ROUTE,    .offset = 0x10d0, .size = 0x0180, .canary_count = 0, },
++	{ .id = IPA_MEM_STATS_V6_ROUTE,    .offset = 0x1250, .size = 0x0180, .canary_count = 0, },
++	{ .id = IPA_MEM_STATS_DROP,        .offset = 0x13d0, .size = 0x0020, .canary_count = 0, },
++	{ .id = IPA_MEM_MODEM,             .offset = 0x13f0, .size = 0x100c, .canary_count = 0, },
++	{ .id = IPA_MEM_UC_EVENT_RING,     .offset = 0x2400, .size = 0x0400, .canary_count = 1, },
++};
++
++/* Memory configuration data for an SoC having IPA v4.1 */
++static const struct ipa_mem_data ipa_mem_data = {
++	.local_count	= ARRAY_SIZE(ipa_mem_local_data),
++	.local		= ipa_mem_local_data,
++	.imem_addr	= 0x146a8000,
++	.imem_size	= 0x00002000,
++	.smem_size	= 0x00002000,
++};
++
++/* Interconnect bandwidths are in 1000 byte/second units */
++static const struct ipa_interconnect_data ipa_interconnect_data[] = {
++	{
++		.name			= "memory",
++		.peak_bandwidth		= 600000,	/* 600 MBps */
++		.average_bandwidth	= 80000,	/* 80 MBps */
++	},
++	/* Average bandwidth is unused for the next two interconnects */
++	{
++		.name			= "imem",
++		.peak_bandwidth		= 350000,	/* 350 MBps */
++		.average_bandwidth	= 0,		/* unused */
++	},
++	{
++		.name			= "config",
++		.peak_bandwidth		= 40000,	/* 40 MBps */
++		.average_bandwidth	= 0,		/* unused */
++	},
++};
++
++/* Clock and interconnect configuration data for an SoC having IPA v4.1 */
++static const struct ipa_power_data ipa_power_data = {
++	.core_clock_rate	= 100 * 1000 * 1000,	/* Hz */
++	.interconnect_count	= ARRAY_SIZE(ipa_interconnect_data),
++	.interconnect_data	= ipa_interconnect_data,
++};
++
++/* Configuration data for an SoC having IPA v4.1 */
++const struct ipa_data ipa_data_v4_1 = {
++	.version		= IPA_VERSION_4_1,
++	.qsb_count		= ARRAY_SIZE(ipa_qsb_data),
++	.qsb_data		= ipa_qsb_data,
++	.modem_route_count	= 8,
++	.endpoint_count		= ARRAY_SIZE(ipa_gsi_endpoint_data),
++	.endpoint_data		= ipa_gsi_endpoint_data,
++	.resource_data		= &ipa_resource_data,
++	.mem_data		= &ipa_mem_data,
++	.power_data		= &ipa_power_data,
++};
+diff --git a/drivers/net/ipa/gsi_reg.c b/drivers/net/ipa/gsi_reg.c
+index 825598661188..fdeb2d64ac0b 100644
+--- a/drivers/net/ipa/gsi_reg.c
++++ b/drivers/net/ipa/gsi_reg.c
+@@ -96,6 +96,7 @@ static const struct regs *gsi_regs(struct gsi *gsi)
+ 	case IPA_VERSION_3_5_1:
+ 		return &gsi_regs_v3_5_1;
+ 
++	case IPA_VERSION_4_1:
+ 	case IPA_VERSION_4_2:
+ 		return &gsi_regs_v4_0;
+ 
+diff --git a/drivers/net/ipa/gsi_trans.c b/drivers/net/ipa/gsi_trans.c
+index 19531883864a..fbe796cd8a0a 100644
+--- a/drivers/net/ipa/gsi_trans.c
++++ b/drivers/net/ipa/gsi_trans.c
+@@ -79,6 +79,13 @@ struct gsi_tre {
+ };
+ 
+ /* gsi_tre->flags mask values (in CPU byte order) */
++/* How long to wait for a committed transaction to complete.  Command channel
++ * transactions finish in microseconds; this only has to be generous enough to
++ * never expire on a working device, because the alternative is a wait that
++ * never ends.  GSI_CMD_TIMEOUT in gsi.c bounds the generic commands similarly.
++ */
++#define GSI_TRANS_TIMEOUT	1000	/* milliseconds */
++
+ #define TRE_FLAGS_CHAIN_FMASK	GENMASK(0, 0)
+ #define TRE_FLAGS_IEOT_FMASK	GENMASK(9, 9)
+ #define TRE_FLAGS_BEI_FMASK	GENMASK(10, 10)
+@@ -619,7 +626,22 @@ void gsi_trans_commit_wait(struct gsi_trans *trans)
+ 
+ 	__gsi_trans_commit(trans, true);
+ 
+-	wait_for_completion(&trans->completion);
++	/* Every caller of this is a command channel operation, and some of
++	 * them run from the modem's SSR notifier chain while holding the
++	 * remote processor lock. Waiting there without a bound is fatal: if
++	 * the transaction never completes, the modem can never be restarted
++	 * and any driver unregistering an SSR notifier blocks behind it.
++	 *
++	 * Timing out is safe. We hold a reference of our own here, and the
++	 * GSI completion path holds the one it took when the transaction was
++	 * committed, so dropping ours below never frees a transaction the
++	 * hardware may still complete later.
++	 */
++	if (!wait_for_completion_timeout(&trans->completion,
++					 msecs_to_jiffies(GSI_TRANS_TIMEOUT)))
++		dev_err(trans->gsi->dev,
++			"channel %u: transaction did not complete in %ums\n",
++			trans->channel_id, GSI_TRANS_TIMEOUT);
+ 
+ out_trans_free:
+ 	gsi_trans_free(trans);
+diff --git a/drivers/net/ipa/gsi_trans.h b/drivers/net/ipa/gsi_trans.h
+index c1b3386cbb9d..0886c222d6eb 100644
+--- a/drivers/net/ipa/gsi_trans.h
++++ b/drivers/net/ipa/gsi_trans.h
+@@ -202,6 +202,10 @@ void gsi_trans_commit(struct gsi_trans *trans, bool ring_db);
+  * gsi_trans_commit_wait() - Commit a GSI transaction and wait for it
+  *			     to complete
+  * @trans:	Transaction to commit
++ *
++ * The wait is bounded.  If the transaction does not complete in time an error
++ * is logged and the caller continues; callers run from contexts, such as the
++ * modem's SSR notifier chain, where blocking forever wedges the system.
+  */
+ void gsi_trans_commit_wait(struct gsi_trans *trans);
+ 
+diff --git a/drivers/net/ipa/ipa_data.h b/drivers/net/ipa/ipa_data.h
+index 2fd03f0799b2..454f653a29fb 100644
+--- a/drivers/net/ipa/ipa_data.h
++++ b/drivers/net/ipa/ipa_data.h
+@@ -242,6 +242,7 @@ struct ipa_data {
+ 
+ extern const struct ipa_data ipa_data_v3_1;
+ extern const struct ipa_data ipa_data_v3_5_1;
++extern const struct ipa_data ipa_data_v4_1;
+ extern const struct ipa_data ipa_data_v4_2;
+ extern const struct ipa_data ipa_data_v4_5;
+ extern const struct ipa_data ipa_data_v4_7;
+diff --git a/drivers/net/ipa/ipa_main.c b/drivers/net/ipa/ipa_main.c
+index 25500c5a6928..e5d089be922a 100644
+--- a/drivers/net/ipa/ipa_main.c
++++ b/drivers/net/ipa/ipa_main.c
+@@ -645,6 +645,10 @@ static const struct of_device_id ipa_match[] = {
+ 		.compatible	= "qcom,sdm845-ipa",
+ 		.data		= &ipa_data_v3_5_1,
+ 	},
++	{
++		.compatible	= "qcom,sm8150-ipa",
++		.data		= &ipa_data_v4_1,
++	},
+ 	{
+ 		.compatible	= "qcom,sc7180-ipa",
+ 		.data		= &ipa_data_v4_2,
+diff --git a/drivers/net/ipa/ipa_reg.c b/drivers/net/ipa/ipa_reg.c
+index c574f798fdc9..9f8195a4f0bf 100644
+--- a/drivers/net/ipa/ipa_reg.c
++++ b/drivers/net/ipa/ipa_reg.c
+@@ -114,6 +114,8 @@ static const struct regs *ipa_regs(enum ipa_version version)
+ 		return &ipa_regs_v3_1;
+ 	case IPA_VERSION_3_5_1:
+ 		return &ipa_regs_v3_5_1;
++	case IPA_VERSION_4_1:
++		return &ipa_regs_v4_1;
+ 	case IPA_VERSION_4_2:
+ 		return &ipa_regs_v4_2;
+ 	case IPA_VERSION_4_5:
+diff --git a/drivers/net/ipa/ipa_reg.h b/drivers/net/ipa/ipa_reg.h
+index 61b7c441ae95..8bf908ecfcc8 100644
+--- a/drivers/net/ipa/ipa_reg.h
++++ b/drivers/net/ipa/ipa_reg.h
+@@ -631,6 +631,7 @@ enum ipa_reg_ipa_irq_uc_field_id {
+ 
+ extern const struct regs ipa_regs_v3_1;
+ extern const struct regs ipa_regs_v3_5_1;
++extern const struct regs ipa_regs_v4_1;
+ extern const struct regs ipa_regs_v4_2;
+ extern const struct regs ipa_regs_v4_5;
+ extern const struct regs ipa_regs_v4_7;
+diff --git a/drivers/net/ipa/reg/ipa_reg-v4.1.c b/drivers/net/ipa/reg/ipa_reg-v4.1.c
+new file mode 100644
+index 000000000000..dd196279bff2
+--- /dev/null
++++ b/drivers/net/ipa/reg/ipa_reg-v4.1.c
+@@ -0,0 +1,479 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/* Copyright (C) 2022-2024 Linaro Ltd.
++ * Copyright (C) 2026 Robin Snyders
++ */
++
++#include <linux/array_size.h>
++#include <linux/bits.h>
++#include <linux/types.h>
++
++#include "../ipa_reg.h"
++#include "../ipa_version.h"
++
++static const u32 reg_comp_cfg_fmask[] = {
++						/* Bit 0 reserved */
++	[GSI_SNOC_BYPASS_DIS]				= BIT(1),
++	[GEN_QMB_0_SNOC_BYPASS_DIS]			= BIT(2),
++	[GEN_QMB_1_SNOC_BYPASS_DIS]			= BIT(3),
++	[IPA_DCMP_FAST_CLK_EN]				= BIT(4),
++	[IPA_QMB_SELECT_CONS_EN]			= BIT(5),
++	[IPA_QMB_SELECT_PROD_EN]			= BIT(6),
++	[GSI_MULTI_INORDER_RD_DIS]			= BIT(7),
++	[GSI_MULTI_INORDER_WR_DIS]			= BIT(8),
++	[GEN_QMB_0_MULTI_INORDER_RD_DIS]		= BIT(9),
++	[GEN_QMB_1_MULTI_INORDER_RD_DIS]		= BIT(10),
++	[GEN_QMB_0_MULTI_INORDER_WR_DIS]		= BIT(11),
++	[GEN_QMB_1_MULTI_INORDER_WR_DIS]		= BIT(12),
++	[GEN_QMB_0_SNOC_CNOC_LOOP_PROT_DIS]		= BIT(13),
++	[GSI_SNOC_CNOC_LOOP_PROT_DISABLE]		= BIT(14),
++	[GSI_MULTI_AXI_MASTERS_DIS]			= BIT(15),
++	[IPA_QMB_SELECT_GLOBAL_EN]			= BIT(16),
++	[ATOMIC_FETCHER_ARB_LOCK_DIS]			= GENMASK(20, 17),
++						/* Bits 21-31 reserved */
++};
++
++REG_FIELDS(COMP_CFG, comp_cfg, 0x0000003c);
++
++static const u32 reg_clkon_cfg_fmask[] = {
++	[CLKON_RX]					= BIT(0),
++	[CLKON_PROC]					= BIT(1),
++	[TX_WRAPPER]					= BIT(2),
++	[CLKON_MISC]					= BIT(3),
++	[RAM_ARB]					= BIT(4),
++	[FTCH_HPS]					= BIT(5),
++	[FTCH_DPS]					= BIT(6),
++	[CLKON_HPS]					= BIT(7),
++	[CLKON_DPS]					= BIT(8),
++	[RX_HPS_CMDQS]					= BIT(9),
++	[HPS_DPS_CMDQS]					= BIT(10),
++	[DPS_TX_CMDQS]					= BIT(11),
++	[RSRC_MNGR]					= BIT(12),
++	[CTX_HANDLER]					= BIT(13),
++	[ACK_MNGR]					= BIT(14),
++	[D_DCPH]					= BIT(15),
++	[H_DCPH]					= BIT(16),
++						/* Bit 17 reserved */
++	[NTF_TX_CMDQS]					= BIT(18),
++	[CLKON_TX_0]					= BIT(19),
++	[CLKON_TX_1]					= BIT(20),
++	[CLKON_FNR]					= BIT(21),
++	[QSB2AXI_CMDQ_L]				= BIT(22),
++	[AGGR_WRAPPER]					= BIT(23),
++	[RAM_SLAVEWAY]					= BIT(24),
++	[CLKON_QMB]					= BIT(25),
++	[WEIGHT_ARB]					= BIT(26),
++	[GSI_IF]					= BIT(27),
++	[CLKON_GLOBAL]					= BIT(28),
++	[GLOBAL_2X_CLK]					= BIT(29),
++						/* Bits 30-31 reserved */
++};
++
++REG_FIELDS(CLKON_CFG, clkon_cfg, 0x00000044);
++
++static const u32 reg_route_fmask[] = {
++	[ROUTE_DIS]					= BIT(0),
++	[ROUTE_DEF_PIPE]				= GENMASK(5, 1),
++	[ROUTE_DEF_HDR_TABLE]				= BIT(6),
++	[ROUTE_DEF_HDR_OFST]				= GENMASK(16, 7),
++	[ROUTE_FRAG_DEF_PIPE]				= GENMASK(21, 17),
++						/* Bits 22-23 reserved */
++	[ROUTE_DEF_RETAIN_HDR]				= BIT(24),
++						/* Bits 25-31 reserved */
++};
++
++REG_FIELDS(ROUTE, route, 0x00000048);
++
++static const u32 reg_shared_mem_size_fmask[] = {
++	[MEM_SIZE]					= GENMASK(15, 0),
++	[MEM_BADDR]					= GENMASK(31, 16),
++};
++
++REG_FIELDS(SHARED_MEM_SIZE, shared_mem_size, 0x00000054);
++
++static const u32 reg_qsb_max_writes_fmask[] = {
++	[GEN_QMB_0_MAX_WRITES]				= GENMASK(3, 0),
++	[GEN_QMB_1_MAX_WRITES]				= GENMASK(7, 4),
++						/* Bits 8-31 reserved */
++};
++
++REG_FIELDS(QSB_MAX_WRITES, qsb_max_writes, 0x00000074);
++
++static const u32 reg_qsb_max_reads_fmask[] = {
++	[GEN_QMB_0_MAX_READS]				= GENMASK(3, 0),
++	[GEN_QMB_1_MAX_READS]				= GENMASK(7, 4),
++						/* Bits 8-15 reserved */
++	[GEN_QMB_0_MAX_READS_BEATS]			= GENMASK(23, 16),
++	[GEN_QMB_1_MAX_READS_BEATS]			= GENMASK(31, 24),
++};
++
++REG_FIELDS(QSB_MAX_READS, qsb_max_reads, 0x00000078);
++
++static const u32 reg_filt_rout_hash_flush_fmask[] = {
++	[IPV6_ROUTER_HASH]				= BIT(0),
++						/* Bits 1-3 reserved */
++	[IPV6_FILTER_HASH]				= BIT(4),
++						/* Bits 5-7 reserved */
++	[IPV4_ROUTER_HASH]				= BIT(8),
++						/* Bits 9-11 reserved */
++	[IPV4_FILTER_HASH]				= BIT(12),
++						/* Bits 13-31 reserved */
++};
++
++REG_FIELDS(FILT_ROUT_HASH_FLUSH, filt_rout_hash_flush, 0x000014c);
++
++/* Valid bits defined by ipa->available */
++REG_STRIDE(STATE_AGGR_ACTIVE, state_aggr_active, 0x000000b4, 0x0004);
++
++REG(IPA_BCR, ipa_bcr, 0x000001d0);
++
++static const u32 reg_local_pkt_proc_cntxt_fmask[] = {
++	[IPA_BASE_ADDR]					= GENMASK(16, 0),
++						/* Bits 17-31 reserved */
++};
++
++/* Offset must be a multiple of 8 */
++REG_FIELDS(LOCAL_PKT_PROC_CNTXT, local_pkt_proc_cntxt, 0x000001e8);
++
++/* Valid bits defined by ipa->available */
++REG_STRIDE(AGGR_FORCE_CLOSE, aggr_force_close, 0x000001ec, 0x0004);
++
++static const u32 reg_counter_cfg_fmask[] = {
++						/* Bits 0-3 reserved */
++	[AGGR_GRANULARITY]				= GENMASK(8, 4),
++						/* Bits 9-31 reserved */
++};
++
++REG_FIELDS(COUNTER_CFG, counter_cfg, 0x000001f0);
++
++static const u32 reg_ipa_tx_cfg_fmask[] = {
++						/* Bits 0-1 reserved */
++	[PREFETCH_ALMOST_EMPTY_SIZE_TX0]		= GENMASK(5, 2),
++	[DMAW_SCND_OUTSD_PRED_THRESHOLD]		= GENMASK(9, 6),
++	[DMAW_SCND_OUTSD_PRED_EN]			= BIT(10),
++	[DMAW_MAX_BEATS_256_DIS]			= BIT(11),
++	[PA_MASK_EN]					= BIT(12),
++	[PREFETCH_ALMOST_EMPTY_SIZE_TX1]		= GENMASK(16, 13),
++						/* Bit 17 reserved */
++	[SSPND_PA_NO_START_STATE]			= BIT(18),
++	[SSPND_PA_NO_BQ_STATE]				= BIT(19),
++						/* Bits 20-31 reserved */
++};
++
++REG_FIELDS(IPA_TX_CFG, ipa_tx_cfg, 0x000001fc);
++
++static const u32 reg_flavor_0_fmask[] = {
++	[MAX_PIPES]					= GENMASK(3, 0),
++						/* Bits 4-7 reserved */
++	[MAX_CONS_PIPES]				= GENMASK(12, 8),
++						/* Bits 13-15 reserved */
++	[MAX_PROD_PIPES]				= GENMASK(20, 16),
++						/* Bits 21-23 reserved */
++	[PROD_LOWEST]					= GENMASK(27, 24),
++						/* Bits 28-31 reserved */
++};
++
++REG_FIELDS(FLAVOR_0, flavor_0, 0x00000210);
++
++static const u32 reg_idle_indication_cfg_fmask[] = {
++	[ENTER_IDLE_DEBOUNCE_THRESH]			= GENMASK(15, 0),
++	[CONST_NON_IDLE_ENABLE]				= BIT(16),
++						/* Bits 17-31 reserved */
++};
++
++REG_FIELDS(IDLE_INDICATION_CFG, idle_indication_cfg, 0x00000220);
++
++static const u32 reg_src_rsrc_grp_01_rsrc_type_fmask[] = {
++	[X_MIN_LIM]					= GENMASK(5, 0),
++						/* Bits 6-7 reserved */
++	[X_MAX_LIM]					= GENMASK(13, 8),
++						/* Bits 14-15 reserved */
++	[Y_MIN_LIM]					= GENMASK(21, 16),
++						/* Bits 22-23 reserved */
++	[Y_MAX_LIM]					= GENMASK(29, 24),
++						/* Bits 30-31 reserved */
++};
++
++REG_STRIDE_FIELDS(SRC_RSRC_GRP_01_RSRC_TYPE, src_rsrc_grp_01_rsrc_type,
++		  0x00000400, 0x0020);
++
++static const u32 reg_src_rsrc_grp_23_rsrc_type_fmask[] = {
++	[X_MIN_LIM]					= GENMASK(5, 0),
++						/* Bits 6-7 reserved */
++	[X_MAX_LIM]					= GENMASK(13, 8),
++						/* Bits 14-15 reserved */
++	[Y_MIN_LIM]					= GENMASK(21, 16),
++						/* Bits 22-23 reserved */
++	[Y_MAX_LIM]					= GENMASK(29, 24),
++						/* Bits 30-31 reserved */
++};
++
++REG_STRIDE_FIELDS(SRC_RSRC_GRP_23_RSRC_TYPE, src_rsrc_grp_23_rsrc_type,
++		  0x00000404, 0x0020);
++
++static const u32 reg_dst_rsrc_grp_01_rsrc_type_fmask[] = {
++	[X_MIN_LIM]					= GENMASK(5, 0),
++						/* Bits 6-7 reserved */
++	[X_MAX_LIM]					= GENMASK(13, 8),
++						/* Bits 14-15 reserved */
++	[Y_MIN_LIM]					= GENMASK(21, 16),
++						/* Bits 22-23 reserved */
++	[Y_MAX_LIM]					= GENMASK(29, 24),
++						/* Bits 30-31 reserved */
++};
++
++REG_STRIDE_FIELDS(DST_RSRC_GRP_01_RSRC_TYPE, dst_rsrc_grp_01_rsrc_type,
++		  0x00000500, 0x0020);
++
++static const u32 reg_dst_rsrc_grp_23_rsrc_type_fmask[] = {
++	[X_MIN_LIM]					= GENMASK(5, 0),
++						/* Bits 6-7 reserved */
++	[X_MAX_LIM]					= GENMASK(13, 8),
++						/* Bits 14-15 reserved */
++	[Y_MIN_LIM]					= GENMASK(21, 16),
++						/* Bits 22-23 reserved */
++	[Y_MAX_LIM]					= GENMASK(29, 24),
++						/* Bits 30-31 reserved */
++};
++
++REG_STRIDE_FIELDS(DST_RSRC_GRP_23_RSRC_TYPE, dst_rsrc_grp_23_rsrc_type,
++		  0x00000504, 0x0020);
++
++static const u32 reg_endp_init_ctrl_fmask[] = {
++	[ENDP_SUSPEND]					= BIT(0),
++	[ENDP_DELAY]					= BIT(1),
++						/* Bits 2-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_CTRL, endp_init_ctrl, 0x00000800, 0x0070);
++
++static const u32 reg_endp_init_cfg_fmask[] = {
++	[FRAG_OFFLOAD_EN]				= BIT(0),
++	[CS_OFFLOAD_EN]					= GENMASK(2, 1),
++	[CS_METADATA_HDR_OFFSET]			= GENMASK(6, 3),
++						/* Bit 7 reserved */
++	[CS_GEN_QMB_MASTER_SEL]				= BIT(8),
++						/* Bits 9-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_CFG, endp_init_cfg, 0x00000808, 0x0070);
++
++static const u32 reg_endp_init_nat_fmask[] = {
++	[NAT_EN]					= GENMASK(1, 0),
++						/* Bits 2-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_NAT, endp_init_nat, 0x0000080c, 0x0070);
++
++static const u32 reg_endp_init_hdr_fmask[] = {
++	[HDR_LEN]					= GENMASK(5, 0),
++	[HDR_OFST_METADATA_VALID]			= BIT(6),
++	[HDR_OFST_METADATA]				= GENMASK(12, 7),
++	[HDR_ADDITIONAL_CONST_LEN]			= GENMASK(18, 13),
++	[HDR_OFST_PKT_SIZE_VALID]			= BIT(19),
++	[HDR_OFST_PKT_SIZE]				= GENMASK(25, 20),
++	[HDR_A5_MUX]					= BIT(26),
++	[HDR_LEN_INC_DEAGG_HDR]				= BIT(27),
++	[HDR_METADATA_REG_VALID]			= BIT(28),
++						/* Bits 29-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_HDR, endp_init_hdr, 0x00000810, 0x0070);
++
++static const u32 reg_endp_init_hdr_ext_fmask[] = {
++	[HDR_ENDIANNESS]				= BIT(0),
++	[HDR_TOTAL_LEN_OR_PAD_VALID]			= BIT(1),
++	[HDR_TOTAL_LEN_OR_PAD]				= BIT(2),
++	[HDR_PAYLOAD_LEN_INC_PADDING]			= BIT(3),
++	[HDR_TOTAL_LEN_OR_PAD_OFFSET]			= GENMASK(9, 4),
++	[HDR_PAD_TO_ALIGNMENT]				= GENMASK(13, 10),
++						/* Bits 14-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_HDR_EXT, endp_init_hdr_ext, 0x00000814, 0x0070);
++
++REG_STRIDE(ENDP_INIT_HDR_METADATA_MASK, endp_init_hdr_metadata_mask,
++	   0x00000818, 0x0070);
++
++static const u32 reg_endp_init_mode_fmask[] = {
++	[ENDP_MODE]					= GENMASK(2, 0),
++						/* Bit 3 reserved */
++	[DEST_PIPE_INDEX]				= GENMASK(8, 4),
++						/* Bits 9-11 reserved */
++	[BYTE_THRESHOLD]				= GENMASK(27, 12),
++	[PIPE_REPLICATION_EN]				= BIT(28),
++	[PAD_EN]					= BIT(29),
++	[HDR_FTCH_DISABLE]				= BIT(30),
++						/* Bit 31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_MODE, endp_init_mode, 0x00000820, 0x0070);
++
++static const u32 reg_endp_init_aggr_fmask[] = {
++	[AGGR_EN]					= GENMASK(1, 0),
++	[AGGR_TYPE]					= GENMASK(4, 2),
++	[BYTE_LIMIT]					= GENMASK(9, 5),
++	[TIME_LIMIT]					= GENMASK(14, 10),
++	[PKT_LIMIT]					= GENMASK(20, 15),
++	[SW_EOF_ACTIVE]					= BIT(21),
++	[FORCE_CLOSE]					= BIT(22),
++						/* Bit 23 reserved */
++	[HARD_BYTE_LIMIT_EN]				= BIT(24),
++						/* Bits 25-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_AGGR, endp_init_aggr, 0x00000824, 0x0070);
++
++static const u32 reg_endp_init_hol_block_en_fmask[] = {
++	[HOL_BLOCK_EN]					= BIT(0),
++						/* Bits 1-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_HOL_BLOCK_EN, endp_init_hol_block_en,
++		  0x0000082c, 0x0070);
++
++static const u32 reg_endp_init_hol_block_timer_fmask[] = {
++	[TIMER_BASE_VALUE]				= GENMASK(31, 0),
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_HOL_BLOCK_TIMER, endp_init_hol_block_timer,
++		  0x00000830, 0x0070);
++
++static const u32 reg_endp_init_deaggr_fmask[] = {
++	[DEAGGR_HDR_LEN]				= GENMASK(5, 0),
++	[SYSPIPE_ERR_DETECTION]				= BIT(6),
++	[PACKET_OFFSET_VALID]				= BIT(7),
++	[PACKET_OFFSET_LOCATION]			= GENMASK(13, 8),
++	[IGNORE_MIN_PKT_ERR]				= BIT(14),
++						/* Bit 15 reserved */
++	[MAX_PACKET_LEN]				= GENMASK(31, 16),
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_DEAGGR, endp_init_deaggr, 0x00000834, 0x0070);
++
++static const u32 reg_endp_init_rsrc_grp_fmask[] = {
++	[ENDP_RSRC_GRP]					= BIT(0),
++						/* Bits 1-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_RSRC_GRP, endp_init_rsrc_grp, 0x00000838, 0x0070);
++
++static const u32 reg_endp_init_seq_fmask[] = {
++	[SEQ_TYPE]					= GENMASK(7, 0),
++	[SEQ_REP_TYPE]					= GENMASK(15, 8),
++						/* Bits 16-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_INIT_SEQ, endp_init_seq, 0x0000083c, 0x0070);
++
++static const u32 reg_endp_status_fmask[] = {
++	[STATUS_EN]					= BIT(0),
++	[STATUS_ENDP]					= GENMASK(5, 1),
++						/* Bits 6-7 reserved */
++	[STATUS_LOCATION]				= BIT(8),
++	[STATUS_PKT_SUPPRESS]				= BIT(9),
++						/* Bits 10-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_STATUS, endp_status, 0x00000840, 0x0070);
++
++static const u32 reg_endp_filter_router_hsh_cfg_fmask[] = {
++	[FILTER_HASH_MSK_SRC_ID]			= BIT(0),
++	[FILTER_HASH_MSK_SRC_IP]			= BIT(1),
++	[FILTER_HASH_MSK_DST_IP]			= BIT(2),
++	[FILTER_HASH_MSK_SRC_PORT]			= BIT(3),
++	[FILTER_HASH_MSK_DST_PORT]			= BIT(4),
++	[FILTER_HASH_MSK_PROTOCOL]			= BIT(5),
++	[FILTER_HASH_MSK_METADATA]			= BIT(6),
++	[FILTER_HASH_MSK_ALL]				= GENMASK(6, 0),
++						/* Bits 7-15 reserved */
++	[ROUTER_HASH_MSK_SRC_ID]			= BIT(16),
++	[ROUTER_HASH_MSK_SRC_IP]			= BIT(17),
++	[ROUTER_HASH_MSK_DST_IP]			= BIT(18),
++	[ROUTER_HASH_MSK_SRC_PORT]			= BIT(19),
++	[ROUTER_HASH_MSK_DST_PORT]			= BIT(20),
++	[ROUTER_HASH_MSK_PROTOCOL]			= BIT(21),
++	[ROUTER_HASH_MSK_METADATA]			= BIT(22),
++	[ROUTER_HASH_MSK_ALL]				= GENMASK(22, 16),
++						/* Bits 23-31 reserved */
++};
++
++REG_STRIDE_FIELDS(ENDP_FILTER_ROUTER_HSH_CFG, endp_filter_router_hsh_cfg,
++		  0x0000085c, 0x0070);
++
++/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
++REG(IPA_IRQ_STTS, ipa_irq_stts, 0x00003008 + 0x1000 * GSI_EE_AP);
++
++/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
++REG(IPA_IRQ_EN, ipa_irq_en, 0x0000300c + 0x1000 * GSI_EE_AP);
++
++/* Valid bits defined by enum ipa_irq_id; only used for GSI_EE_AP */
++REG(IPA_IRQ_CLR, ipa_irq_clr, 0x00003010 + 0x1000 * GSI_EE_AP);
++
++static const u32 reg_ipa_irq_uc_fmask[] = {
++	[UC_INTR]					= BIT(0),
++						/* Bits 1-31 reserved */
++};
++
++REG_FIELDS(IPA_IRQ_UC, ipa_irq_uc, 0x0000301c + 0x1000 * GSI_EE_AP);
++
++/* Valid bits defined by ipa->available */
++REG_STRIDE(IRQ_SUSPEND_INFO, irq_suspend_info,
++	   0x00003030 + 0x1000 * GSI_EE_AP, 0x0004);
++
++/* Valid bits defined by ipa->available */
++REG_STRIDE(IRQ_SUSPEND_EN, irq_suspend_en,
++	   0x00003034 + 0x1000 * GSI_EE_AP, 0x0004);
++
++/* Valid bits defined by ipa->available */
++REG_STRIDE(IRQ_SUSPEND_CLR, irq_suspend_clr,
++	   0x00003038 + 0x1000 * GSI_EE_AP, 0x0004);
++
++static const struct reg *reg_array[] = {
++	[COMP_CFG]			= &reg_comp_cfg,
++	[CLKON_CFG]			= &reg_clkon_cfg,
++	[ROUTE]				= &reg_route,
++	[SHARED_MEM_SIZE]		= &reg_shared_mem_size,
++	[QSB_MAX_WRITES]		= &reg_qsb_max_writes,
++	[QSB_MAX_READS]			= &reg_qsb_max_reads,
++	[FILT_ROUT_HASH_FLUSH]		= &reg_filt_rout_hash_flush,
++	[STATE_AGGR_ACTIVE]		= &reg_state_aggr_active,
++	[IPA_BCR]			= &reg_ipa_bcr,
++	[LOCAL_PKT_PROC_CNTXT]		= &reg_local_pkt_proc_cntxt,
++	[AGGR_FORCE_CLOSE]		= &reg_aggr_force_close,
++	[COUNTER_CFG]			= &reg_counter_cfg,
++	[IPA_TX_CFG]			= &reg_ipa_tx_cfg,
++	[FLAVOR_0]			= &reg_flavor_0,
++	[IDLE_INDICATION_CFG]		= &reg_idle_indication_cfg,
++	[SRC_RSRC_GRP_01_RSRC_TYPE]	= &reg_src_rsrc_grp_01_rsrc_type,
++	[SRC_RSRC_GRP_23_RSRC_TYPE]	= &reg_src_rsrc_grp_23_rsrc_type,
++	[DST_RSRC_GRP_01_RSRC_TYPE]	= &reg_dst_rsrc_grp_01_rsrc_type,
++	[DST_RSRC_GRP_23_RSRC_TYPE]	= &reg_dst_rsrc_grp_23_rsrc_type,
++	[ENDP_INIT_CTRL]		= &reg_endp_init_ctrl,
++	[ENDP_INIT_CFG]			= &reg_endp_init_cfg,
++	[ENDP_INIT_NAT]			= &reg_endp_init_nat,
++	[ENDP_INIT_HDR]			= &reg_endp_init_hdr,
++	[ENDP_INIT_HDR_EXT]		= &reg_endp_init_hdr_ext,
++	[ENDP_INIT_HDR_METADATA_MASK]	= &reg_endp_init_hdr_metadata_mask,
++	[ENDP_INIT_MODE]		= &reg_endp_init_mode,
++	[ENDP_INIT_AGGR]		= &reg_endp_init_aggr,
++	[ENDP_INIT_HOL_BLOCK_EN]	= &reg_endp_init_hol_block_en,
++	[ENDP_INIT_HOL_BLOCK_TIMER]	= &reg_endp_init_hol_block_timer,
++	[ENDP_INIT_DEAGGR]		= &reg_endp_init_deaggr,
++	[ENDP_INIT_RSRC_GRP]		= &reg_endp_init_rsrc_grp,
++	[ENDP_INIT_SEQ]			= &reg_endp_init_seq,
++	[ENDP_STATUS]			= &reg_endp_status,
++	[ENDP_FILTER_ROUTER_HSH_CFG]	= &reg_endp_filter_router_hsh_cfg,
++	[IPA_IRQ_STTS]			= &reg_ipa_irq_stts,
++	[IPA_IRQ_EN]			= &reg_ipa_irq_en,
++	[IPA_IRQ_CLR]			= &reg_ipa_irq_clr,
++	[IPA_IRQ_UC]			= &reg_ipa_irq_uc,
++	[IRQ_SUSPEND_INFO]		= &reg_irq_suspend_info,
++	[IRQ_SUSPEND_EN]		= &reg_irq_suspend_en,
++	[IRQ_SUSPEND_CLR]		= &reg_irq_suspend_clr,
++};
++
++const struct regs ipa_regs_v4_1 = {
++	.reg_count	= ARRAY_SIZE(reg_array),
++	.reg		= reg_array,
++};
+diff --git a/drivers/net/wireless/ath/ath10k/qmi.c b/drivers/net/wireless/ath/ath10k/qmi.c
+index f1f33af0170a..d300e400ea8f 100644
+--- a/drivers/net/wireless/ath/ath10k/qmi.c
++++ b/drivers/net/wireless/ath/ath10k/qmi.c
+@@ -69,16 +69,33 @@ static int ath10k_qmi_unmap_msa_permission(struct ath10k_qmi *qmi,
+ 	u64 src_perms;
+ 	int ret;
+ 
+-	src_perms = BIT(QCOM_SCM_VMID_MSS_MSA) | BIT(QCOM_SCM_VMID_WLAN);
++	u64 wlan_perms = BIT(QCOM_SCM_VMID_WLAN);
+ 
+ 	if (!mem_info->secure)
+-		src_perms |= BIT(QCOM_SCM_VMID_WLAN_CE);
++		wlan_perms |= BIT(QCOM_SCM_VMID_WLAN_CE);
+ 
+ 	dst_perms.vmid = QCOM_SCM_VMID_HLOS;
+ 	dst_perms.perm = QCOM_SCM_PERM_RW;
+ 
++	/* The hypervisor checks the source set against who actually owns the
++	 * region, so it has to be exact. Tearing the modem down revokes its
++	 * MSS_MSA share without telling us, and the symmetric reclaim below
++	 * is then rejected with -EINVAL, which is what leaves Wi-Fi down
++	 * after a modem crash. Fall back to the set that survives.
++	 */
++	src_perms = BIT(QCOM_SCM_VMID_MSS_MSA) | wlan_perms;
++
++	ret = qcom_scm_assign_mem(mem_info->addr, mem_info->size,
++				  &src_perms, &dst_perms, 1);
++	if (ret != -EINVAL)
++		goto out;
++
++	src_perms = wlan_perms;
++
+ 	ret = qcom_scm_assign_mem(mem_info->addr, mem_info->size,
+ 				  &src_perms, &dst_perms, 1);
++
++out:
+ 	if (ret < 0)
+ 		ath10k_err(ar, "failed to unmap msa permissions: %d\n", ret);
+ 
+@@ -99,6 +116,8 @@ static int ath10k_qmi_setup_msa_permissions(struct ath10k_qmi *qmi)
+ 			goto err_unmap;
+ 	}
+ 
++	qmi->msa_perm_granted = true;
++
+ 	return 0;
+ 
+ err_unmap:
+@@ -114,8 +133,43 @@ static void ath10k_qmi_remove_msa_permission(struct ath10k_qmi *qmi)
+ 	if (qmi->msa_fixed_perm)
+ 		return;
+ 
++	/* Reclaiming regions we do not hold is rejected by the hypervisor and
++	 * only produces noise, so track whether the assignment is ours. This
++	 * also makes the call idempotent, which it has to be: it is reached
++	 * both from the QMI service going away and from the modem's subsystem
++	 * restart notifier, in whichever order those happen to arrive.
++	 */
++	if (!qmi->msa_perm_granted)
++		return;
++
+ 	for (i = 0; i < qmi->nr_mem_region; i++)
+ 		ath10k_qmi_unmap_msa_permission(qmi, &qmi->mem_region[i]);
++
++	qmi->msa_perm_granted = false;
++}
++
++/**
++ * ath10k_qmi_reclaim_msa() - hand the MSA regions back to HLOS
++ * @ar: the ath10k device
++ *
++ * Called from the modem's subsystem restart notifier once the modem has
++ * stopped. A crashing modem does not always produce the QMI service removal
++ * that would otherwise trigger the reclaim, and without it the regions stay
++ * assigned to MSS_MSA: the next assignment is then rejected with -EINVAL
++ * because HLOS no longer owns them, and WLAN never comes back.
++ *
++ * This must only run while the modem is down. Taking the regions away from a
++ * running modem strips it of its own memory and kills it outright.
++ */
++void ath10k_qmi_reclaim_msa(struct ath10k *ar)
++{
++	struct ath10k_snoc *ar_snoc = ath10k_snoc_priv(ar);
++	struct ath10k_qmi *qmi = ar_snoc->qmi;
++
++	if (!qmi)
++		return;
++
++	ath10k_qmi_remove_msa_permission(qmi);
+ }
+ 
+ static int ath10k_qmi_msa_mem_info_send_sync_msg(struct ath10k_qmi *qmi)
+@@ -499,7 +553,15 @@ ath10k_qmi_cfg_send_sync_msg(struct ath10k *ar,
+ 
+ 	if (resp.resp.result != QMI_RESULT_SUCCESS_V01) {
+ 		ath10k_err(ar, "config request rejected: %d\n", resp.resp.error);
+-		ret = -EINVAL;
++		/* Report the one rejection the caller can do something about
++		 * separately: the firmware refuses to be configured while it
++		 * still believes WLAN is enabled, and turning it off first
++		 * clears that. Everything else is not recoverable here.
++		 */
++		if (resp.resp.error == QMI_ERR_INCOMPATIBLE_STATE_V01)
++			ret = -EBUSY;
++		else
++			ret = -EINVAL;
+ 		goto out;
+ 	}
+ 
+@@ -523,6 +585,18 @@ int ath10k_qmi_wlan_enable(struct ath10k *ar,
+ 		   mode, config);
+ 
+ 	ret = ath10k_qmi_cfg_send_sync_msg(ar, config, version);
++	if (ret == -EBUSY) {
++		/* WLAN was left enabled in the firmware. That happens when the
++		 * teardown could not complete, for instance when a WMI command
++		 * times out while the interface is being brought down for
++		 * suspend, and it is otherwise permanent: every later attempt
++		 * to bring WLAN up is rejected the same way and the interface
++		 * never returns. Turn it off and configure it again.
++		 */
++		ath10k_warn(ar, "wlan left enabled in firmware, turning it off\n");
++		ath10k_qmi_wlan_disable(ar);
++		ret = ath10k_qmi_cfg_send_sync_msg(ar, config, version);
++	}
+ 	if (ret) {
+ 		ath10k_err(ar, "failed to send qmi config: %d\n", ret);
+ 		return ret;
+diff --git a/drivers/net/wireless/ath/ath10k/qmi.h b/drivers/net/wireless/ath/ath10k/qmi.h
+index 0816eb4e4a18..d46a0db09cfe 100644
+--- a/drivers/net/wireless/ath/ath10k/qmi.h
++++ b/drivers/net/wireless/ath/ath10k/qmi.h
+@@ -107,6 +107,7 @@ struct ath10k_qmi {
+ 	char fw_build_timestamp[MAX_TIMESTAMP_LEN + 1];
+ 	struct ath10k_qmi_cal_data cal_data[MAX_NUM_CAL_V01];
+ 	bool msa_fixed_perm;
++	bool msa_perm_granted;
+ 	bool no_msa_ready_indicator;
+ 	enum ath10k_qmi_state state;
+ };
+@@ -116,6 +117,7 @@ int ath10k_qmi_wlan_enable(struct ath10k *ar,
+ 			   enum wlfw_driver_mode_enum_v01 mode,
+ 			   const char *version);
+ int ath10k_qmi_wlan_disable(struct ath10k *ar);
++void ath10k_qmi_reclaim_msa(struct ath10k *ar);
+ int ath10k_qmi_init(struct ath10k *ar, u32 msa_size);
+ int ath10k_qmi_deinit(struct ath10k *ar);
+ int ath10k_qmi_set_fw_log_mode(struct ath10k *ar, u8 fw_log_mode);
+diff --git a/drivers/net/wireless/ath/ath10k/snoc.c b/drivers/net/wireless/ath/ath10k/snoc.c
+index f0713bd36173..82d2b1659d86 100644
+--- a/drivers/net/wireless/ath/ath10k/snoc.c
++++ b/drivers/net/wireless/ath/ath10k/snoc.c
+@@ -1516,6 +1516,13 @@ static int ath10k_snoc_modem_notify(struct notifier_block *nb, unsigned long act
+ 
+ 	case QCOM_SSR_AFTER_SHUTDOWN:
+ 		ath10k_dbg(ar, ATH10K_DBG_SNOC, "received modem offline event\n");
++		/* The modem is down, so this is the one moment where the MSA
++		 * regions can be taken back safely. A crash does not reliably
++		 * produce the QMI service removal that normally reclaims them,
++		 * and leaving them assigned to MSS_MSA makes the next
++		 * assignment fail with -EINVAL, with WLAN down until reboot.
++		 */
++		ath10k_qmi_reclaim_msa(ar);
+ 		break;
+ 
+ 	default:
+@@ -1823,6 +1830,17 @@ static int ath10k_snoc_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto err_qmi_deinit;
+ 
++	/* ath10k_snoc_hif_suspend() and its resume counterpart refuse to run
++	 * unless the device may wake the system, and nothing ever declares
++	 * that it can, so they always return -EPERM. WoWLAN is therefore
++	 * unusable however it is configured, and mac80211 falls back to
++	 * tearing the connection down on every suspend. The wake interrupt
++	 * those handlers arm is one of the copy engine interrupts requested
++	 * above, so the capability is real and only the declaration is
++	 * missing.
++	 */
++	device_init_wakeup(&pdev->dev, true);
++
+ 	ath10k_dbg(ar, ATH10K_DBG_SNOC, "snoc probe\n");
+ 
+ 	return 0;
+@@ -1871,6 +1889,8 @@ static void ath10k_snoc_remove(struct platform_device *pdev)
+ 
+ 	ath10k_dbg(ar, ATH10K_DBG_SNOC, "snoc remove\n");
+ 
++	device_init_wakeup(&pdev->dev, false);
++
+ 	reinit_completion(&ar->driver_recovery);
+ 
+ 	if (test_bit(ATH10K_SNOC_FLAG_RECOVERY, &ar_snoc->flags))
+diff --git a/drivers/remoteproc/qcom_q6v5_pas.c b/drivers/remoteproc/qcom_q6v5_pas.c
+index 02e29171cbbe..4655a4786d71 100644
+--- a/drivers/remoteproc/qcom_q6v5_pas.c
++++ b/drivers/remoteproc/qcom_q6v5_pas.c
+@@ -75,6 +75,7 @@ struct qcom_pas {
+ 	struct device *proxy_pds[3];
+ 
+ 	int proxy_pd_count;
++	bool proxy_pds_held;
+ 
+ 	const char *dtb_firmware_name;
+ 	int pas_id;
+@@ -164,6 +165,8 @@ static int qcom_pas_pds_enable(struct qcom_pas *pas, struct device **pds,
+ 		}
+ 	}
+ 
++	pas->proxy_pds_held = true;
++
+ 	return 0;
+ 
+ unroll_pd_votes:
+@@ -180,6 +183,11 @@ static void qcom_pas_pds_disable(struct qcom_pas *pas, struct device **pds,
+ {
+ 	int i;
+ 
++	if (!pas->proxy_pds_held)
++		return;
++
++	pas->proxy_pds_held = false;
++
+ 	for (i = 0; i < pd_count; i++) {
+ 		dev_pm_genpd_set_performance_state(pds[i], 0);
+ 		pm_runtime_put(pds[i]);
+@@ -373,7 +381,8 @@ static void qcom_pas_handover(struct qcom_q6v5 *q6v5)
+ 		regulator_disable(pas->cx_supply);
+ 	clk_disable_unprepare(pas->aggre2_clk);
+ 	clk_disable_unprepare(pas->xo);
+-	qcom_pas_pds_disable(pas, pas->proxy_pds, pas->proxy_pd_count);
++
++	/* Keep proxy power domains voted until the remote processor stops. */
+ }
+ 
+ static int qcom_pas_stop(struct rproc *rproc)
+@@ -402,6 +411,7 @@ static int qcom_pas_stop(struct rproc *rproc)
+ 	handover = qcom_q6v5_unprepare(&pas->q6v5);
+ 	if (handover)
+ 		qcom_pas_handover(&pas->q6v5);
++	qcom_pas_pds_disable(pas, pas->proxy_pds, pas->proxy_pd_count);
+ 
+ 	if (pas->smem_host_id)
+ 		ret = qcom_smem_bust_hwspin_lock_by_host(pas->smem_host_id);
+diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig
+index 840b0ae42b4e..ea313d353294 100644
+--- a/sound/soc/codecs/Kconfig
++++ b/sound/soc/codecs/Kconfig
+@@ -2102,6 +2102,15 @@ config SND_SOC_TFA9872
+ 	depends on I2C
+ 	select REGMAP_I2C
+ 
++config SND_SOC_TFA9874
++	tristate "NXP TFA9874 speaker amplifier"
++	depends on I2C
++	select REGMAP_I2C
++	help
++	  Enable the NXP TFA9874 speaker amplifiers used by the OnePlus 7T Pro.
++	  The codec programs the board's fixed TDM profile and keeps the output
++	  muted unless an active playback stream has stable clocks.
++
+ config SND_SOC_TFA9879
+ 	tristate "NXP Semiconductors TFA9879 amplifier"
+ 	depends on I2C
+diff --git a/sound/soc/codecs/Makefile b/sound/soc/codecs/Makefile
+index 3a476bb10351..75de98d29f08 100644
+--- a/sound/soc/codecs/Makefile
++++ b/sound/soc/codecs/Makefile
+@@ -315,6 +315,7 @@ snd-soc-tas2781-comlib-i2c-y := tas2781-comlib-i2c.o
+ snd-soc-tas2781-fmwlib-y := tas2781-fmwlib.o
+ snd-soc-tas2781-i2c-y := tas2781-i2c.o
+ snd-soc-tfa9872-y := tfa9872.o
++snd-soc-tfa9874-y := tfa9874.o
+ snd-soc-tfa9879-y := tfa9879.o
+ snd-soc-tfa989x-y := tfa989x.o
+ snd-soc-tlv320adc3xxx-y := tlv320adc3xxx.o
+@@ -738,6 +739,7 @@ obj-$(CONFIG_SND_SOC_TAS6424)	+= snd-soc-tas6424.o
+ obj-$(CONFIG_SND_SOC_TDA7419)	+= snd-soc-tda7419.o
+ obj-$(CONFIG_SND_SOC_TAS2770) += snd-soc-tas2770.o
+ obj-$(CONFIG_SND_SOC_TFA9872)	+= snd-soc-tfa9872.o
++obj-$(CONFIG_SND_SOC_TFA9874)	+= snd-soc-tfa9874.o
+ obj-$(CONFIG_SND_SOC_TFA9879)	+= snd-soc-tfa9879.o
+ obj-$(CONFIG_SND_SOC_TFA989X)	+= snd-soc-tfa989x.o
+ obj-$(CONFIG_SND_SOC_TLV320ADC3XXX)	+= snd-soc-tlv320adc3xxx.o
+diff --git a/sound/soc/codecs/tfa9874.c b/sound/soc/codecs/tfa9874.c
+new file mode 100644
+index 000000000000..eb6db521406e
+--- /dev/null
++++ b/sound/soc/codecs/tfa9874.c
+@@ -0,0 +1,532 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Minimal NXP TFA9874 codec support for the OnePlus 7T Pro.
++ *
++ * The device has no internal audio DSP.  These settings reproduce the
++ * hardware and speaker profile from the OxygenOS tfa98xx container, while
++ * external Qualcomm ADSP speaker protection remains a separate concern.
++ */
++
++#include <linux/bitops.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/iopoll.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/regmap.h>
++#include <sound/soc.h>
++
++#define TFA9874_SYSTEM_CONTROL		0x00
++#define TFA9874_MANAGER_CONTROL		0x01
++#define TFA9874_AUDIO_CONTROL		0x02
++#define TFA9874_REVISION_REG		0x03
++#define TFA9874_STATUS_FLAGS0		0x10
++#define TFA9874_STATUS_FLAGS1		0x11
++#define TFA9874_STATUS_FLAGS3		0x13
++#define TFA9874_BATTERY_VOLTAGE		0x15
++#define TFA9874_TEMPERATURE		0x16
++#define TFA9874_VDDP_VOLTAGE		0x17
++#define TFA9874_TDM_CONFIG0		0x20
++#define TFA9874_REVISION_0C74		0x0c74
++
++#define TFA9874_PWDN			BIT(0)
++#define TFA9874_AMPE			BIT(3)
++#define TFA9874_DCA			BIT(4)
++#define TFA9874_MANSCONF			BIT(2)
++#define TFA9874_TDME			BIT(4)
++#define TFA9874_PLLS			BIT(6)
++#define TFA9874_CLKS			BIT(7)
++
++/* Field encoding used by the NXP container: register, shift, width - 1. */
++#define TFA9874_FIELD(reg, shift, width)	(((reg) << 8) | ((shift) << 4) | ((width) - 1))
++
++struct tfa9874_field_value {
++	u16 field;
++	u16 value;
++};
++
++struct tfa9874_reg_value {
++	u8 reg;
++	u16 value;
++};
++
++struct tfa9874 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct mutex lock;
++	u8 slot;
++	bool configured;
++	bool active;
++};
++
++static const struct tfa9874_reg_value tfa9874_0c74_optimal[] = {
++	{ 0x02, 0x22c8 },
++	{ 0x52, 0x57dc },
++	{ 0x53, 0x003e },
++	{ 0x56, 0x0400 },
++	{ 0x61, 0x0110 },
++	{ 0x6f, 0x00a5 },
++	{ 0x70, 0x07f8 },
++	{ 0x73, 0x0047 },
++	{ 0x74, 0x5098 },
++	{ 0x75, 0x8d28 },
++	{ 0x80, 0x0000 },
++	{ 0x83, 0x0799 },
++	{ 0x84, 0x0081 },
++};
++
++/* Device-common values from OxygenOS tfa98xx.cnt. */
++static const struct tfa9874_field_value tfa9874_device_fields[] = {
++	{ TFA9874_FIELD(0x20, 12, 4), 0x2 },	/* TDMNBCK */
++	{ TFA9874_FIELD(0x21, 4, 5), 0x1f },	/* TDMSLLN */
++	{ TFA9874_FIELD(0x22, 2, 5), 0x1f },	/* TDMSSIZE */
++	{ TFA9874_FIELD(0x23, 3, 1), 0x1 },	/* TDMCSE */
++	{ TFA9874_FIELD(0x23, 4, 1), 0x0 },	/* TDMVSE */
++	{ TFA9874_FIELD(0x68, 0, 3), 0x3 },	/* TDMSRCMAP */
++	{ TFA9874_FIELD(0x04, 0, 2), 0x1 },	/* REFCKEXT */
++	{ TFA9874_FIELD(0x23, 1, 1), 0x1 },	/* TDMDCE */
++	{ TFA9874_FIELD(0x61, 6, 4), 0x4 },	/* TDMSPKG */
++	{ TFA9874_FIELD(0x61, 2, 4), 0xf },	/* TDMDCG */
++	{ TFA9874_FIELD(0x68, 3, 2), 0x1 },	/* TDMSRCAS */
++	{ TFA9874_FIELD(0x68, 5, 2), 0x2 },	/* TDMSRCBS */
++	{ TFA9874_FIELD(0x02, 5, 6), 0x16 },	/* FRACTDEL */
++	{ TFA9874_FIELD(0x52, 5, 8), 0xbe },	/* AMPGAIN */
++	{ TFA9874_FIELD(0x53, 5, 1), 0x1 },
++	{ TFA9874_FIELD(0x64, 14, 2), 0x2 },	/* LPM1MODE */
++	{ TFA9874_FIELD(0x56, 9, 1), 0x0 },
++	{ TFA9874_FIELD(0x6f, 0, 3), 0x5 },	/* DELCURCOMP */
++	{ TFA9874_FIELD(0x6f, 7, 3), 0x1 },	/* LVLCLPPWM */
++	{ TFA9874_FIELD(0x70, 7, 2), 0x3 },	/* DCCV */
++	{ TFA9874_FIELD(0x74, 3, 1), 0x1 },	/* DCTRACK */
++	{ TFA9874_FIELD(0x74, 9, 5), 0x8 },	/* DCHOLD */
++	{ TFA9874_FIELD(0x75, 15, 1), 0x1 },	/* DCTRIPHYSTE */
++	{ TFA9874_FIELD(0x74, 15, 1), 0x0 },
++	{ TFA9874_FIELD(0x80, 0, 2), 0x0 },
++	{ TFA9874_FIELD(0x83, 0, 6), 0x19 },
++	{ TFA9874_FIELD(0x83, 6, 5), 0x1e },
++	{ TFA9874_FIELD(0x84, 5, 4), 0x4 },
++	{ TFA9874_FIELD(0x51, 5, 1), 0x0 },	/* HPFBYP */
++	{ TFA9874_FIELD(0x58, 4, 5), 0x1 },
++	{ TFA9874_FIELD(0x6f, 5, 1), 0x1 },	/* ENCURCOMP */
++	{ TFA9874_FIELD(0x85, 1, 1), 0x1 },
++	{ TFA9874_FIELD(0x85, 3, 1), 0x0 },
++	{ TFA9874_FIELD(0x85, 4, 1), 0x0 },
++	{ TFA9874_FIELD(0x88, 0, 2), 0x2 },
++	{ TFA9874_FIELD(0x84, 4, 1), 0x0 },
++	{ TFA9874_FIELD(0xc4, 13, 1), 0x0 },
++	{ TFA9874_FIELD(0xb0, 5, 1), 0x0 },
++	{ TFA9874_FIELD(0x74, 4, 5), 0xa },	/* DCTRIP */
++	{ TFA9874_FIELD(0x75, 3, 5), 0x5 },	/* DCTRIP2 */
++	{ TFA9874_FIELD(0x75, 8, 5), 0x10 },	/* DCTRIPT */
++	{ TFA9874_FIELD(0x76, 3, 6), 0x1e },	/* DCVOF */
++	{ TFA9874_FIELD(0x76, 9, 6), 0x3f },	/* DCVOS */
++	{ TFA9874_FIELD(0x02, 0, 4), 0x8 },	/* AUDFS: 48 kHz */
++	{ TFA9874_FIELD(0x02, 4, 1), 0x0 },	/* INPLEV */
++	{ TFA9874_FIELD(0x62, 14, 2), 0x0 },	/* LNMODE */
++};
++
++static bool tfa9874_writeable_reg(struct device *dev, unsigned int reg)
++{
++	switch (reg) {
++	case 0x00 ... 0x02:
++	case 0x04:
++	case 0x0f:
++	case 0x20 ... 0x23:
++	case 0x26 ... 0x27:
++	case 0x51 ... 0x53:
++	case 0x56:
++	case 0x58:
++	case 0x61 ... 0x62:
++	case 0x64:
++	case 0x68:
++	case 0x6f ... 0x70:
++	case 0x73 ... 0x76:
++	case 0x80:
++	case 0x83 ... 0x85:
++	case 0x88:
++	case 0xa0 ... 0xa1:
++	case 0xb0:
++	case 0xc4:
++		return true;
++	default:
++		return false;
++	}
++}
++
++static bool tfa9874_readable_reg(struct device *dev, unsigned int reg)
++{
++	if (tfa9874_writeable_reg(dev, reg))
++		return true;
++
++	switch (reg) {
++	case TFA9874_REVISION_REG:
++	case TFA9874_STATUS_FLAGS0 ... TFA9874_STATUS_FLAGS1:
++	case TFA9874_STATUS_FLAGS3:
++	case TFA9874_BATTERY_VOLTAGE ... TFA9874_VDDP_VOLTAGE:
++	case 0xfb:
++		return true;
++	default:
++		return false;
++	}
++}
++
++static const struct regmap_config tfa9874_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 16,
++	.val_format_endian = REGMAP_ENDIAN_BIG,
++	.max_register = 0xfb,
++	.readable_reg = tfa9874_readable_reg,
++	.writeable_reg = tfa9874_writeable_reg,
++	.cache_type = REGCACHE_NONE,
++};
++
++static int tfa9874_update_field(struct tfa9874 *tfa, u16 field, u16 value)
++{
++	u8 reg = field >> 8;
++	u8 shift = (field >> 4) & 0xf;
++	u8 width = (field & 0xf) + 1;
++	u16 mask = GENMASK(shift + width - 1, shift);
++
++	return regmap_update_bits(tfa->regmap, reg, mask, value << shift);
++}
++
++static int tfa9874_safe_off(struct tfa9874 *tfa)
++{
++	int ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_AMPE | TFA9874_DCA, 0);
++	if (ret)
++		return ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_PWDN, TFA9874_PWDN);
++	if (!ret)
++		tfa->active = false;
++
++	return ret;
++}
++
++static int tfa9874_configure(struct tfa9874 *tfa)
++{
++	unsigned int hidden_key;
++	unsigned int i;
++	int ret;
++
++	if (tfa->configured)
++		return 0;
++
++	ret = tfa9874_safe_off(tfa);
++	if (ret)
++		return ret;
++
++	/* Exact 0x0c74 unlock and optimal-settings sequence from OxygenOS. */
++	ret = regmap_write(tfa->regmap, 0x0f, 0x5a6b);
++	if (ret)
++		return ret;
++	ret = regmap_read(tfa->regmap, 0xfb, &hidden_key);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa0, hidden_key ^ 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa1, 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0x0f, 0x0000);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < ARRAY_SIZE(tfa9874_0c74_optimal); i++) {
++		ret = regmap_write(tfa->regmap, tfa9874_0c74_optimal[i].reg,
++				   tfa9874_0c74_optimal[i].value);
++		if (ret)
++			return ret;
++	}
++
++	/* The production container repeats these three key writes. */
++	ret = regmap_write(tfa->regmap, 0x0f, 0x5a6b);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa1, 0x005a);
++	if (ret)
++		return ret;
++	ret = regmap_write(tfa->regmap, 0xa0, 0x005a);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < ARRAY_SIZE(tfa9874_device_fields); i++) {
++		ret = tfa9874_update_field(tfa, tfa9874_device_fields[i].field,
++					   tfa9874_device_fields[i].value);
++		if (ret)
++			return ret;
++	}
++
++	/* Stereo slot and current-limit values differ between the two chips. */
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 0, 4), tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 4, 4),
++				    !tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x26, 12, 4),
++				    tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x27, 0, 4),
++				    !tfa->slot);
++	if (ret)
++		return ret;
++	ret = tfa9874_update_field(tfa, TFA9874_FIELD(0x70, 3, 4),
++				    tfa->slot ? 0xa : 0xb);
++	if (ret)
++		return ret;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_TDM_CONFIG0,
++				 TFA9874_TDME, TFA9874_TDME);
++	if (ret)
++		return ret;
++
++	ret = tfa9874_safe_off(tfa);
++	if (ret)
++		return ret;
++
++	tfa->configured = true;
++	dev_info(tfa->dev, "OxygenOS speaker profile prepared on TDM slot %u; output muted\n",
++		 tfa->slot);
++
++	return 0;
++}
++
++static void tfa9874_log_status(struct tfa9874 *tfa, const char *stage)
++{
++	unsigned int status0, status1, status3, temp;
++	int ret;
++
++	ret = regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS0, &status0);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS1, &status1);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS3, &status3);
++	ret |= regmap_read(tfa->regmap, TFA9874_TEMPERATURE, &temp);
++	if (ret)
++		dev_warn(tfa->dev, "%s status read failed: %d\n", stage, ret);
++	else
++		dev_info(tfa->dev,
++			 "%s status0=%04x status1=%04x status3=%04x temp=%04x\n",
++			 stage, status0, status1, status3, temp);
++}
++
++static int tfa9874_startup(struct snd_pcm_substream *substream,
++			   struct snd_soc_dai *dai)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++	int ret;
++
++	mutex_lock(&tfa->lock);
++	ret = tfa9874_configure(tfa);
++	mutex_unlock(&tfa->lock);
++
++	return ret;
++}
++
++static int tfa9874_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++	unsigned int status;
++	int ret = 0;
++
++	if (stream != SNDRV_PCM_STREAM_PLAYBACK)
++		return 0;
++
++	mutex_lock(&tfa->lock);
++	if (mute) {
++		if (tfa->active)
++			tfa9874_log_status(tfa, "pre-mute");
++		ret = tfa9874_safe_off(tfa);
++		goto out;
++	}
++
++	ret = tfa9874_configure(tfa);
++	if (ret)
++		goto out;
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_MANAGER_CONTROL,
++				 TFA9874_MANSCONF, TFA9874_MANSCONF);
++	if (ret)
++		goto fail_off;
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_PWDN | TFA9874_DCA | TFA9874_AMPE,
++				 TFA9874_DCA);
++	if (ret)
++		goto fail_off;
++
++	ret = regmap_read_poll_timeout(tfa->regmap, TFA9874_STATUS_FLAGS1,
++				       status, (status & (TFA9874_PLLS | TFA9874_CLKS)) ==
++				       (TFA9874_PLLS | TFA9874_CLKS), 500, 20000);
++	if (ret) {
++		dev_err(tfa->dev, "audio clocks did not become stable (status1=%04x)\n",
++			status);
++		goto fail_off;
++	}
++
++	ret = regmap_update_bits(tfa->regmap, TFA9874_SYSTEM_CONTROL,
++				 TFA9874_AMPE, TFA9874_AMPE);
++	if (ret)
++		goto fail_off;
++
++	usleep_range(1000, 1500);
++	tfa->active = true;
++	tfa9874_log_status(tfa, "unmuted");
++	goto out;
++
++fail_off:
++	tfa9874_safe_off(tfa);
++out:
++	mutex_unlock(&tfa->lock);
++	return ret;
++}
++
++static void tfa9874_shutdown(struct snd_pcm_substream *substream,
++			     struct snd_soc_dai *dai)
++{
++	struct tfa9874 *tfa = snd_soc_component_get_drvdata(dai->component);
++
++	mutex_lock(&tfa->lock);
++	tfa9874_safe_off(tfa);
++	mutex_unlock(&tfa->lock);
++}
++
++static const struct snd_soc_dai_ops tfa9874_dai_ops = {
++	.startup = tfa9874_startup,
++	.shutdown = tfa9874_shutdown,
++	.mute_stream = tfa9874_mute_stream,
++	.no_capture_mute = 1,
++};
++
++static struct snd_soc_dai_driver tfa9874_dai = {
++	.name = "tfa9874-aif",
++	.playback = {
++		.stream_name = "Speaker Playback",
++		.channels_min = 2,
++		.channels_max = 2,
++		.rates = SNDRV_PCM_RATE_48000,
++		.formats = SNDRV_PCM_FMTBIT_S24_LE,
++	},
++	.ops = &tfa9874_dai_ops,
++};
++
++static int tfa9874_component_probe(struct snd_soc_component *component)
++{
++	snd_soc_component_set_drvdata(component, dev_get_drvdata(component->dev));
++	return 0;
++}
++
++static const struct snd_soc_component_driver tfa9874_component_driver = {
++	.name = "tfa9874",
++	.probe = tfa9874_component_probe,
++	.endianness = 1,
++};
++
++static ssize_t diagnostics_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct tfa9874 *tfa = dev_get_drvdata(dev);
++	unsigned int system, status0, status1, status3, battery, temp, vddp;
++	int ret;
++
++	mutex_lock(&tfa->lock);
++	ret = regmap_read(tfa->regmap, TFA9874_SYSTEM_CONTROL, &system);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS0, &status0);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS1, &status1);
++	ret |= regmap_read(tfa->regmap, TFA9874_STATUS_FLAGS3, &status3);
++	ret |= regmap_read(tfa->regmap, TFA9874_BATTERY_VOLTAGE, &battery);
++	ret |= regmap_read(tfa->regmap, TFA9874_TEMPERATURE, &temp);
++	ret |= regmap_read(tfa->regmap, TFA9874_VDDP_VOLTAGE, &vddp);
++	mutex_unlock(&tfa->lock);
++	if (ret)
++		return ret;
++
++	return sysfs_emit(buf,
++		"slot=%u configured=%u active=%u system=%04x status0=%04x status1=%04x status3=%04x battery=%04x temp=%04x vddp=%04x\n",
++		tfa->slot, tfa->configured, tfa->active, system, status0,
++		status1, status3, battery, temp, vddp);
++}
++static DEVICE_ATTR_RO(diagnostics);
++
++static struct attribute *tfa9874_attrs[] = {
++	&dev_attr_diagnostics.attr,
++	NULL,
++};
++static const struct attribute_group tfa9874_group = {
++	.attrs = tfa9874_attrs,
++};
++
++static int tfa9874_i2c_probe(struct i2c_client *client)
++{
++	struct tfa9874 *tfa;
++	unsigned int revision;
++	int ret;
++
++	if (client->addr != 0x34 && client->addr != 0x35)
++		return dev_err_probe(&client->dev, -EINVAL,
++				     "unsupported I2C address 0x%02x\n", client->addr);
++
++	tfa = devm_kzalloc(&client->dev, sizeof(*tfa), GFP_KERNEL);
++	if (!tfa)
++		return -ENOMEM;
++
++	tfa->dev = &client->dev;
++	tfa->slot = client->addr == 0x35;
++	mutex_init(&tfa->lock);
++	tfa->regmap = devm_regmap_init_i2c(client, &tfa9874_regmap_config);
++	if (IS_ERR(tfa->regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(tfa->regmap),
++				     "failed to allocate register map\n");
++
++	ret = regmap_read(tfa->regmap, TFA9874_REVISION_REG, &revision);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to read silicon revision\n");
++	if (revision != TFA9874_REVISION_0C74)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unsupported silicon revision 0x%04x\n", revision);
++
++	i2c_set_clientdata(client, tfa);
++	ret = devm_device_add_group(&client->dev, &tfa9874_group);
++	if (ret)
++		return ret;
++
++	dev_info(&client->dev,
++		 "TFA9874 revision 0x%04x detected on TDM slot %u; amplifier remains disabled\n",
++		 revision, tfa->slot);
++
++	return devm_snd_soc_register_component(&client->dev,
++					       &tfa9874_component_driver,
++					       &tfa9874_dai, 1);
++}
++
++static const struct of_device_id tfa9874_of_match[] = {
++	{ .compatible = "nxp,tfa9874" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, tfa9874_of_match);
++
++static const struct i2c_device_id tfa9874_i2c_id[] = {
++	{ "tfa9874" },
++	{}
++};
++MODULE_DEVICE_TABLE(i2c, tfa9874_i2c_id);
++
++static struct i2c_driver tfa9874_i2c_driver = {
++	.driver = {
++		.name = "tfa9874",
++		.of_match_table = tfa9874_of_match,
++	},
++	.probe = tfa9874_i2c_probe,
++	.id_table = tfa9874_i2c_id,
++};
++module_i2c_driver(tfa9874_i2c_driver);
++
++MODULE_DESCRIPTION("NXP TFA9874 amplifier codec driver");
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
++MODULE_LICENSE("GPL");
+diff --git a/sound/soc/codecs/wcd934x.c b/sound/soc/codecs/wcd934x.c
+index 1bb7e1dc7e6b..7e718d471e6e 100644
+--- a/sound/soc/codecs/wcd934x.c
++++ b/sound/soc/codecs/wcd934x.c
+@@ -1712,6 +1712,10 @@ static int wcd934x_slim_set_hw_params(struct wcd934x_codec *wcd,
+ 		payload |= 1 << ch->shift;
+ 		cfg->port_mask |= BIT(ch->port);
+ 	}
++	if (!cfg->ch_count) {
++		dev_err(wcd->dev, "Cannot configure a SLIM stream without channels\n");
++		return -EINVAL;
++	}
+ 
+ 	cfg->chs = kcalloc(cfg->ch_count, sizeof(unsigned int), GFP_KERNEL);
+ 	if (!cfg->chs)
+@@ -1877,6 +1881,7 @@ static int wcd934x_trigger(struct snd_pcm_substream *substream, int cmd,
+ 	struct wcd_slim_codec_dai_data *dai_data;
+ 	struct wcd934x_codec *wcd;
+ 	struct slim_stream_config *cfg;
++	int ret;
+ 
+ 	wcd = snd_soc_component_get_drvdata(dai->component);
+ 
+@@ -1887,14 +1892,39 @@ static int wcd934x_trigger(struct snd_pcm_substream *substream, int cmd,
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+ 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+ 		cfg = &dai_data->sconfig;
+-		slim_stream_prepare(dai_data->sruntime, cfg);
+-		slim_stream_enable(dai_data->sruntime);
++		dev_dbg(wcd->dev,
++			"DAI %d SLIM start rate=%u bps=%u channels=%u ports=%#lx\n",
++			dai->id, cfg->rate, cfg->bps, cfg->ch_count,
++			cfg->port_mask);
++		ret = slim_stream_prepare(dai_data->sruntime, cfg);
++		if (ret) {
++			dev_err(wcd->dev, "DAI %d SLIM prepare failed: %d\n",
++				dai->id, ret);
++			return ret;
++		}
++		ret = slim_stream_enable(dai_data->sruntime);
++		if (ret) {
++			dev_err(wcd->dev, "DAI %d SLIM enable failed: %d\n",
++				dai->id, ret);
++			slim_stream_unprepare(dai_data->sruntime);
++			return ret;
++		}
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
+ 	case SNDRV_PCM_TRIGGER_SUSPEND:
+ 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+-		slim_stream_disable(dai_data->sruntime);
+-		slim_stream_unprepare(dai_data->sruntime);
++		ret = slim_stream_disable(dai_data->sruntime);
++		if (ret) {
++			dev_err(wcd->dev, "DAI %d SLIM disable failed: %d\n",
++				dai->id, ret);
++			return ret;
++		}
++		ret = slim_stream_unprepare(dai_data->sruntime);
++		if (ret) {
++			dev_err(wcd->dev, "DAI %d SLIM unprepare failed: %d\n",
++				dai->id, ret);
++			return ret;
++		}
+ 		break;
+ 	default:
+ 		break;
+diff --git a/sound/soc/qcom/qdsp6/q6afe-dai.c b/sound/soc/qcom/qdsp6/q6afe-dai.c
+index 0f47aadaabe1..aa9ca534a81f 100644
+--- a/sound/soc/qcom/qdsp6/q6afe-dai.c
++++ b/sound/soc/qcom/qdsp6/q6afe-dai.c
+@@ -958,7 +958,7 @@ static const struct snd_soc_dapm_widget q6afe_dai_widgets[] = {
+ 						0, SND_SOC_NOPM, 0, 0),
+ 	SND_SOC_DAPM_AIF_OUT("QUIN_TDM_TX_7", NULL,
+ 						0, SND_SOC_NOPM, 0, 0),
+-	SND_SOC_DAPM_AIF_OUT("DISPLAY_PORT_RX", "NULL", 0, SND_SOC_NOPM, 0, 0),
++	SND_SOC_DAPM_AIF_IN("DISPLAY_PORT_RX", NULL, 0, SND_SOC_NOPM, 0, 0),
+ 
+ 	SND_SOC_DAPM_AIF_IN("WSA_CODEC_DMA_RX_0", "NULL",
+ 		0, SND_SOC_NOPM, 0, 0),
+diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
+index 8ad61345bb73..078b2b1f6a42 100644
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -22,6 +22,7 @@
+ #define SLIM_MAX_TX_PORTS 16
+ #define SLIM_MAX_RX_PORTS 13
+ #define WCD934X_DEFAULT_MCLK_RATE	9600000
++#define QUAT_MI2S_BCLK_RATE	3072000
+ 
+ struct sm8150_snd_data {
+ 	struct snd_soc_jack jack;
+@@ -47,6 +48,7 @@ static const struct {
+ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 				     struct snd_pcm_hw_params *params)
+ {
++	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
+ 	struct snd_interval *rate = hw_param_interval(params,
+ 					SNDRV_PCM_HW_PARAM_RATE);
+ 	struct snd_interval *channels = hw_param_interval(params,
+@@ -54,9 +56,17 @@ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 	struct snd_mask *fmt = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
+ 
+ 	rate->min = rate->max = 48000;
+-	channels->min = channels->max = 2;
+ 	snd_mask_none(fmt);
+-	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
++	if (cpu_dai->id >= SLIMBUS_0_TX &&
++	    cpu_dai->id <= SLIMBUS_6_TX && (cpu_dai->id & 1)) {
++		channels->min = 1;
++		channels->max = 1;
++		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
++	} else {
++		channels->min = 2;
++		channels->max = 2;
++		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
++	}
+ 
+ 	return 0;
+ }
+@@ -200,6 +210,8 @@ static int sm8150_snd_hw_params(struct snd_pcm_substream *substream,
+ 	int ret = 0;
+ 
+ 	switch (cpu_dai->id) {
++	case QUATERNARY_MI2S_RX:
++		break;
+ 	case QUATERNARY_TDM_RX_0:
+ 	case QUATERNARY_TDM_TX_0:
+ 		ret = sm8150_tdm_snd_hw_params(substream, params);
+@@ -207,6 +219,8 @@ static int sm8150_snd_hw_params(struct snd_pcm_substream *substream,
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 		ret = sm8150_slim_snd_hw_params(substream, params);
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;
+@@ -260,8 +274,7 @@ static int sm8150_dai_init(struct snd_soc_pcm_runtime *rtd)
+ 
+ 	switch (cpu_dai->id) {
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+-		/* setting up wcd multiple times for slim port is redundant */
+-		if (pdata->slim_port_setup || !link->no_pcm)
++		if (!link->no_pcm)
+ 			return 0;
+ 
+ 		for_each_rtd_codec_dais(rtd, i, codec_dai) {
+@@ -277,6 +290,10 @@ static int sm8150_dai_init(struct snd_soc_pcm_runtime *rtd)
+ 					       WCD934X_DEFAULT_MCLK_RATE,
+ 					       SNDRV_PCM_STREAM_PLAYBACK);
+ 
++			/* the jack belongs to the component, not the link */
++			if (pdata->slim_port_setup)
++				continue;
++
+ 			rval = snd_soc_component_set_jack(codec_dai->component,
+ 							  &pdata->jack, NULL);
+ 			if (rval != 0 && rval != -ENOTSUPP) {
+@@ -306,6 +323,13 @@ static int sm8150_snd_startup(struct snd_pcm_substream *substream)
+ 	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
+ 
+ 	switch (cpu_dai->id) {
++	case QUATERNARY_MI2S_RX:
++		snd_soc_dai_set_sysclk(cpu_dai,
++			Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT,
++			QUAT_MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK);
++		/* The external speaker amplifiers consume BCLK and frame sync. */
++		snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_BP_FP);
++		break;
+ 	case QUATERNARY_TDM_RX_0:
+ 		codec_dai_fmt |= SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_DSP_A;
+ 		if (++(data->quat_tdm_clk_count) == 1) {
+@@ -318,6 +342,8 @@ static int sm8150_snd_startup(struct snd_pcm_substream *substream)
+ 		break;
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;
+@@ -344,6 +370,8 @@ static void sm8150_snd_shutdown(struct snd_pcm_substream *substream)
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 	case QUATERNARY_MI2S_RX:
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;

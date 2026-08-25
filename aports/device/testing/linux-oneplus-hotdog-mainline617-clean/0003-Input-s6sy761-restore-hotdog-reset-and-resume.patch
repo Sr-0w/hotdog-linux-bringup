@@ -1,9 +1,12 @@
-From 400c9d970c9ff1d090e336ab42be41f3874b45bb Mon Sep 17 00:00:00 2001
+From b7339f713c971a3001b5d8d36b3cfdfa98d3872a Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:55:52 +0200
-Subject: [PATCH 3/7] Input: s6sy761: restore hotdog reset and resume
+Subject: [PATCH 03/12] Input: s6sy761: restore hotdog reset and resume
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/input/touchscreen/s6sy761.c | 111 +++++++++++++++++++++++-----
+ 1 file changed, 94 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/input/touchscreen/s6sy761.c b/drivers/input/touchscreen/s6sy761.c
 index e1518a75a51b..5b6c7beebd61 100644
@@ -177,6 +180,3 @@ index e1518a75a51b..5b6c7beebd61 100644
  }
  
  static const struct dev_pm_ops s6sy761_pm_ops = {
--- 
-2.54.0
-

@@ -1,11 +1,11 @@
 # Hotdog Kernel Migration to SM8150 6.17
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ## Immutable source oracle
 
 The complete pre-migration kernel is preserved at commit
-`20099d91f97ced4943bd2ddc78a4cd00b20b1b94` and annotated tag
+`211577f492d791f47b3235796e9f5b2458324330` and annotated tag
 `kernel-clearstaff-403b56c-r181-checkpoint`. Its checkpoint directory records
 the ClearStaff commit, all 153 applied patches in order, one stray unapplied
 patch, package recipe, input and resolved configs, cumulative diff, expected
@@ -40,8 +40,8 @@ it. Diagnostic framebuffer painting, direct-entry pstore markers, camera
 experiments, superseded UFS dumps and other historical scaffolding stay in the
 immutable checkpoint.
 
-The initial tree uses seven focused commits and changes 17 kernel files. Its
-first offline build produced:
+The current tree uses thirteen focused commits and changes 58 kernel files.
+The first seven-commit offline foundation build produced:
 
 | Artifact | SHA256 |
 |---|---|
@@ -56,9 +56,9 @@ The Image is 31,492,608 bytes and carries the validated ABL fields
 modules. The final packaged config uses a distinct
 `6.17.0-sm8150-hotdog-clean` release to prevent module mixing.
 
-## Foundation scope
+## Current scope
 
-The first boot candidate includes only:
+The first boot candidate included:
 
 - direct ABL entry and inherited APSS watchdog handling;
 - Hotdog DT identity and stock-derived memory reservations;
@@ -68,8 +68,11 @@ The first boot candidate includes only:
 - Adreno 640 GPU/GMU;
 - power/volume keys and S6SY761 touch.
 
-Subsystems beyond that list are intentionally deferred. A successful first
-boot must not be interpreted as restoring the full r181 feature matrix.
+The next validated block adds the alert slider, charging policy, Type-C role
+switching, reboot modes, AW8697 haptics and PN553 NFC. The current offline
+block adds IPA 4.1, the hotdog MPSS/ADSP firmware paths, WCN3990 Wi-Fi and
+Bluetooth, WCD9340 audio and both TFA9874 speaker amplifiers. Cameras, popup
+motor and the SLPI/Elliptic path remain deferred.
 
 ## Foundation oracle decisions
 
@@ -98,10 +101,59 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
 - New panel and touch bindings: PASS under direct `dt-doc-validate`.
 - Full DT schema: retains pre-existing SM8150 common-tree warnings for UFS,
   PMIC, APR and RPMh naming; new Hotdog-specific schema findings are addressed.
-- Packaged pmaports build: PASS, strict isolated build, APK SHA256
-  `229373be81468c6c124fa754998200638fabc87a295bb1d8212c09667430fcd9`.
+- Packaged foundation build: PASS through r3. The strict r4 radio/audio build
+  is also PASS, APK SHA256
+  `958d2eb4ab469f8465df9a5e2389fe29b5bc411a45006241ed2529083f3cb438`.
 - Full image assembly/offline image QA: pending.
-- Hardware boot: not run.
+- Hardware boot: PASS for the r2 foundation and r3 haptics tree; the current
+  radio/audio commit has not been booted yet.
 
 The hardware-tested 6.16 package remains the default until all pending gates
 above pass.
+
+## First hardware boots
+
+The first packaged candidate reached ABL but not Linux because the generated
+DTB lacked symbols consumed by the stock DTBO. Preserving overlay symbols with
+`DTC_FLAGS_sm8150-oneplus-hotdog := -@` made the filtered stock overlay apply
+offline and fixed the boot. The r2 candidate then reached a writable rootfs,
+SSH, OpenRC and Plasma on `6.17.0-sm8150-hotdog-clean`. The r3 candidate added
+the missing QUP0 enable and bound `3-005a` to `aw8697-haptics`; alert slider,
+touch, GPU, charger, Type-C, NFC and reboot-mode devices also remained present.
+
+The apparent slow boot is not a storage or early-kernel regression. The r2
+kernel log mounts the root filesystem at 4.282 seconds. It then attempts the
+generic `qcom/sm8150/oneplus7/modem.mdt` path at 6.508 seconds and fails with
+`-ENOENT`. Userspace consequently emits repeated QRTR node-zero errors and
+performs its modem and UIM waits before continuing to networking and the SLPI
+service gate. The r4 radio block replaces that generic path with the hotdog
+firmware, restores IPA and the modem SMP2P contract, and is expected to remove
+the modem portion of that delay. This expectation still requires a staged
+hardware boot; no timeout has been shortened to conceal it.
+
+Evidence for these boots is retained under
+`logs/2026-08-26-sm8150-617-block1-r2/` and
+`logs/2026-08-26-sm8150-617-block1-r3/`. Physical feature tests remain deferred
+until the complete migrated feature set is present.
+
+## Radio and audio hardware gate
+
+The first r4 boot remained black with no framebuffer, USB gadget or SSH. After
+about five minutes the operator pressed Volume Up and Power; that manual key
+sequence exposed `05c6:9008` briefly and initiated the recovery/restart. The
+9008 transition was therefore not spontaneous and must not be described as an
+automatic crashdump recovery. No useful ramoops record survived that failed
+boot.
+
+The following r4 boot reached SSH on the same kernel and rootfs. Its kernel log
+mounted the root filesystem at 4.629 seconds, initialized IPA at 5.354 seconds,
+booted the hotdog ADSP firmware by 5.482 seconds and the hotdog modem firmware
+by 7.479 seconds. WCN3990 completed firmware startup by 13.135 seconds and
+associated as `wlan0` by 21.292 seconds. Runtime enumeration also showed
+`rmnet_ipa0`, a complete modem QRTR service table, ADSP and modem both running,
+and the `OnePlus 7T Pro` SM8150 sound card.
+
+This is a partial hardware gate, not a stable-boot PASS. A further ordinary
+reboot must complete without a manual key sequence before the radio/audio
+block can be promoted. The first black boot remains an unresolved regression
+until that repetition classifies it.

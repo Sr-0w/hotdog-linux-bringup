@@ -1,9 +1,13 @@
-From 3bda90e0c24f086554d8b30ed0a7fa3434dbe367 Mon Sep 17 00:00:00 2001
+From d5a3e128b5629f8772f6efa60447bf8c8b1ca730 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:53:09 +0200
-Subject: [PATCH 1/7] arm64: add bounded hotdog direct-boot contract
+Subject: [PATCH 01/12] arm64: add bounded hotdog direct-boot contract
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/Kconfig.platforms |  9 +++++++++
+ arch/arm64/kernel/head.S     | 20 ++++++++++++++++++++
+ 2 files changed, 29 insertions(+)
 
 diff --git a/arch/arm64/Kconfig.platforms b/arch/arm64/Kconfig.platforms
 index a88f5ad9328c..7ff45e5a1b07 100644
@@ -65,6 +69,3 @@ index ca04b338cb0d..5ae954bcc6cb 100644
  	bl	record_mmu_state
  	bl	preserve_boot_args
  
--- 
-2.54.0
-

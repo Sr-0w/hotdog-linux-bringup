@@ -1,9 +1,19 @@
-From c1b8aff58c2ba5dc428c51e57dfe669a36a189c6 Mon Sep 17 00:00:00 2001
+From a629ce918a194224edcec40da5f24f3fbf902f29 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 23:14:50 +0200
-Subject: [PATCH 7/7] dt-bindings: document hotdog display and touch
+Subject: [PATCH 07/12] dt-bindings: document hotdog display and touch
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../devicetree/bindings/arm/qcom.yaml         |  5 ++
+ .../display/panel/samsung,oneplus-dsc.yaml    | 68 +++++++++++++++++++
+ .../input/touchscreen/samsung,s6sy761.yaml    |  4 ++
+ .../devicetree/bindings/vendor-prefixes.yaml  |  2 +
+ MAINTAINERS                                   |  9 ++-
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  3 +
+ drivers/gpu/drm/panel/Kconfig                 |  3 +-
+ 7 files changed, 92 insertions(+), 2 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
 
 diff --git a/Documentation/devicetree/bindings/arm/qcom.yaml b/Documentation/devicetree/bindings/arm/qcom.yaml
 index ae43b3556580..35c096d9b6c8 100644
@@ -23,7 +33,7 @@ index ae43b3556580..35c096d9b6c8 100644
                - qcom,qrb5165-rb5
 diff --git a/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml b/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
 new file mode 100644
-index 000000000000..6c4ac74e92ea
+index 000000000000..7f5b9a09cf06
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
 @@ -0,0 +1,68 @@
@@ -124,7 +134,7 @@ index 9ec8947dfcad..3708203d9a7c 100644
      description: Open Network Install Environment group
    "^onion,.*":
 diff --git a/MAINTAINERS b/MAINTAINERS
-index dfe7806beeec..d47f9189948b 100644
+index dfe7806beeec..139037a7da87 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
 @@ -18844,6 +18844,13 @@ S:	Maintained
@@ -176,6 +186,3 @@ index ac96d5bf7f9a..8a359c59d7ba 100644
  
  config DRM_PANEL_SEIKO_43WVF1G
  	tristate "Seiko 43WVF1G panel"
--- 
-2.54.0
-

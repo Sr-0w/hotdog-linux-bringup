@@ -1,9 +1,17 @@
-From 899982446cce189b5732268599694aef15e15800 Mon Sep 17 00:00:00 2001
+From 9a02cbf5aa3807f93557563006faf12160130b95 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:10 +0200
-Subject: [PATCH 4/7] drm: restore hotdog DSC panel pipeline
+Subject: [PATCH 04/12] drm: restore hotdog DSC panel pipeline
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c            |  28 +-
+ drivers/gpu/drm/panel/Kconfig                 |  11 +
+ drivers/gpu/drm/panel/Makefile                |   1 +
+ .../gpu/drm/panel/panel-samsung-oneplus-dsc.c | 428 ++++++++++++++++++
+ include/drm/display/drm_dsc.h                 |   6 +
+ 5 files changed, 457 insertions(+), 17 deletions(-)
+ create mode 100644 drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
 
 diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
 index e0de545d4077..ec9b03b90285 100644
@@ -554,6 +562,3 @@ index bbbe7438473d..4205b4c2eb42 100644
  };
  
  /**
--- 
-2.54.0
-
