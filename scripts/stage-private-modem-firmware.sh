@@ -6,10 +6,13 @@ root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 package_rel=device/testing/firmware-oneplus-hotdog-modem-oos10
 package_dir="$root/aports/$package_rel"
 destination="$package_dir/modem-oos10.0.13.mbn"
+mcfg_destination="$package_dir/mcfg-oos10.0.13.tar.gz"
 pmaports_root=${HOTDOG_PMAPORTS_SM8150:-$root/src/postmarketos/pmaports-sm8150}
 expected_source_sha=7920f87d8544d17efbe93ec9d7365190a43016eb9d286b1361de5fc96ca6a7b9
 expected_output_sha=559a517c2d4ca5c22d25e0a9b3383bbf7591a632f688b629a19c3e51e3dba9e5
 expected_output_size=75953080
+expected_mcfg_sha=a81d9d110cd2aa9ecc906ec69c1698aaf4518142f890fa6f6d8e656e498ff1fa
+expected_mcfg_size=1978176
 expected_build=MPSS.HE.1.0.c11.1-00007-SM8150_GEN_PACK-2.320290.2.328393.1
 source_file=${1:-${HOTDOG_MODEM_OOS10_SOURCE:-}}
 pil_squasher=${PIL_SQUASHER:-pil-squasher}
@@ -19,7 +22,7 @@ if [ -z "$source_file" ]; then
 	exit 2
 fi
 
-for command_name in 7z awk grep install mktemp rm sha256sum stat; do
+for command_name in 7z awk cc find grep gzip install mktemp rm sha256sum sort stat tar wc; do
 	command -v "$command_name" >/dev/null 2>&1 || {
 		printf 'Missing command: %s\n' "$command_name" >&2
 		exit 2
@@ -48,6 +51,7 @@ trap 'rm -rf "$work"' EXIT HUP INT TERM
 # has extracted valid files. Validate every required output instead of trusting
 # that final status.
 7z x -y -o"$work" "$source_file" 'image/modem.*' 'verinfo/ver_info.txt' \
+	'image/modem_pr/mcfg/configs/mcfg_sw/*' \
 	>"$work/7z.log" 2>&1 || true
 [ -s "$work/image/modem.mdt" ] || {
 	printf 'OOS10 modem.mdt was not extracted\n' >&2
@@ -59,6 +63,43 @@ trap 'rm -rf "$work"' EXIT HUP INT TERM
 }
 grep -Fq "\"modem\": \"$expected_build\"" "$work/verinfo/ver_info.txt" || {
 	printf 'Unexpected modem build in ver_info.txt\n' >&2
+	exit 4
+}
+
+mcfg_root="$work/image/modem_pr/mcfg/configs/mcfg_sw"
+[ -s "$mcfg_root/mbn_sw.txt" ] || {
+	printf 'OOS10 MCFG software list was not extracted\n' >&2
+	exit 4
+}
+[ "$(find "$mcfg_root" -type f -name mcfg_sw.mbn | wc -l)" -eq 69 ] || {
+	printf 'Unexpected OOS10 MCFG profile count\n' >&2
+	exit 4
+}
+[ "$(find "$mcfg_root" -type f -name mcfg_sw.sig | wc -l)" -eq 69 ] || {
+	printf 'Unexpected OOS10 MCFG signature count\n' >&2
+	exit 4
+}
+
+cc -std=c11 -Wall -Wextra -Werror -O2 \
+	-I "$root/helpers/hotdog-radio" \
+	"$root/helpers/hotdog-radio/hotdog-mbn.c" \
+	"$root/helpers/hotdog-radio/hotdog-mbn-inspect.c" \
+	-o "$work/hotdog-mbn-inspect"
+find "$mcfg_root" -type f -name mcfg_sw.mbn -print | sort | while IFS= read -r profile; do
+	"$work/hotdog-mbn-inspect" "$profile" >/dev/null || {
+		printf 'Invalid MCFG profile: %s\n' "$profile" >&2
+		exit 4
+	}
+done
+"$work/hotdog-mbn-inspect" \
+	"$mcfg_root/generic/eu/proximus/commerci/belgium/mcfg_sw.mbn" \
+	>"$work/proximus.txt"
+grep -Fq 'carrier=Proximus_Belgium' "$work/proximus.txt" || {
+	printf 'OOS10 Proximus profile metadata mismatch\n' >&2
+	exit 4
+}
+grep -Fq 'plmn[0]=206-1' "$work/proximus.txt" || {
+	printf 'OOS10 Proximus PLMN metadata mismatch\n' >&2
 	exit 4
 }
 
@@ -80,15 +121,36 @@ actual_output_sha=$(sha256sum "$work/modem.mbn" | awk '{ print $1 }')
 	exit 5
 }
 
+tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 \
+	--numeric-owner --format=ustar \
+	-C "$work/image/modem_pr/mcfg/configs" -cf - mcfg_sw | \
+	gzip -n -9 >"$work/mcfg-oos10.0.13.tar.gz"
+actual_mcfg_size=$(stat -c %s "$work/mcfg-oos10.0.13.tar.gz")
+actual_mcfg_sha=$(sha256sum "$work/mcfg-oos10.0.13.tar.gz" | awk '{ print $1 }')
+[ "$actual_mcfg_size" -eq "$expected_mcfg_size" ] || {
+	printf 'MCFG archive size mismatch: expected %s, got %s\n' \
+		"$expected_mcfg_size" "$actual_mcfg_size" >&2
+	exit 5
+}
+[ "$actual_mcfg_sha" = "$expected_mcfg_sha" ] || {
+	printf 'MCFG archive SHA256 mismatch: expected %s, got %s\n' \
+		"$expected_mcfg_sha" "$actual_mcfg_sha" >&2
+	exit 5
+}
+
 install -Dm644 "$work/modem.mbn" "$destination"
+install -Dm644 "$work/mcfg-oos10.0.13.tar.gz" "$mcfg_destination"
 printf 'Staged %s\n' "$destination"
+printf 'Staged %s\n' "$mcfg_destination"
 printf 'Source SHA256 %s\n' "$actual_source_sha"
 printf 'Output SHA256 %s\n' "$actual_output_sha"
+printf 'MCFG SHA256 %s\n' "$actual_mcfg_sha"
 
 if [ -d "$pmaports_root/device/testing" ]; then
 	canonical_dir="$pmaports_root/$package_rel"
 	install -Dm644 "$package_dir/APKBUILD" "$canonical_dir/APKBUILD"
 	install -Dm644 "$package_dir/README.md" "$canonical_dir/README.md"
 	install -Dm644 "$destination" "$canonical_dir/modem-oos10.0.13.mbn"
+	install -Dm644 "$mcfg_destination" "$canonical_dir/mcfg-oos10.0.13.tar.gz"
 	printf 'Staged local pmaports package %s\n' "$canonical_dir"
 fi

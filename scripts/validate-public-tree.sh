@@ -563,6 +563,7 @@ validate_hotdog_oos10_modem_contract() {
 	local firmware_dir="aports/device/testing/firmware-oneplus-hotdog-modem-oos10"
 	local firmware_apkbuild="$firmware_dir/APKBUILD"
 	local private_blob="$firmware_dir/modem-oos10.0.13.mbn"
+	local private_mcfg="$firmware_dir/mcfg-oos10.0.13.tar.gz"
 	local stage_helper="scripts/stage-private-modem-firmware.sh"
 	local sim_helper="helpers/hotdog-sim-slot2-check.sh"
 
@@ -580,12 +581,19 @@ validate_hotdog_oos10_modem_contract() {
 		die "OOS10 modem stage helper lacks the output hash gate"
 	grep -q '7920f87d8544d17efbe93ec9d7365190a43016eb9d286b1361de5fc96ca6a7b9' "$stage_helper" ||
 		die "OOS10 modem stage helper lacks the source hash gate"
+	grep -q 'a81d9d110cd2aa9ecc906ec69c1698aaf4518142f890fa6f6d8e656e498ff1fa' "$stage_helper" ||
+		die "OOS10 modem stage helper lacks the MCFG hash gate"
+	grep -q '/usr/share/hotdog-radio/mcfg/mcfg_sw/' "$firmware_apkbuild" ||
+		die "OOS10 modem package does not install the MCFG catalog"
 	grep -q 'expected_modem_sha=559a517c' "$sim_helper" ||
 		die "SIM helper does not attest the OOS10 modem firmware"
 	grep -q 'PIN1 retries are' "$sim_helper" ||
 		die "SIM helper does not fail closed on retry changes"
 	if git ls-files --error-unmatch "$private_blob" >/dev/null 2>&1; then
 		die "private OOS10 modem firmware is tracked by Git"
+	fi
+	if git ls-files --error-unmatch "$private_mcfg" >/dev/null 2>&1; then
+		die "private OOS10 MCFG catalog is tracked by Git"
 	fi
 }
 

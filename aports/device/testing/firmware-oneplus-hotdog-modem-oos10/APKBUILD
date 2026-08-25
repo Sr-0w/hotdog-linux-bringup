@@ -1,6 +1,6 @@
 pkgname=firmware-oneplus-hotdog-modem-oos10
 pkgver=1.0.11.1.7
-pkgrel=1
+pkgrel=2
 pkgdesc="OxygenOS 10 modem firmware for OnePlus 7T Pro"
 url="https://www.oneplus.com/global/support/softwareupgrade"
 arch="aarch64"
@@ -12,6 +12,7 @@ replaces="firmware-oneplus-hotdog-modem"
 
 source="
 	modem-oos10.0.13.mbn
+	mcfg-oos10.0.13.tar.gz
 	README.md
 	"
 builddir="$srcdir"
@@ -19,9 +20,15 @@ builddir="$srcdir"
 package() {
 	install -Dm644 "$srcdir/modem-oos10.0.13.mbn" \
 		"$pkgdir/lib/firmware/qcom/sm8150/oneplus/hotdog/modem.mbn"
+	find "$srcdir/mcfg_sw" -type f -print | while IFS= read -r file; do
+		relative=${file#"$srcdir/mcfg_sw/"}
+		install -Dm644 "$file" \
+			"$pkgdir/usr/share/hotdog-radio/mcfg/mcfg_sw/$relative"
+	done
 }
 
 sha512sums="
 9341c27ca2727f7b133fc737e90c3b3c2ee855fd05ed48f9c096615f3058f66243f0f77db6e22681262e29dfd449eb425ab1b4603d622d0056950a8e2b0d0f8c  modem-oos10.0.13.mbn
-59d6b7a11a648bb1131059107e7e48595d1d26f778f47e3b5b276761e0886128bfd900d03770f1a5595736911cd8ce64a049353a3ebdf479cb1f25d51230b98a  README.md
+18cd9eed720749249d9c11c1763ad3281f6e925a4b184560dbd6e9582159968024ecddaf615b8eae9758c61728129e28e5874017bb11d09b4b0d500b1de1318e  mcfg-oos10.0.13.tar.gz
+0dee8000e5ccdd5779b4e170c33227ea3e3a10452c3efc060125fd5bb0b25f39a98cca586ffe0a9c58c769a886cd38b7faa04de3939fc5b348d0078555e1f168  README.md
 "
