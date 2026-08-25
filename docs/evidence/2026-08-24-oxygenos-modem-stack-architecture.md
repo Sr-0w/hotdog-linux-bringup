@@ -177,7 +177,12 @@ deleted, and the public clear API refuses active or blocked ownership.
 
 The complete target-only path was compiled against the postmarketOS aarch64
 libqmi 1.39 headers with `-Wall -Wextra -Werror`. The resulting session object
-has SHA-256 `fd863c7c8e497fad1208be3690106ebeab0888daa7cf7e82172e71ec40631267`.
+has SHA-256 `7a2a6af65ecf530964c80af56ea467722e2a37c63a5a56d98a0c291401bc506e`.
+Local configuration is owned independently from the kernel link. Normal stop,
+configuration failure and SSR all require an acknowledged unconfigure callback
+before packet handles, CIDs or the rmnet link may be released. A partial local
+configuration is treated as owned conservatively; failed rollback becomes a
+blocked residue instead of leaving an invisible policy rule behind.
 
 The separate `hotdog-ims-bearer-state` file is the boot-bound handoff to other
 services. For each subscription it distinguishes absent, discovery, operator

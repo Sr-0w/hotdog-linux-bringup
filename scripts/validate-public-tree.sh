@@ -759,6 +759,9 @@ validate_hotdog_radio_state_contract() {
 	grep -q 'HOTDOG_IMS_EXECUTOR_ACTION_RELEASE_CLIENTS' \
 		"$source_dir/hotdog-ims-executor.c" ||
 		die "IMS executor does not release WDS clients during rollback"
+	grep -q 'HOTDOG_IMS_EXECUTOR_ACTION_UNCONFIGURE_LINK' \
+		"$source_dir/hotdog-ims-executor.c" ||
+		die "IMS executor does not rollback local IP configuration"
 	grep -q 'HOTDOG_IMS_BEARER_BLOCKED' "$source_dir/hotdog-ims-bearer-state.c" ||
 		die "IMS bearer runtime cannot expose unresolved ownership"
 	grep -q 'O_NOFOLLOW' "$source_dir/hotdog-ims-bearer-state.c" ||

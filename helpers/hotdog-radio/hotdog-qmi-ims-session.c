@@ -62,7 +62,8 @@ static void fail(struct hotdog_qmi_ims_session *session, unsigned int error)
 
 	if (!error)
 		error = EIO;
-	if (session->executor.phase == HOTDOG_IMS_EXECUTOR_STOPPING ||
+	if (session->executor.phase == HOTDOG_IMS_EXECUTOR_UNCONFIGURING ||
+	    session->executor.phase == HOTDOG_IMS_EXECUTOR_STOPPING ||
 	    session->executor.phase == HOTDOG_IMS_EXECUTOR_RELEASING_CLIENTS ||
 	    session->executor.phase == HOTDOG_IMS_EXECUTOR_DELETING_LINK) {
 		cleanup_blocked(session, error);
@@ -485,6 +486,9 @@ static void dispatch(struct hotdog_qmi_ims_session *session,
 	case HOTDOG_IMS_EXECUTOR_ACTION_CONFIGURE_LINK:
 		notify(session, HOTDOG_QMI_IMS_SESSION_CONFIGURE_REQUIRED, 0);
 		return;
+	case HOTDOG_IMS_EXECUTOR_ACTION_UNCONFIGURE_LINK:
+		notify(session, HOTDOG_QMI_IMS_SESSION_UNCONFIGURE_REQUIRED, 0);
+		return;
 	case HOTDOG_IMS_EXECUTOR_ACTION_STOP_LEG: {
 		g_autoptr(QmiMessageWdsStopNetworkInput) input = NULL;
 
@@ -587,6 +591,33 @@ int hotdog_qmi_ims_session_configured(struct hotdog_qmi_ims_session *session)
 	if (!session || !session->initialized)
 		return -EINVAL;
 	result = hotdog_ims_executor_configured(&session->executor, &operation);
+	if (!result)
+		dispatch(session, &operation);
+	return result;
+}
+
+int hotdog_qmi_ims_session_configuration_failed(
+	struct hotdog_qmi_ims_session *session, unsigned int error)
+{
+	if (!session || !session->initialized || !error ||
+	    session->executor.phase != HOTDOG_IMS_EXECUTOR_CONFIGURING)
+		return -EINVAL;
+#if QMI_CHECK_VERSION(1, 37, 0)
+	fail(session, error);
+	return 0;
+#else
+	return -EOPNOTSUPP;
+#endif
+}
+
+int hotdog_qmi_ims_session_unconfigured(struct hotdog_qmi_ims_session *session)
+{
+	struct hotdog_ims_executor_operation operation;
+	int result;
+
+	if (!session || !session->initialized)
+		return -EINVAL;
+	result = hotdog_ims_executor_unconfigured(&session->executor, &operation);
 	if (!result)
 		dispatch(session, &operation);
 	return result;

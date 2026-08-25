@@ -12,6 +12,7 @@
 
 enum hotdog_qmi_ims_session_event {
 	HOTDOG_QMI_IMS_SESSION_CONFIGURE_REQUIRED,
+	HOTDOG_QMI_IMS_SESSION_UNCONFIGURE_REQUIRED,
 	HOTDOG_QMI_IMS_SESSION_UP,
 	HOTDOG_QMI_IMS_SESSION_DOWN,
 	HOTDOG_QMI_IMS_SESSION_BLOCKED,
@@ -52,6 +53,9 @@ int hotdog_qmi_ims_session_start(
 	const struct hotdog_qmi_ims_session_config *config,
 	hotdog_qmi_ims_session_callback callback, void *user_data);
 int hotdog_qmi_ims_session_configured(struct hotdog_qmi_ims_session *session);
+int hotdog_qmi_ims_session_configuration_failed(
+	struct hotdog_qmi_ims_session *session, unsigned int error);
+int hotdog_qmi_ims_session_unconfigured(struct hotdog_qmi_ims_session *session);
 int hotdog_qmi_ims_session_stop(struct hotdog_qmi_ims_session *session);
 int hotdog_qmi_ims_session_ssr(struct hotdog_qmi_ims_session *session);
 int hotdog_qmi_ims_session_clear(struct hotdog_qmi_ims_session *session);

@@ -150,6 +150,7 @@ int hotdog_ims_executor_configured(
 {
 	if (!executor || !operation || executor->phase != HOTDOG_IMS_EXECUTOR_CONFIGURING)
 		return -EPROTO;
+	executor->local_config_owned = true;
 	executor->phase = HOTDOG_IMS_EXECUTOR_UP;
 	set_operation(operation, HOTDOG_IMS_EXECUTOR_ACTION_PUBLISH_UP, 0, 0);
 	return 0;
@@ -183,6 +184,29 @@ static void next_cleanup(struct hotdog_ims_executor *executor,
 	set_operation(operation, HOTDOG_IMS_EXECUTOR_ACTION_PUBLISH_DOWN, 0, 0);
 }
 
+static void begin_cleanup(struct hotdog_ims_executor *executor,
+			  struct hotdog_ims_executor_operation *operation)
+{
+	if (executor->local_config_owned) {
+		executor->phase = HOTDOG_IMS_EXECUTOR_UNCONFIGURING;
+		set_operation(operation, HOTDOG_IMS_EXECUTOR_ACTION_UNCONFIGURE_LINK, 0, 0);
+		return;
+	}
+	next_cleanup(executor, operation);
+}
+
+int hotdog_ims_executor_unconfigured(
+	struct hotdog_ims_executor *executor,
+	struct hotdog_ims_executor_operation *operation)
+{
+	if (!executor || !operation ||
+	    executor->phase != HOTDOG_IMS_EXECUTOR_UNCONFIGURING)
+		return -EPROTO;
+	executor->local_config_owned = false;
+	next_cleanup(executor, operation);
+	return 0;
+}
+
 int hotdog_ims_executor_stop(
 	struct hotdog_ims_executor *executor,
 	struct hotdog_ims_executor_operation *operation)
@@ -191,7 +215,7 @@ int hotdog_ims_executor_stop(
 		return -EPROTO;
 	executor->intentional_stop = true;
 	executor->error = 0;
-	next_cleanup(executor, operation);
+	begin_cleanup(executor, operation);
 	return 0;
 }
 
@@ -206,7 +230,9 @@ int hotdog_ims_executor_fail(
 		return -EINVAL;
 	executor->intentional_stop = false;
 	executor->error = error;
-	next_cleanup(executor, operation);
+	if (executor->phase == HOTDOG_IMS_EXECUTOR_CONFIGURING)
+		executor->local_config_owned = true;
+	begin_cleanup(executor, operation);
 	return 0;
 }
 
@@ -253,7 +279,8 @@ int hotdog_ims_executor_cleanup_failed(
 	struct hotdog_ims_executor *executor, unsigned int error)
 {
 	if (!executor || !error ||
-	    (executor->phase != HOTDOG_IMS_EXECUTOR_STOPPING &&
+	    (executor->phase != HOTDOG_IMS_EXECUTOR_UNCONFIGURING &&
+	     executor->phase != HOTDOG_IMS_EXECUTOR_STOPPING &&
 	     executor->phase != HOTDOG_IMS_EXECUTOR_RELEASING_CLIENTS &&
 	     executor->phase != HOTDOG_IMS_EXECUTOR_DELETING_LINK))
 		return -EINVAL;
@@ -273,7 +300,10 @@ int hotdog_ims_executor_ssr(
 	executor->clients_owned = false;
 	executor->client_count = 0;
 	memset(executor->packet_handles, 0, sizeof(executor->packet_handles));
-	if (executor->link_owned) {
+	if (executor->local_config_owned) {
+		executor->phase = HOTDOG_IMS_EXECUTOR_UNCONFIGURING;
+		set_operation(operation, HOTDOG_IMS_EXECUTOR_ACTION_UNCONFIGURE_LINK, 0, 0);
+	} else if (executor->link_owned) {
 		executor->phase = HOTDOG_IMS_EXECUTOR_DELETING_LINK;
 		set_operation(operation, HOTDOG_IMS_EXECUTOR_ACTION_DELETE_LINK, 0, 0);
 	} else {
@@ -287,7 +317,7 @@ const char *hotdog_ims_executor_phase_name(enum hotdog_ims_executor_phase phase)
 {
 	static const char *const names[] = {
 		"idle", "adding-link", "allocating-clients", "binding", "starting",
-		"reading-settings", "configuring", "up", "stopping",
+		"reading-settings", "configuring", "up", "unconfiguring", "stopping",
 		"releasing-clients", "deleting-link", "failed", "blocked",
 	};
 
@@ -298,7 +328,8 @@ const char *hotdog_ims_executor_action_name(enum hotdog_ims_executor_action acti
 {
 	static const char *const names[] = {
 		"none", "add-link", "allocate-clients", "bind-leg", "start-leg",
-		"read-settings", "configure-link", "stop-leg", "release-clients",
+		"read-settings", "configure-link", "unconfigure-link", "stop-leg",
+		"release-clients",
 		"delete-link", "publish-up", "publish-down",
 	};
 

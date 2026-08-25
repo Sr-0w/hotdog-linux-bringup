@@ -16,6 +16,7 @@ enum hotdog_ims_executor_phase {
 	HOTDOG_IMS_EXECUTOR_READING_SETTINGS,
 	HOTDOG_IMS_EXECUTOR_CONFIGURING,
 	HOTDOG_IMS_EXECUTOR_UP,
+	HOTDOG_IMS_EXECUTOR_UNCONFIGURING,
 	HOTDOG_IMS_EXECUTOR_STOPPING,
 	HOTDOG_IMS_EXECUTOR_RELEASING_CLIENTS,
 	HOTDOG_IMS_EXECUTOR_DELETING_LINK,
@@ -31,6 +32,7 @@ enum hotdog_ims_executor_action {
 	HOTDOG_IMS_EXECUTOR_ACTION_START_LEG,
 	HOTDOG_IMS_EXECUTOR_ACTION_READ_SETTINGS,
 	HOTDOG_IMS_EXECUTOR_ACTION_CONFIGURE_LINK,
+	HOTDOG_IMS_EXECUTOR_ACTION_UNCONFIGURE_LINK,
 	HOTDOG_IMS_EXECUTOR_ACTION_STOP_LEG,
 	HOTDOG_IMS_EXECUTOR_ACTION_RELEASE_CLIENTS,
 	HOTDOG_IMS_EXECUTOR_ACTION_DELETE_LINK,
@@ -56,6 +58,7 @@ struct hotdog_ims_executor {
 	unsigned int cleanup_error;
 	bool link_owned;
 	bool clients_owned;
+	bool local_config_owned;
 	bool intentional_stop;
 	char ifname[HOTDOG_IMS_EXECUTOR_IFNAME_SIZE];
 };
@@ -80,6 +83,9 @@ int hotdog_ims_executor_settings_read(
 	struct hotdog_ims_executor *executor, unsigned int leg,
 	struct hotdog_ims_executor_operation *operation);
 int hotdog_ims_executor_configured(
+	struct hotdog_ims_executor *executor,
+	struct hotdog_ims_executor_operation *operation);
+int hotdog_ims_executor_unconfigured(
 	struct hotdog_ims_executor *executor,
 	struct hotdog_ims_executor_operation *operation);
 int hotdog_ims_executor_stop(

@@ -85,8 +85,24 @@ int main(int argc, char **argv) {
         hotdog_ims_executor_cleanup_failed(&e,EIO); show("blocked",&e,&o);
         return 0;
     }
+    if (!strcmp(argv[1], "configfail")) {
+        hotdog_ims_executor_begin(&e,HOTDOG_IP_V4V6,&o);
+        hotdog_ims_executor_link_added(&e,"ims0",11,&o);
+        hotdog_ims_executor_client_allocated(&e,0,&o);
+        hotdog_ims_executor_client_allocated(&e,1,&o);
+        hotdog_ims_executor_leg_bound(&e,0,&o);
+        hotdog_ims_executor_leg_bound(&e,1,&o);
+        hotdog_ims_executor_leg_started(&e,0,100,&o);
+        hotdog_ims_executor_leg_started(&e,1,200,&o);
+        hotdog_ims_executor_settings_read(&e,0,&o);
+        hotdog_ims_executor_settings_read(&e,1,&o);
+        hotdog_ims_executor_fail(&e,EIO,&o); show("fail",&e,&o);
+        hotdog_ims_executor_unconfigured(&e,&o); show("unconfigured",&e,&o);
+        return 0;
+    }
     if (!strcmp(argv[1], "ssr")) {
         up(&e,&o); hotdog_ims_executor_ssr(&e,&o); show("ssr",&e,&o);
+        hotdog_ims_executor_unconfigured(&e,&o); show("unconfigured",&e,&o);
         hotdog_ims_executor_link_deleted(&e,&o); show("deleted",&e,&o);
         return 0;
     }
@@ -135,6 +151,7 @@ class HotdogImsExecutorTests(unittest.TestCase):
 
     def test_cleanup_failure_preserves_residue_and_blocks(self) -> None:
         output = self.run_mode("blocked")
+        self.assertIn("stop phase=unconfiguring action=unconfigure-link", output)
         self.assertIn("blocked phase=blocked", output)
         self.assertIn("residue=111", output)
 
@@ -144,10 +161,16 @@ class HotdogImsExecutorTests(unittest.TestCase):
         self.assertIn("released phase=deleting-link action=delete-link", output)
         self.assertIn("deleted phase=failed action=publish-down", output)
 
+    def test_partial_local_configuration_rolls_back_before_packet_handles(self) -> None:
+        output = self.run_mode("configfail")
+        self.assertIn("fail phase=unconfiguring action=unconfigure-link", output)
+        self.assertIn("unconfigured phase=stopping action=stop-leg leg=0 handle=100", output)
+
     def test_ssr_drops_stale_remote_ownership_before_local_link_delete(self) -> None:
         output = self.run_mode("ssr")
-        self.assertIn("ssr phase=deleting-link action=delete-link", output)
+        self.assertIn("ssr phase=unconfiguring action=unconfigure-link", output)
         self.assertIn("error=102 residue=001", output)
+        self.assertIn("unconfigured phase=deleting-link action=delete-link", output)
         self.assertIn("deleted phase=failed action=publish-down", output)
 
 
