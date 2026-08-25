@@ -493,6 +493,16 @@ presence and length, never the full ICCID. MCFG selection consumes the value
 internally, so a PIN prompt cannot accidentally become the first operation
 that discovers which card and subscription are active.
 
+A successful PIN changes the attested UIM state and therefore invalidates a
+previous `locked` readiness record. ModemManager now atomically writes only a
+root-owned `pin-unlocked` re-attestation request; it never edits readiness or
+includes the PIN. The lifecycle supervisor validates and consumes that request,
+revokes readiness, stops ModemManager, reruns the complete UIM/PDC/DMS
+bootstrap under the existing boot-bound approval, and restarts ModemManager
+only after a new record is valid. Notification failure is logged after PIN
+success but is not returned as a PIN error, avoiding an unsafe duplicate PIN
+attempt. A malformed, writable or symlink request blocks the lifecycle.
+
 ### PDC/MCFG
 
 - parse stock MBN metadata types for carrier name, long IIN, IIN and MCC/MNC;

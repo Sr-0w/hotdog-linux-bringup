@@ -1,0 +1,154 @@
+From 2419243deeca2c58a20011ba43e335dbd5f9f0fc Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 10:49:29 +0200
+Subject: [PATCH] qmi: request guarded radio re-attestation after PIN
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ src/mm-sim-qmi.c | 94 ++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 91 insertions(+), 3 deletions(-)
+
+diff --git a/src/mm-sim-qmi.c b/src/mm-sim-qmi.c
+index 321a52e..6e59e03 100644
+--- a/src/mm-sim-qmi.c
++++ b/src/mm-sim-qmi.c
+@@ -16,11 +16,14 @@
+  */
+ 
+ #include <config.h>
++#include <errno.h>
++#include <fcntl.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <string.h>
+ #include <ctype.h>
++#include <sys/stat.h>
+ 
+ #include <ModemManager.h>
+ #define _LIBMM_INSIDE_MM
+@@ -107,6 +110,86 @@ get_uim_card_session_type (MMSimQmi *self)
+     }
+ }
+ 
++#define HOTDOG_RADIO_RUNTIME_DIR "/run/hotdog-radio"
++#define HOTDOG_REATTEST_REQUEST "pin-unlocked\n"
++
++static void
++request_radio_reattest (MMSimQmi *self)
++{
++    char    temporary[64];
++    struct stat status;
++    int     directory;
++    int     descriptor = -1;
++    int     saved_errno = 0;
++    size_t  offset = 0;
++
++    directory = open (HOTDOG_RADIO_RUNTIME_DIR,
++                      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
++    if (directory < 0) {
++        mm_obj_warn (self, "cannot open guarded radio runtime directory: %s",
++                     g_strerror (errno));
++        return;
++    }
++    if (fstat (directory, &status)) {
++        saved_errno = errno;
++        goto out;
++    }
++    if (!S_ISDIR (status.st_mode) || (status.st_mode & (S_IWGRP | S_IWOTH))) {
++        saved_errno = EPERM;
++        goto out;
++    }
++    if (snprintf (temporary, sizeof (temporary), "reattest-request.new.%ld",
++                  (long)getpid ()) >= (int)sizeof (temporary)) {
++        saved_errno = ENAMETOOLONG;
++        goto out;
++    }
++    descriptor = openat (directory, temporary,
++                         O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
++                         0600);
++    if (descriptor < 0) {
++        saved_errno = errno;
++        goto out;
++    }
++    while (offset < sizeof (HOTDOG_REATTEST_REQUEST) - 1) {
++        ssize_t written;
++
++        written = write (descriptor, HOTDOG_REATTEST_REQUEST + offset,
++                         sizeof (HOTDOG_REATTEST_REQUEST) - 1 - offset);
++        if (written < 0 && errno == EINTR)
++            continue;
++        if (written <= 0) {
++            saved_errno = written < 0 ? errno : EIO;
++            goto out;
++        }
++        offset += (size_t)written;
++    }
++    if (fsync (descriptor)) {
++        saved_errno = errno;
++        goto out;
++    }
++    if (close (descriptor)) {
++        descriptor = -1;
++        saved_errno = errno;
++        goto out;
++    }
++    descriptor = -1;
++    if (renameat (directory, temporary, directory, "reattest-request") ||
++        fsync (directory)) {
++        saved_errno = errno;
++        goto out;
++    }
++    mm_obj_info (self, "requested guarded radio re-attestation after PIN unlock");
++out:
++    if (descriptor >= 0)
++        close (descriptor);
++    if (saved_errno) {
++        unlinkat (directory, temporary, 0);
++        mm_obj_warn (self, "cannot request guarded radio re-attestation: %s",
++                     g_strerror (saved_errno));
++    }
++    close (directory);
++}
++
+ /*****************************************************************************/
+ /* Wait for SIM ready */
+ 
+@@ -1004,8 +1087,9 @@ set_preferred_networks_reload_ready (MMBaseSim    *self,
+         mm_gdbus_sim_set_preferred_networks (MM_GDBUS_SIM (self),
+                                              mm_sim_preferred_network_list_get_variant (loaded_list));
+         g_task_return_error (task, error);
+-    } else
++    } else {
+         g_task_return_boolean (task, TRUE);
++    }
+ 
+     g_list_free_full (loaded_list, (GDestroyNotify) mm_sim_preferred_network_free);
+     g_object_unref (task);
+@@ -1176,8 +1260,10 @@ uim_verify_pin_ready (QmiClientUim *client,
+     } else if (!qmi_message_uim_verify_pin_output_get_result (output, &error)) {
+         g_prefix_error (&error, "Couldn't verify PIN: ");
+         g_task_return_error (task, pin_qmi_error_to_mobile_equipment_error (error));
+-    } else
++    } else {
++        request_radio_reattest (MM_SIM_QMI (g_task_get_source_object (task)));
+         g_task_return_boolean (task, TRUE);
++    }
+ 
+     if (output)
+         qmi_message_uim_verify_pin_output_unref (output);
+@@ -1234,8 +1320,10 @@ dms_uim_verify_pin_ready (QmiClientDms *client,
+     } else if (!qmi_message_dms_uim_verify_pin_output_get_result (output, &error)) {
+         g_prefix_error (&error, "Couldn't verify PIN: ");
+         g_task_return_error (task, pin_qmi_error_to_mobile_equipment_error (error));
+-    } else
++    } else {
++        request_radio_reattest (MM_SIM_QMI (g_task_get_source_object (task)));
+         g_task_return_boolean (task, TRUE);
++    }
+ 
+     if (output)
+         qmi_message_dms_uim_verify_pin_output_unref (output);
+-- 
+2.54.0
+

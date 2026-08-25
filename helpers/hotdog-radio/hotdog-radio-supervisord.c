@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "hotdog-mcfg-runtime.h"
 #include "hotdog-radio-readiness.h"
+#include "hotdog-radio-reattest.h"
 #include "hotdog-radio-supervisor.h"
 
 #include <errno.h>
@@ -21,6 +22,7 @@
 #define DEFAULT_MCFG_ROOT "/usr/share/hotdog-radio/mcfg/mcfg_sw"
 #define DEFAULT_BOOTSTRAP "/usr/libexec/hotdog-radio-bootstrapd"
 #define DEFAULT_RC_SERVICE "/sbin/rc-service"
+#define DEFAULT_REATTEST_REQUEST "/run/hotdog-radio/reattest-request"
 
 enum child_kind {
 	CHILD_NONE,
@@ -41,6 +43,7 @@ struct lifecycle {
 	char *approval;
 	char *bootstrap_path;
 	char *rc_service_path;
+	char *reattest_request_path;
 	unsigned int node;
 	unsigned int failure_limit;
 	enum child_kind child_kind;
@@ -56,6 +59,7 @@ struct lifecycle {
 static void dispatch(struct lifecycle *lifecycle,
 		     enum hotdog_supervisor_event event);
 static void inspect_readiness(struct lifecycle *lifecycle, bool allow_reattest);
+static void spawn_reattest(struct lifecycle *lifecycle);
 
 static void maybe_quit(struct lifecycle *lifecycle)
 {
@@ -331,10 +335,35 @@ static void inspect_readiness(struct lifecycle *lifecycle, bool allow_reattest)
 static gboolean poll_readiness(gpointer user_data)
 {
 	struct lifecycle *lifecycle = user_data;
+	int request;
 
-	if (!lifecycle->quitting &&
-	    lifecycle->supervisor.phase != HOTDOG_SUPERVISOR_BLOCKED)
-		inspect_readiness(lifecycle, true);
+	if (lifecycle->quitting ||
+	    lifecycle->supervisor.phase == HOTDOG_SUPERVISOR_BLOCKED)
+		return G_SOURCE_CONTINUE;
+	request = hotdog_radio_reattest_consume(lifecycle->reattest_request_path);
+	if (request < 0) {
+		g_printerr("radio re-attestation request rejected: %d\n", request);
+		lifecycle->result = 1;
+		dispatch(lifecycle, HOTDOG_SUPERVISOR_FATAL);
+		return G_SOURCE_CONTINUE;
+	}
+	if (request > 0) {
+		printf("radio-reattest=requested reason=pin-unlocked\n");
+		lifecycle->attestation_attempted = false;
+		if (revoke_readiness(lifecycle)) {
+			lifecycle->result = 1;
+			dispatch(lifecycle, HOTDOG_SUPERVISOR_FATAL);
+		} else if (lifecycle->supervisor.phase == HOTDOG_SUPERVISOR_ACTIVE ||
+			   lifecycle->supervisor.phase ==
+				HOTDOG_SUPERVISOR_STARTING_MODEMMANAGER) {
+			dispatch(lifecycle, HOTDOG_SUPERVISOR_READINESS_REMOVED);
+		} else {
+			lifecycle->supervisor.readiness_valid = false;
+			spawn_reattest(lifecycle);
+		}
+		return G_SOURCE_CONTINUE;
+	}
+	inspect_readiness(lifecycle, true);
 	return G_SOURCE_CONTINUE;
 }
 
@@ -421,6 +450,9 @@ int main(int argc, char **argv)
 		  "Radio bootstrap executable", "FILE" },
 		{ "rc-service", 0, 0, G_OPTION_ARG_FILENAME, &lifecycle.rc_service_path,
 		  "OpenRC service executable", "FILE" },
+		{ "reattest-request", 0, 0, G_OPTION_ARG_FILENAME,
+		  &lifecycle.reattest_request_path,
+		  "Post-PIN radio re-attestation request", "FILE" },
 		{ "failure-limit", 0, 0, G_OPTION_ARG_INT, &lifecycle.failure_limit,
 		  "Maximum consecutive ModemManager start failures", "COUNT" },
 		{ NULL }
@@ -447,9 +479,12 @@ int main(int argc, char **argv)
 		lifecycle.bootstrap_path = g_strdup(DEFAULT_BOOTSTRAP);
 	if (!lifecycle.rc_service_path)
 		lifecycle.rc_service_path = g_strdup(DEFAULT_RC_SERVICE);
+	if (!lifecycle.reattest_request_path)
+		lifecycle.reattest_request_path = g_strdup(DEFAULT_REATTEST_REQUEST);
 	if (!lifecycle.readiness_path || !lifecycle.boot_id_path ||
 	    !lifecycle.runtime_manifest || !lifecycle.bootstrap_path ||
-	    !lifecycle.rc_service_path || lifecycle.node > UINT16_MAX ||
+	    !lifecycle.rc_service_path || !lifecycle.reattest_request_path ||
+	    lifecycle.node > UINT16_MAX ||
 	    !lifecycle.failure_limit || lifecycle.failure_limit > 10) {
 		g_printerr("invalid supervisor configuration\n");
 		result = 2;
@@ -483,5 +518,6 @@ out:
 	g_free(lifecycle.approval);
 	g_free(lifecycle.bootstrap_path);
 	g_free(lifecycle.rc_service_path);
+	g_free(lifecycle.reattest_request_path);
 	return result;
 }

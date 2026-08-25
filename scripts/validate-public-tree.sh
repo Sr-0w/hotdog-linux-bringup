@@ -488,6 +488,7 @@ validate_modemmanager_slot_pin_contract() {
 	local voice_patch="aports/temp/modemmanager/0004-qmi-voice-preserve-numberless-calls.patch"
 	local sms_ims_patch="aports/temp/modemmanager/0005-qmi-preserve-sms-ims-transport-domain.patch"
 	local voice_ims_patch="aports/temp/modemmanager/0006-qmi-select-ip-voice-calls-from-ims-state.patch"
+	local pin_reattest_patch="aports/temp/modemmanager/0007-qmi-request-radio-reattest-after-PIN.patch"
 
 	log "ModemManager QMI SIM-slot PIN contract"
 	[ -f "$apkbuild" ] || die "missing ModemManager override"
@@ -496,8 +497,15 @@ validate_modemmanager_slot_pin_contract() {
 	[ -f "$voice_patch" ] || die "missing ModemManager QMI Voice call-list patch"
 	[ -f "$sms_ims_patch" ] || die "missing ModemManager SMS-over-IMS patch"
 	[ -f "$voice_ims_patch" ] || die "missing ModemManager IP Voice dial patch"
+	[ -f "$pin_reattest_patch" ] || die "missing ModemManager post-PIN re-attestation patch"
 	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
 		die "ModemManager override does not apply the SIM-slot PIN patch"
+	grep -q '0007-qmi-request-radio-reattest-after-PIN.patch' "$apkbuild" ||
+		die "ModemManager override does not apply post-PIN re-attestation"
+	grep -q 'request_radio_reattest' "$pin_reattest_patch" ||
+		die "successful PIN does not request guarded re-attestation"
+	grep -q 'O_NOFOLLOW' "$pin_reattest_patch" ||
+		die "post-PIN request does not reject path substitution"
 	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
 		die "ModemManager patch does not cover PIN verification"
 	grep -q 'qmi_message_uim_unblock_pin_input_set_session' "$patch" ||
@@ -661,7 +669,8 @@ validate_hotdog_radio_state_contract() {
 		[ -f "$source_dir/$source" ] || die "missing radio readiness source: $source"
 	done
 	for source in hotdog-radio-supervisor.c hotdog-radio-supervisor.h \
-		hotdog-radio-supervisor-replay.c hotdog-radio-supervisord.c; do
+		hotdog-radio-supervisor-replay.c hotdog-radio-supervisord.c \
+		hotdog-radio-reattest.c hotdog-radio-reattest.h; do
 		[ -f "$source_dir/$source" ] || die "missing radio supervisor source: $source"
 	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
@@ -825,6 +834,7 @@ validate_hotdog_radio_state_contract() {
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
 		"$source_dir/hotdog-radio-supervisord.c" \
 		"$source_dir/hotdog-radio-supervisor.c" \
+		"$source_dir/hotdog-radio-reattest.c" \
 		"$source_dir/hotdog-radio-readiness.c" \
 		"$source_dir/hotdog-mcfg-runtime.c" "$source_dir/hotdog-pdc.c" \
 		"$source_dir/hotdog-uim.c" "$source_dir/hotdog-mbn.c" \

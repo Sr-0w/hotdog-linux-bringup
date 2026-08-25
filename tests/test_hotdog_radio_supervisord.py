@@ -26,6 +26,7 @@ class HotdogRadioSupervisordTests(unittest.TestCase):
                 str(SOURCE / "hotdog-radio-supervisord.c"),
                 str(SOURCE / "hotdog-radio-supervisor.c"),
                 str(SOURCE / "hotdog-radio-readiness.c"),
+                str(SOURCE / "hotdog-radio-reattest.c"),
                 str(SOURCE / "hotdog-mcfg-runtime.c"),
                 str(SOURCE / "hotdog-pdc.c"),
                 str(SOURCE / "hotdog-uim.c"),
@@ -45,6 +46,7 @@ class HotdogRadioSupervisordTests(unittest.TestCase):
         self.assertIn("--approval=FILE", output)
         self.assertIn("--failure-limit=COUNT", output)
         self.assertIn("--runtime-manifest=FILE", output)
+        self.assertIn("--reattest-request=FILE", output)
 
     def test_process_control_uses_fixed_argv_without_a_shell(self) -> None:
         source = (SOURCE / "hotdog-radio-supervisord.c").read_text()
@@ -54,6 +56,12 @@ class HotdogRadioSupervisordTests(unittest.TestCase):
         self.assertNotIn("system(", source)
         self.assertNotIn("g_spawn_command_line", source)
         self.assertNotIn('"/bin/sh"', source)
+
+    def test_post_pin_request_stops_modemmanager_before_reattest(self) -> None:
+        source = (SOURCE / "hotdog-radio-supervisord.c").read_text()
+        self.assertIn("hotdog_radio_reattest_consume", source)
+        self.assertIn("HOTDOG_SUPERVISOR_READINESS_REMOVED", source)
+        self.assertIn("lifecycle->attestation_attempted = false", source)
 
     def test_bootstrap_deferred_handoff_is_apply_only(self) -> None:
         source = (SOURCE / "hotdog-radio-bootstrapd.c").read_text()
