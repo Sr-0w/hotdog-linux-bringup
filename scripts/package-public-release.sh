@@ -172,7 +172,8 @@ boot_dtb_sha="$(sha256sum "$unpack_dir/dtb" | awk '{print $1}')"
 boot_sha="$(sha256sum "$boot_asset" | awk '{print $1}')"
 dtbo_sha="$(sha256sum "$dtbo_asset" | awk '{print $1}')"
 root_sha="$(sha256sum "$rootfs" | awk '{print $1}')"
-source_commit="$(git -C "$script_dir/.." rev-parse HEAD)"
+source_commit="${HOTDOG_RELEASE_SOURCE_COMMIT:-$(git -C "$script_dir/.." rev-parse HEAD)}"
+[[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "invalid release source commit"
 cat > "$outdir/MANIFEST.md" <<EOF
 # ${version} release manifest
 
