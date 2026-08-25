@@ -69,6 +69,7 @@ Recent evidence and current regression records:
 - [Installed MCFG catalog and no-SIM dry-run gate](evidence/2026-08-25-radio-mcfg-dry-plan.md)
 - [ModemManager pre-online activation gate](evidence/2026-08-25-modemmanager-preonline-gate.md)
 - [Read-only DMS shutdown gate](evidence/2026-08-25-radio-dms-shutdown-gate.md)
+- [Read-only NAS pre-online baseline](evidence/2026-08-25-radio-nas-preonline.md)
 - [Read-only resident PDC catalog](evidence/2026-08-25-radio-pdc-resident-catalog.md)
 - [OxygenOS 11/12 modem firmware bundle](evidence/2026-08-25-oxygenos-modem-firmware-bundle.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)

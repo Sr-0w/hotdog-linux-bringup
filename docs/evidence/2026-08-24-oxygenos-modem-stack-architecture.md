@@ -182,10 +182,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The read-only slice is packaged as `hotdog-radio-bootstrap-0.10-r0` plus an
+The read-only slice is packaged as `hotdog-radio-bootstrap-0.11-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
-`70278134224172bf23a1e748aa20e8fd647750c4e828f99e42fb4b945b1acbe0`
-and `d01e39094ab031443014df07a0b6acaad4fcf38392455f95148eb96239926de0`.
+`86b143742d9a465408349548d068771ee919a3c3408b87db360b9f1b82eea8b8`
+and `aa86308d2648b70a975720b209e60e02771d85af0709fb25323f8707df25cb90`.
 The binary links to the four subscription setters from libqmi `r2`. The
 disabled service writes boot ID, kernel identity, UIM and PDC output atomically
 to `/run/hotdog-radio/observation`. It deliberately does not create the future
@@ -377,7 +377,11 @@ see [the DMS shutdown gate](2026-08-25-radio-dms-shutdown-gate.md).
 CS/PS attach, selected-network, radio-interface and roaming state. The daemon
 exposes it only through a standalone read-only `--probe-nas` operation. It does
 not print PLMN/operator identity and does not request registration; active NAS
-registration remains downstream of verified PDC and DMS Online.
+registration remains downstream of verified PDC and DMS Online. The no-SIM
+hardware baseline is `not-registered-searching` with both CS and PS detached,
+network unknown and interface `none`, independently confirmed by qmicli.
+Searching is not readiness; see
+[the NAS pre-online baseline](2026-08-25-radio-nas-preonline.md).
 
 ## Parity gates
 
