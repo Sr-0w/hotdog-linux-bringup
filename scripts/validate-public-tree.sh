@@ -690,6 +690,12 @@ validate_hotdog_radio_state_contract() {
 	done
 	[ -f "$source_dir/hotdog-wds-profile-probe.c" ] ||
 		die "missing read-only WDS profile probe"
+	grep -q 'hotdog-wds-profile-probe.c' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "WDS profile probe is not built by the radio package"
+	grep -q 'usr/libexec/hotdog-wds-profile-probe' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "WDS profile probe is not installed by the radio package"
 	grep -q 'qmi_message_wds_bind_subscription_input_set_subscription_id' \
 		"$source_dir/hotdog-qmi-wds-profile.c" ||
 		die "WDS profile transport does not bind a modem subscription"
