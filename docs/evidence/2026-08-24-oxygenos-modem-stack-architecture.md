@@ -105,6 +105,10 @@ then starts the 3GPP profile/APN with bounded auth credentials. IPv4v6 becomes
 two WDS clients, IPv4 and IPv6, sharing the mux; it is never collapsed into an
 unsupported single-family request. Endpoint type/interface remain discovered
 runtime inputs rather than Hotdog constants, and credentials are never logged.
+Start confirmation requires a nonzero packet handle; Stop carries that exact
+handle. Current Settings decoding preserves per-family address, gateway and DNS
+plus IPv6 prefix and a consistent MTU, rejecting incomplete addresses, malformed
+IPv6 arrays and mismatched dual-stack MTUs before the bearer becomes connected.
 
 ### SMS and cell broadcast
 

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "hotdog-qmi-wds.h"
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <string.h>
 
@@ -124,4 +125,144 @@ void hotdog_qmi_wds_plan_clear(struct hotdog_qmi_wds_plan *plan)
 			qmi_message_wds_start_network_input_unref(plan->legs[index].start);
 	}
 	memset(plan, 0, sizeof(*plan));
+}
+
+int hotdog_qmi_wds_decode_start(QmiMessageWdsStartNetworkOutput *output,
+				uint32_t *packet_handle,
+				uint16_t *remote_result)
+{
+	GError *error = NULL;
+
+	if (!output || !packet_handle || !remote_result)
+		return -EINVAL;
+	*packet_handle = 0;
+	*remote_result = 0;
+	if (!qmi_message_wds_start_network_output_get_result(output, &error)) {
+		if (error && error->domain == QMI_PROTOCOL_ERROR)
+			*remote_result = (uint16_t)error->code;
+		g_clear_error(&error);
+		return -EREMOTEIO;
+	}
+	if (!qmi_message_wds_start_network_output_get_packet_data_handle(
+		    output, packet_handle, &error) || !*packet_handle) {
+		g_clear_error(&error);
+		return -ENODATA;
+	}
+	return 0;
+}
+
+int hotdog_qmi_wds_stop_input(uint32_t packet_handle,
+			      QmiMessageWdsStopNetworkInput **input)
+{
+	GError *error = NULL;
+
+	if (!packet_handle || !input)
+		return -EINVAL;
+	*input = qmi_message_wds_stop_network_input_new();
+	if (!qmi_message_wds_stop_network_input_set_packet_data_handle(
+		    *input, packet_handle, &error)) {
+		g_clear_error(&error);
+		qmi_message_wds_stop_network_input_unref(*input);
+		*input = NULL;
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int ipv4_string(guint32 address, char *target, size_t size)
+{
+	struct in_addr value = { .s_addr = GUINT32_TO_BE(address) };
+
+	return inet_ntop(AF_INET, &value, target, (socklen_t)size) ? 0 : -EINVAL;
+}
+
+static int ipv6_string(GArray *array, char *target, size_t size)
+{
+	struct in6_addr value = { 0 };
+	size_t index;
+
+	if (!array || array->len != 8)
+		return -EPROTO;
+	for (index = 0; index < 8; index++) {
+		guint16 word = GUINT16_TO_BE(g_array_index(array, guint16, index));
+
+		memcpy(&value.s6_addr[index * sizeof(word)], &word, sizeof(word));
+	}
+	return inet_ntop(AF_INET6, &value, target, (socklen_t)size) ? 0 : -EINVAL;
+}
+
+int hotdog_qmi_wds_decode_current_settings(
+	QmiMessageWdsGetCurrentSettingsOutput *output, QmiWdsIpFamily family,
+	struct hotdog_bearer_runtime *runtime, uint16_t *remote_result)
+{
+	GError *error = NULL;
+	GArray *array = NULL;
+	guint32 address, mtu;
+	guint8 prefix;
+	int result;
+
+	if (!output || !runtime || !remote_result ||
+	    (family != QMI_WDS_IP_FAMILY_IPV4 && family != QMI_WDS_IP_FAMILY_IPV6))
+		return -EINVAL;
+	*remote_result = 0;
+	if (!qmi_message_wds_get_current_settings_output_get_result(output, &error)) {
+		if (error && error->domain == QMI_PROTOCOL_ERROR)
+			*remote_result = (uint16_t)error->code;
+		g_clear_error(&error);
+		return -EREMOTEIO;
+	}
+	if (qmi_message_wds_get_current_settings_output_get_mtu(output, &mtu, NULL)) {
+		if (mtu < 576 || mtu > 65535 || (runtime->mtu && runtime->mtu != mtu))
+			return -EPROTO;
+		runtime->mtu = mtu;
+	}
+	if (family == QMI_WDS_IP_FAMILY_IPV4) {
+		if (!qmi_message_wds_get_current_settings_output_get_ipv4_address(
+			    output, &address, NULL))
+			return -ENODATA;
+		result = ipv4_string(address, runtime->ipv4, sizeof(runtime->ipv4));
+		if (!result && qmi_message_wds_get_current_settings_output_get_ipv4_gateway_address(
+				 output, &address, NULL))
+			result = ipv4_string(address, runtime->ipv4_gateway,
+					     sizeof(runtime->ipv4_gateway));
+		if (!result && qmi_message_wds_get_current_settings_output_get_primary_ipv4_dns_address(
+				 output, &address, NULL))
+			result = ipv4_string(address, runtime->ipv4_dns1,
+					     sizeof(runtime->ipv4_dns1));
+		if (!result && qmi_message_wds_get_current_settings_output_get_secondary_ipv4_dns_address(
+				 output, &address, NULL))
+			result = ipv4_string(address, runtime->ipv4_dns2,
+					     sizeof(runtime->ipv4_dns2));
+		if (!runtime->dns1[0] && runtime->ipv4_dns1[0])
+			memcpy(runtime->dns1, runtime->ipv4_dns1,
+			       strlen(runtime->ipv4_dns1) + 1);
+		if (!runtime->dns2[0] && runtime->ipv4_dns2[0])
+			memcpy(runtime->dns2, runtime->ipv4_dns2,
+			       strlen(runtime->ipv4_dns2) + 1);
+		return result;
+	}
+	if (!qmi_message_wds_get_current_settings_output_get_ipv6_address(
+		    output, &array, &prefix, NULL))
+		return -ENODATA;
+	result = ipv6_string(array, runtime->ipv6, sizeof(runtime->ipv6));
+	runtime->ipv6_prefix = prefix;
+	if (!result && qmi_message_wds_get_current_settings_output_get_ipv6_gateway_address(
+			 output, &array, &prefix, NULL))
+		result = ipv6_string(array, runtime->ipv6_gateway,
+				     sizeof(runtime->ipv6_gateway));
+	if (!result && qmi_message_wds_get_current_settings_output_get_ipv6_primary_dns_address(
+			 output, &array, NULL))
+		result = ipv6_string(array, runtime->ipv6_dns1,
+				     sizeof(runtime->ipv6_dns1));
+	if (!result && qmi_message_wds_get_current_settings_output_get_ipv6_secondary_dns_address(
+			 output, &array, NULL))
+		result = ipv6_string(array, runtime->ipv6_dns2,
+				     sizeof(runtime->ipv6_dns2));
+	if (!runtime->dns1[0] && runtime->ipv6_dns1[0])
+		memcpy(runtime->dns1, runtime->ipv6_dns1,
+		       strlen(runtime->ipv6_dns1) + 1);
+	if (!runtime->dns2[0] && runtime->ipv6_dns2[0])
+		memcpy(runtime->dns2, runtime->ipv6_dns2,
+		       strlen(runtime->ipv6_dns2) + 1);
+	return result;
 }

@@ -62,7 +62,14 @@ struct hotdog_nas_subscription {
 
 struct hotdog_bearer_runtime {
 	char ipv4[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv4_gateway[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv4_dns1[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv4_dns2[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char ipv6[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv6_gateway[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv6_dns1[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char ipv6_dns2[HOTDOG_NETWORK_ADDRESS_SIZE];
+	unsigned int ipv6_prefix;
 	char dns1[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char dns2[HOTDOG_NETWORK_ADDRESS_SIZE];
 	unsigned int mtu;

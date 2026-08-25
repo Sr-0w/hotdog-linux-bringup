@@ -71,6 +71,32 @@ class HotdogQmiWdsTests(unittest.TestCase):
         self.assertNotIn("printf", source)
         self.assertNotIn("g_print", source)
 
+    def test_stop_request_keeps_exact_packet_handle(self) -> None:
+        flags = subprocess.run(
+            ["pkg-config", "--cflags", "--libs", "qmi-glib", "glib-2.0"],
+            check=True, capture_output=True, text=True,
+        ).stdout.split()
+        source = r'''#include "hotdog-qmi-wds.h"
+#include <stdio.h>
+int main(void) { QmiMessageWdsStopNetworkInput *i=NULL; guint32 h=0;
+ if(hotdog_qmi_wds_stop_input(0x12345678,&i)) return 1;
+ if(!qmi_message_wds_stop_network_input_get_packet_data_handle(i,&h,NULL)) return 2;
+ printf("handle=%08x\n",h); qmi_message_wds_stop_network_input_unref(i); }
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cfile = Path(directory) / "stop.c"
+            binary = Path(directory) / "stop"
+            cfile.write_text(source)
+            subprocess.run(
+                ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                 "-I", str(SOURCE), str(SOURCE / "hotdog-network.c"),
+                 str(SOURCE / "hotdog-qmi-wds.c"), str(cfile), *flags,
+                 "-o", str(binary)], check=True,
+            )
+            output = subprocess.run([str(binary)], check=True,
+                                    capture_output=True, text=True).stdout.strip()
+            self.assertEqual(output, "handle=12345678")
+
 
 if __name__ == "__main__":
     unittest.main()
