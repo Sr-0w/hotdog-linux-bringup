@@ -16,7 +16,11 @@ hardware-tested package and is not selected by the device package yet.
 
 The source archive URL is pinned to the commit rather than relying on the tag
 name. The seven patches are exported from the local kernel branch
-`codex/hotdog-sm8150-clean-baseline` and retain their commit identities.
+`codex/hotdog-sm8150-clean-baseline` at commit
+`c1b8aff58c2ba5dc428c51e57dfe669a36a189c6`, tree
+`8ddc2f65bd5e097ee5c7f88a42e656573d504690`, and retain their commit
+identities. The cumulative source delta is 17 files, 1,036 insertions and 37
+deletions.
 
 ## Included foundation
 

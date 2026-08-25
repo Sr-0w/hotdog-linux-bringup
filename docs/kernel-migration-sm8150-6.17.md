@@ -40,8 +40,8 @@ it. Diagnostic framebuffer painting, direct-entry pstore markers, camera
 experiments, superseded UFS dumps and other historical scaffolding stay in the
 immutable checkpoint.
 
-The initial tree uses seven focused commits and changes 12 kernel files before
-the final binding/maintenance cleanup. Its first offline build produced:
+The initial tree uses seven focused commits and changes 17 kernel files. Its
+first offline build produced:
 
 | Artifact | SHA256 |
 |---|---|
@@ -70,6 +70,24 @@ The first boot candidate includes only:
 
 Subsystems beyond that list are intentionally deferred. A successful first
 boot must not be interpreted as restoring the full r181 feature matrix.
+
+## Foundation oracle decisions
+
+| r181 source | Validated contract | 6.17 decision |
+|---|---|---|
+| `0002`-`0011` | ABL load offset/window and inherited APSS watchdog | Rewritten as a 29-line config-gated entry quirk. Framebuffer painting, pmsg records and hold loops were dropped. |
+| `0012`, `0027`, `0028` | Native Samsung DSC panel, two slices per packet, stock 60/90 Hz modes | Panel sequence retained; host integration rewritten with explicit packet-slice validation. DSI error instrumentation was dropped. |
+| `0014`, `0029` | UFS request lists must stay below 4 GiB; UFS uses Apps SMMU stream `0x300` | Stream is already present in 6.17 DT; only the focused Qualcomm variant DMA-mask hook was retained. |
+| `0030` | Legacy hardirq completion experiment | Not ported. Hardware r20 reproduced the failure and ruled this change out; threaded IRQ handling remains from 6.17. |
+| `0031`, `0032` | Missing stock-owned RAM caused real page-cache corruption and crashdump | Exact XBL/AOP, removed-region and CDSP gaps retained in the minimal DTS. |
+| `0016`, `0046`, `0047`, relevant `0156` hunks | S6SY761 wiring, reset, bounded boot wait and sensing rearm after resume | Retained as one DTS contract and one focused driver commit. |
+| `0017` | Adreno 640/GMU and Hotdog ZAP firmware | DT enable and firmware path retained; no GPU driver changes were needed. |
+| `0018`, `0053` | Real PM8150 GPIO volume keys | Recreated in the minimal DTS; the misleading RESIN input is disabled. |
+| `0048`, USB parts of `0156` | Gadget recovery over ACM/NCM and translated DWC3 stream `0x140` | The 6.17 SM8150 SoC/common DT and config already provide these contracts, so no duplicate patch was added. |
+| Experimental RAID6 evidence outside r181 | 6.17 direct boot can stall in `raid6_select_algo()` benchmark | `CONFIG_RAID6_PQ_BENCHMARK` is disabled in the new package config; RAID6 functionality remains enabled. |
+
+UFS ICE is also already described by the 6.17 SoC DT and enabled by the shared
+configuration. The older temporary `qcom,ice` deletion is not reproduced.
 
 ## Current gates
 
