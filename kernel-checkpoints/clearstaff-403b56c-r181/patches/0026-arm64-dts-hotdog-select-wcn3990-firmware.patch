@@ -1,0 +1,26 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 19:18:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: select WCN3990 firmware
+
+The HD1913 controller identifies itself with ROM version 0x1001, which
+causes the generic QCA filename derivation to request revision 01. The
+device firmware instead provides and successfully runs revision 21.
+Select the Hotdog NVM and rampatch names explicitly using the standard
+two-entry firmware-name property.
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -298,6 +298,7 @@
+ 
+ 	bluetooth {
+ 		compatible = "qcom,wcn3990-bt";
++		firmware-name = "crnv21.bin", "crbtfw21.tlv";
+ 		vddio-supply = <&vreg_l1a_0p75>;
+ 		vddxo-supply = <&vreg_l7a_1p8>;
+ 		vddrf-supply = <&vreg_l2c_1p3>;
+-- 
+2.50.1

@@ -1,0 +1,46 @@
+From 0dbe05a37e9bbdc08985f4645848f3232327fcdd Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 17:42:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: use the headphone SLIMbus route
+
+The initial card-registration topology used SLIMBUS_0_RX and WCD9340
+AIF1_PB as a conservative transport probe. The HD1913 Android audio
+configuration maps headphones to SLIMBUS_6_RX, routes codec RX2/RX3 from
+AIF4_PB, and uses two 24-bit channels. The same SLIMBUS_6_RX/AIF4_PB pair
+is used by existing upstream Qualcomm WCD sound cards.
+
+Select that hardware-backed playback pair while leaving capture and the
+external speaker amplifiers unchanged.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -322,10 +322,10 @@
+ 	};
+ 
+ 	slim-dai-link {
+-		link-name = "SLIM Playback 1";
++		link-name = "SLIM Playback 6";
+ 
+ 		cpu {
+-			sound-dai = <&q6afedai SLIMBUS_0_RX>;
++			sound-dai = <&q6afedai SLIMBUS_6_RX>;
+ 		};
+ 
+ 		platform {
+@@ -332,7 +332,7 @@
+ 		};
+ 
+ 		codec {
+-			sound-dai = <&wcd9340 AIF1_PB>;
++			sound-dai = <&wcd9340 AIF4_PB>;
+ 		};
+ 	};
+ 
+-- 
+2.50.1

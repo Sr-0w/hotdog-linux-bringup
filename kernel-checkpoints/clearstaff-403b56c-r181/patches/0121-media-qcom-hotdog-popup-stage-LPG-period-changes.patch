@@ -1,0 +1,39 @@
+From 802724e9fa8ad3fcf458f3b7c38051f87b2ccf7b Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 18:14:21 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: stage LPG period changes
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 2214be68c..5b5e517a5 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -117,11 +117,21 @@ static int hotdog_popup_pwm_enable(struct hotdog_popup *popup, u64 period)
+ 	state.period = period;
+ 	state.duty_cycle = period / 2;
+ 	state.polarity = PWM_POLARITY_NORMAL;
++	/* LPG needs the new period committed while disabled before restarting. */
++	state.enabled = false;
++	ret = pwm_apply_might_sleep(popup->step_pwm, &state);
++	if (ret)
++		goto err_disable;
++
+ 	state.enabled = true;
+ 	ret = pwm_apply_might_sleep(popup->step_pwm, &state);
+ 	if (ret)
+-		hotdog_popup_pwm_disable(popup);
++		goto err_disable;
+ 
++	return 0;
++
++err_disable:
++	hotdog_popup_pwm_disable(popup);
+ 	return ret;
+ }
+ 
+-- 
+2.54.0
+

@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 15:05:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable microphone routing
+
+The SLIM Capture 1 back end already links SLIMBUS_0_TX to the WCD9340
+AIF1_CAP port, and the codec node already carries micbias1 through
+micbias4. No DAPM route connects an analogue microphone input to its bias
+supply, so every ADC path stays powered down and the capture front end has
+no reachable back end.
+
+Add the five analogue microphone routes. The bias assignment is read from
+the stock OxygenOS device tree overlay for this handset, which is
+identified by carrying oplus,speaker-pa = "nxp", oplus,usbc-switch and
+qcom,wsa-max-devs = <0>, and which is immediately followed by the
+tfa98xx_right@34 amplifier node. Its qcom,audio-routing names the physical
+role of each input:
+
+  AMIC1 - MIC BIAS1
+  AMIC2 - MIC BIAS2, "Headset Mic"
+  AMIC3 - MIC BIAS4, "ANCRight Headset Mic"
+  AMIC4 - MIC BIAS1, "ANCLeft Headset Mic"
+  AMIC5 - MIC BIAS1, "Handset Mic"
+
+The handset microphone is therefore AMIC5, reached by selecting AMIC5 on
+the shared AMIC4_5 mux and taking ADC4. AMIC4 is an ANC input on the same
+mux, which is why picking it produces a running but silent capture.
+
+Mainline has no "Handset Mic" or "Analog Mic" input widget, so only the
+pad-to-supply half of the stock routing is expressed here, as
+sdm845-oneplus-fajita does for the same codec.
+
+This change is capture-only. It adds no playback route and does not touch
+the validated speaker path.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -390,7 +390,12 @@
+ 	pinctrl-names = "default";
+ 	status = "okay";
+
+-	audio-routing = "RX_BIAS", "MCLK";
++	audio-routing = "RX_BIAS", "MCLK",
++			"AMIC1", "MIC BIAS1",
++			"AMIC2", "MIC BIAS2",
++			"AMIC3", "MIC BIAS4",
++			"AMIC4", "MIC BIAS1",
++			"AMIC5", "MIC BIAS1";
+
+ 	mm1-dai-link {
+ 		link-name = "MultiMedia1";
+--
+2.50.1

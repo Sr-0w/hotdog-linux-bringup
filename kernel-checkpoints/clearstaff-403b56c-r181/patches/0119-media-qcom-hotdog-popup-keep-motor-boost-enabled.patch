@@ -1,0 +1,51 @@
+From 8b591ddfcdb977fb589676bb8310a7033f32a55b Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:56:12 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: keep motor boost enabled
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 297dad2ad..2214be68c 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -139,7 +139,6 @@ static void hotdog_popup_stop(struct hotdog_popup *popup)
+ 	gpiod_set_value_cansleep(popup->sleep, 0);
+ 	gpiod_set_value_cansleep(popup->mode1, 0);
+ 	gpiod_set_value_cansleep(popup->direction, 0);
+-	gpiod_set_value_cansleep(popup->boost, 0);
+ }
+ 
+ static int hotdog_popup_read_halls(struct hotdog_popup *popup,
+@@ -163,8 +162,6 @@ static void hotdog_popup_power_on(struct hotdog_popup *popup, bool upward)
+ 	/* FI5 direction is physically low for up and high for down. */
+ 	gpiod_set_value_cansleep(popup->direction, !upward);
+ 	gpiod_set_value_cansleep(popup->mode1, 1);
+-	gpiod_set_value_cansleep(popup->boost, 1);
+-	usleep_range(10000, 11000);
+ 	gpiod_set_value_cansleep(popup->sleep, 1);
+ 	usleep_range(1000, 1500);
+ }
+@@ -670,7 +667,8 @@ static int hotdog_popup_probe(struct platform_device *pdev)
+ 	mutex_init(&popup->lock);
+ 	platform_set_drvdata(pdev, popup);
+ 
+-	popup->boost = devm_gpiod_get(dev, "boost-enable", GPIOD_OUT_LOW);
++	/* OxygenOS keeps the motor boost converter on across movements. */
++	popup->boost = devm_gpiod_get(dev, "boost-enable", GPIOD_OUT_HIGH);
+ 	if (IS_ERR(popup->boost))
+ 		return dev_err_probe(dev, PTR_ERR(popup->boost),
+ 				     "failed to get boost GPIO\n");
+@@ -755,6 +753,7 @@ static void hotdog_popup_remove(struct platform_device *pdev)
+ 	of_genpd_del_provider(pdev->dev.of_node);
+ 	pm_genpd_remove(&popup->genpd);
+ 	hotdog_popup_stop(popup);
++	gpiod_set_value_cansleep(popup->boost, 0);
+ }
+ 
+ static const struct of_device_id hotdog_popup_of_match[] = {
+-- 
+2.54.0
+

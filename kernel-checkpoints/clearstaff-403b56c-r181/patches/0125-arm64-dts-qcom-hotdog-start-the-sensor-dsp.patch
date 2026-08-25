@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 23:30:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: start the sensor DSP
+
+The motion sensors on this handset live behind the SLPI, a separate Hexagon
+island, and nothing reaches them while it is held in reset. The node is already
+described upstream with its SMP2P interrupts and memory region, and the board
+already reserves the stock 0x98100000 window for it; only the firmware name and
+status were missing.
+
+The image comes from the handset's own modem partition, where the vendor ships
+it as slpi.mdt plus twenty-two segments, squashed into a single slpi.mbn the way
+the other remote processors here are packaged.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -583,6 +583,11 @@
+ 	status = "okay";
+ };
+ 
++&remoteproc_slpi {
++	firmware-name = "qcom/sm8150/oneplus/hotdog/slpi.mbn";
++	status = "okay";
++};
++
+ &remoteproc_mpss {
+ 	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
+ 	status = "okay";
+--
+2.50.1

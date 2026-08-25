@@ -1,0 +1,247 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 15:20:00 +0200
+Subject: [PATCH] media: i2c: follow the OnePlus IMX586 power sequence
+
+The staged r92 sequence proves that PM8009 LDO1 is safe when the module
+rails are ordered, but its generic 24 MHz sequence does not wake the main
+sensor. All four IMX586 module descriptions shipped in OxygenOS encode the
+same board-specific sequence and identify the device at address 0x1a,
+register 0x0016.
+
+Implement that sequence as an explicit DT-selected diagnostic path:
+CUSTOM_GPIO1, VDIG, CUSTOM_GPIO2, VIO, 19.2 MHz MCLK, then reset. Do not
+enable the unused BOB/VANA path or TLMM GPIO 11. Retain a stage boundary
+after every operation and unwind in the vendor power-down order.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -21,9 +21,11 @@
+ #include <linux/mod_devicetable.h>
+ #include <linux/mutex.h>
+ #include <linux/module.h>
++#include <linux/property.h>
+ #include <linux/regulator/consumer.h>
+ 
+ #define HOTDOG_CAM_SCAN_MCLK_RATE	24000000
++#define HOTDOG_IMX586_MCLK_RATE		19200000
+ 
+ /*
+  * Off unless asked for. Powering a slot and driving its bus is intrusive
+@@ -37,14 +39,13 @@
+ 		 "I2C bus number of the one slot to power and probe, -1 for none");
+ 
+ /*
+- * How far to take the power-up sequence. Powering a slot resets the handset on
+- * three of the four, and stopping before each step is what says which one does
+- * it. 1 prepares VIO and the analogue source, 2 gates VANA onto the sensor,
+- * 3 adds VDIG, 4 adds MCLK, and 5 releases reset and scans.
++ * How far to take the power-up sequence. The generic path has five stages. The
++ * OxygenOS IMX586 path has six: CUSTOM_GPIO1, VDIG, CUSTOM_GPIO2, VIO, MCLK,
++ * then reset and the model read.
+  */
+-static int stage = 5;
++static int stage = 6;
+ module_param(stage, int, 0444);
+-MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 5");
++MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 6");
+ 
+ /* One slot at a time: the two masters of a CCI block share an interrupt. */
+ static DEFINE_MUTEX(hotdog_cam_scan_lock);
+@@ -108,6 +109,147 @@
+ 		dev_info(dev, "no device answered on this bus\n");
+ }
+ 
++static void hotdog_imx586_read_id(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	u8 wbuf[2] = { 0x00, 0x16 };
++	u8 rbuf[2] = { 0xff, 0xff };
++	struct i2c_msg msgs[2] = {
++		{ .addr = 0x1a, .flags = 0, .len = sizeof(wbuf), .buf = wbuf },
++		{ .addr = 0x1a, .flags = I2C_M_RD,
++		  .len = sizeof(rbuf), .buf = rbuf },
++	};
++	int ret;
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret != 2) {
++		dev_info(dev, "IMX586 did not answer at 0x1a: %d\n", ret);
++		return;
++	}
++
++	dev_info(dev, "IMX586 model register 0x0016 = 0x%02x%02x%s\n",
++		 rbuf[0], rbuf[1],
++		 rbuf[0] == 0x05 && rbuf[1] == 0x86 ? " (matched)" : "");
++}
++
++static int hotdog_imx586_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct gpio_desc *custom1;
++	struct gpio_desc *custom2;
++	struct gpio_desc *reset;
++	struct regulator *vdig;
++	struct regulator *vio;
++	struct clk *mclk;
++	bool custom1_on = false;
++	bool custom2_on = false;
++	bool mclk_on = false;
++	bool reset_up = false;
++	bool vdig_on = false;
++	bool vio_on = false;
++	int ret = 0;
++
++	custom1 = devm_gpiod_get(dev, "custom1", GPIOD_OUT_LOW);
++	if (IS_ERR(custom1))
++		return dev_err_probe(dev, PTR_ERR(custom1),
++				     "cannot get CUSTOM_GPIO1\n");
++
++	custom2 = devm_gpiod_get(dev, "custom2", GPIOD_OUT_LOW);
++	if (IS_ERR(custom2))
++		return dev_err_probe(dev, PTR_ERR(custom2),
++				     "cannot get CUSTOM_GPIO2\n");
++
++	reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(reset))
++		return dev_err_probe(dev, PTR_ERR(reset),
++				     "cannot get reset GPIO\n");
++
++	vdig = devm_regulator_get(dev, "vdig");
++	if (IS_ERR(vdig))
++		return dev_err_probe(dev, PTR_ERR(vdig), "cannot get VDIG\n");
++
++	vio = devm_regulator_get(dev, "vio");
++	if (IS_ERR(vio))
++		return dev_err_probe(dev, PTR_ERR(vio), "cannot get VIO\n");
++
++	mclk = devm_clk_get(dev, NULL);
++	if (IS_ERR(mclk))
++		return dev_err_probe(dev, PTR_ERR(mclk), "cannot get MCLK\n");
++
++	ret = clk_set_rate(mclk, HOTDOG_IMX586_MCLK_RATE);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot set IMX586 MCLK rate\n");
++
++	gpiod_set_value_cansleep(custom1, 1);
++	custom1_on = true;
++	dev_info(dev, "IMX586 stage 1: CUSTOM_GPIO1 asserted\n");
++	if (stage < 2)
++		goto power_down;
++
++	ret = regulator_enable(vdig);
++	if (ret) {
++		dev_err(dev, "cannot enable IMX586 VDIG: %d\n", ret);
++		goto power_down;
++	}
++	vdig_on = true;
++	usleep_range(1000, 2000);
++	dev_info(dev, "IMX586 stage 2: VDIG enabled\n");
++	if (stage < 3)
++		goto power_down;
++
++	gpiod_set_value_cansleep(custom2, 1);
++	custom2_on = true;
++	dev_info(dev, "IMX586 stage 3: CUSTOM_GPIO2 asserted\n");
++	if (stage < 4)
++		goto power_down;
++
++	ret = regulator_enable(vio);
++	if (ret) {
++		dev_err(dev, "cannot enable IMX586 VIO: %d\n", ret);
++		goto power_down;
++	}
++	vio_on = true;
++	usleep_range(1000, 2000);
++	dev_info(dev, "IMX586 stage 4: VIO enabled\n");
++	if (stage < 5)
++		goto power_down;
++
++	ret = clk_prepare_enable(mclk);
++	if (ret) {
++		dev_err(dev, "cannot enable IMX586 MCLK: %d\n", ret);
++		goto power_down;
++	}
++	mclk_on = true;
++	usleep_range(1000, 2000);
++	dev_info(dev, "IMX586 stage 5: MCLK running at %lu Hz\n",
++		 clk_get_rate(mclk));
++	if (stage < 6)
++		goto power_down;
++
++	gpiod_set_value_cansleep(reset, 0);
++	reset_up = true;
++	usleep_range(1000, 2000);
++	dev_info(dev, "IMX586 stage 6: reset released, reading model\n");
++	hotdog_imx586_read_id(client);
++
++power_down:
++	/* Match the power-down order encoded by every OnePlus IMX586 module. */
++	if (reset_up)
++		gpiod_set_value_cansleep(reset, 1);
++	if (mclk_on)
++		clk_disable_unprepare(mclk);
++	if (vio_on)
++		regulator_disable(vio);
++	if (vdig_on)
++		regulator_disable(vdig);
++	if (custom2_on)
++		gpiod_set_value_cansleep(custom2, 0);
++	if (custom1_on)
++		gpiod_set_value_cansleep(custom1, 0);
++
++	return ret ? ret : -ENODEV;
++}
++
+ static int hotdog_cam_scan_probe(struct i2c_client *client)
+ {
+ 	struct device *dev = &client->dev;
+@@ -128,6 +270,11 @@
+ 		return -ENODEV;
+ 
+ 	dev_info(dev, "scanning this slot on i2c-%d\n", scan);
++	guard(mutex)(&hotdog_cam_scan_lock);
++
++	if (device_property_read_bool(dev,
++				      "oneplus,imx586-power-sequence"))
++		return hotdog_imx586_probe(client);
+ 
+ 	vio = devm_regulator_get(dev, "vio");
+ 	if (IS_ERR(vio))
+@@ -161,8 +308,6 @@
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "cannot set MCLK rate\n");
+ 
+-	guard(mutex)(&hotdog_cam_scan_lock);
+-
+ 	ret = regulator_enable(vio);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "cannot enable VIO\n");
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -906,16 +906,15 @@
+ 
+ 		clocks = <&camcc CAM_CC_MCLK1_CLK>;
+ 		assigned-clocks = <&camcc CAM_CC_MCLK1_CLK>;
+-		assigned-clock-rates = <24000000>;
++		assigned-clock-rates = <19200000>;
+ 
+ 		vio-supply = <&vreg_l1c_1p8>;
+-		vana-supply = <&vreg_bob>;
+ 		vdig-supply = <&vreg_l1f_1p1>;
+ 
+ 		reset-gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
+-		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>,
+-				    <&tlmm 29 GPIO_ACTIVE_HIGH>,
+-				    <&pm8150l_gpios 1 GPIO_ACTIVE_LOW>;
++		custom1-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
++		custom2-gpios = <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
++		oneplus,imx586-power-sequence;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk1_default>;
+-- 
+2.50.1
+

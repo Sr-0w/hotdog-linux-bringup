@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 01:10:00 +0200
+Subject: [PATCH] media: camss: vote the internal sm8150 CAMNOC path
+
+The SM8150 downstream CPAS driver votes two interconnect paths for VFE0:
+the internal CAMNOC HF0-uncompressed path and the external CAMNOC HF0 to
+DDR path. Mainline currently votes only the external path.
+
+This is observable as a CAMNOC slave error. A CSID test-generator capture
+reaches VFE write master 0, which attempts a non-secure write burst to the
+programmed buffer IOVA, but CAMNOC records error code 3, "Disconnected
+target", at that exact address. The request never reaches the SMMU and the
+capture buffer remains untouched.
+
+The SM8150 interconnect provider already describes the internal
+MASTER_CAMNOC_HF0_UNCOMP to SLAVE_CAMNOC_UNCOMP path. Add it to the CAMSS
+consumer and vote it with the same bounded bring-up bandwidth as the HF0
+memory path.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150.dtsi      |  4 +++-
+ drivers/media/platform/qcom/camss/camss.c |  5 +++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -4055,10 +4055,12 @@
+ 
+ 			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_CAMERA_CFG 0>,
+ 					<&mmss_noc MASTER_CAMNOC_HF0 0 &mc_virt SLAVE_EBI_CH0 0>,
+-					<&mmss_noc MASTER_CAMNOC_SF 0 &mc_virt SLAVE_EBI_CH0 0>;
++					<&mmss_noc MASTER_CAMNOC_SF 0 &mc_virt SLAVE_EBI_CH0 0>,
++					<&camnoc_virt MASTER_CAMNOC_HF0_UNCOMP 0 &camnoc_virt SLAVE_CAMNOC_UNCOMP 0>;
+ 			interconnect-names = "cam_ahb",
+ 					     "cam_hf_0_mnoc",
+-					     "cam_sf_0_mnoc";
++					     "cam_sf_0_mnoc",
++					     "cam_hf_0_camnoc";
+ 
+ 			iommus = <&apps_smmu 0x840 0x620>,
+ 				 <&apps_smmu 0x860 0x620>,
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -4019,6 +4019,11 @@ static const struct resources_icc icc_res_8150[] = {
+ 		.icc_bw_tbl.avg = 0,
+ 		.icc_bw_tbl.peak = 2097152,
+ 	},
++	{
++		.name = "cam_hf_0_camnoc",
++		.icc_bw_tbl.avg = 2097152,
++		.icc_bw_tbl.peak = 2097152,
++	},
+ };
+ 
+ static const struct camss_resources sm8150_resources = {
+--
+2.50.1

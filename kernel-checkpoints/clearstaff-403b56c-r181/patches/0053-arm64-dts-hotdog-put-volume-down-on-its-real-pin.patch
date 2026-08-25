@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 20:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: put volume down on its real pin
+
+Volume down was described as the PON RESIN input. It registers an input
+device that claims KEY_VOLUMEDOWN, but pressing the key does nothing at all.
+
+The PMIC is armed correctly, so the description is not merely incomplete: the
+PON interrupt enable register reads 0x03, so both KPDPWR and RESIN interrupts
+are enabled, and both are configured for either edge. Yet holding the key
+never changes the RESIN bit in the PON real-time status register, and the
+interrupt count stays at zero. Volume up, which is a PMIC GPIO, counts its
+presses normally over the same period.
+
+RESIN is simply not wired to the key on this board. The stock device tree
+puts both volume keys on PMIC GPIOs: gpio6 for up, which is already
+described here, and gpio7 for down, with a matching pin state that enables
+the input and its pull-up.
+
+Describe volume down the same way as volume up, and stop enabling RESIN,
+because an input device that claims a key it can never report is worse than
+not offering it.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 34 +++++++++++++-----
+ 1 file changed, 25 insertions(+), 9 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -53,7 +53,7 @@
+ 	gpio_keys: gpio-keys {
+ 		compatible = "gpio-keys";
+ 		pinctrl-names = "default";
+-		pinctrl-0 = <&volume_up_state>;
++		pinctrl-0 = <&volume_up_state>, <&volume_down_state>;
+ 
+ 		volume-up {
+ 			label = "volume_up";
+@@ -63,6 +63,15 @@
+ 			wakeup-source;
+ 			debounce-interval = <15>;
+ 		};
++
++		volume-down {
++			label = "volume_down";
++			gpios = <&pm8150_gpios 7 GPIO_ACTIVE_LOW>;
++			linux,input-type = <EV_KEY>;
++			linux,code = <KEY_VOLUMEDOWN>;
++			wakeup-source;
++			debounce-interval = <15>;
++		};
+ 	};
+ 
+ 	memory@80000000 {
+@@ -202,6 +211,15 @@
+ 		power-source = <1>;
+ 		qcom,drive-strength = <PMIC_GPIO_STRENGTH_NO>;
+ 	};
++
++	volume_down_state: volume-down-state {
++		pins = "gpio7";
++		function = "normal";
++		input-enable;
++		bias-pull-up;
++		power-source = <1>;
++		qcom,drive-strength = <PMIC_GPIO_STRENGTH_NO>;
++	};
+ };
+ 
+ &tlmm {
+@@ -730,10 +748,11 @@
+ 	status = "okay";
+ };
+ 
+-&pon_resin {
+-	linux,code = <KEY_VOLUMEDOWN>;
+-	status = "okay";
+-};
++/*
++ * RESIN is not wired to anything on this board. Leaving it enabled registers
++ * an input device that claims KEY_VOLUMEDOWN and never reports a press, which
++ * is worse than not offering it at all.
++ */
+ 
+ &mdss_dsi0_phy {
+ 	vdds-supply = <&vreg_l5a_0p875>;
+--
+2.50.1

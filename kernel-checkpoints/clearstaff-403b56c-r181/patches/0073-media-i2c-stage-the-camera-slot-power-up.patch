@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 13:45:00 +0200
+Subject: [PATCH] media: i2c: stage the camera slot power-up
+
+Three of the four camera slots reset the handset the moment they are powered,
+and five hypotheses about their description have each been tested and refuted.
+Guessing at the description again is not the way forward; seeing which step of
+the sequence does it is.
+
+Add a stage parameter that stops after the supplies, after the analogue enable
+GPIOs, after MCLK, or runs the whole thing, logging each step as it passes.
+Whichever stage the handset survives to bounds the fault to one operation.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/hotdog-cam-scan.c | 34 +++++++++++++++++++++++++---
+ 1 file changed, 31 insertions(+), 3 deletions(-)
+
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -36,6 +36,16 @@
+ MODULE_PARM_DESC(scan,
+ 		 "I2C bus number of the one slot to power and probe, -1 for none");
+ 
++/*
++ * How far to take the power-up sequence. Powering a slot resets the handset on
++ * three of the four, and stopping before each step is what says which one does
++ * it. 1 supplies only, 2 adds the analogue enable GPIOs, 3 adds MCLK, 4 releases
++ * reset and scans.
++ */
++static int stage = 4;
++module_param(stage, int, 0444);
++MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 4");
++
+ /* One slot at a time: the two masters of a CCI block share an interrupt. */
+ static DEFINE_MUTEX(hotdog_cam_scan_lock);
+ 
+@@ -160,6 +170,10 @@
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "cannot enable supplies\n");
+ 
++	dev_info(dev, "stage 1: supplies enabled\n");
++	if (stage < 2)
++		goto hold;
++
+ 	if (vana_enable) {
+ 		DECLARE_BITMAP(values, BITS_PER_TYPE(long));
+ 
+@@ -167,6 +181,9 @@
+ 		gpiod_multi_set_value_cansleep(vana_enable, values);
+ 	}
+ 	usleep_range(1000, 2000);
++	dev_info(dev, "stage 2: analogue enable asserted\n");
++	if (stage < 3)
++		goto hold;
+ 
+ 	ret = clk_prepare_enable(mclk);
+ 	if (ret) {
+@@ -174,6 +191,9 @@
+ 		goto disable_supplies;
+ 	}
+ 	usleep_range(1000, 2000);
++	dev_info(dev, "stage 3: MCLK running\n");
++	if (stage < 4)
++		goto hold_clk;
+ 
+ 	gpiod_set_value_cansleep(reset, 0);
+ 	usleep_range(10000, 11000);
+@@ -183,7 +203,9 @@
+ 	hotdog_cam_scan_bus(client);
+ 
+ 	gpiod_set_value_cansleep(reset, 1);
++hold_clk:
+ 	clk_disable_unprepare(mclk);
++hold:
+ 
+ disable_supplies:
+ 	if (vana_enable) {
+--
+2.50.1

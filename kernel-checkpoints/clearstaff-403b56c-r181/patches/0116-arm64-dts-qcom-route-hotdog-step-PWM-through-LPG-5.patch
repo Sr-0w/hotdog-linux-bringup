@@ -1,0 +1,25 @@
+From bfbd6496021637d180908a092a929bc67ee48ce5 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:15:14 +0200
+Subject: [PATCH] arm64: dts: qcom: route hotdog step PWM through LPG 5
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index bc5a63ed3..91316d8c1 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -83,7 +83,7 @@ camera_popup: camera-popup {
+ 		mode1-gpios = <&pm8150l_gpios 8 GPIO_ACTIVE_HIGH>;
+ 		sleep-gpios = <&pm8150_gpios 10 GPIO_ACTIVE_HIGH>;
+ 		step-gpios = <&pm8150l_gpios 10 GPIO_ACTIVE_HIGH>;
+-		pwms = <&pm8150l_lpg 3 104166>;
++		pwms = <&pm8150l_lpg 4 104166>;
+ 		pwm-names = "step";
+ 		io-channels = <&hall_up>, <&hall_down>;
+ 		io-channel-names = "hall-up", "hall-down";
+-- 
+2.54.0
+

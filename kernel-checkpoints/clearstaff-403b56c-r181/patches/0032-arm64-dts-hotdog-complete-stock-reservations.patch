@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000032 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 14:00:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: complete stock memory reservations
+
+Comparing the HD1913 stock reserved-memory union with the mainline hotdog
+tree leaves two stock-owned intervals visible to the Linux page allocator:
+
+  - 0x89b00000-0x89d00000 from removed_regions
+  - 0x99517000-0x99600000 from cdsp_regions
+
+The second full DDR capture was taken after the XBL/AOP gap fix. It found
+Flatpak page-cache folios from the crashing staging inode at
+0x99518000-0x99580000, inside the omitted CDSP interval. This reproduces the
+same firmware ownership collision at the next missing reservation.
+
+Reserve both remaining intervals as no-map. Together with the preceding
+XBL/AOP fix, this makes the mainline reserved-memory union cover every byte
+owned by the enabled HD1913 stock reservations.
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -96,6 +96,16 @@ / {
+ 			no-map;
+ 		};
+ 
++		stock_removed_gap: memory@89b00000 {
++			reg = <0 0x89b00000 0 0x200000>;
++			no-map;
++		};
++
++		stock_cdsp_gap: memory@99517000 {
++			reg = <0 0x99517000 0 0xe9000>;
++			no-map;
++		};
++
+ 		hotdog_removed_gap: hotdog-removed-gap@89d00000 {
+ 			reg = <0 0x89d00000 0 0x1a00000>;
+ 			no-map;
+-- 
+2.50.1

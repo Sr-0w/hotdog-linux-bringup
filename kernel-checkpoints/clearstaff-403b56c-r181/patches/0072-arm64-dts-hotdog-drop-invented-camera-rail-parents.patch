@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 13:35:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: drop the invented camera rail parents
+
+The PM8009 camera rails added here were given vdd-l1, vdd-l3 and vdd-l4 parents
+pointing at vreg_s8c_1p3, chosen because that is what ldo2 uses. No board in the
+tree describes those parents: every one that carries PM8009 declares only
+vdd-l2-supply, and the other mainline SM8150 handset with this PMIC describes
+only ldo2, ldo5 and ldo6.
+
+The three camera slots fed by these rails reset the handset when powered, while
+the slot fed by ldo2 comes up cleanly. Since the parents were an inference with
+nothing behind it, describe the rails the way every other board does and leave
+them out.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../boot/dts/qcom/sm8150-oneplus-common.dtsi | 3 ---
+ 1 file changed, 3 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
+@@ -394,10 +394,7 @@
+ 		vdd-s1-supply = <&vph_pwr>;
+ 		vdd-s2-supply = <&vreg_bob>;
+ 
+-		vdd-l1-supply = <&vreg_s8c_1p3>;
+ 		vdd-l2-supply = <&vreg_s8c_1p3>;
+-		vdd-l3-supply = <&vreg_s8c_1p3>;
+-		vdd-l4-supply = <&vreg_s8c_1p3>;
+ 		vdd-l5-l6-supply = <&vreg_bob>;
+ 
+ 		vreg_l1f_1p1: ldo1 {
+--
+2.50.1

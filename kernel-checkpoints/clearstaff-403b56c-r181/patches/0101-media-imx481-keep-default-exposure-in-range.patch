@@ -1,0 +1,25 @@
+From dbfb13bbe87ea935e6741ac5506afba0469cb841 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 11:08:12 +0200
+Subject: [PATCH] media: imx481 keep default exposure in range
+
+---
+ drivers/media/i2c/imx481.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/media/i2c/imx481.c b/drivers/media/i2c/imx481.c
+index 4d4d47efd..31e7a9764 100644
+--- a/drivers/media/i2c/imx481.c
++++ b/drivers/media/i2c/imx481.c
+@@ -35,7 +35,7 @@
+ #define IMX481_EXPOSURE_MIN	1
+ #define IMX481_EXPOSURE_OFFSET	18
+ #define IMX481_EXPOSURE_STEP	1
+-#define IMX481_EXPOSURE_DEFAULT	0x0dd0
++#define IMX481_EXPOSURE_DEFAULT	0x0dcc
+ 
+ /* Analog gain control */
+ #define IMX481_REG_AGAIN	0x0204
+-- 
+2.54.0
+

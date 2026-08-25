@@ -1,0 +1,58 @@
+From 7772c54695a875787da4171f11b617ec558fc77a Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 21:27:16 +0200
+Subject: [PATCH] ASoC: hotdog: match OxygenOS speaker sample format
+
+OxygenOS selects S24_LE for QUAT_MI2S_RX in mixer_paths_tavil.xml. This produces the 3.072 MHz bit clock and 32-bit slots programmed by the stock TFA9874 container.\n\nUse that same format for the mainline backend and amplifier DAI so samples line up with the active TDM slots.
+---
+ sound/soc/codecs/tfa9874.c | 2 +-
+ sound/soc/qcom/sm8150.c    | 9 +++------
+ 2 files changed, 4 insertions(+), 7 deletions(-)
+
+diff --git a/sound/soc/codecs/tfa9874.c b/sound/soc/codecs/tfa9874.c
+index 90ffdb3b90ab..5298b9954e52 100644
+--- a/sound/soc/codecs/tfa9874.c
++++ b/sound/soc/codecs/tfa9874.c
+@@ -410,7 +410,7 @@ static struct snd_soc_dai_driver tfa9874_dai = {
+ 		.channels_min = 2,
+ 		.channels_max = 2,
+ 		.rates = SNDRV_PCM_RATE_48000,
+-		.formats = SNDRV_PCM_FMTBIT_S16_LE,
++		.formats = SNDRV_PCM_FMTBIT_S24_LE,
+ 	},
+ 	.ops = &tfa9874_dai_ops,
+ };
+diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
+index 5b31489e9202..222c86e0fda1 100644
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -22,7 +22,7 @@
+ #define SLIM_MAX_TX_PORTS 16
+ #define SLIM_MAX_RX_PORTS 13
+ #define WCD934X_DEFAULT_MCLK_RATE	9600000
+-#define MI2S_BCLK_RATE		1536000
++#define QUAT_MI2S_BCLK_RATE	3072000
+ 
+ struct sm8150_snd_data {
+ 	struct snd_soc_jack jack;
+@@ -58,10 +58,7 @@ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 	rate->min = rate->max = 48000;
+ 	channels->min = channels->max = 2;
+ 	snd_mask_none(fmt);
+-	if (cpu_dai->id == QUATERNARY_MI2S_RX)
+-		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
+-	else
+-		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
++	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
+ 
+ 	return 0;
+ }
+@@ -316,7 +313,7 @@ static int sm8150_snd_startup(struct snd_pcm_substream *substream)
+ 	case QUATERNARY_MI2S_RX:
+ 		snd_soc_dai_set_sysclk(cpu_dai,
+ 			Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT,
+-			MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK);
++			QUAT_MI2S_BCLK_RATE, SNDRV_PCM_STREAM_PLAYBACK);
+ 		/* The external speaker amplifiers consume BCLK and frame sync. */
+ 		snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_BP_FP);
+ 		break;

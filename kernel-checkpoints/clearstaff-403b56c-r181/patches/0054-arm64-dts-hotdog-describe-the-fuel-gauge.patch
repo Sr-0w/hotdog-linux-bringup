@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 20:45:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: describe the fuel gauge
+
+Nothing described the fuel gauge, so the only battery information came from
+the charger, leaving charge level, capacity, current and temperature
+unreported.
+
+The stock device tree places it at address 0x55 on the eighth QUP serial
+engine, alongside the fast-charge microcontroller. That engine is i2c8 here
+and was not enabled. It is described without GPI DMA and at 100 kHz, matching
+what i2c4 already needs on this board.
+
+The stock name for the part is bq27541, but its registers are not laid out
+that way. Reading them directly with the driver unbound shows state of charge
+at 0x1c reporting 100, temperature at 0x02 reporting 33.9 C, remaining and
+full charge capacity at 0x0c and 0x0e, and current at 0x10 reading zero on a
+full battery. That is the bq27421 layout, not the bq27541 one, where state of
+charge would sit at 0x2c and temperature at 0x06. Reading it as a bq27541
+returned a state of charge within a few counts of the voltage and a cycle
+count identical to the remaining capacity, because 0x2a and 0x2c hold
+something else entirely on this part.
+
+Describe it as ti,bq27411, which shares that register map and correctly
+declares cycle count as unavailable rather than reporting a neighbouring
+register.
+
+monitored-battery is deliberately omitted. The gauge is factory programmed for
+the cell it ships with, and the driver can push devicetree values into a
+gauge's data memory, which is not something a description should do to a
+working battery.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -363,6 +363,18 @@
+ 	status = "okay";
+ };
+ 
++&i2c8 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <100000>;
++	status = "okay";
++
++	fuel-gauge@55 {
++		compatible = "ti,bq27411";
++		reg = <0x55>;
++	};
++};
++
+ &i2c17 {
+ 	status = "okay";
+ 	clock-frequency = <400000>;
+--
+2.50.1

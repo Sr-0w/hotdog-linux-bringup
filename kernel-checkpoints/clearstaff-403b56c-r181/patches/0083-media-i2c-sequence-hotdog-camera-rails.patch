@@ -1,0 +1,183 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 16:45:00 +0200
+Subject: [PATCH] media: i2c: sequence hotdog camera rails explicitly
+
+The staged camera probe enabled all regulator handles before asserting the
+external analogue-enable GPIOs. On the three Sony slots this meant VDIG was
+applied while VANA remained physically disconnected. The only working slot
+uses a GPIO-backed fixed regulator for VANA, so its bulk enable happened to
+produce a different physical sequence.
+
+The failing sequence leaves no kernel panic and the primary PMIC records an
+UVLO fault. Split the rails so the diagnostic follows the physical sequence:
+prepare VIO and the analogue source, gate VANA onto the module, then enable
+VDIG, MCLK and reset. Keep each boundary independently testable and unwind in
+the exact reverse order.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/hotdog-cam-scan.c | 79 +++++++++++++++++++----------
+ 1 file changed, 53 insertions(+), 26 deletions(-)
+
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -39,12 +39,12 @@
+ /*
+  * How far to take the power-up sequence. Powering a slot resets the handset on
+  * three of the four, and stopping before each step is what says which one does
+- * it. 1 supplies only, 2 adds the analogue enable GPIOs, 3 adds MCLK, 4 releases
+- * reset and scans.
++ * it. 1 prepares VIO and the analogue source, 2 gates VANA onto the sensor,
++ * 3 adds VDIG, 4 adds MCLK, and 5 releases reset and scans.
+  */
+-static int stage = 4;
++static int stage = 5;
+ module_param(stage, int, 0444);
+-MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 4");
++MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 5");
+ 
+ /* One slot at a time: the two masters of a CCI block share an interrupt. */
+ static DEFINE_MUTEX(hotdog_cam_scan_lock);
+@@ -61,14 +61,6 @@
+ /* Samsung report their model at 0x0000; Sony at 0x0016. */
+ static const u16 hotdog_cam_scan_id_regs[] = { 0x0000, 0x0016 };
+ 
+-static const char * const hotdog_cam_scan_supplies[] = {
+-	"vio",		/* digital I/O, 1.8 V */
+-	"vana",		/* analogue, 3.3 V, gated by the enable GPIOs */
+-	"vdig",		/* digital core, 1.056 or 1.104 V from PM8009 */
+-};
+-
+-#define HOTDOG_CAM_SCAN_NUM_SUPPLIES ARRAY_SIZE(hotdog_cam_scan_supplies)
+-
+ static void hotdog_cam_scan_bus(struct i2c_client *client)
+ {
+ 	struct device *dev = &client->dev;
+@@ -118,12 +110,13 @@
+ 
+ static int hotdog_cam_scan_probe(struct i2c_client *client)
+ {
+-	struct regulator_bulk_data supplies[HOTDOG_CAM_SCAN_NUM_SUPPLIES];
+ 	struct device *dev = &client->dev;
+ 	struct gpio_desc *reset;
+ 	struct gpio_descs *vana_enable;
++	struct regulator *vana;
++	struct regulator *vdig;
++	struct regulator *vio;
+ 	struct clk *mclk;
+-	unsigned int i;
+ 	int ret;
+ 
+ 	/*
+@@ -136,13 +129,17 @@
+ 
+ 	dev_info(dev, "scanning this slot on i2c-%d\n", scan);
+ 
+-	for (i = 0; i < HOTDOG_CAM_SCAN_NUM_SUPPLIES; i++)
+-		supplies[i].supply = hotdog_cam_scan_supplies[i];
+-
+-	ret = devm_regulator_bulk_get(dev, HOTDOG_CAM_SCAN_NUM_SUPPLIES,
+-				      supplies);
+-	if (ret)
+-		return dev_err_probe(dev, ret, "cannot get supplies\n");
++	vio = devm_regulator_get(dev, "vio");
++	if (IS_ERR(vio))
++		return dev_err_probe(dev, PTR_ERR(vio), "cannot get VIO\n");
++
++	vana = devm_regulator_get(dev, "vana");
++	if (IS_ERR(vana))
++		return dev_err_probe(dev, PTR_ERR(vana), "cannot get VANA\n");
++
++	vdig = devm_regulator_get(dev, "vdig");
++	if (IS_ERR(vdig))
++		return dev_err_probe(dev, PTR_ERR(vdig), "cannot get VDIG\n");
+ 
+ 	/* Held asserted until the rails and the clock are up. */
+ 	reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+@@ -166,13 +163,19 @@
+ 
+ 	guard(mutex)(&hotdog_cam_scan_lock);
+ 
+-	ret = regulator_bulk_enable(HOTDOG_CAM_SCAN_NUM_SUPPLIES, supplies);
++	ret = regulator_enable(vio);
+ 	if (ret)
+-		return dev_err_probe(dev, ret, "cannot enable supplies\n");
++		return dev_err_probe(dev, ret, "cannot enable VIO\n");
++
++	ret = regulator_enable(vana);
++	if (ret) {
++		dev_err(dev, "cannot prepare VANA: %d\n", ret);
++		goto disable_vio;
++	}
+ 
+-	dev_info(dev, "stage 1: supplies enabled\n");
++	dev_info(dev, "stage 1: VIO and VANA source prepared\n");
+ 	if (stage < 2)
+-		goto hold;
++		goto disable_vana;
+ 
+ 	if (vana_enable) {
+ 		DECLARE_BITMAP(values, BITS_PER_TYPE(long));
+@@ -180,19 +183,29 @@
+ 		bitmap_fill(values, vana_enable->ndescs);
+ 		gpiod_multi_set_value_cansleep(vana_enable, values);
+ 	}
+-	usleep_range(1000, 2000);
+-	dev_info(dev, "stage 2: analogue enable asserted\n");
++	usleep_range(5000, 6000);
++	dev_info(dev, "stage 2: VANA physically enabled\n");
+ 	if (stage < 3)
+-		goto hold;
++		goto disable_vana_gpio;
++
++	ret = regulator_enable(vdig);
++	if (ret) {
++		dev_err(dev, "cannot enable VDIG: %d\n", ret);
++		goto disable_vana_gpio;
++	}
++	usleep_range(5000, 6000);
++	dev_info(dev, "stage 3: VDIG enabled after VANA\n");
++	if (stage < 4)
++		goto disable_vdig;
+ 
+ 	ret = clk_prepare_enable(mclk);
+ 	if (ret) {
+ 		dev_err(dev, "cannot enable MCLK: %d\n", ret);
+-		goto disable_supplies;
++		goto disable_vdig;
+ 	}
+ 	usleep_range(1000, 2000);
+-	dev_info(dev, "stage 3: MCLK running\n");
+-	if (stage < 4)
++	dev_info(dev, "stage 4: MCLK running\n");
++	if (stage < 5)
+ 		goto hold_clk;
+ 
+ 	gpiod_set_value_cansleep(reset, 0);
+@@ -205,16 +218,19 @@
+ 	gpiod_set_value_cansleep(reset, 1);
+ hold_clk:
+ 	clk_disable_unprepare(mclk);
+-hold:
+-
+-disable_supplies:
++disable_vdig:
++	regulator_disable(vdig);
++disable_vana_gpio:
+ 	if (vana_enable) {
+ 		DECLARE_BITMAP(values, BITS_PER_TYPE(long));
+ 
+ 		bitmap_zero(values, vana_enable->ndescs);
+ 		gpiod_multi_set_value_cansleep(vana_enable, values);
+ 	}
+-	regulator_bulk_disable(HOTDOG_CAM_SCAN_NUM_SUPPLIES, supplies);
++disable_vana:
++	regulator_disable(vana);
++disable_vio:
++	regulator_disable(vio);
+ 
+ 	/*
+ 	 * Nothing is left bound: the point is the log line above, and leaving
+-- 
+2.50.1

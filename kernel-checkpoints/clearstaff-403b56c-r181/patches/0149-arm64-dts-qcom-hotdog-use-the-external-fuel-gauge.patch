@@ -1,0 +1,35 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 13 Aug 2026 15:30:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: use the external fuel gauge
+
+The OnePlus 7T Pro has a factory-programmed BQ27411-compatible fuel gauge on
+I2C8.  Enabling the PM8150B fuel gauge as well registers two system batteries
+with slightly different state-of-charge estimates.
+
+Keep the PM8150B SMB5 charger enabled, but disable its integrated fuel gauge
+and use the dedicated BQ27411-compatible gauge as the sole battery telemetry
+source.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -331,9 +331,9 @@
+ };
+ 
+ &pm8150b_fg {
+-	monitored-battery = <&battery>;
+-	power-supplies = <&pm8150b_charger>;
+-	status = "okay";
++	/delete-property/ monitored-battery;
++	/delete-property/ power-supplies;
++	status = "disabled";
+ };
+ 
+ &pon_pwrkey {
+-- 
+2.51.0

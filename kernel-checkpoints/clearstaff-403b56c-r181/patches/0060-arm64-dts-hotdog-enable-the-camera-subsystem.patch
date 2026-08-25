@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 00:50:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable the camera subsystem
+
+Turn on CAMSS and both CCI blocks so the subsystem probes on hardware. No
+sensor is described yet, so nothing streams; this is the step that proves the
+clocks, power domains and register map are right before sensor wiring adds a
+second unknown.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 12 ++++++++++
+ 1 file changed, 12 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -766,6 +766,18 @@
+  * is worse than not offering it at all.
+  */
+ 
++&cci0 {
++	status = "okay";
++};
++
++&cci1 {
++	status = "okay";
++};
++
++&camss {
++	status = "okay";
++};
++
+ &mdss_dsi0_phy {
+ 	vdds-supply = <&vreg_l5a_0p875>;
+ 	status = "okay";
+--
+2.50.1

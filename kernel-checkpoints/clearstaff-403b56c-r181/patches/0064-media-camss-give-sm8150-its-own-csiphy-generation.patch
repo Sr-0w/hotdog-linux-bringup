@@ -1,0 +1,99 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 01:45:00 +0200
+Subject: [PATCH] media: camss: give sm8150 its own CSIPHY generation
+
+SM8150 was given CAMSS_845 because sdm845 was the closest supported part, and
+that is right for the CSID and VFE, which are the same generation. It is wrong
+for the CSIPHY.
+
+The published vendor kernel says so directly: its sm8150 camera device tree
+declares every CSIPHY as "qcom,csiphy-v1.1", while sdm845 is v1.0. The two
+sequences differ from the first common-block register onwards, and the vendor's
+own headers carry 440 register writes for v1.1 against 272 for v1.0.
+
+Mainline already has the v1.1 sequence, as lane_regs_sc8280xp, and it matches
+the vendor's v1.1 table entry for entry once padding is discounted. So this
+adds CAMSS_8150, which behaves as CAMSS_845 everywhere except the CSIPHY lane
+table, where it takes the v1.1 one.
+
+Symptom this fixes: the sensor transmits and the CSID is correctly configured
+for four lanes over D-PHY, but latches receive errors and never interrupts,
+because the physical layer was set up for the wrong generation.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/platform/qcom/camss/camss-csiphy-3ph-1-0.c | 14 ++++++++
+ drivers/media/platform/qcom/camss/camss-vfe.c            |  2 +
+ drivers/media/platform/qcom/camss/camss.c                |  2 +-
+ drivers/media/platform/qcom/camss/camss.h                |  1 +
+ 4 files changed, 18 insertions(+), 1 deletion(-)
+
+--- a/drivers/media/platform/qcom/camss/camss.h
++++ b/drivers/media/platform/qcom/camss/camss.h
+@@ -85,6 +85,7 @@
+ 	CAMSS_8250,
+ 	CAMSS_8280XP,
+ 	CAMSS_845,
++	CAMSS_8150,
+ 	CAMSS_8550,
+ 	CAMSS_X1E80100,
+ };
+--- a/drivers/media/platform/qcom/camss/camss-csiphy-3ph-1-0.c
++++ b/drivers/media/platform/qcom/camss/camss-csiphy-3ph-1-0.c
+@@ -748,6 +748,7 @@
+ 	case CAMSS_8250:
+ 	case CAMSS_8280XP:
+ 	case CAMSS_845:
++	case CAMSS_8150:
+ 	case CAMSS_8550:
+ 	case CAMSS_X1E80100:
+ 		ret = true;
+@@ -829,6 +830,16 @@
+ 		regs->lane_regs = &lane_regs_sdm845[0];
+ 		regs->lane_array_size = ARRAY_SIZE(lane_regs_sdm845);
+ 		break;
++	/*
++	 * SM8150 carries a v1.1 PHY, which the published vendor kernel states
++	 * outright and whose register table matches sc8280xp's entry for entry.
++	 * Driving it with sdm845's v1.0 sequence leaves the receiver latching
++	 * errors and decoding nothing.
++	 */
++	case CAMSS_8150:
++		regs->lane_regs = &lane_regs_sc8280xp[0];
++		regs->lane_array_size = ARRAY_SIZE(lane_regs_sc8280xp);
++		break;
+ 	case CAMSS_7280:
+ 	case CAMSS_8250:
+ 		regs->lane_regs = &lane_regs_sm8250[0];
+--- a/drivers/media/platform/qcom/camss/camss-vfe.c
++++ b/drivers/media/platform/qcom/camss/camss-vfe.c
+@@ -345,6 +345,7 @@
+ 	case CAMSS_8250:
+ 	case CAMSS_8280XP:
+ 	case CAMSS_845:
++	case CAMSS_8150:
+ 	case CAMSS_8550:
+ 	case CAMSS_X1E80100:
+ 		switch (sink_code) {
+@@ -1973,6 +1974,7 @@
+ 	case CAMSS_8250:
+ 	case CAMSS_8280XP:
+ 	case CAMSS_845:
++	case CAMSS_8150:
+ 	case CAMSS_8550:
+ 	case CAMSS_X1E80100:
+ 		ret = 16;
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -3993,7 +3993,7 @@
+ };
+ 
+ static const struct camss_resources sm8150_resources = {
+-	.version = CAMSS_845,
++	.version = CAMSS_8150,
+ 	.pd_name = "top",
+ 	.csiphy_res = csiphy_res_8150,
+ 	.csid_res = csid_res_8150,
+--
+2.50.1

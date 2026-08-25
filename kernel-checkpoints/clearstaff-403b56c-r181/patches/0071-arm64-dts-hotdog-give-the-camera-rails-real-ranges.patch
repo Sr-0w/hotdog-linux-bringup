@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 13:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: give the camera rails their real
+ ranges
+
+The PM8009 rails added earlier were pinned to a single point each, with minimum
+equal to maximum, using figures read from the stock sensor nodes rather than
+from the regulators themselves. The vendor regulator description gives ranges:
+1.100 to 1.304 V for ldo1 and 1.096 to 1.304 V for ldo4.
+
+The three camera slots fed by these rails reset the handset the moment they are
+powered, while the one slot fed by ldo2, described before this port touched
+anything, powers up cleanly and reports its sensor. Asking an RPMh regulator for
+a voltage its own description does not offer is wrong regardless of whether it
+explains that.
+
+ldo3 takes ldo4's range: it is the same NLDO and the vendor description does not
+carry it separately.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../boot/dts/qcom/sm8150-oneplus-common.dtsi | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi
+@@ -401,8 +401,8 @@
+ 		vdd-l5-l6-supply = <&vreg_bob>;
+ 
+ 		vreg_l1f_1p1: ldo1 {
+-			regulator-min-microvolt = <1104000>;
+-			regulator-max-microvolt = <1104000>;
++			regulator-min-microvolt = <1100000>;
++			regulator-max-microvolt = <1304000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+@@ -413,14 +413,14 @@
+ 		};
+ 
+ 		vreg_l3f_1p05: ldo3 {
+-			regulator-min-microvolt = <1056000>;
+-			regulator-max-microvolt = <1056000>;
++			regulator-min-microvolt = <1096000>;
++			regulator-max-microvolt = <1304000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+ 		vreg_l4f_1p05: ldo4 {
+-			regulator-min-microvolt = <1056000>;
+-			regulator-max-microvolt = <1056000>;
++			regulator-min-microvolt = <1096000>;
++			regulator-max-microvolt = <1304000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
+ 
+--
+2.50.1

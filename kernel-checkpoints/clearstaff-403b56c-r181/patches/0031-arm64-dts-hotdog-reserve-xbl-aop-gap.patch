@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000031 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 13:30:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: reserve the stock XBL/AOP gap
+
+The HD1913 stock device tree reserves 0x85e00000-0x85f40000 as one
+XBL/AOP region. The generic SM8150 description instead reserves XBL at
+0x85d00000-0x85e40000 and AOP plus cmd-db at
+0x85f00000-0x85f40000. This leaves 0x85e40000-0x85f00000 available to
+Linux on hotdog even though the device firmware still owns it.
+
+A full DDR capture after a reproducible Qualcomm crashdump found two
+Flatpak page-cache folios covering that entire 768 KiB hole. Reserve the
+missing portion as no-map so the page allocator cannot reuse firmware
+memory under pressure.
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -91,6 +91,11 @@ / {
+ 	};
+ 
+ 	reserved-memory {
++		xbl_aop_gap: memory@85e40000 {
++			reg = <0 0x85e40000 0 0xc0000>;
++			no-map;
++		};
++
+ 		hotdog_removed_gap: hotdog-removed-gap@89d00000 {
+ 			reg = <0 0x89d00000 0 0x1a00000>;
+ 			no-map;
+-- 
+2.50.1

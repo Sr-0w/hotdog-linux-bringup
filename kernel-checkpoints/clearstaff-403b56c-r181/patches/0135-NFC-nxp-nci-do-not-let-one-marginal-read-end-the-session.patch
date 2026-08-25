@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 12 Aug 2026 08:45:00 +0200
+Subject: [PATCH] NFC: nxp-nci: do not let one marginal read end the session
+
+Two things make a single transport hiccup permanent on this controller.
+
+An interrupt that arrives before the driver has left cold mode is answered with
+-EREMOTEIO, which is then latched into hard_fault. That is not a transport
+failure at all: the controller is simply signalling early, and the frame should
+be dropped and waited out rather than treated as fatal.
+
+And hard_fault is only cleared on the way into cold mode, so once latched it
+survives every subsequent power cycle the core performs. On this handset a
+marginal first read leaves the controller healthy but the driver deaf to every
+later interrupt.
+
+Drop the early frame instead of faulting, and clear the latch on any mode
+change, since a mode change restarts the transport.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/nfc/nxp-nci/i2c.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+--- a/drivers/nfc/nxp-nci/i2c.c
++++ b/drivers/nfc/nxp-nci/i2c.c
+@@ -51,8 +51,13 @@
+ 	gpiod_set_value(phy->gpiod_en, (mode != NXP_NCI_MODE_COLD) ? 1 : 0);
+ 	usleep_range(10000, 15000);
+ 
+-	if (mode == NXP_NCI_MODE_COLD)
+-		phy->hard_fault = 0;
++	/*
++	 * Any mode change restarts the transport, so a fault latched from a
++	 * previous attempt must not survive it. Clearing this only on the way
++	 * into cold mode left a single marginal read ending the session for
++	 * good, with every later interrupt dropped.
++	 */
++	phy->hard_fault = 0;
+ 
+ 	return 0;
+ }
+@@ -221,8 +226,12 @@
+ 		r = nxp_nci_i2c_fw_read(phy, &skb);
+ 		break;
+ 	case NXP_NCI_MODE_COLD:
+-		r = -EREMOTEIO;
+-		break;
++		/*
++		 * The controller can assert its interrupt before the driver
++		 * has left cold mode. That is not a transport failure and
++		 * must not poison the phy: drop the frame and wait.
++		 */
++		goto exit_irq_handled;
+ 	}
+ 
+ 	if (r == -EREMOTEIO) {
+--
+2.50.1

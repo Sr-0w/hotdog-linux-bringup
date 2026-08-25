@@ -1,0 +1,154 @@
+From 00944c86ea266594b3bca55ea3e2c9ed5da77f56 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 16:50:40 +0200
+Subject: [PATCH 114/114] media: qcom: camss: unwind failed stream starts
+
+---
+ drivers/media/platform/qcom/camss/camss-vfe.c | 30 ++++++----
+ .../media/platform/qcom/camss/camss-video.c   | 57 +++++++++++--------
+ 2 files changed, 52 insertions(+), 35 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/camss/camss-vfe.c b/drivers/media/platform/qcom/camss/camss-vfe.c
+index 1332db97f..435cf5b24 100644
+--- a/drivers/media/platform/qcom/camss/camss-vfe.c
++++ b/drivers/media/platform/qcom/camss/camss-vfe.c
+@@ -779,8 +779,9 @@ static void vfe_buf_flush_pending(struct vfe_output *output,
+ 	struct camss_buffer *t;
+ 
+ 	list_for_each_entry_safe(buf, t, &output->pending_bufs, queue) {
+-		vb2_buffer_done(&buf->vb.vb2_buf, state);
+ 		list_del(&buf->queue);
++		if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
++			vb2_buffer_done(&buf->vb.vb2_buf, state);
+ 	}
+ }
+ 
+@@ -1159,6 +1160,9 @@ int vfe_flush_buffers(struct camss_video *vid,
+ 	struct vfe_line *line = container_of(vid, struct vfe_line, video_out);
+ 	struct vfe_device *vfe = to_vfe(line);
+ 	struct vfe_output *output;
++	struct camss_buffer *buf0;
++	struct camss_buffer *buf1;
++	struct camss_buffer *last;
+ 	unsigned long flags;
+ 
+ 	output = &line->output;
+@@ -1167,16 +1171,22 @@ int vfe_flush_buffers(struct camss_video *vid,
+ 
+ 	vfe_buf_flush_pending(output, state);
+ 
+-	if (output->buf[0])
+-		vb2_buffer_done(&output->buf[0]->vb.vb2_buf, state);
+-
+-	if (output->buf[1])
+-		vb2_buffer_done(&output->buf[1]->vb.vb2_buf, state);
++	buf0 = output->buf[0];
++	buf1 = output->buf[1];
++	last = output->last_buffer;
++	output->buf[0] = NULL;
++	output->buf[1] = NULL;
++	output->last_buffer = NULL;
++	output->gen2.active_num = 0;
+ 
+-	if (output->last_buffer) {
+-		vb2_buffer_done(&output->last_buffer->vb.vb2_buf, state);
+-		output->last_buffer = NULL;
+-	}
++	if (buf0 && buf0->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
++		vb2_buffer_done(&buf0->vb.vb2_buf, state);
++	if (buf1 && buf1 != buf0 &&
++	    buf1->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
++		vb2_buffer_done(&buf1->vb.vb2_buf, state);
++	if (last && last != buf0 && last != buf1 &&
++	    last->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
++		vb2_buffer_done(&last->vb.vb2_buf, state);
+ 
+ 	spin_unlock_irqrestore(&vfe->output_lock, flags);
+ 
+diff --git a/drivers/media/platform/qcom/camss/camss-video.c b/drivers/media/platform/qcom/camss/camss-video.c
+index aa021fd5e..c1fa03a2c 100644
+--- a/drivers/media/platform/qcom/camss/camss-video.c
++++ b/drivers/media/platform/qcom/camss/camss-video.c
+@@ -225,6 +225,34 @@ static int video_check_format(struct camss_video *video)
+ 	return 0;
+ }
+ 
++static void video_stop_subdevices(struct camss_video *video,
++				  struct media_entity *stop_at)
++{
++	struct media_entity *entity = &video->vdev.entity;
++	struct media_pad *pad;
++	struct v4l2_subdev *subdev;
++	int ret;
++
++	while (1) {
++		pad = &entity->pads[0];
++		if (!(pad->flags & MEDIA_PAD_FL_SINK))
++			break;
++
++		pad = media_pad_remote_pad_first(pad);
++		if (!pad || !is_media_entity_v4l2_subdev(pad->entity) ||
++		    pad->entity == stop_at)
++			break;
++
++		entity = pad->entity;
++		subdev = media_entity_to_v4l2_subdev(entity);
++		ret = v4l2_subdev_call(subdev, video, s_stream, 0);
++		if (ret < 0 && ret != -ENOIOCTLCMD)
++			dev_warn(video->camss->dev,
++				 "Failed to stop %s while unwinding pipeline: %d\n",
++				 entity->name, ret);
++	}
++}
++
+ static int video_start_streaming(struct vb2_queue *q, unsigned int count)
+ {
+ 	struct camss_video *video = vb2_get_drv_priv(q);
+@@ -258,8 +286,10 @@ static int video_start_streaming(struct vb2_queue *q, unsigned int count)
+ 		subdev = media_entity_to_v4l2_subdev(entity);
+ 
+ 		ret = v4l2_subdev_call(subdev, video, s_stream, 1);
+-		if (ret < 0 && ret != -ENOIOCTLCMD)
++		if (ret < 0 && ret != -ENOIOCTLCMD) {
++			video_stop_subdevices(video, entity);
+ 			goto error;
++		}
+ 	}
+ 
+ 	return 0;
+@@ -277,31 +307,8 @@ static void video_stop_streaming(struct vb2_queue *q)
+ {
+ 	struct camss_video *video = vb2_get_drv_priv(q);
+ 	struct video_device *vdev = &video->vdev;
+-	struct media_entity *entity;
+-	struct media_pad *pad;
+-	struct v4l2_subdev *subdev;
+-	int ret;
+ 
+-	entity = &vdev->entity;
+-	while (1) {
+-		pad = &entity->pads[0];
+-		if (!(pad->flags & MEDIA_PAD_FL_SINK))
+-			break;
+-
+-		pad = media_pad_remote_pad_first(pad);
+-		if (!pad || !is_media_entity_v4l2_subdev(pad->entity))
+-			break;
+-
+-		entity = pad->entity;
+-		subdev = media_entity_to_v4l2_subdev(entity);
+-
+-		ret = v4l2_subdev_call(subdev, video, s_stream, 0);
+-
+-		if (ret) {
+-			dev_err(video->camss->dev, "Video pipeline stop failed: %d\n", ret);
+-			return;
+-		}
+-	}
++	video_stop_subdevices(video, NULL);
+ 
+ 	video_device_pipeline_stop(vdev);
+ 
+-- 
+2.54.0
+

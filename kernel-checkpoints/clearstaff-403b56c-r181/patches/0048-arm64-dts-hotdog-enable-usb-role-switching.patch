@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 17:10:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable USB role switching
+
+The controller is pinned to peripheral mode, so the port can only ever be a
+device. Nothing drives a role switch, the PM8150B Type-C block stays
+disabled, and its VBUS regulator is never enabled, so host mode is not
+reachable at all.
+
+Describe the port the way the other SM8150 handsets with this PMIC do.
+Enable the Type-C block with its PD PHY supply and a dual-role connector,
+enable the VBUS boost so the port can source, switch the controller to OTG
+with a role switch, and connect the two endpoints the connector needs: the
+controller's high-speed port for data role, and the FSA4480 for orientation
+and SBU muxing.
+
+The FSA4480 endpoint already existed but was left dangling when the switch
+was first described; it is now terminated.
+
+This stays USB 2.0 only. The QMP PHY remains disabled and the controller
+keeps maximum-speed = "high-speed", so SuperSpeed and DisplayPort alternate
+mode are unaffected by this change.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 71 ++++++++++++++++++++--
+ 1 file changed, 68 insertions(+), 3 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -16,6 +16,7 @@
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
+ #include <dt-bindings/sound/qcom,wcd934x.h>
++#include <dt-bindings/usb/pd.h>
+ #include "sm8150-oneplus-common.dtsi"
+ #include "sm8150-wcd9340.dtsi"
+ 
+@@ -329,7 +330,9 @@
+ 		orientation-switch;
+ 
+ 		port {
+-			fsa4480_sbu_mux: endpoint {};
++			fsa4480_sbu_mux: endpoint {
++				remote-endpoint = <&pm8150b_sbu_mux_in>;
++			};
+ 		};
+ 	};
+ };
+@@ -573,10 +576,65 @@
+ };
+ 
+ &usb_1_dwc3 {
+-	dr_mode = "peripheral";
++	dr_mode = "otg";
+ 	maximum-speed = "high-speed";
+ 	phys = <&usb_1_hsphy>;
+ 	phy-names = "usb2-phy";
++	usb-role-switch;
++};
++
++&usb_1_dwc3_hs {
++	remote-endpoint = <&pm8150b_role_switch_in>;
++};
++
++&pm8150b_vbus {
++	status = "okay";
++};
++
++&pm8150b_typec {
++	vdd-pdphy-supply = <&vdda_usb_hs_3p1>;
++	status = "okay";
++
++	connector {
++		compatible = "usb-c-connector";
++
++		power-role = "dual";
++		data-role = "dual";
++		self-powered;
++
++		source-pdos = <PDO_FIXED(5000, 3000,
++					 PDO_FIXED_DUAL_ROLE |
++					 PDO_FIXED_USB_COMM |
++					 PDO_FIXED_DATA_SWAP)>;
++
++		sink-pdos = <PDO_FIXED(5000, 3000,
++					 PDO_FIXED_DUAL_ROLE |
++					 PDO_FIXED_USB_COMM |
++					 PDO_FIXED_DATA_SWAP)>;
++
++		op-sink-microwatt = <10000000>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++
++				pm8150b_role_switch_in: endpoint {
++					remote-endpoint = <&usb_1_dwc3_hs>;
++				};
++			};
++
++			port@1 {
++				reg = <1>;
++
++				pm8150b_sbu_mux_in: endpoint {
++					remote-endpoint = <&fsa4480_sbu_mux>;
++				};
++			};
++		};
++	};
+ };
+ 
+ &mdss {
+--
+2.50.1

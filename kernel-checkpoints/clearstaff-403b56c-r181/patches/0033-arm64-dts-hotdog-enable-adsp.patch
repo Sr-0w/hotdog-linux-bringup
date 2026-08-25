@@ -1,0 +1,38 @@
+From 51d04ed60efee0d9747430747f8c5be79b01a525 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 13:00:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: enable the audio DSP
+
+The HD1913 firmware package provides the signed ADSP image extracted from
+the matching stock release, and the device tree already preserves the
+stock 30 MiB ADSP reservation. Enable only the PAS remote processor in
+this step so its firmware loading, boot and GLINK/APR services can be
+validated independently of the codec and sound-card topology.
+
+Keep SLIMbus, WCD9340 and the machine sound card disabled for now. Those
+pieces require their own hardware contracts and should not obscure an
+ADSP boot failure.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -286,6 +286,11 @@
+ 	};
+ };
+ 
++&remoteproc_adsp {
++	firmware-name = "qcom/sm8150/oneplus/hotdog/adsp.mbn";
++	status = "okay";
++};
++
+ &remoteproc_mpss {
+ 	firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn";
+ 	status = "okay";
+-- 
+2.50.1
+

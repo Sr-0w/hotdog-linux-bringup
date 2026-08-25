@@ -1,0 +1,22 @@
+From 7f22ba7c6f3b38542683a91c5931f95a064f3a90 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 14 Aug 2026 08:08:50 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: link DWC3 charger supply
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 46e36f9ebcac..78106d59b45a 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -959,6 +959,7 @@ &usb_1_qmpphy_out {
+ &usb_1_dwc3 {
+ 	dr_mode = "otg";
+ 	usb-role-switch;
++	usb-psy-name = "pm8150b-charger";
+ };
+ 
+ &mdss_dp {

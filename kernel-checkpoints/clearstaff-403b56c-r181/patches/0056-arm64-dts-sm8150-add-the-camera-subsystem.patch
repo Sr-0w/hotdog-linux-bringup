@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 22:31:00 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150: add the camera subsystem
+
+Describe CAMSS: two CSIDs, four CSIPHYs and two VFEs, with the register
+bases and interrupts the SoC uses, its camera clock controller supplies, the
+IFE and Titan top power domains, and the SMMU streams the image front ends
+issue.
+
+The camera clock controller is already described, so this only adds the
+consumer. Left disabled, since it is only useful on a board that also
+describes sensors.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150.dtsi | 128 +++++++++++++++++++++++++++
+ 1 file changed, 128 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -3798,6 +3798,128 @@
+ 			qcom,bcm-voters = <&apps_bcm_voter>;
+ 		};
+ 
++		camss: camss@acb3000 {
++			compatible = "qcom,sm8150-camss";
++
++			reg = <0 0x0acb3000 0 0x1000>,
++			      <0 0x0acba000 0 0x1000>,
++			      <0 0x0ac65000 0 0x1000>,
++			      <0 0x0ac66000 0 0x1000>,
++			      <0 0x0ac67000 0 0x1000>,
++			      <0 0x0ac68000 0 0x1000>,
++			      <0 0x0acaf000 0 0x4000>,
++			      <0 0x0acb6000 0 0x4000>;
++			reg-names = "csid0",
++				    "csid1",
++				    "csiphy0",
++				    "csiphy1",
++				    "csiphy2",
++				    "csiphy3",
++				    "vfe0",
++				    "vfe1";
++
++			interrupts = <GIC_SPI 464 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 466 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 477 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 478 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 479 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 448 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 465 IRQ_TYPE_EDGE_RISING>,
++				     <GIC_SPI 467 IRQ_TYPE_EDGE_RISING>;
++			interrupt-names = "csid0",
++					  "csid1",
++					  "csiphy0",
++					  "csiphy1",
++					  "csiphy2",
++					  "csiphy3",
++					  "vfe0",
++					  "vfe1";
++
++			power-domains = <&camcc IFE_0_GDSC>,
++					<&camcc IFE_1_GDSC>,
++					<&camcc TITAN_TOP_GDSC>;
++			power-domain-names = "ife0", "ife1", "top";
++
++			clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK>,
++				 <&camcc CAM_CC_CPAS_AHB_CLK>,
++				 <&camcc CAM_CC_CPHY_RX_CLK_SRC>,
++				 <&camcc CAM_CC_IFE_0_CSID_CLK>,
++				 <&camcc CAM_CC_IFE_0_CSID_CLK_SRC>,
++				 <&camcc CAM_CC_IFE_1_CSID_CLK>,
++				 <&camcc CAM_CC_IFE_1_CSID_CLK_SRC>,
++				 <&camcc CAM_CC_CSIPHY0_CLK>,
++				 <&camcc CAM_CC_CSI0PHYTIMER_CLK>,
++				 <&camcc CAM_CC_CSI0PHYTIMER_CLK_SRC>,
++				 <&camcc CAM_CC_CSIPHY1_CLK>,
++				 <&camcc CAM_CC_CSI1PHYTIMER_CLK>,
++				 <&camcc CAM_CC_CSI1PHYTIMER_CLK_SRC>,
++				 <&camcc CAM_CC_CSIPHY2_CLK>,
++				 <&camcc CAM_CC_CSI2PHYTIMER_CLK>,
++				 <&camcc CAM_CC_CSI2PHYTIMER_CLK_SRC>,
++				 <&camcc CAM_CC_CSIPHY3_CLK>,
++				 <&camcc CAM_CC_CSI3PHYTIMER_CLK>,
++				 <&camcc CAM_CC_CSI3PHYTIMER_CLK_SRC>,
++				 <&gcc GCC_CAMERA_AHB_CLK>,
++				 <&gcc GCC_CAMERA_HF_AXI_CLK>,
++				 <&camcc CAM_CC_SLOW_AHB_CLK_SRC>,
++				 <&camcc CAM_CC_CORE_AHB_CLK>,
++				 <&camcc CAM_CC_IFE_0_CLK>,
++				 <&camcc CAM_CC_IFE_0_AXI_CLK>,
++				 <&camcc CAM_CC_IFE_0_CPHY_RX_CLK>,
++				 <&camcc CAM_CC_IFE_0_CLK_SRC>,
++				 <&camcc CAM_CC_IFE_1_CLK>,
++				 <&camcc CAM_CC_IFE_1_AXI_CLK>,
++				 <&camcc CAM_CC_IFE_1_CPHY_RX_CLK>,
++				 <&camcc CAM_CC_IFE_1_CLK_SRC>;
++			clock-names = "camnoc_axi",
++				      "cpas_ahb",
++				      "cphy_rx_src",
++				      "csi0",
++				      "csi0_src",
++				      "csi1",
++				      "csi1_src",
++				      "csiphy0",
++				      "csiphy0_timer",
++				      "csiphy0_timer_src",
++				      "csiphy1",
++				      "csiphy1_timer",
++				      "csiphy1_timer_src",
++				      "csiphy2",
++				      "csiphy2_timer",
++				      "csiphy2_timer_src",
++				      "csiphy3",
++				      "csiphy3_timer",
++				      "csiphy3_timer_src",
++				      "gcc_camera_ahb",
++				      "gcc_camera_axi",
++				      "slow_ahb_src",
++				      "soc_ahb",
++				      "vfe0",
++				      "vfe0_axi",
++				      "vfe0_cphy_rx",
++				      "vfe0_src",
++				      "vfe1",
++				      "vfe1_axi",
++				      "vfe1_cphy_rx",
++				      "vfe1_src";
++
++			iommus = <&apps_smmu 0x840 0x620>,
++				 <&apps_smmu 0x860 0x620>,
++				 <&apps_smmu 0xa40 0x620>,
++				 <&apps_smmu 0xa60 0x620>,
++				 <&apps_smmu 0xc40 0x620>,
++				 <&apps_smmu 0xc60 0x620>,
++				 <&apps_smmu 0xe40 0x620>,
++				 <&apps_smmu 0xe60 0x620>;
++
++			status = "disabled";
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++			};
++		};
++
+ 		camcc: clock-controller@ad00000 {
+ 			compatible = "qcom,sm8150-camcc";
+ 			reg = <0 0x0ad00000 0 0x10000>;
+--
+2.50.1

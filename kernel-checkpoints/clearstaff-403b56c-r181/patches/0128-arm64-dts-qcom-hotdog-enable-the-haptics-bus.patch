@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 11 Aug 2026 00:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: enable the haptics bus
+
+The stock tree puts an Awinic AW8697 at 0x5a on the bus mainline calls i2c7,
+and nothing here enabled that bus, so the part could not even be reached.
+
+No upstream driver matches it yet. linux-next carries aw86927, which is the same
+family but a later generation: it identifies parts by a two-byte chip id at 0x57
+and 0x58, while the vendor sources give this one a single-byte id of 0x97.
+Adding AW8697 support to that driver is the work; being able to talk to the chip
+is the prerequisite.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 15 +++++++
+ 1 file changed, 15 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -539,6 +539,20 @@
+  * secure element on this system, and powering it is one of the candidates for
+  * the reset seen when the RF field comes up.
+  */
++/*
++ * Haptics bus. The stock tree puts an Awinic AW8697 at 0x5a here. No upstream
++ * driver matches it yet: linux-next carries aw86927, which is the same family
++ * but a later generation, with a two-byte chip id where this part reports one.
++ * Enable the bus so the controller can be reached and identified while that
++ * support is written.
++ */
++&i2c7 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <400000>;
++	status = "okay";
++};
++
+ &i2c9 {
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+--
+2.50.1

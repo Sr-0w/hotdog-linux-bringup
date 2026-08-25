@@ -1,0 +1,68 @@
+From 66c2f8aa9d3e166055fd7b3f6c33da5a6d87dd75 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 17:00:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: enable WCD9340 transport
+
+The ADSP firmware and APR services are now validated independently on the
+HD1913. Add the existing SM8150 SLIMbus/WCD9340 topology and describe the
+handset's active-high reset plus five 1.8 V codec supplies.
+
+The common topology already carries the stock-derived GPIO 123 interrupt,
+9.6 MHz clock, micbias settings, GPIO controller and SoundWire master. Keep
+the machine sound card and external TFA98xx amplifiers absent so this step
+validates only transport and internal codec enumeration.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 10 ++++++++++
+ arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi       |  3 +--
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -14,6 +14,7 @@
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+ #include "sm8150-oneplus-common.dtsi"
++#include "sm8150-wcd9340.dtsi"
+ 
+ /delete-node/ &rmtfs_mem;
+ 
+@@ -295,6 +296,15 @@ &remoteproc_mpss {
+ 	status = "okay";
+ };
+ 
++&wcd9340 {
++	reset-gpios = <&tlmm 143 GPIO_ACTIVE_HIGH>;
++	vdd-buck-sido-supply = <&vreg_s4a_1p8>;
++	vdd-buck-supply = <&vreg_s4a_1p8>;
++	vdd-tx-supply = <&vreg_s4a_1p8>;
++	vdd-rx-supply = <&vreg_s4a_1p8>;
++	vdd-io-supply = <&vreg_s4a_1p8>;
++};
++
+ &wifi {
+ 	status = "okay";
+ 
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi b/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
+--- a/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi
+@@ -54,7 +54,7 @@
+ 				reg = <0x42 0x2>;
+ 			};
+ 
+-			swm: swm@c85 {
++			swm: soundwire@c85 {
+ 				compatible = "qcom,soundwire-v1.3.0";
+ 				reg = <0xc85 0x40>;
+ 				interrupts-extended = <&wcd9340 20>;
+@@ -81,6 +81,5 @@
+ 		function = "gpio";
+ 		drive-strength = <2>;
+ 		bias-pull-down;
+-		input-enable;
+ 	};
+ };
+-- 
+2.50.1

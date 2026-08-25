@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 13:05:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: fix the camera PMIC enable polarity
+
+The three camera slots whose analogue supply is switched by a PM8150L GPIO reset
+the handset the moment they are powered, while the one slot switched by a TLMM
+pin powers up cleanly and reports its sensor.
+
+The stock overlay explains it. Every one of its active pin states for these
+drives the pin low:
+
+	cam_sensor_rear_0_dvdd_active { pins = "gpio1";  output-low; }
+	cam_sensor_rear_2_ana_active  { pins = "gpio2";  output-low; }
+	                              { pins = "gpio12"; output-low; }
+
+They were described here as active high, so they were being asserted the wrong
+way round.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -879,7 +879,7 @@
+ 		reset-gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
+ 		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>,
+ 				    <&tlmm 29 GPIO_ACTIVE_HIGH>,
+-				    <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
++				    <&pm8150l_gpios 1 GPIO_ACTIVE_LOW>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk1_default>;
+@@ -904,7 +904,7 @@
+ 		vdig-supply = <&vreg_l3f_1p05>;
+ 
+ 		reset-gpios = <&tlmm 12 GPIO_ACTIVE_LOW>;
+-		vana-enable-gpios = <&pm8150l_gpios 12 GPIO_ACTIVE_HIGH>;
++		vana-enable-gpios = <&pm8150l_gpios 12 GPIO_ACTIVE_LOW>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk2_default>;
+@@ -925,7 +925,7 @@
+ 		vdig-supply = <&vreg_l4f_1p05>;
+ 
+ 		reset-gpios = <&tlmm 23 GPIO_ACTIVE_LOW>;
+-		vana-enable-gpios = <&pm8150l_gpios 2 GPIO_ACTIVE_HIGH>;
++		vana-enable-gpios = <&pm8150l_gpios 2 GPIO_ACTIVE_LOW>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk3_default>;
+--
+2.50.1

@@ -1,0 +1,35 @@
+From 2979adee24213d6fbe0fbe8ffecbb73306bbb585 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 14:28:07 +0200
+Subject: [PATCH] media: hotdog-popup: gate recovery on restore command
+
+---
+ drivers/media/platform/qcom/hotdog-popup-motor.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index a675eb2c9..0434442e6 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -279,8 +279,7 @@ static ssize_t pulse_up_store(struct device *dev,
+ 	ret = kstrtouint(buf, 0, &microsteps);
+ 	if (ret)
+ 		return ret;
+-	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS &&
+-	    microsteps != HOTDOG_RECOVER_MICROSTEPS)
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS)
+ 		return -EINVAL;
+ 
+ 	guard(mutex)(&popup->lock);
+@@ -309,7 +308,8 @@ static ssize_t restore_closed_store(struct device *dev,
+ 	ret = kstrtouint(buf, 0, &microsteps);
+ 	if (ret)
+ 		return ret;
+-	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS)
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS &&
++	    microsteps != HOTDOG_RECOVER_MICROSTEPS)
+ 		return -EINVAL;
+ 
+ 	guard(mutex)(&popup->lock);
+-- 
+2.54.0

@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 12:55:00 +0200
+Subject: [PATCH] media: i2c: scan one camera slot at a time
+
+Powering the three Sony slots together resets the handset before anything
+reaches the log, while the Samsung slot scans cleanly. Taking them one at a time
+is what tells them apart, so name the slot by its I2C bus number rather than
+turning them all on with a single boolean.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/hotdog-cam-scan.c | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -31,9 +31,10 @@
+  * fault while scanning left the handset without a usable userspace. Load with
+  * scan=1 by hand, with the log in view.
+  */
+-static bool scan;
+-module_param(scan, bool, 0444);
+-MODULE_PARM_DESC(scan, "Power each camera slot and probe its bus");
++static int scan = -1;
++module_param(scan, int, 0444);
++MODULE_PARM_DESC(scan,
++		 "I2C bus number of the one slot to power and probe, -1 for none");
+ 
+ /* One slot at a time: the two masters of a CCI block share an interrupt. */
+ static DEFINE_MUTEX(hotdog_cam_scan_lock);
+@@ -115,9 +116,16 @@
+ 	unsigned int i;
+ 	int ret;
+ 
+-	if (!scan)
++	/*
++	 * One slot at a time, named explicitly. Powering all of them together
++	 * resets the handset, and doing them individually is what tells the
++	 * slots apart.
++	 */
++	if (scan < 0 || scan != i2c_adapter_id(client->adapter))
+ 		return -ENODEV;
+ 
++	dev_info(dev, "scanning this slot on i2c-%d\n", scan);
++
+ 	for (i = 0; i < HOTDOG_CAM_SCAN_NUM_SUPPLIES; i++)
+ 		supplies[i].supply = hotdog_cam_scan_supplies[i];
+ 
+--
+2.50.1

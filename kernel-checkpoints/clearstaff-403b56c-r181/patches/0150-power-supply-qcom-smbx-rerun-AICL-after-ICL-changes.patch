@@ -1,0 +1,74 @@
+From 9b947de9f54e3fd16c89194e69184c7a7fde6bc9 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 14 Aug 2026 07:49:43 +0200
+Subject: [PATCH] power: supply: qcom_smbx: rerun AICL after ICL changes
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/power/supply/qcom_smbx.c | 36 ++++++++++++++++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index acccb0e0c8c0..b45e223552d5 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -335,6 +335,9 @@ enum smb_generation {
+ #define BARK_BITE_WDOG_PET				0x643
+ #define BARK_BITE_WDOG_PET_BIT				BIT(0)
+ 
++#define AICL_CMD					0x644
++#define RERUN_AICL_BIT					BIT(0)
++
+ #define WD_CFG						0x651
+ #define WATCHDOG_TRIGGER_AFP_EN_BIT			BIT(7)
+ #define BARK_WDOG_INT_EN_BIT				BIT(6)
+@@ -652,9 +655,34 @@ static inline int smb_get_current_limit(struct smb_chip *chip,
+ 	return rc;
+ }
+ 
++static int smb_rerun_aicl(struct smb_chip *chip)
++{
++	unsigned int stat;
++	int rc;
++
++	rc = regmap_read(chip->regmap, chip->base + POWER_PATH_STATUS(chip),
++			 &stat);
++	if (rc < 0)
++		return rc;
++
++	if (stat & P_PATH_USBIN_SUSPEND_STS_BIT)
++		return 0;
++
++	rc = regmap_update_bits(chip->regmap,
++				chip->base + USBIN_AICL_OPTIONS_CFG,
++				USBIN_AICL_PERIODIC_RERUN_EN_BIT,
++				USBIN_AICL_PERIODIC_RERUN_EN_BIT);
++	if (rc < 0)
++		return rc;
++
++	return regmap_update_bits(chip->regmap, chip->base + AICL_CMD,
++				  RERUN_AICL_BIT, RERUN_AICL_BIT);
++}
++
+ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
+ {
+ 	unsigned char val_raw;
++	int rc;
+ 
+ 	if (val > chip->icl_max_ua) {
+ 		dev_err(chip->dev,
+@@ -664,8 +692,12 @@ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
+ 	}
+ 	val_raw = val / chip->icl_step_ua;
+ 
+-	return regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
+-			    val_raw);
++	rc = regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
++			  val_raw);
++	if (rc < 0 || chip->gen != SMB5)
++		return rc;
++
++	return smb_rerun_aicl(chip);
+ }
+ 
+ static void smb_status_change_work(struct work_struct *work)

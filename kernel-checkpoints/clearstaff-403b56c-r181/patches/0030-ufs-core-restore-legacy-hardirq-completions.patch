@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000030 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 11:15:00 +0200
+Subject: [PATCH] ufs: core: restore legacy hardirq completion handling
+
+Commit 3c7ac40d7322 ("scsi: ufs: core: Delegate the interrupt service
+routine to a threaded IRQ handler") moved all legacy UFS completion work to
+an IRQ thread. The change caused a significant completion-latency regression
+on pre-v4 UFS host controllers. On the SM8150 controller in hotdog, sustained
+buffered writes reproducibly end with a completed request whose notifying
+interrupt was not observed, followed by failed UFS recovery.
+
+Restore the pre-3c7ac40d legacy hardirq path for this bring-up kernel. MCQ is
+not used on this controller, so a threaded fallback provides no benefit here.
+Keep this as a focused diagnostic until the bounded upstream hardirq approach
+is available in a suitable stable kernel.
+
+---
+ drivers/ufs/core/ufshcd.c | 35 ++++++-----------------------------
+ 1 file changed, 6 insertions(+), 29 deletions(-)
+
+diff --git a/drivers/ufs/core/ufshcd.c b/drivers/ufs/core/ufshcd.c
+index a8d6aa213f25..09dfce73a4a0 100644
+--- a/drivers/ufs/core/ufshcd.c
++++ b/drivers/ufs/core/ufshcd.c
+@@ -7080,7 +7080,7 @@ static irqreturn_t ufshcd_sl_intr(struct ufs_hba *hba, u32 intr_status)
+ }
+ 
+ /**
+- * ufshcd_threaded_intr - Threaded interrupt service routine
++ * ufshcd_intr - Main interrupt service routine
+  * @irq: irq number
+  * @__hba: pointer to adapter instance
+  *
+@@ -7088,7 +7088,7 @@ static irqreturn_t ufshcd_sl_intr(struct ufs_hba *hba, u32 intr_status)
+  *  IRQ_HANDLED - If interrupt is valid
+  *  IRQ_NONE    - If invalid interrupt
+  */
+-static irqreturn_t ufshcd_threaded_intr(int irq, void *__hba)
++static irqreturn_t ufshcd_intr(int irq, void *__hba)
+ {
+ 	u32 last_intr_status, intr_status, enabled_intr_status = 0;
+ 	irqreturn_t retval = IRQ_NONE;
+@@ -7130,29 +7130,6 @@ static irqreturn_t ufshcd_threaded_intr(int irq, void *__hba)
+ 	return retval;
+ }
+ 
+-/**
+- * ufshcd_intr - Main interrupt service routine
+- * @irq: irq number
+- * @__hba: pointer to adapter instance
+- *
+- * Return:
+- *  IRQ_HANDLED     - If interrupt is valid
+- *  IRQ_WAKE_THREAD - If handling is moved to threaded handled
+- *  IRQ_NONE        - If invalid interrupt
+- */
+-static irqreturn_t ufshcd_intr(int irq, void *__hba)
+-{
+-	struct ufs_hba *hba = __hba;
+-
+-	/* Move interrupt handling to thread when MCQ & ESI are not enabled */
+-	if (!hba->mcq_enabled || !hba->mcq_esi_enabled)
+-		return IRQ_WAKE_THREAD;
+-
+-	/* Directly handle interrupts since MCQ ESI handlers does the hard job */
+-	return ufshcd_sl_intr(hba, ufshcd_readl(hba, REG_INTERRUPT_STATUS) &
+-				   ufshcd_readl(hba, REG_INTERRUPT_ENABLE));
+-}
+-
+ static int ufshcd_clear_tm_cmd(struct ufs_hba *hba, int tag)
+ {
+ 	int err = 0;
+@@ -10758,13 +10735,13 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
+ 	ufshcd_readl(hba, REG_INTERRUPT_ENABLE);
+ 
+ 	/* IRQ registration */
+-	err = devm_request_threaded_irq(dev, irq, ufshcd_intr, ufshcd_threaded_intr,
+-					IRQF_ONESHOT | IRQF_SHARED, UFSHCD, hba);
++	err = devm_request_irq(dev, irq, ufshcd_intr, IRQF_SHARED, UFSHCD, hba);
+ 	if (err) {
+ 		dev_err(hba->dev, "request irq failed\n");
+ 		goto out_disable;
+ 	} else {
+ 		hba->is_irq_enabled = true;
++		dev_info(hba->dev, "legacy UFS completions handled in hardirq context\n");
+ 	}
+ 
+ 	/* Reset the attached device */
+-- 
+2.50.1

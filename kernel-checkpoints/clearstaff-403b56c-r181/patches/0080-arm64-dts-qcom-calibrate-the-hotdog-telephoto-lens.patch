@@ -1,0 +1,125 @@
+From c0f45d17d3338e5318d35fbb38409357e9c65b4a Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 12:10:41 +0200
+Subject: [PATCH] arm64: dts: qcom: calibrate the hotdog telephoto lens
+
+---
+ .../bindings/media/i2c/onnn,lc898217xc.yaml   | 16 ++++++++++++
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  2 ++
+ drivers/media/i2c/lc898217xc.c                | 25 +++++++++++++++++--
+ 3 files changed, 41 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml b/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
+index ffe148b11022..4e12f3aee1d8 100644
+--- a/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
+@@ -26,6 +26,20 @@ properties:
+   vio-supply:
+     description: I/O pull-up supply
+ 
++  onnn,max-focus-position:
++    description:
++      Maximum calibrated focus position for the lens module. The actuator's
++      full 10-bit range is used when this property is absent.
++    minimum: 1
++    maximum: 1023
++    default: 1023
++
++  onnn,default-focus-position:
++    description: Focus position selected when the actuator is powered up.
++    minimum: 0
++    maximum: 1023
++    default: 50
++
+ required:
+   - compatible
+   - reg
+@@ -46,6 +60,8 @@ examples:
+ 
+             vdd-supply = <&vreg_l23a_3p3>;
+             vio-supply = <&vreg_l1c_1p8>;
++            onnn,max-focus-position = <400>;
++            onnn,default-focus-position = <50>;
+         };
+     };
+ 
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 392de6b297ee..3cc4fee70e9d 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -863,6 +863,8 @@ s5k3m5_vcm: lens@74 {
+ 
+ 		vdd-supply = <&vreg_cam1_vaf>;
+ 		vio-supply = <&vreg_l1c_1p8>;
++		onnn,max-focus-position = <400>;
++		onnn,default-focus-position = <50>;
+ 	};
+ 
+ 	/* Telephoto. Confirmed on hardware by its 0x30d5 chip id. */
+diff --git a/drivers/media/i2c/lc898217xc.c b/drivers/media/i2c/lc898217xc.c
+index 8b45181adfb6..1d17879cca18 100644
+--- a/drivers/media/i2c/lc898217xc.c
++++ b/drivers/media/i2c/lc898217xc.c
+@@ -5,6 +5,7 @@
+ #include <linux/i2c.h>
+ #include <linux/module.h>
+ #include <linux/pm_runtime.h>
++#include <linux/property.h>
+ #include <linux/regulator/consumer.h>
+ 
+ #include <media/v4l2-ctrls.h>
+@@ -31,6 +32,8 @@ struct lc898217xc_device {
+ 	struct v4l2_subdev sd;
+ 	struct v4l2_ctrl *focus;
+ 	struct regulator_bulk_data supplies[ARRAY_SIZE(lc898217xc_supply_names)];
++	u16 focus_pos_max;
++	u16 focus_pos_default;
+ };
+ 
+ static inline struct lc898217xc_device *
+@@ -198,6 +201,7 @@ static int lc898217xc_runtime_resume(struct device *dev)
+ static int lc898217xc_probe(struct i2c_client *client)
+ {
+ 	struct lc898217xc_device *vcm;
++	u32 value;
+ 	unsigned int i;
+ 	int ret;
+ 
+@@ -205,6 +209,23 @@ static int lc898217xc_probe(struct i2c_client *client)
+ 	if (!vcm)
+ 		return -ENOMEM;
+ 
++	vcm->focus_pos_max = LC898217XC_MAX_FOCUS_POS;
++	if (!device_property_read_u32(&client->dev,
++				      "onnn,max-focus-position", &value)) {
++		if (!value || value > LC898217XC_MAX_FOCUS_POS)
++			return dev_err_probe(&client->dev, -EINVAL,
++					     "invalid maximum focus position\n");
++		vcm->focus_pos_max = value;
++	}
++
++	vcm->focus_pos_default = LC898217XC_DEFAULT_FOCUS_POS;
++	if (!device_property_read_u32(&client->dev,
++				      "onnn,default-focus-position", &value))
++		vcm->focus_pos_default = value;
++	if (vcm->focus_pos_default > vcm->focus_pos_max)
++		return dev_err_probe(&client->dev, -EINVAL,
++				     "default focus position exceeds maximum\n");
++
+ 	for (i = 0; i < ARRAY_SIZE(lc898217xc_supply_names); i++)
+ 		vcm->supplies[i].supply = lc898217xc_supply_names[i];
+ 
+@@ -223,8 +244,8 @@ static int lc898217xc_probe(struct i2c_client *client)
+ 	v4l2_ctrl_handler_init(&vcm->ctrls, 1);
+ 	vcm->focus = v4l2_ctrl_new_std(&vcm->ctrls, &lc898217xc_ctrl_ops,
+ 				       V4L2_CID_FOCUS_ABSOLUTE, 0,
+-				       LC898217XC_MAX_FOCUS_POS, 1,
+-				       LC898217XC_DEFAULT_FOCUS_POS);
++				       vcm->focus_pos_max, 1,
++				       vcm->focus_pos_default);
+ 	if (vcm->ctrls.error) {
+ 		ret = vcm->ctrls.error;
+ 		goto err_free_ctrls;
+-- 
+2.54.0
+

@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 23:20:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: describe the NFC controller
+
+Nothing described NFC, so no controller appeared and there was no nfc class at
+all. The stock device tree has it: an NXP NQ NCI part at 0x28 on the bus
+mainline calls i2c9, with the interrupt on GPIO 47, the enable line on GPIO 41
+and firmware download on GPIO 48.
+
+The upstream nxp-nci-i2c driver takes exactly those, and the kernel already
+builds it along with the NCI core.
+
+The pin configuration follows the stock nfc_enable_active and nfc_int_active
+states rather than being invented: both pull up, and the enable group covers
+GPIO 42 as well, which is the secure-element power line. The clock-request line
+on GPIO 113 is pulled up for the same reason. No driver consumes the last two,
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -313,6 +313,30 @@
+ };
+ 
+ &tlmm {
++	nfc_default: nfc-default-state {
++		irq-pins {
++			pins = "gpio47";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		enable-pins {
++			pins = "gpio41", "gpio48";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		clk-req-pins {
++			pins = "gpio113";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++	};
++
++
+ 	cam0_vana_default: cam0-vana-default-state {
+ 		pins = "gpio11";
+ 		function = "gpio";
+@@ -504,6 +528,36 @@
+ 	};
+ };
+ 
++/*
++ * NFC. An NXP NQ controller at 0x28 on the bus mainline calls i2c9, taken from
++ * the stock tree: interrupt on GPIO 47, enable on GPIO 41, firmware download on
++ * GPIO 48. The pin states follow the stock nfc_enable_active and nfc_int_active,
++ * which pull up and leave levels to the driver.
++ *
++ * The secure-element power line on GPIO 42 is deliberately not pulled up here
++ * even though the stock groups it with the enable pins: nothing drives the
++ * secure element on this system, and powering it is one of the candidates for
++ * the reset seen when the RF field comes up.
++ */
++&i2c9 {
++	clock-frequency = <100000>;
++	status = "okay";
++
++	nfc@28 {
++		compatible = "nxp,nxp-nci-i2c";
++		reg = <0x28>;
++
++		interrupt-parent = <&tlmm>;
++		interrupts = <47 IRQ_TYPE_LEVEL_HIGH>;
++
++		enable-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&tlmm 48 GPIO_ACTIVE_HIGH>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&nfc_default>;
++	};
++};
++
+ &i2c4 {
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+--
+2.50.1

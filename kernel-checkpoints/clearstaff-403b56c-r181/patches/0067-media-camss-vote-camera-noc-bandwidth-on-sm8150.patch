@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 12:30:00 +0200
+Subject: [PATCH] media: camss: vote camera NoC bandwidth on sm8150
+
+CAMSS votes interconnect bandwidth through resources_icc, and every part
+supported from SM8250 onwards declares it. SM8150 was templated from SDM845,
+which does not, so nothing here votes for the camera NoC paths.
+
+The evidence fits. The CSID hands over a full frame every frame, its byte
+counter reading exactly one RAW10 frame; the write master is enabled with the
+right geometry and a valid address; the SMMU never faults. Yet the entire VFE
+bus register block stays static during capture, and buffers queued pre-filled
+with a pattern come back with that pattern untouched. A write master with no
+route to memory behaves exactly that way.
+
+Add the three paths SM8250 uses, with the SM8150 interconnect identifiers.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150.dtsi      |  7 +++++++
+ drivers/media/platform/qcom/camss/camss.c | 19 +++++++++++++++++++
+ 2 files changed, 26 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -4053,6 +4053,13 @@
+ 				      "vfe1_cphy_rx",
+ 				      "vfe1_src";
+ 
++			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_CAMERA_CFG 0>,
++					<&mmss_noc MASTER_CAMNOC_HF0 0 &mc_virt SLAVE_EBI_CH0 0>,
++					<&mmss_noc MASTER_CAMNOC_SF 0 &mc_virt SLAVE_EBI_CH0 0>;
++			interconnect-names = "cam_ahb",
++					     "cam_hf_0_mnoc",
++					     "cam_sf_0_mnoc";
++
+ 			iommus = <&apps_smmu 0x840 0x620>,
+ 				 <&apps_smmu 0x860 0x620>,
+ 				 <&apps_smmu 0xa40 0x620>,
+--- a/drivers/media/platform/qcom/camss/camss.c
++++ b/drivers/media/platform/qcom/camss/camss.c
+@@ -4003,8 +4003,28 @@
+ 	.link_entities = camss_link_entities
+ };
+ 
++static const struct resources_icc icc_res_8150[] = {
++	{
++		.name = "cam_ahb",
++		.icc_bw_tbl.avg = 38400,
++		.icc_bw_tbl.peak = 76800,
++	},
++	{
++		.name = "cam_hf_0_mnoc",
++		.icc_bw_tbl.avg = 2097152,
++		.icc_bw_tbl.peak = 2097152,
++	},
++	{
++		.name = "cam_sf_0_mnoc",
++		.icc_bw_tbl.avg = 0,
++		.icc_bw_tbl.peak = 2097152,
++	},
++};
++
+ static const struct camss_resources sm8150_resources = {
+ 	.version = CAMSS_8150,
++	.icc_res = icc_res_8150,
++	.icc_path_num = ARRAY_SIZE(icc_res_8150),
+ 	.pd_name = "top",
+ 	.csiphy_res = csiphy_res_8150,
+ 	.csid_res = csid_res_8150,
+--
+2.50.1

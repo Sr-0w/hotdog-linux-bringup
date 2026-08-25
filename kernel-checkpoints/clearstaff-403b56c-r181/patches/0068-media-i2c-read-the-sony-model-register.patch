@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 12:45:00 +0200
+Subject: [PATCH] media: i2c: read the Sony model register in the slot aid
+
+Three of this handset's four camera slots hold Sony parts with no upstream
+driver, and none of them is confirmed on hardware. The identification aid only
+read register 0x0000, where Samsung report their model; Sony carry theirs at
+0x0016.
+
+Read both, so a slot is identified whichever vendor it holds, and pace the
+transfers slightly since an earlier run over slots with nothing to answer did
+not survive.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/hotdog-cam-scan.c | 47 ++++++++++++++++++++++-------
+ 1 file changed, 36 insertions(+), 11 deletions(-)
+
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -47,6 +47,9 @@
+ 	0x10, 0x1a, 0x1f, 0x20, 0x21, 0x2d, 0x34, 0x36, 0x37, 0x5a, 0x6c,
+ };
+ 
++/* Samsung report their model at 0x0000; Sony at 0x0016. */
++static const u16 hotdog_cam_scan_id_regs[] = { 0x0000, 0x0016 };
++
+ static const char * const hotdog_cam_scan_supplies[] = {
+ 	"vio",		/* digital I/O, 1.8 V */
+ 	"vana",		/* analogue, 3.3 V, gated by the enable GPIOs */
+@@ -63,24 +66,39 @@
+ 
+ 	for (i = 0; i < ARRAY_SIZE(hotdog_cam_scan_addrs); i++) {
+ 		u8 addr = hotdog_cam_scan_addrs[i];
+-		u8 wbuf[2] = { 0x00, 0x00 };
+-		u8 rbuf[2] = { 0xff, 0xff };
+-		struct i2c_msg msgs[2] = {
+-			{ .addr = addr, .flags = 0,
+-			  .len = sizeof(wbuf), .buf = wbuf },
+-			{ .addr = addr, .flags = I2C_M_RD,
+-			  .len = sizeof(rbuf), .buf = rbuf },
+-		};
++		unsigned int r;
+ 
+ 		if (addr == client->addr)
+ 			continue;
+ 
+-		if (i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs)) != 2)
+-			continue;
+-
+-		dev_info(dev, "address 0x%02x answers, register 0x0000 = 0x%02x%02x\n",
+-			 addr, rbuf[0], rbuf[1]);
+-		found++;
++		/*
++		 * Samsung parts report their model at 0x0000, Sony ones at
++		 * 0x0016, so read both rather than assume which vendor a slot
++		 * holds.
++		 */
++		for (r = 0; r < ARRAY_SIZE(hotdog_cam_scan_id_regs); r++) {
++			u16 reg = hotdog_cam_scan_id_regs[r];
++			u8 wbuf[2] = { reg >> 8, reg & 0xff };
++			u8 rbuf[2] = { 0xff, 0xff };
++			struct i2c_msg msgs[2] = {
++				{ .addr = addr, .flags = 0,
++				  .len = sizeof(wbuf), .buf = wbuf },
++				{ .addr = addr, .flags = I2C_M_RD,
++				  .len = sizeof(rbuf), .buf = rbuf },
++			};
++
++			if (i2c_transfer(client->adapter, msgs,
++					 ARRAY_SIZE(msgs)) != 2)
++				continue;
++
++			dev_info(dev,
++				 "address 0x%02x answers, register 0x%04x = 0x%02x%02x\n",
++				 addr, reg, rbuf[0], rbuf[1]);
++			found++;
++
++			/* Give the bus a moment between transfers. */
++			usleep_range(200, 400);
++		}
+ 	}
+ 
+ 	if (!found)
+--
+2.50.1

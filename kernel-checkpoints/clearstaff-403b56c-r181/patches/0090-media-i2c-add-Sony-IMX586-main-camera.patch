@@ -1,0 +1,1544 @@
+From 6986f11ebf856a146b1766087e7a8870a5f9cb61 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 17:54:41 +0200
+Subject: [PATCH] media: i2c: add Sony IMX586 main camera
+
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |   31 +-
+ drivers/media/i2c/Kconfig                     |   11 +
+ drivers/media/i2c/Makefile                    |    1 +
+ drivers/media/i2c/imx586.c                    | 1419 +++++++++++++++++
+ 4 files changed, 1457 insertions(+), 5 deletions(-)
+ create mode 100644 drivers/media/i2c/imx586.c
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index f667a623c214..9e4ba7edbb0f 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -12,6 +12,7 @@
+ #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/media/video-interfaces.h>
+ #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
+@@ -931,9 +932,12 @@ s5k3m5_ep: endpoint {
+ };
+ 
+ &cci0_i2c1 {
+-	camera-scan@7f {
+-		compatible = "oneplus,hotdog-camera-scan";
+-		reg = <0x7f>;
++	/* Main 48 MP rear camera, identified on hardware as Sony IMX586. */
++	camera@1a {
++		compatible = "sony,imx586";
++		reg = <0x1a>;
++		orientation = <1>;
++		rotation = <90>;
+ 
+ 		clocks = <&camcc CAM_CC_MCLK1_CLK>;
+ 		assigned-clocks = <&camcc CAM_CC_MCLK1_CLK>;
+@@ -947,14 +951,21 @@ camera-scan@7f {
+ 		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>;
+ 		custom1-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
+ 		custom2-gpios = <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
+-		oneplus,imx586-power-sequence;
+-
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk1_default>,
+ 			    <&cam0_vana_default>,
+ 			    <&cam0_custom1_default>,
+ 			    <&cam0_custom2_default>,
+ 			    <&cam0_reset_default>;
++
++		port {
++			imx586_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
++				data-lanes = <0 1 2>;
++				link-frequencies = /bits/ 64 <698395833>;
++				remote-endpoint = <&csiphy1_ep>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -1022,6 +1033,16 @@ csiphy0_ep: endpoint {
+ 				remote-endpoint = <&s5k3m5_ep>;
+ 			};
+ 		};
++
++		port@1 {
++			reg = <1>;
++
++			csiphy1_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
++				data-lanes = <0 1 2>;
++				remote-endpoint = <&imx586_ep>;
++			};
++		};
+ 	};
+ };
+ 
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 4afe704d7f17..97ae3edf21fc 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -255,6 +255,17 @@ config VIDEO_IMX412
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called imx412.
+ 
++config VIDEO_IMX586
++	tristate "Sony IMX586 sensor support"
++	depends on OF_GPIO
++	help
++	  This is a Video4Linux2 sensor driver for the Sony IMX586
++	  48 megapixel camera sensor. It supports raw Bayer capture,
++	  exposure and analogue gain controls over a MIPI C-PHY link.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called imx586.
++
+ config VIDEO_IMX415
+ 	tristate "Sony IMX415 sensor support"
+ 	depends on OF_GPIO
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index a0f0a7904e2a..2e65209f0e6c 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -58,6 +58,7 @@ obj-$(CONFIG_VIDEO_IMX334) += imx334.o
+ obj-$(CONFIG_VIDEO_IMX335) += imx335.o
+ obj-$(CONFIG_VIDEO_IMX355) += imx355.o
+ obj-$(CONFIG_VIDEO_IMX412) += imx412.o
++obj-$(CONFIG_VIDEO_IMX586) += imx586.o
+ obj-$(CONFIG_VIDEO_IMX415) += imx415.o
+ obj-$(CONFIG_VIDEO_IR_I2C) += ir-kbd-i2c.o
+ obj-$(CONFIG_VIDEO_ISL7998X) += isl7998x.o
+diff --git a/drivers/media/i2c/imx586.c b/drivers/media/i2c/imx586.c
+new file mode 100644
+index 000000000000..8befc53673f6
+--- /dev/null
++++ b/drivers/media/i2c/imx586.c
+@@ -0,0 +1,1419 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Sony IMX586 camera sensor driver
++ *
++ * Copyright (C) 2021 Intel Corporation
++ * Copyright (C) 2026 OnePlus 7T Pro Linux contributors
++ */
++#include <linux/unaligned.h>
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-fwnode.h>
++#include <media/v4l2-subdev.h>
++
++/* Streaming Mode */
++#define IMX586_REG_MODE_SELECT	0x0100
++#define IMX586_MODE_STANDBY	0x00
++#define IMX586_MODE_STREAMING	0x01
++
++/* Lines per frame */
++#define IMX586_REG_LPFR		0x0340
++
++/* Chip ID */
++#define IMX586_REG_ID		0x0016
++#define IMX586_ID		0x0586
++
++/* Exposure control */
++#define IMX586_REG_EXPOSURE_CIT	0x0202
++#define IMX586_EXPOSURE_MIN	6
++#define IMX586_EXPOSURE_OFFSET	48
++#define IMX586_EXPOSURE_STEP	1
++#define IMX586_EXPOSURE_DEFAULT	0x0bca
++
++/* Analog gain control */
++#define IMX586_REG_AGAIN	0x0204
++#define IMX586_AGAIN_MIN	0
++#define IMX586_AGAIN_MAX	992
++#define IMX586_AGAIN_STEP	1
++#define IMX586_AGAIN_DEFAULT	0x70
++
++/* Group hold register */
++#define IMX586_REG_HOLD		0x0104
++
++/* Input clock rate */
++#define IMX586_INCLK_RATE	19200000
++
++#define IMX586_VANA_MIN_UV	3300000
++#define IMX586_VANA_MAX_UV	3320000
++#define IMX586_VDIG_LOAD_UA	1100000
++
++/* CSI2 HW configuration */
++#define IMX586_LINK_FREQ	698395833
++#define IMX586_NUM_DATA_LANES	3
++
++#define IMX586_REG_MIN		0x00
++#define IMX586_REG_MAX		0xffff
++
++/**
++ * struct imx586_reg - imx586 sensor register
++ * @address: Register address
++ * @val: Register value
++ */
++struct imx586_reg {
++	u16 address;
++	u8 val;
++};
++
++/**
++ * struct imx586_reg_list - imx586 sensor register list
++ * @num_of_regs: Number of registers in the list
++ * @regs: Pointer to register list
++ */
++struct imx586_reg_list {
++	u32 num_of_regs;
++	const struct imx586_reg *regs;
++};
++
++/**
++ * struct imx586_mode - imx586 sensor mode structure
++ * @width: Frame width
++ * @height: Frame height
++ * @code: Format code
++ * @hblank: Horizontal blanking in lines
++ * @vblank: Vertical blanking in lines
++ * @vblank_min: Minimum vertical blanking in lines
++ * @vblank_max: Maximum vertical blanking in lines
++ * @pclk: Sensor pixel clock
++ * @link_freq_idx: Link frequency index
++ * @reg_list: Register list for sensor mode
++ */
++struct imx586_mode {
++	u32 width;
++	u32 height;
++	u32 code;
++	u32 hblank;
++	u32 vblank;
++	u32 vblank_min;
++	u32 vblank_max;
++	u64 pclk;
++	u32 link_freq_idx;
++	struct imx586_reg_list reg_list;
++};
++
++/**
++ * struct imx586 - imx586 sensor device structure
++ * @dev: Pointer to generic device
++ * @client: Pointer to i2c client
++ * @sd: V4L2 sub-device
++ * @pad: Media pad. Only one pad supported
++ * @reset_gpio: Sensor reset gpio
++ * @inclk: Sensor input clock
++ * @supplies: Regulator supplies
++ * @ctrl_handler: V4L2 control handler
++ * @link_freq_ctrl: Pointer to link frequency control
++ * @pclk_ctrl: Pointer to pixel clock control
++ * @hblank_ctrl: Pointer to horizontal blanking control
++ * @vblank_ctrl: Pointer to vertical blanking control
++ * @exp_ctrl: Pointer to exposure control
++ * @again_ctrl: Pointer to analog gain control
++ * @vblank: Vertical blanking in lines
++ * @cur_mode: Pointer to current selected sensor mode
++ * @mutex: Mutex for serializing sensor controls
++ */
++struct imx586 {
++	struct device *dev;
++	struct i2c_client *client;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct gpio_desc *reset_gpio;
++	struct gpio_desc *vana_enable_gpio;
++	struct gpio_desc *custom1_gpio;
++	struct gpio_desc *custom2_gpio;
++	struct clk *inclk;
++	struct regulator *vana;
++	struct regulator *vdig;
++	struct regulator *vio;
++	struct v4l2_ctrl_handler ctrl_handler;
++	struct v4l2_ctrl *link_freq_ctrl;
++	struct v4l2_ctrl *pclk_ctrl;
++	struct v4l2_ctrl *hblank_ctrl;
++	struct v4l2_ctrl *vblank_ctrl;
++	struct {
++		struct v4l2_ctrl *exp_ctrl;
++		struct v4l2_ctrl *again_ctrl;
++	};
++	u32 vblank;
++	const struct imx586_mode *cur_mode;
++	struct mutex mutex;
++};
++
++static const s64 link_freq[] = {
++	IMX586_LINK_FREQ,
++};
++
++/* Sensor mode registers */
++static const struct imx586_reg imx586_init_regs[] = {
++	{ 0x0136, 0x13 },
++	{ 0x0137, 0x33 },
++	{ 0x3c7e, 0x03 },
++	{ 0x3c7f, 0x0a },
++	{ 0x0111, 0x03 },
++	{ 0x380c, 0x00 },
++	{ 0x3c00, 0x10 },
++	{ 0x3c01, 0x10 },
++	{ 0x3c02, 0x10 },
++	{ 0x3c03, 0x10 },
++	{ 0x3c04, 0x10 },
++	{ 0x3c05, 0x01 },
++	{ 0x3c06, 0x00 },
++	{ 0x3c07, 0x00 },
++	{ 0x3c08, 0x03 },
++	{ 0x3c09, 0xff },
++	{ 0x3c0a, 0x01 },
++	{ 0x3c0b, 0x00 },
++	{ 0x3c0c, 0x00 },
++	{ 0x3c0d, 0x03 },
++	{ 0x3c0e, 0xff },
++	{ 0x3c0f, 0x20 },
++	{ 0x3f88, 0x00 },
++	{ 0x3f8e, 0x00 },
++	{ 0x5282, 0x01 },
++	{ 0x9004, 0x14 },
++	{ 0x9200, 0xf4 },
++	{ 0x9201, 0xa7 },
++	{ 0x9202, 0xf4 },
++	{ 0x9203, 0xaa },
++	{ 0x9204, 0xf4 },
++	{ 0x9205, 0xad },
++	{ 0x9206, 0xf4 },
++	{ 0x9207, 0xb0 },
++	{ 0x9208, 0xf4 },
++	{ 0x9209, 0xb3 },
++	{ 0x920a, 0xb7 },
++	{ 0x920b, 0x34 },
++	{ 0x920c, 0xb7 },
++	{ 0x920d, 0x36 },
++	{ 0x920e, 0xb7 },
++	{ 0x920f, 0x37 },
++	{ 0x9210, 0xb7 },
++	{ 0x9211, 0x38 },
++	{ 0x9212, 0xb7 },
++	{ 0x9213, 0x39 },
++	{ 0x9214, 0xb7 },
++	{ 0x9215, 0x3a },
++	{ 0x9216, 0xb7 },
++	{ 0x9217, 0x3c },
++	{ 0x9218, 0xb7 },
++	{ 0x9219, 0x3d },
++	{ 0x921a, 0xb7 },
++	{ 0x921b, 0x3e },
++	{ 0x921c, 0xb7 },
++	{ 0x921d, 0x3f },
++	{ 0x921e, 0x77 },
++	{ 0x921f, 0x77 },
++	{ 0x9222, 0xc4 },
++	{ 0x9223, 0x4b },
++	{ 0x9224, 0xc4 },
++	{ 0x9225, 0x4c },
++	{ 0x9226, 0xc4 },
++	{ 0x9227, 0x4d },
++	{ 0x9810, 0x14 },
++	{ 0x9814, 0x14 },
++	{ 0x99b2, 0x20 },
++	{ 0x99b3, 0x0f },
++	{ 0x99b4, 0x0f },
++	{ 0x99b5, 0x0f },
++	{ 0x99b6, 0x0f },
++	{ 0x99e4, 0x0f },
++	{ 0x99e5, 0x0f },
++	{ 0x99e6, 0x0f },
++	{ 0x99e7, 0x0f },
++	{ 0x99e8, 0x0f },
++	{ 0x99e9, 0x0f },
++	{ 0x99ea, 0x0f },
++	{ 0x99eb, 0x0f },
++	{ 0x99ec, 0x0f },
++	{ 0xa569, 0x06 },
++	{ 0xa56a, 0x13 },
++	{ 0xa56b, 0x13 },
++	{ 0xa679, 0x20 },
++	{ 0xa830, 0x68 },
++	{ 0xa831, 0x56 },
++	{ 0xa832, 0x2b },
++	{ 0xa833, 0x55 },
++	{ 0xa834, 0x55 },
++	{ 0xa835, 0x16 },
++	{ 0xa837, 0x51 },
++	{ 0xa838, 0x34 },
++	{ 0xa854, 0x4f },
++	{ 0xa855, 0x48 },
++	{ 0xa856, 0x45 },
++	{ 0xa857, 0x02 },
++	{ 0xa85a, 0x23 },
++	{ 0xa85b, 0x16 },
++	{ 0xa85c, 0x12 },
++	{ 0xa85d, 0x02 },
++	{ 0xac72, 0x01 },
++	{ 0xac73, 0x26 },
++	{ 0xac74, 0x01 },
++	{ 0xac75, 0x26 },
++	{ 0xac76, 0x00 },
++	{ 0xac77, 0xc4 },
++	{ 0xb051, 0x02 },
++	{ 0xc020, 0x01 },
++	{ 0xc61d, 0x00 },
++	{ 0xc625, 0x00 },
++	{ 0xc638, 0x03 },
++	{ 0xc63b, 0x01 },
++	{ 0xe286, 0x31 },
++	{ 0xe2a6, 0x32 },
++	{ 0xe2c6, 0x33 },
++	{ 0xea4b, 0x00 },
++	{ 0xea4c, 0x00 },
++	{ 0xea4d, 0x00 },
++	{ 0xea4e, 0x00 },
++	{ 0xf000, 0x00 },
++	{ 0xf001, 0x10 },
++	{ 0xf00c, 0x00 },
++	{ 0xf00d, 0x40 },
++	{ 0xf030, 0x00 },
++	{ 0xf031, 0x10 },
++	{ 0xf03c, 0x00 },
++	{ 0xf03d, 0x40 },
++	{ 0xf44b, 0x80 },
++	{ 0xf44c, 0x10 },
++	{ 0xf44d, 0x06 },
++	{ 0xf44e, 0x80 },
++	{ 0xf44f, 0x10 },
++	{ 0xf450, 0x06 },
++	{ 0xf451, 0x80 },
++	{ 0xf452, 0x10 },
++	{ 0xf453, 0x06 },
++	{ 0xf454, 0x80 },
++	{ 0xf455, 0x10 },
++	{ 0xf456, 0x06 },
++	{ 0xf457, 0x80 },
++	{ 0xf458, 0x10 },
++	{ 0xf459, 0x06 },
++	{ 0xf478, 0x20 },
++	{ 0xf479, 0x80 },
++	{ 0xf47a, 0x80 },
++	{ 0xf47b, 0x20 },
++	{ 0xf47c, 0x80 },
++	{ 0xf47d, 0x80 },
++	{ 0xf47e, 0x20 },
++	{ 0xf47f, 0x80 },
++	{ 0xf480, 0x80 },
++	{ 0xf480, 0x80 },
++	{ 0xf481, 0x20 },
++	{ 0xf482, 0x60 },
++	{ 0xf483, 0x80 },
++	{ 0xf484, 0x20 },
++	{ 0xf485, 0x60 },
++	{ 0xf486, 0x80 },
++	{ 0x9852, 0x00 },
++	{ 0x9954, 0x0f },
++	{ 0xa7ad, 0x01 },
++	{ 0xa7cb, 0x01 },
++	{ 0xae09, 0xff },
++	{ 0xae0a, 0xff },
++	{ 0xae12, 0x58 },
++	{ 0xae13, 0x58 },
++	{ 0xae15, 0x10 },
++	{ 0xae16, 0x10 },
++	{ 0xaf05, 0x48 },
++	{ 0xb07c, 0x02 },
++	{ 0x0106, 0x01 },
++};
++
++static const struct imx586_reg mode_4000x3000_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x02 },
++	{ 0x0342, 0x1e },
++	{ 0x0343, 0xc0 },
++	{ 0x0340, 0x0b },
++	{ 0x0341, 0xfa },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x00 },
++	{ 0x0347, 0x00 },
++	{ 0x0348, 0x1f },
++	{ 0x0349, 0x3f },
++	{ 0x034a, 0x17 },
++	{ 0x034b, 0x6f },
++	{ 0x0220, 0x62 },
++	{ 0x0222, 0x01 },
++	{ 0x0900, 0x01 },
++	{ 0x0901, 0x22 },
++	{ 0x0902, 0x08 },
++	{ 0x3140, 0x00 },
++	{ 0x3246, 0x81 },
++	{ 0x3247, 0x81 },
++	{ 0x3f15, 0x00 },
++	{ 0x0401, 0x00 },
++	{ 0x0404, 0x00 },
++	{ 0x0405, 0x10 },
++	{ 0x0408, 0x00 },
++	{ 0x0409, 0x00 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x00 },
++	{ 0x040c, 0x0f },
++	{ 0x040d, 0xa0 },
++	{ 0x040e, 0x0b },
++	{ 0x040f, 0xb8 },
++	{ 0x034c, 0x0f },
++	{ 0x034d, 0xa0 },
++	{ 0x034e, 0x0b },
++	{ 0x034f, 0xb8 },
++	{ 0x0301, 0x05 },
++	{ 0x0303, 0x04 },
++	{ 0x0305, 0x03 },
++	{ 0x0306, 0x01 },
++	{ 0x0307, 0x1b },
++	{ 0x030b, 0x02 },
++	{ 0x030d, 0x08 },
++	{ 0x030e, 0x02 },
++	{ 0x030f, 0x46 },
++	{ 0x0310, 0x01 },
++	{ 0x3620, 0x00 },
++	{ 0x3621, 0x00 },
++	{ 0x3c11, 0x04 },
++	{ 0x3c12, 0x03 },
++	{ 0x3c13, 0x2d },
++	{ 0x3f0c, 0x01 },
++	{ 0x3f14, 0x00 },
++	{ 0x3f80, 0x01 },
++	{ 0x3f81, 0x90 },
++	{ 0x3f8c, 0x00 },
++	{ 0x3f8d, 0x14 },
++	{ 0x3ff8, 0x01 },
++	{ 0x3ff9, 0x2a },
++	{ 0x3ffe, 0x00 },
++	{ 0x3fff, 0x6c },
++	{ 0x0202, 0x0b },
++	{ 0x0203, 0xca },
++	{ 0x0224, 0x01 },
++	{ 0x0225, 0xf4 },
++	{ 0x3fe0, 0x01 },
++	{ 0x3fe1, 0xf4 },
++	{ 0x0204, 0x00 },
++	{ 0x0205, 0x70 },
++	{ 0x0216, 0x00 },
++	{ 0x0217, 0x70 },
++	{ 0x0218, 0x01 },
++	{ 0x0219, 0x00 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++	{ 0x0210, 0x01 },
++	{ 0x0211, 0x00 },
++	{ 0x0212, 0x01 },
++	{ 0x0213, 0x00 },
++	{ 0x0214, 0x01 },
++	{ 0x0215, 0x00 },
++	{ 0x3fe2, 0x00 },
++	{ 0x3fe3, 0x70 },
++	{ 0x3fe4, 0x01 },
++	{ 0x3fe5, 0x00 },
++	{ 0x3e20, 0x02 },
++	{ 0x3e37, 0x00 },
++	{ 0x3e20, 0x02 },
++	{ 0x3e3b, 0x01 },
++	{ 0x4434, 0x01 },
++	{ 0x4435, 0xf0 },
++};
++
++/* Supported sensor mode configurations */
++static const struct imx586_mode supported_mode = {
++	.width = 4000,
++	.height = 3000,
++	.hblank = 3872,
++	.vblank = 66,
++	.vblank_min = 57,
++	.vblank_max = 62535,
++	.pclk = 478900000,
++	.link_freq_idx = 0,
++	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
++	.reg_list = {
++		.num_of_regs = ARRAY_SIZE(mode_4000x3000_regs),
++		.regs = mode_4000x3000_regs,
++	},
++};
++
++/**
++ * to_imx586() - imx586 V4L2 sub-device to imx586 device.
++ * @subdev: pointer to imx586 V4L2 sub-device
++ *
++ * Return: pointer to imx586 device
++ */
++static inline struct imx586 *to_imx586(struct v4l2_subdev *subdev)
++{
++	return container_of(subdev, struct imx586, sd);
++}
++
++/**
++ * imx586_read_reg() - Read registers.
++ * @imx586: pointer to imx586 device
++ * @reg: register address
++ * @len: length of bytes to read. Max supported bytes is 4
++ * @val: pointer to register value to be filled.
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_read_reg(struct imx586 *imx586, u16 reg, u32 len, u32 *val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx586->sd);
++	struct i2c_msg msgs[2] = {0};
++	u8 addr_buf[2] = {0};
++	u8 data_buf[4] = {0};
++	int ret;
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, addr_buf);
++
++	/* Write register address */
++	msgs[0].addr = client->addr;
++	msgs[0].flags = 0;
++	msgs[0].len = ARRAY_SIZE(addr_buf);
++	msgs[0].buf = addr_buf;
++
++	/* Read data from register */
++	msgs[1].addr = client->addr;
++	msgs[1].flags = I2C_M_RD;
++	msgs[1].len = len;
++	msgs[1].buf = &data_buf[4 - len];
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	*val = get_unaligned_be32(data_buf);
++
++	return 0;
++}
++
++/**
++ * imx586_write_reg() - Write register
++ * @imx586: pointer to imx586 device
++ * @reg: register address
++ * @len: length of bytes. Max supported bytes is 4
++ * @val: register value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_write_reg(struct imx586 *imx586, u16 reg, u32 len, u32 val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx586->sd);
++	u8 buf[6] = {0};
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, buf);
++	put_unaligned_be32(val << (8 * (4 - len)), buf + 2);
++	if (i2c_master_send(client, buf, len + 2) != len + 2)
++		return -EIO;
++
++	return 0;
++}
++
++/**
++ * imx586_write_regs() - Write a list of registers
++ * @imx586: pointer to imx586 device
++ * @regs: list of registers to be written
++ * @len: length of registers array
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_write_regs(struct imx586 *imx586,
++			     const struct imx586_reg *regs, u32 len)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < len; i++) {
++		ret = imx586_write_reg(imx586, regs[i].address, 1, regs[i].val);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
++/**
++ * imx586_update_controls() - Update control ranges based on streaming mode
++ * @imx586: pointer to imx586 device
++ * @mode: pointer to imx586_mode sensor mode
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_update_controls(struct imx586 *imx586,
++				  const struct imx586_mode *mode)
++{
++	int ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx586->link_freq_ctrl, mode->link_freq_idx);
++	if (ret)
++		return ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx586->hblank_ctrl, mode->hblank);
++	if (ret)
++		return ret;
++
++	return __v4l2_ctrl_modify_range(imx586->vblank_ctrl, mode->vblank_min,
++					mode->vblank_max, 1, mode->vblank);
++}
++
++/**
++ * imx586_update_exp_gain() - Set updated exposure and gain
++ * @imx586: pointer to imx586 device
++ * @exposure: updated exposure value
++ * @gain: updated analog gain value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_update_exp_gain(struct imx586 *imx586, u32 exposure, u32 gain)
++{
++	u32 lpfr;
++	int ret;
++
++	lpfr = imx586->vblank + imx586->cur_mode->height;
++
++	dev_dbg(imx586->dev, "Set exp %u, analog gain %u, lpfr %u\n",
++		exposure, gain, lpfr);
++
++	ret = imx586_write_reg(imx586, IMX586_REG_HOLD, 1, 1);
++	if (ret)
++		return ret;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_LPFR, 2, lpfr);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_EXPOSURE_CIT, 2, exposure);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_AGAIN, 2, gain);
++
++error_release_group_hold:
++	imx586_write_reg(imx586, IMX586_REG_HOLD, 1, 0);
++
++	return ret;
++}
++
++/**
++ * imx586_set_ctrl() - Set subdevice control
++ * @ctrl: pointer to v4l2_ctrl structure
++ *
++ * Supported controls:
++ * - V4L2_CID_VBLANK
++ * - cluster controls:
++ *   - V4L2_CID_ANALOGUE_GAIN
++ *   - V4L2_CID_EXPOSURE
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct imx586 *imx586 =
++		container_of(ctrl->handler, struct imx586, ctrl_handler);
++	u32 analog_gain;
++	u32 exposure;
++	int ret;
++
++	switch (ctrl->id) {
++	case V4L2_CID_VBLANK:
++		imx586->vblank = imx586->vblank_ctrl->val;
++
++		dev_dbg(imx586->dev, "Received vblank %u, new lpfr %u\n",
++			imx586->vblank,
++			imx586->vblank + imx586->cur_mode->height);
++
++		ret = __v4l2_ctrl_modify_range(imx586->exp_ctrl,
++					       IMX586_EXPOSURE_MIN,
++					       imx586->vblank +
++					       imx586->cur_mode->height -
++					       IMX586_EXPOSURE_OFFSET,
++					       1, IMX586_EXPOSURE_DEFAULT);
++		break;
++	case V4L2_CID_EXPOSURE:
++		/* Set controls only if sensor is in power on state */
++		if (!pm_runtime_get_if_in_use(imx586->dev))
++			return 0;
++
++		exposure = ctrl->val;
++		analog_gain = imx586->again_ctrl->val;
++
++		dev_dbg(imx586->dev, "Received exp %u, analog gain %u\n",
++			exposure, analog_gain);
++
++		ret = imx586_update_exp_gain(imx586, exposure, analog_gain);
++
++		pm_runtime_put(imx586->dev);
++
++		break;
++	default:
++		dev_err(imx586->dev, "Invalid control %d\n", ctrl->id);
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++/* V4l2 subdevice control ops*/
++static const struct v4l2_ctrl_ops imx586_ctrl_ops = {
++	.s_ctrl = imx586_set_ctrl,
++};
++
++/**
++ * imx586_enum_mbus_code() - Enumerate V4L2 sub-device mbus codes
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @code: V4L2 sub-device code enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_enum_mbus_code(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_mbus_code_enum *code)
++{
++	if (code->index > 0)
++		return -EINVAL;
++
++	code->code = supported_mode.code;
++
++	return 0;
++}
++
++/**
++ * imx586_enum_frame_size() - Enumerate V4L2 sub-device frame sizes
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fsize: V4L2 sub-device size enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_enum_frame_size(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *sd_state,
++				  struct v4l2_subdev_frame_size_enum *fsize)
++{
++	if (fsize->index > 0)
++		return -EINVAL;
++
++	if (fsize->code != supported_mode.code)
++		return -EINVAL;
++
++	fsize->min_width = supported_mode.width;
++	fsize->max_width = fsize->min_width;
++	fsize->min_height = supported_mode.height;
++	fsize->max_height = fsize->min_height;
++
++	return 0;
++}
++
++/**
++ * imx586_fill_pad_format() - Fill subdevice pad format
++ *                            from selected sensor mode
++ * @imx586: pointer to imx586 device
++ * @mode: pointer to imx586_mode sensor mode
++ * @fmt: V4L2 sub-device format need to be filled
++ */
++static void imx586_fill_pad_format(struct imx586 *imx586,
++				   const struct imx586_mode *mode,
++				   struct v4l2_subdev_format *fmt)
++{
++	fmt->format.width = mode->width;
++	fmt->format.height = mode->height;
++	fmt->format.code = mode->code;
++	fmt->format.field = V4L2_FIELD_NONE;
++	fmt->format.colorspace = V4L2_COLORSPACE_RAW;
++	fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
++	fmt->format.quantization = V4L2_QUANTIZATION_DEFAULT;
++	fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
++}
++
++/**
++ * imx586_get_pad_format() - Get subdevice pad format
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_get_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++
++	mutex_lock(&imx586->mutex);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		fmt->format = *framefmt;
++	} else {
++		imx586_fill_pad_format(imx586, imx586->cur_mode, fmt);
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return 0;
++}
++
++/**
++ * imx586_set_pad_format() - Set subdevice pad format
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	const struct imx586_mode *mode;
++	int ret = 0;
++
++	mutex_lock(&imx586->mutex);
++
++	mode = &supported_mode;
++	imx586_fill_pad_format(imx586, mode, fmt);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		*framefmt = fmt->format;
++	} else {
++		ret = imx586_update_controls(imx586, mode);
++		if (!ret)
++			imx586->cur_mode = mode;
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return ret;
++}
++
++/**
++ * imx586_init_state() - Initialize sub-device state
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *sd_state)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	struct v4l2_subdev_format fmt = { 0 };
++
++	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
++	imx586_fill_pad_format(imx586, &supported_mode, &fmt);
++
++	return imx586_set_pad_format(sd, sd_state, &fmt);
++}
++
++/**
++ * imx586_start_streaming() - Start sensor stream
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_start_streaming(struct imx586 *imx586)
++{
++	const struct imx586_reg_list *reg_list;
++	int ret;
++
++	ret = imx586_write_regs(imx586, imx586_init_regs,
++				ARRAY_SIZE(imx586_init_regs));
++	if (ret) {
++		dev_err(imx586->dev, "failed to write global registers\n");
++		return ret;
++	}
++
++	/* Write sensor mode registers */
++	reg_list = &imx586->cur_mode->reg_list;
++	ret = imx586_write_regs(imx586, reg_list->regs,
++				reg_list->num_of_regs);
++	if (ret) {
++		dev_err(imx586->dev, "failed to write mode registers\n");
++		return ret;
++	}
++
++	/* Setup handler will write actual exposure and gain */
++	ret =  __v4l2_ctrl_handler_setup(imx586->sd.ctrl_handler);
++	if (ret) {
++		dev_err(imx586->dev, "fail to setup handler\n");
++		return ret;
++	}
++
++	/* Start streaming */
++	ret = imx586_write_reg(imx586, IMX586_REG_MODE_SELECT,
++			       1, IMX586_MODE_STREAMING);
++	if (ret) {
++		dev_err(imx586->dev, "failed to start streaming\n");
++		return ret;
++	}
++
++	dev_info(imx586->dev, "streaming 4000x3000 RAW10 over three-trio C-PHY\n");
++
++	return 0;
++}
++
++/**
++ * imx586_stop_streaming() - Stop sensor stream
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_stop_streaming(struct imx586 *imx586)
++{
++	return imx586_write_reg(imx586, IMX586_REG_MODE_SELECT,
++				1, IMX586_MODE_STANDBY);
++}
++
++/**
++ * imx586_set_stream() - Enable sensor streaming
++ * @sd: pointer to imx586 subdevice
++ * @enable: set to enable sensor streaming
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	int ret;
++
++	mutex_lock(&imx586->mutex);
++
++	if (enable) {
++		ret = pm_runtime_resume_and_get(imx586->dev);
++		if (ret)
++			goto error_unlock;
++
++		ret = imx586_start_streaming(imx586);
++		if (ret)
++			goto error_power_off;
++	} else {
++		imx586_stop_streaming(imx586);
++		pm_runtime_put(imx586->dev);
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return 0;
++
++error_power_off:
++	pm_runtime_put(imx586->dev);
++error_unlock:
++	mutex_unlock(&imx586->mutex);
++
++	return ret;
++}
++
++/**
++ * imx586_detect() - Detect imx586 sensor
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, -EIO if sensor id does not match
++ */
++static int imx586_detect(struct imx586 *imx586)
++{
++	int ret;
++	u32 val;
++
++	ret = imx586_read_reg(imx586, IMX586_REG_ID, 2, &val);
++	if (ret)
++		return ret;
++
++	if (val != IMX586_ID) {
++		dev_err(imx586->dev, "chip id mismatch: %x!=%x\n",
++			IMX586_ID, val);
++		return -ENXIO;
++	}
++
++	return 0;
++}
++
++/**
++ * imx586_parse_hw_config() - Parse HW configuration and check if supported
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_parse_hw_config(struct imx586 *imx586)
++{
++	struct fwnode_handle *fwnode = dev_fwnode(imx586->dev);
++	struct v4l2_fwnode_endpoint bus_cfg = {
++		.bus_type = V4L2_MBUS_CSI2_CPHY
++	};
++	struct fwnode_handle *ep;
++	unsigned long rate;
++	unsigned int i;
++	int ret;
++
++	if (!fwnode)
++		return -ENXIO;
++
++	/* The GPIO values are logical; reset is active low in the DT. */
++	imx586->reset_gpio = devm_gpiod_get(imx586->dev, "reset",
++					    GPIOD_OUT_HIGH);
++	if (IS_ERR(imx586->reset_gpio)) {
++		dev_err(imx586->dev, "failed to get reset gpio %ld\n",
++			PTR_ERR(imx586->reset_gpio));
++		return PTR_ERR(imx586->reset_gpio);
++	}
++
++	imx586->vana_enable_gpio = devm_gpiod_get(imx586->dev, "vana-enable",
++						  GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->vana_enable_gpio))
++		return dev_err_probe(imx586->dev,
++				     PTR_ERR(imx586->vana_enable_gpio),
++				     "failed to get VANA enable GPIO\n");
++
++	imx586->custom1_gpio = devm_gpiod_get(imx586->dev, "custom1",
++					      GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->custom1_gpio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->custom1_gpio),
++				     "failed to get CUSTOM_GPIO1\n");
++
++	imx586->custom2_gpio = devm_gpiod_get(imx586->dev, "custom2",
++					      GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->custom2_gpio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->custom2_gpio),
++				     "failed to get CUSTOM_GPIO2\n");
++
++	/* Get sensor input clock */
++	imx586->inclk = devm_clk_get(imx586->dev, NULL);
++	if (IS_ERR(imx586->inclk)) {
++		dev_err(imx586->dev, "could not get inclk\n");
++		return PTR_ERR(imx586->inclk);
++	}
++
++	ret = clk_set_rate(imx586->inclk, IMX586_INCLK_RATE);
++	if (ret)
++		return dev_err_probe(imx586->dev, ret,
++				     "could not set 19.2 MHz input clock\n");
++
++	rate = clk_get_rate(imx586->inclk);
++	if (rate != IMX586_INCLK_RATE) {
++		dev_err(imx586->dev, "inclk frequency mismatch\n");
++		return -EINVAL;
++	}
++
++	imx586->vana = devm_regulator_get(imx586->dev, "vana");
++	if (IS_ERR(imx586->vana))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vana),
++				     "failed to get VANA\n");
++
++	imx586->vdig = devm_regulator_get(imx586->dev, "vdig");
++	if (IS_ERR(imx586->vdig))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vdig),
++				     "failed to get VDIG\n");
++
++	imx586->vio = devm_regulator_get(imx586->dev, "vio");
++	if (IS_ERR(imx586->vio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vio),
++				     "failed to get VIO\n");
++
++	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
++	if (!ep)
++		return -ENXIO;
++
++	ret = v4l2_fwnode_endpoint_alloc_parse(ep, &bus_cfg);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++
++	if (bus_cfg.bus_type != V4L2_MBUS_CSI2_CPHY) {
++		dev_err(imx586->dev, "endpoint must use C-PHY\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX586_NUM_DATA_LANES) {
++		dev_err(imx586->dev,
++			"number of CSI2 data lanes %d is not supported\n",
++			bus_cfg.bus.mipi_csi2.num_data_lanes);
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (!bus_cfg.nr_of_link_frequencies) {
++		dev_err(imx586->dev, "no link frequencies defined\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	for (i = 0; i < bus_cfg.nr_of_link_frequencies; i++)
++		if (bus_cfg.link_frequencies[i] == IMX586_LINK_FREQ)
++			goto done_endpoint_free;
++
++	ret = -EINVAL;
++
++done_endpoint_free:
++	v4l2_fwnode_endpoint_free(&bus_cfg);
++
++	return ret;
++}
++
++/* V4l2 subdevice ops */
++static const struct v4l2_subdev_video_ops imx586_video_ops = {
++	.s_stream = imx586_set_stream,
++};
++
++static const struct v4l2_subdev_pad_ops imx586_pad_ops = {
++	.enum_mbus_code = imx586_enum_mbus_code,
++	.enum_frame_size = imx586_enum_frame_size,
++	.get_fmt = imx586_get_pad_format,
++	.set_fmt = imx586_set_pad_format,
++};
++
++static const struct v4l2_subdev_ops imx586_subdev_ops = {
++	.video = &imx586_video_ops,
++	.pad = &imx586_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops imx586_internal_ops = {
++	.init_state = imx586_init_state,
++};
++
++/**
++ * imx586_power_on() - Sensor power on sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_power_on(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx586 *imx586 = to_imx586(sd);
++	int ret;
++
++	ret = regulator_set_voltage(imx586->vana, IMX586_VANA_MIN_UV,
++				    IMX586_VANA_MAX_UV);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to set VANA voltage\n");
++
++	ret = regulator_enable(imx586->vana);
++	if (ret)
++		goto error_vana_voltage;
++
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 1);
++	usleep_range(1000, 2000);
++
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 1);
++
++	ret = regulator_set_load(imx586->vdig, IMX586_VDIG_LOAD_UA);
++	if (ret)
++		goto error_custom1;
++
++	ret = regulator_enable(imx586->vdig);
++	if (ret)
++		goto error_vdig_load;
++	usleep_range(1000, 2000);
++
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 1);
++
++	ret = regulator_enable(imx586->vio);
++	if (ret)
++		goto error_custom2;
++	usleep_range(1000, 2000);
++
++	ret = clk_prepare_enable(imx586->inclk);
++	if (ret) {
++		dev_err(imx586->dev, "failed to enable input clock\n");
++		goto error_vio;
++	}
++
++	usleep_range(1000, 1200);
++	gpiod_set_value_cansleep(imx586->reset_gpio, 0);
++	usleep_range(1000, 2000);
++
++	return 0;
++
++error_vio:
++	regulator_disable(imx586->vio);
++error_custom2:
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 0);
++	regulator_disable(imx586->vdig);
++error_vdig_load:
++	regulator_set_load(imx586->vdig, 0);
++error_custom1:
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 0);
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 0);
++	regulator_disable(imx586->vana);
++error_vana_voltage:
++	regulator_set_voltage(imx586->vana, 0, IMX586_VANA_MAX_UV);
++
++	return ret;
++}
++
++/**
++ * imx586_power_off() - Sensor power off sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_power_off(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx586 *imx586 = to_imx586(sd);
++
++	gpiod_set_value_cansleep(imx586->reset_gpio, 1);
++	clk_disable_unprepare(imx586->inclk);
++	regulator_disable(imx586->vio);
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 0);
++	regulator_disable(imx586->vdig);
++	regulator_set_load(imx586->vdig, 0);
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 0);
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 0);
++	regulator_disable(imx586->vana);
++	regulator_set_voltage(imx586->vana, 0, IMX586_VANA_MAX_UV);
++
++	return 0;
++}
++
++/**
++ * imx586_init_controls() - Initialize sensor subdevice controls
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_init_controls(struct imx586 *imx586)
++{
++	struct v4l2_ctrl_handler *ctrl_hdlr = &imx586->ctrl_handler;
++	const struct imx586_mode *mode = imx586->cur_mode;
++	u32 lpfr;
++	int ret;
++
++	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 6);
++	if (ret)
++		return ret;
++
++	/* Serialize controls with sensor device */
++	ctrl_hdlr->lock = &imx586->mutex;
++
++	/* Initialize exposure and gain */
++	lpfr = mode->vblank + mode->height;
++	imx586->exp_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					     &imx586_ctrl_ops,
++					     V4L2_CID_EXPOSURE,
++					     IMX586_EXPOSURE_MIN,
++					     lpfr - IMX586_EXPOSURE_OFFSET,
++					     IMX586_EXPOSURE_STEP,
++					     IMX586_EXPOSURE_DEFAULT);
++
++	imx586->again_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					       &imx586_ctrl_ops,
++					       V4L2_CID_ANALOGUE_GAIN,
++					       IMX586_AGAIN_MIN,
++					       IMX586_AGAIN_MAX,
++					       IMX586_AGAIN_STEP,
++					       IMX586_AGAIN_DEFAULT);
++
++	v4l2_ctrl_cluster(2, &imx586->exp_ctrl);
++
++	imx586->vblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx586_ctrl_ops,
++						V4L2_CID_VBLANK,
++						mode->vblank_min,
++						mode->vblank_max,
++						1, mode->vblank);
++
++	/* Read only controls */
++	imx586->pclk_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					      &imx586_ctrl_ops,
++					      V4L2_CID_PIXEL_RATE,
++					      mode->pclk, mode->pclk,
++					      1, mode->pclk);
++
++	imx586->link_freq_ctrl = v4l2_ctrl_new_int_menu(ctrl_hdlr,
++							&imx586_ctrl_ops,
++							V4L2_CID_LINK_FREQ,
++							ARRAY_SIZE(link_freq) -
++							1,
++							mode->link_freq_idx,
++							link_freq);
++	if (imx586->link_freq_ctrl)
++		imx586->link_freq_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	imx586->hblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx586_ctrl_ops,
++						V4L2_CID_HBLANK,
++						IMX586_REG_MIN,
++						IMX586_REG_MAX,
++						1, mode->hblank);
++	if (imx586->hblank_ctrl)
++		imx586->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	if (ctrl_hdlr->error) {
++		dev_err(imx586->dev, "control init failed: %d\n",
++			ctrl_hdlr->error);
++		v4l2_ctrl_handler_free(ctrl_hdlr);
++		return ctrl_hdlr->error;
++	}
++
++	imx586->sd.ctrl_handler = ctrl_hdlr;
++
++	return 0;
++}
++
++/**
++ * imx586_probe() - I2C client device binding
++ * @client: pointer to i2c client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_probe(struct i2c_client *client)
++{
++	struct imx586 *imx586;
++	const char *name;
++	int ret;
++
++	imx586 = devm_kzalloc(&client->dev, sizeof(*imx586), GFP_KERNEL);
++	if (!imx586)
++		return -ENOMEM;
++
++	imx586->dev = &client->dev;
++	name = device_get_match_data(&client->dev);
++	if (!name)
++		return -ENODEV;
++
++	/* Initialize subdev */
++	v4l2_i2c_subdev_init(&imx586->sd, client, &imx586_subdev_ops);
++	imx586->sd.internal_ops = &imx586_internal_ops;
++
++	ret = imx586_parse_hw_config(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "HW configuration is not supported\n");
++		return ret;
++	}
++
++	mutex_init(&imx586->mutex);
++
++	ret = imx586_power_on(imx586->dev);
++	if (ret) {
++		dev_err(imx586->dev, "failed to power-on the sensor\n");
++		goto error_mutex_destroy;
++	}
++
++	/* Check module identity */
++	ret = imx586_detect(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "failed to find sensor: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Set default mode to max resolution */
++	imx586->cur_mode = &supported_mode;
++	imx586->vblank = imx586->cur_mode->vblank;
++
++	ret = imx586_init_controls(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "failed to init controls: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Initialize subdev */
++	imx586->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	imx586->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++
++	v4l2_i2c_subdev_set_name(&imx586->sd, client, name, NULL);
++
++	/* Initialize source pad */
++	imx586->pad.flags = MEDIA_PAD_FL_SOURCE;
++	ret = media_entity_pads_init(&imx586->sd.entity, 1, &imx586->pad);
++	if (ret) {
++		dev_err(imx586->dev, "failed to init entity pads: %d\n", ret);
++		goto error_handler_free;
++	}
++
++	ret = v4l2_async_register_subdev_sensor(&imx586->sd);
++	if (ret < 0) {
++		dev_err(imx586->dev,
++			"failed to register async subdev: %d\n", ret);
++		goto error_media_entity;
++	}
++
++	pm_runtime_set_active(imx586->dev);
++	pm_runtime_enable(imx586->dev);
++	pm_runtime_idle(imx586->dev);
++
++	return 0;
++
++error_media_entity:
++	media_entity_cleanup(&imx586->sd.entity);
++error_handler_free:
++	v4l2_ctrl_handler_free(imx586->sd.ctrl_handler);
++error_power_off:
++	imx586_power_off(imx586->dev);
++error_mutex_destroy:
++	mutex_destroy(&imx586->mutex);
++
++	return ret;
++}
++
++/**
++ * imx586_remove() - I2C client device unbinding
++ * @client: pointer to I2C client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static void imx586_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct imx586 *imx586 = to_imx586(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(sd->ctrl_handler);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		imx586_power_off(&client->dev);
++	pm_runtime_set_suspended(&client->dev);
++
++	mutex_destroy(&imx586->mutex);
++}
++
++static const struct dev_pm_ops imx586_pm_ops = {
++	SET_RUNTIME_PM_OPS(imx586_power_off, imx586_power_on, NULL)
++};
++
++static const struct of_device_id imx586_of_match[] = {
++	{ .compatible = "sony,imx586", .data = "imx586" },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(of, imx586_of_match);
++
++static struct i2c_driver imx586_driver = {
++	.probe = imx586_probe,
++	.remove = imx586_remove,
++	.driver = {
++		.name = "imx586",
++		.pm = &imx586_pm_ops,
++		.of_match_table = imx586_of_match,
++	},
++};
++
++module_i2c_driver(imx586_driver);
++
++MODULE_DESCRIPTION("Sony IMX586 sensor driver");
++MODULE_LICENSE("GPL");
+-- 
+2.54.0
+

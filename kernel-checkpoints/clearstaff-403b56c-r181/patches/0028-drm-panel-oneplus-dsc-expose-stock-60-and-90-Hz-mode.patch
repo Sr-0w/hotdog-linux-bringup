@@ -1,0 +1,158 @@
+From 68b8b8fcab0fad1b5f9946556b94d09360d7b34f Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 21:10:16 +0200
+Subject: [PATCH] drm: panel: oneplus-dsc: expose stock 60 and 90 Hz modes
+
+The HD1913 stock DTBO describes both 60 Hz and 90 Hz modes with matching
+control-display values 0x20 and 0x30. Expose both timings while keeping the
+validated 90 Hz mode preferred.
+
+Store the connector like panel-novatek-nt35950 and inspect the committed
+CRTC mode during prepare, so every full modeset initializes the panel with
+the command matching its transport timing. Unknown early modes retain the
+validated 90 Hz fallback.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ .../gpu/drm/panel/panel-samsung-oneplus-dsc.c | 83 ++++++++++++++++++-
+ 1 file changed, 80 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c b/drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
+index d302ef2..206117e 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
++++ b/drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
+@@ -14,6 +14,8 @@
+ 
+ #include <drm/display/drm_dsc.h>
+ #include <drm/display/drm_dsc_helper.h>
++#include <drm/drm_connector.h>
++#include <drm/drm_crtc.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_modes.h>
+ #include <drm/drm_panel.h>
+@@ -21,6 +23,7 @@
+ 
+ struct samsung_oneplus_dsc {
+ 	struct drm_panel panel;
++	struct drm_connector *connector;
+ 	struct mipi_dsi_device *dsi;
+ 	struct drm_dsc_config dsc;
+ 	struct regulator_bulk_data *supplies;
+@@ -48,11 +51,19 @@ static void samsung_oneplus_dsc_reset(struct samsung_oneplus_dsc *ctx)
+ 	usleep_range(5000, 6000);
+ }
+ 
++static u8
++samsung_oneplus_dsc_get_control_display(struct samsung_oneplus_dsc *ctx);
++
+ static int samsung_oneplus_dsc_on(struct samsung_oneplus_dsc *ctx)
+ {
+ 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
++	u8 control_display = samsung_oneplus_dsc_get_control_display(ctx);
++	u8 control_display_cmd[] = { MIPI_DCS_WRITE_CONTROL_DISPLAY, control_display };
+ 
+ 	ctx->dsi->mode_flags |= MIPI_DSI_MODE_LPM;
++	dev_info(&ctx->dsi->dev,
++		 "initializing panel at %u Hz (control-display 0x%02x)\n",
++		 control_display == 0x20 ? 60 : 90, control_display);
+ 
+ 	mipi_dsi_compression_mode_multi(&dsi_ctx, true);
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xc3, 0x00);
+@@ -107,8 +118,8 @@ static int samsung_oneplus_dsc_on(struct samsung_oneplus_dsc *ctx)
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb1, 0x01);
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x02);
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb5, 0xd3);
+-	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, MIPI_DCS_WRITE_CONTROL_DISPLAY,
+-				     0x30);
++	mipi_dsi_dcs_write_buffer_multi(&dsi_ctx, control_display_cmd,
++					ARRAY_SIZE(control_display_cmd));
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xf0, 0xa5, 0xa5);
+ 	mipi_dsi_dcs_set_display_on_multi(&dsi_ctx);
+ 
+@@ -186,6 +197,21 @@ static int samsung_oneplus_dsc_unprepare(struct drm_panel *panel)
+ 	return 0;
+ }
+ 
++static const struct drm_display_mode samsung_oneplus_dsc_60hz_mode = {
++	.clock = (1440 + 16 + 8 + 8) * (3120 + 400 + 28 + 1156) * 60 / 1000,
++	.hdisplay = 1440,
++	.hsync_start = 1440 + 16,
++	.hsync_end = 1440 + 16 + 8,
++	.htotal = 1440 + 16 + 8 + 8,
++	.vdisplay = 3120,
++	.vsync_start = 3120 + 400,
++	.vsync_end = 3120 + 400 + 28,
++	.vtotal = 3120 + 400 + 28 + 1156,
++	.width_mm = 71,
++	.height_mm = 154,
++	.type = DRM_MODE_TYPE_DRIVER,
++};
++
+ static const struct drm_display_mode samsung_oneplus_dsc_90hz_mode = {
+ 	.clock = (1440 + 16 + 8 + 8) * (3120 + 4 + 4 + 8) * 90 / 1000,
+ 	.hdisplay = 1440,
+@@ -201,10 +227,61 @@ static const struct drm_display_mode samsung_oneplus_dsc_90hz_mode = {
+ 	.type = DRM_MODE_TYPE_DRIVER,
+ };
+ 
++static u8
++samsung_oneplus_dsc_get_control_display(struct samsung_oneplus_dsc *ctx)
++{
++	struct drm_connector *connector = ctx->connector;
++	struct drm_crtc_state *crtc_state;
++
++	/* The validated preferred mode is the safe fallback during early prepare. */
++	if (!connector || !connector->state || !connector->state->crtc)
++		return 0x30;
++
++	crtc_state = connector->state->crtc->state;
++	if (drm_mode_match(&crtc_state->mode,
++			   &samsung_oneplus_dsc_60hz_mode,
++			   DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
++		return 0x20;
++
++	if (!drm_mode_match(&crtc_state->mode,
++			    &samsung_oneplus_dsc_90hz_mode,
++			    DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
++		dev_warn(&ctx->dsi->dev,
++			 "unknown mode " DRM_MODE_FMT ", using 90 Hz panel command\n",
++			 DRM_MODE_ARG(&crtc_state->mode));
++
++	return 0x30;
++}
++
+ static int samsung_oneplus_dsc_get_modes(struct drm_panel *panel,
+ 					 struct drm_connector *connector)
+ {
+-	return drm_connector_helper_get_modes_fixed(connector, &samsung_oneplus_dsc_90hz_mode);
++	static const struct drm_display_mode * const modes[] = {
++		&samsung_oneplus_dsc_90hz_mode,
++		&samsung_oneplus_dsc_60hz_mode,
++	};
++	struct samsung_oneplus_dsc *ctx = to_samsung_oneplus_dsc(panel);
++	struct drm_display_mode *mode;
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(modes); i++) {
++		mode = drm_mode_duplicate(connector->dev, modes[i]);
++		if (!mode)
++			return -ENOMEM;
++
++		drm_mode_set_name(mode);
++		mode->type |= DRM_MODE_TYPE_DRIVER;
++		if (i == 0)
++			mode->type |= DRM_MODE_TYPE_PREFERRED;
++
++		drm_mode_probed_add(connector, mode);
++	}
++
++	connector->display_info.width_mm = modes[0]->width_mm;
++	connector->display_info.height_mm = modes[0]->height_mm;
++	ctx->connector = connector;
++
++	return ARRAY_SIZE(modes);
+ }
+ 
+ static const struct drm_panel_funcs samsung_oneplus_dsc_panel_funcs = {
+-- 
+2.54.0

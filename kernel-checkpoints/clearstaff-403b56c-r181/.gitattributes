@@ -1,0 +1,3 @@
+# Preserve the byte-exact historical patch payloads. Several contain CRLF.
+*.patch -text
+cumulative.patch -text

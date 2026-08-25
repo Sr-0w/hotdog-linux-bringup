@@ -1,0 +1,322 @@
+From fde6c2e5d71e346a99173cde3078cdee567eb915 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 14:17:52 +0200
+Subject: [PATCH] media: hotdog-popup: add Hall-terminated opening
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c  | 242 ++++++++++++++++--
+ 1 file changed, 224 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 627a4a055..ca0f46d29 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -16,6 +16,15 @@
+ #define HOTDOG_PREFLIGHT_MICROSTEPS	320
+ #define HOTDOG_CLOSED_DOWN_MIN		300
+ #define HOTDOG_CLOSED_UP_MAX		50
++#define HOTDOG_RESTORE_DOWN_MIN		340
++#define HOTDOG_RESTORE_DOWN_MAX		368
++#define HOTDOG_OPEN_DOWN_MIN		368
++#define HOTDOG_FULL_COURSE_MICROSTEPS	(1380 * 32)
++#define HOTDOG_HALL_SAMPLE_MICROSTEPS	64
++#define HOTDOG_DIRECTION_CHECK_STEPS	320
++#define HOTDOG_PROGRESS_WINDOW_STEPS	640
++#define HOTDOG_PROGRESS_MIN_COUNTS	2
++#define HOTDOG_OPEN_HALL_MIN		150
+ 
+ struct hotdog_popup {
+ 	struct device *dev;
+@@ -28,6 +37,10 @@ struct hotdog_popup {
+ 	struct iio_channel *hall_down;
+ 	struct mutex lock;
+ 	bool preflight_used;
++	bool restore_used;
++	bool open_used;
++	bool endpoint_reached;
++	unsigned int last_steps;
+ 	int before_up;
+ 	int before_down;
+ 	int after_up;
+@@ -60,10 +73,39 @@ static int hotdog_popup_read_halls(struct hotdog_popup *popup,
+ 	return 0;
+ }
+ 
++static void hotdog_popup_power_on(struct hotdog_popup *popup, bool upward)
++{
++	/* FI5 direction is physically low for up and high for down. */
++	gpiod_set_value_cansleep(popup->direction, !upward);
++	gpiod_set_value_cansleep(popup->mode1, 1);
++	gpiod_set_value_cansleep(popup->boost, 1);
++	usleep_range(10000, 11000);
++	gpiod_set_value_cansleep(popup->sleep, 1);
++	usleep_range(1000, 1500);
++}
++
++static void hotdog_popup_step(struct hotdog_popup *popup)
++{
++	gpiod_set_value_cansleep(popup->step, 1);
++	usleep_range(40, 60);
++	gpiod_set_value_cansleep(popup->step, 0);
++	usleep_range(40, 60);
++}
++
++static void hotdog_popup_drive_exact(struct hotdog_popup *popup, bool upward,
++				     unsigned int microsteps)
++{
++	unsigned int i;
++
++	hotdog_popup_power_on(popup, upward);
++	for (i = 0; i < microsteps; i++)
++		hotdog_popup_step(popup);
++	hotdog_popup_stop(popup);
++}
++
+ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+ {
+ 	int ret;
+-	int i;
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->before_up,
+ 				       &popup->before_down);
+@@ -75,21 +117,37 @@ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+ 		return -ERANGE;
+ 
+ 	/* DRV8834 1/32 mode: M0 is high-impedance in pinctrl, M1 is high. */
+-	gpiod_set_value_cansleep(popup->direction, 0);
+-	gpiod_set_value_cansleep(popup->mode1, 1);
+-	gpiod_set_value_cansleep(popup->boost, 1);
+-	usleep_range(10000, 11000);
+-	gpiod_set_value_cansleep(popup->sleep, 1);
+-	usleep_range(1000, 1500);
++	hotdog_popup_drive_exact(popup, true, HOTDOG_PREFLIGHT_MICROSTEPS);
++	msleep(20);
+ 
+-	for (i = 0; i < HOTDOG_PREFLIGHT_MICROSTEPS; i++) {
+-		gpiod_set_value_cansleep(popup->step, 1);
+-		usleep_range(40, 60);
+-		gpiod_set_value_cansleep(popup->step, 0);
+-		usleep_range(40, 60);
+-	}
++	ret = hotdog_popup_read_halls(popup, &popup->after_up,
++				       &popup->after_down);
++	if (ret)
++		return ret;
+ 
+-	hotdog_popup_stop(popup);
++	dev_info(popup->dev,
++		 "preflight up: %d microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 HOTDOG_PREFLIGHT_MICROSTEPS, popup->before_up, popup->after_up,
++		 popup->before_down, popup->after_down);
++
++	return 0;
++}
++
++static int hotdog_popup_restore_closed(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_down) < HOTDOG_RESTORE_DOWN_MIN ||
++	    abs(popup->before_down) > HOTDOG_RESTORE_DOWN_MAX ||
++	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++		return -ERANGE;
++
++	hotdog_popup_drive_exact(popup, false, HOTDOG_PREFLIGHT_MICROSTEPS);
+ 	msleep(20);
+ 
+ 	ret = hotdog_popup_read_halls(popup, &popup->after_up,
+@@ -97,14 +155,100 @@ static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
+ 	if (ret)
+ 		return ret;
+ 
++	if (abs(popup->after_down) <= abs(popup->before_down))
++		return -EPROTO;
++
++	popup->last_steps = HOTDOG_PREFLIGHT_MICROSTEPS;
+ 	dev_info(popup->dev,
+-		 "preflight up: %d microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 "restore closed: %d microsteps, Hall up %d -> %d, down %d -> %d\n",
+ 		 HOTDOG_PREFLIGHT_MICROSTEPS, popup->before_up, popup->after_up,
+ 		 popup->before_down, popup->after_down);
+ 
+ 	return 0;
+ }
+ 
++static int hotdog_popup_open(struct hotdog_popup *popup)
++{
++	int window_up;
++	int window_down;
++	int current_up;
++	int current_down;
++	unsigned int steps;
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_down) < HOTDOG_OPEN_DOWN_MIN ||
++	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++		return -ERANGE;
++
++	window_up = popup->before_up;
++	window_down = popup->before_down;
++	popup->endpoint_reached = false;
++	popup->last_steps = 0;
++	hotdog_popup_power_on(popup, true);
++
++	for (steps = 1; steps <= HOTDOG_FULL_COURSE_MICROSTEPS; steps++) {
++		hotdog_popup_step(popup);
++		popup->last_steps = steps;
++
++		if (steps % HOTDOG_HALL_SAMPLE_MICROSTEPS)
++			continue;
++
++		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++		if (ret)
++			goto out_stop;
++
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++		if (abs(current_up) >= HOTDOG_OPEN_HALL_MIN) {
++			popup->endpoint_reached = true;
++			ret = 0;
++			goto out_stop;
++		}
++
++		if (steps == HOTDOG_DIRECTION_CHECK_STEPS &&
++		    current_down - popup->before_down <
++		    HOTDOG_PROGRESS_MIN_COUNTS) {
++			ret = -EPROTO;
++			goto out_stop;
++		}
++
++		if (!(steps % HOTDOG_PROGRESS_WINDOW_STEPS)) {
++			if (abs(current_up - window_up) <
++			    HOTDOG_PROGRESS_MIN_COUNTS &&
++			    abs(current_down - window_down) <
++			    HOTDOG_PROGRESS_MIN_COUNTS) {
++				ret = -ETIMEDOUT;
++				goto out_stop;
++			}
++			window_up = current_up;
++			window_down = current_down;
++		}
++	}
++
++	ret = -ERANGE;
++
++out_stop:
++	hotdog_popup_stop(popup);
++	msleep(20);
++	if (!hotdog_popup_read_halls(popup, &current_up, &current_down)) {
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++	}
++
++	dev_info(popup->dev,
++		 "open stopped: steps=%u endpoint=%u error=%d Hall up %d -> %d, down %d -> %d\n",
++		 popup->last_steps, popup->endpoint_reached, ret,
++		 popup->before_up, popup->after_up, popup->before_down,
++		 popup->after_down);
++
++	return ret;
++}
++
+ static ssize_t status_show(struct device *dev,
+ 			   struct device_attribute *attr, char *buf)
+ {
+@@ -119,10 +263,12 @@ static ssize_t status_show(struct device *dev,
+ 		return ret;
+ 
+ 	return sysfs_emit(buf,
+-		"used=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d microsteps=%u\n",
+-		popup->preflight_used, popup->last_error, up, down,
++		"preflight_used=%u restore_used=%u open_used=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
++		popup->preflight_used, popup->restore_used, popup->open_used,
++		popup->endpoint_reached, popup->last_error, up, down,
+ 		popup->before_up, popup->before_down, popup->after_up,
+-		popup->after_down, HOTDOG_PREFLIGHT_MICROSTEPS);
++		popup->after_down, popup->last_steps,
++		HOTDOG_PREFLIGHT_MICROSTEPS, HOTDOG_FULL_COURSE_MICROSTEPS);
+ }
+ static DEVICE_ATTR_RO(status);
+ 
+@@ -155,9 +301,69 @@ static ssize_t pulse_up_store(struct device *dev,
+ }
+ static DEVICE_ATTR_WO(pulse_up);
+ 
++static ssize_t restore_closed_store(struct device *dev,
++				    struct device_attribute *attr,
++				    const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int microsteps;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &microsteps);
++	if (ret)
++		return ret;
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->restore_used)
++		return -EALREADY;
++
++	popup->restore_used = true;
++	ret = hotdog_popup_restore_closed(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(restore_closed);
++
++static ssize_t open_store(struct device *dev,
++			  struct device_attribute *attr,
++			  const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int limit;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &limit);
++	if (ret)
++		return ret;
++	if (limit != HOTDOG_FULL_COURSE_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->open_used)
++		return -EALREADY;
++
++	popup->open_used = true;
++	ret = hotdog_popup_open(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(open);
++
+ static struct attribute *hotdog_popup_attrs[] = {
+ 	&dev_attr_status.attr,
+ 	&dev_attr_pulse_up.attr,
++	&dev_attr_restore_closed.attr,
++	&dev_attr_open.attr,
+ 	NULL,
+ };
+ ATTRIBUTE_GROUPS(hotdog_popup);
+-- 
+2.54.0

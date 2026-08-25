@@ -1,0 +1,83 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -72,52 +72,6 @@
+ 	.endm
+ 
+ /*
+- * Draw cumulative white checkpoints in the bootloader-provided framebuffer.
+- * The 1440x3120 a8r8g8b8 scanout starts at 0x9c000000 with a 5760-byte
+- * stride. This is temporary direct-boot instrumentation, not a display
+- * driver.
+- */
+-	.macro	hotdog_fb_stage slot, cached=0
+-	mov	x11, #0x9c000000
+-	movz	x12, #0x16, lsl #16
+-	add	x12, x12, #8, lsl #12	// row 256: 0x168000
+-	add	x11, x11, x12
+-	mov	x17, #(\slot * 896)		// 224 pixels per slot
+-	add	x11, x11, x17
+-	movz	w12, #0xffff
+-	movk	w12, #0x00ff, lsl #16	// a8r8g8b8 white
+-	mov	x13, #96
+-.Lhotdog_fb_row\@:
+-	mov	x16, x11
+-	mov	x14, #160
+-.Lhotdog_fb_pixel\@:
+-	str	w12, [x11], #4
+-	subs	x14, x14, #1
+-	b.ne	.Lhotdog_fb_pixel\@
+-	.if \cached
+-	mov	x14, #10
+-.Lhotdog_fb_flush\@:
+-	dc	cvac, x16
+-	add	x16, x16, #64
+-	subs	x14, x14, #1
+-	b.ne	.Lhotdog_fb_flush\@
+-	.endif
+-	mov	x15, #5120			// stride - 160 * 4
+-	add	x11, x11, x15
+-	subs	x13, x13, #1
+-	b.ne	.Lhotdog_fb_row\@
+-	dsb	sy
+-	.endm
+-
+-	/* Keep each early checkpoint visible long enough for a 30 fps camera. */
+-	.macro	hotdog_fb_pause
+-	mov	x10, #0x04000000
+-.Lhotdog_fb_pause\@:
+-	subs	x10, x10, #1
+-	b.ne	.Lhotdog_fb_pause\@
+-	.endm
+-
+-/*
+  * Kernel startup entry point.
+  * ---------------------------
+  *
+@@ -163,9 +117,6 @@
+ 	 *  x21        primary_entry() .. start_kernel()        FDT pointer passed at boot in x0
+ 	 */
+ SYM_CODE_START(primary_entry)
+-	/* A register-only delay remains safe regardless of the incoming MMU state. */
+-	hotdog_fb_pause
+-
+ 	bl	record_mmu_state
+ 	bl	preserve_boot_args
+ 
+@@ -204,8 +155,6 @@
+ 	mov	x20, x0
+ 	/* init_kernel_el() has established an MMU-off physical access context. */
+ 	hotdog_ram_stage 0x00, 0x10, 0x4c45, 0x3031	// "EL10"
+-	hotdog_fb_stage 0
+-	hotdog_fb_pause
+ 
+ 	/*
+ 	 * The following calls CPU setup code, see arch/arm64/mm/proc.S for
+@@ -215,7 +164,5 @@
+ 	 */
+ 	bl	__cpu_setup			// initialise processor
+ 	hotdog_ram_stage 0x20, 0x20, 0x5043, 0x3255	// "CPU2"
+-	hotdog_fb_stage 1
+-	hotdog_fb_pause
+ 	b	__primary_switch
+ SYM_CODE_END(primary_entry)

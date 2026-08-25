@@ -1,0 +1,55 @@
+From 724688fa3308e4e684c88309499089b38ef0f775 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 18:20:26 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: retry a stalled close ramp
+
+---
+ .../media/platform/qcom/hotdog-popup-motor.c   | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 5b5e517a5..36b5505e0 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -443,6 +443,20 @@ static int hotdog_popup_close(struct hotdog_popup *popup)
+ 	return hotdog_popup_move_profile(popup, false);
+ }
+ 
++static int hotdog_popup_close_with_retry(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_close(popup);
++	if (ret != -EPROTO)
++		return ret;
++
++	/* The LPG/DRV8834 pair can ignore the first ramp after a fast stop. */
++	dev_info(popup->dev, "close ramp did not move; retrying once\n");
++	msleep(250);
++	return hotdog_popup_close(popup);
++}
++
+ static int hotdog_popup_domain_power_on(struct generic_pm_domain *domain)
+ {
+ 	struct hotdog_popup *popup =
+@@ -455,7 +469,7 @@ static int hotdog_popup_domain_power_on(struct generic_pm_domain *domain)
+ 	ret = hotdog_popup_open(popup);
+ 	if (ret) {
+ 		/* Never leave a failed opening at an unknown intermediate point. */
+-		recovery_ret = hotdog_popup_close(popup);
++		recovery_ret = hotdog_popup_close_with_retry(popup);
+ 		if (recovery_ret)
+ 			dev_err(popup->dev,
+ 				"automatic open failed (%d), close recovery failed (%d)\n",
+@@ -475,7 +489,7 @@ static int hotdog_popup_domain_power_off(struct generic_pm_domain *domain)
+ 
+ 	guard(mutex)(&popup->lock);
+ 	popup->automatic_close_count++;
+-	ret = hotdog_popup_close(popup);
++	ret = hotdog_popup_close_with_retry(popup);
+ 	hotdog_popup_stop(popup);
+ 	popup->last_error = ret;
+ 	return ret;
+-- 
+2.54.0
+

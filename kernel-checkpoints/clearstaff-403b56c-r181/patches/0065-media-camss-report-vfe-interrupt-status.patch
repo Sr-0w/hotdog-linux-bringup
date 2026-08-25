@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 02:10:00 +0200
+Subject: [PATCH] media: camss: report VFE interrupt status during bring-up
+
+Capture on this port returns correctly sized buffers containing only zeroes,
+while every stage checkable from userspace is configured correctly: the sensor
+streams at the right mode, the CSIPHY runs the right generation's sequence with
+the right settle count, the CSID decodes RAW10 payload-only from the right PHY,
+and the SMMU does not fault.
+
+The remaining question is what the VFE interrupt actually reports. A steady
+30 fps looked like start-of-frame arriving from the CSID, but a second write
+master fed from the same CSID blocks entirely, which makes that reading unsafe.
+
+Print the interrupt and bus status for the first few interrupts of a session so
+the two can be told apart. Temporary, to be dropped once frames arrive.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/platform/qcom/camss/camss-vfe-17x.c | 32 ++++++++++++
+ 1 file changed, 32 insertions(+)
+
+--- a/drivers/media/platform/qcom/camss/camss-vfe-17x.c
++++ b/drivers/media/platform/qcom/camss/camss-vfe-17x.c
+@@ -220,6 +220,7 @@
+ 	val = WM_CGC_OVERRIDE_ALL;
+ 	writel_relaxed(val, vfe->base + VFE_BUS_WM_CGC_OVERRIDE);
+ 
++
+ 	writel_relaxed(0x0, vfe->base + VFE_BUS_WM_TEST_BUS_CTRL);
+ 
+ 	/* if addr_no_sync has default value then config the addr no sync reg */
+@@ -260,6 +261,18 @@
+ 		&line->video_out.active_fmt.fmt.pix_mp;
+ 	u32 stride = pix->plane_fmt[0].bytesperline;
+ 
++	/* Bring-up instrumentation: report what is actually programmed. */
++	{
++		static int reported;
++
++		if (reported < 6) {
++			reported++;
++			dev_info(vfe->camss->dev,
++				 "vfe%d wm%u: addr=%08x stride=%u height=%u\n",
++				 vfe->id, wm, addr, stride, pix->height);
++		}
++	}
++
+ 	writel_relaxed(addr, vfe->base + VFE_BUS_WM_IMAGE_ADDR(wm));
+ 	writel_relaxed(stride * pix->height, vfe->base + VFE_BUS_WM_FRAME_INC(wm));
+ }
+@@ -348,6 +361,24 @@
+ 	writel_relaxed(CMD_GLOBAL_CLEAR, vfe->base + VFE_IRQ_CMD);
+ 	writel_relaxed(1, vfe->base + VFE_BUS_IRQ_CLEAR_GLOBAL);
+ 
++	/*
++	 * Bring-up instrumentation. Reset acknowledgements dominate and say
++	 * nothing, so only interrupts carrying something else are printed.
++	 */
++	if ((status0 & ~STATUS_0_RESET_ACK) || status1 ||
++	    vfe_bus_status[VFE_LINE_RDI0] || vfe_bus_status[VFE_LINE_RDI1]) {
++		static int reported;
++
++		if (reported < 24) {
++			reported++;
++			dev_info(vfe->camss->dev,
++				 "vfe%d irq: status0=%08x status1=%08x bus_rdi0=%08x bus_rdi1=%08x\n",
++				 vfe->id, status0, status1,
++				 vfe_bus_status[VFE_LINE_RDI0],
++				 vfe_bus_status[VFE_LINE_RDI1]);
++		}
++	}
++
+ 	if (status0 & STATUS_0_RESET_ACK)
+ 		vfe->isr_ops.reset_ack(vfe);
+ 
+--
+2.50.1

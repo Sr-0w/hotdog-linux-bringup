@@ -1,0 +1,166 @@
+From b0cafaabe3adbc8d902d01222158ce219305954f Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 11:18:36 +0200
+Subject: [PATCH] media: i2c: add the hotdog telephoto autofocus
+
+The HD1913 camera description connects the slot-1 actuator to GPIO35 and the PM8150L BOB rail. Qualcomm camera data identifies the Ofilm S5K3M5 actuator as an AK7374 at 7-bit address 0x0c, with a 10-bit position shifted by six bits and standby value 0x20. Extend the existing AK73xx VCM driver and bind it to the telephoto sensor.
+---
+ .../media/i2c/asahi-kasei,ak7375.yaml         |  7 ++--
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 32 +++++++++++++++++++
+ drivers/media/i2c/Kconfig                     |  9 +++---
+ drivers/media/i2c/ak7375.c                    | 15 +++++++++
+ 4 files changed, 55 insertions(+), 8 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml b/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
+index fe312cc6a873..97afa3088b1d 100644
+--- a/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
+@@ -4,19 +4,20 @@
+ $id: http://devicetree.org/schemas/media/i2c/asahi-kasei,ak7375.yaml#
+ $schema: http://devicetree.org/meta-schemas/core.yaml#
+ 
+-title: Asahi Kasei Microdevices AK7375 voice coil lens actuator
++title: Asahi Kasei Microdevices AK73xx voice coil lens actuators
+ 
+ maintainers:
+   - Tianshu Qiu <tian.shu.qiu@intel.com>
+ 
+ description:
+-  AK7375 is a voice coil motor (VCM) camera lens actuator that
+-  is controlled over I2C.
++  AK7345, AK7374 and AK7375 are voice coil motor (VCM) camera lens
++  actuators that are controlled over I2C.
+ 
+ properties:
+   compatible:
+     enum:
+       - asahi-kasei,ak7345
++      - asahi-kasei,ak7374
+       - asahi-kasei,ak7375
+ 
+   reg:
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 5be63fb56146..2fa431eae659 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -223,6 +223,13 @@ volume_down_state: volume-down-state {
+ };
+ 
+ &tlmm {
++	cam1_vaf_default: cam1-vaf-default-state {
++		pins = "gpio35";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	cam1_vana_default: cam1-vana-default-state {
+ 		pins = "gpio148";
+ 		function = "gpio";
+@@ -821,6 +828,22 @@ vreg_cam1_vana: regulator-cam1-vana {
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam1_vana_default>;
+ 	};
++
++	/* GPIO35 switches the 3.3 V autofocus rail for camera slot 1. */
++	vreg_cam1_vaf: regulator-cam1-vaf {
++		compatible = "regulator-fixed";
++		regulator-name = "cam1_vaf";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++
++		gpio = <&tlmm 35 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++
++		vin-supply = <&vreg_bob>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam1_vaf_default>;
++	};
+ };
+ 
+ &cci0 {
+@@ -834,6 +857,14 @@ &cci0 {
+  * GPIOs are given. Reset is active low.
+  */
+ &cci0_i2c0 {
++	s5k3m5_vcm: lens@c {
++		compatible = "asahi-kasei,ak7374";
++		reg = <0x0c>;
++
++		vdd-supply = <&vreg_cam1_vaf>;
++		vio-supply = <&vreg_l1c_1p8>;
++	};
++
+ 	/* Telephoto. Confirmed on hardware by its 0x30d5 chip id. */
+ 	camera@10 {
+ 		compatible = "samsung,s5k3m5";
+@@ -849,6 +880,7 @@ camera@10 {
+ 		vddio-supply = <&vreg_l1c_1p8>;
+ 
+ 		reset-gpios = <&tlmm 28 GPIO_ACTIVE_LOW>;
++		lens-focus = <&s5k3m5_vcm>;
+ 
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk0_default>;
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 0da2a860ce79..2ea8f236e0d0 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -798,16 +798,15 @@ config VIDEO_AD5820
+ 	  It is used for example in Nokia N900 (RX-51).
+ 
+ config VIDEO_AK7375
+-	tristate "AK7375 lens voice coil support"
++	tristate "AK73xx lens voice coil support"
+ 	depends on I2C && VIDEO_DEV
+ 	select MEDIA_CONTROLLER
+ 	select VIDEO_V4L2_SUBDEV_API
+ 	select V4L2_ASYNC
+ 	help
+-	  This is a driver for the AK7375 camera lens voice coil.
+-	  AK7375 is a 12 bit DAC with 120mA output current sink
+-	  capability. This is designed for linear control of
+-	  voice coil motors, controlled via I2C serial interface.
++	  This is a driver for the AK7345, AK7374 and AK7375 camera lens
++	  voice coils. These devices are designed for linear control of
++	  voice coil motors over an I2C serial interface.
+ 
+ config VIDEO_DW9714
+ 	tristate "DW9714 lens voice coil support"
+diff --git a/drivers/media/i2c/ak7375.c b/drivers/media/i2c/ak7375.c
+index 9a2432cea3ff..d52d37fe267b 100644
+--- a/drivers/media/i2c/ak7375.c
++++ b/drivers/media/i2c/ak7375.c
+@@ -51,6 +51,20 @@ static const struct ak73xx_chipdef ak7345_cdef = {
+ 	.power_delay_us	= 20000,
+ };
+ 
++static const struct ak73xx_chipdef ak7374_cdef = {
++	.reg_position	= 0x0,
++	.reg_cont	= 0x2,
++	.shift_pos	= 6,	/* 10 bits position values, need to << 6 */
++	.mode_active	= 0x0,
++	.mode_standby	= 0x20,
++	.has_standby	= true,
++	.focus_pos_max	= 1023,
++	.focus_steps	= 1,
++	.ctrl_steps	= 16,
++	.ctrl_delay_us	= 1000,
++	.power_delay_us	= 10000,
++};
++
+ static const struct ak73xx_chipdef ak7375_cdef = {
+ 	.reg_position	= 0x0,
+ 	.reg_cont	= 0x2,
+@@ -330,6 +344,7 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 
+ static const struct of_device_id ak7375_of_table[] = {
+ 	{ .compatible = "asahi-kasei,ak7345", .data = &ak7345_cdef, },
++	{ .compatible = "asahi-kasei,ak7374", .data = &ak7374_cdef, },
+ 	{ .compatible = "asahi-kasei,ak7375", .data = &ak7375_cdef, },
+ 	{ /* sentinel */ }
+ };
+-- 
+2.54.0
+

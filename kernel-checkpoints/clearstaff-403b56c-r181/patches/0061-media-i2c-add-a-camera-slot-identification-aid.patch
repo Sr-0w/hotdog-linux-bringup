@@ -1,0 +1,259 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sat, 8 Aug 2026 01:10:00 +0200
+Subject: [PATCH] media: i2c: add a camera slot identification aid for hotdog
+
+The board describes four camera slots but records neither which image sensor
+sits in which slot nor at which I2C address it answers. A sensor stays silent
+until its supplies are up, its MCLK is running and reset is released, so a cold
+bus scan finds only the modules' calibration EEPROMs.
+
+This powers one slot the way a sensor driver would, then reads register 0x0000
+from every address on that slot's CCI bus. Sony and Samsung sensors both report
+their model there, so one boot identifies every slot at once.
+
+It stays inert unless loaded with scan=1: powering a slot and driving its bus
+during boot is intrusive, and one slot at a time is enforced because the two
+masters of a CCI block share an interrupt. Only the addresses these sensors and
+their companion parts actually use are tried.
+
+It is a diagnostic and deliberately fails probe afterwards, so it never holds
+an address a real sensor node will want. It should be removed once the four
+sensors are described.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/media/i2c/Kconfig           |  10 ++
+ drivers/media/i2c/Makefile          |   1 +
+ drivers/media/i2c/hotdog-cam-scan.c | 194 ++++++++++++++++++++++++++++
+ 3 files changed, 176 insertions(+)
+ create mode 100644 drivers/media/i2c/hotdog-cam-scan.c
+
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -700,6 +700,16 @@
+ 	  This is a V4L2 sensor driver for Samsung S5C73M3
+ 	  8 Mpixel camera.
+ 
++config VIDEO_HOTDOG_CAM_SCAN
++	tristate "OnePlus 7T Pro camera slot identification aid"
++	depends on I2C && OF
++	help
++	  Bring-up diagnostic for the OnePlus 7T Pro. It powers a camera slot
++	  and reports which addresses answer on that slot's CCI bus, together
++	  with the model register, so the sensors can be identified.
++
++	  This is not a functional camera driver. Say N.
++
+ config VIDEO_S5K3M5
+ 	tristate "Samsung S5K3M5 sensor support"
+ 	select V4L2_CCI_I2C
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -121,6 +121,7 @@
+ obj-$(CONFIG_VIDEO_RDACM21) += rdacm21.o
+ obj-$(CONFIG_VIDEO_RJ54N1) += rj54n1cb0c.o
+ obj-$(CONFIG_VIDEO_S5C73M3) += s5c73m3/
++obj-$(CONFIG_VIDEO_HOTDOG_CAM_SCAN) += hotdog-cam-scan.o
+ obj-$(CONFIG_VIDEO_S5K3M5) += s5k3m5.o
+ obj-$(CONFIG_VIDEO_S5K5BAF) += s5k5baf.o
+ obj-$(CONFIG_VIDEO_S5K6A3) += s5k6a3.o
+--- /dev/null
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -0,0 +1,194 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Bring-up aid for the OnePlus 7T Pro camera slots.
++ *
++ * The board describes four camera slots but says nothing about which image
++ * sensor sits in which one, nor at which I2C address. A sensor only answers
++ * once its supplies are up, its MCLK is running and reset is released, so it
++ * cannot be found by scanning a cold bus.
++ *
++ * This driver powers one slot exactly as a sensor driver would, then reads
++ * register 0x0000 from every address on that slot's CCI bus. Sony and Samsung
++ * sensors both report their model there, so a single boot identifies every
++ * slot. It is a diagnostic, not a device driver: it never streams and is meant
++ * to be removed once the sensors are described.
++ */
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/mod_devicetable.h>
++#include <linux/mutex.h>
++#include <linux/module.h>
++#include <linux/regulator/consumer.h>
++
++#define HOTDOG_CAM_SCAN_MCLK_RATE	24000000
++
++/*
++ * Off unless asked for. Powering a slot and driving its bus is intrusive
++ * enough that it must not happen during boot: an earlier revision did, and a
++ * fault while scanning left the handset without a usable userspace. Load with
++ * scan=1 by hand, with the log in view.
++ */
++static bool scan;
++module_param(scan, bool, 0444);
++MODULE_PARM_DESC(scan, "Power each camera slot and probe its bus");
++
++/* One slot at a time: the two masters of a CCI block share an interrupt. */
++static DEFINE_MUTEX(hotdog_cam_scan_lock);
++
++/*
++ * Addresses used by the image sensors and companion parts this handset can
++ * carry. Sweeping the whole range gains nothing and means hundreds of
++ * transfers that no device will answer.
++ */
++static const u8 hotdog_cam_scan_addrs[] = {
++	0x10, 0x1a, 0x1f, 0x20, 0x21, 0x2d, 0x34, 0x36, 0x37, 0x5a, 0x6c,
++};
++
++static const char * const hotdog_cam_scan_supplies[] = {
++	"vio",		/* digital I/O, 1.8 V */
++	"vana",		/* analogue, 3.3 V, gated by the enable GPIOs */
++	"vdig",		/* digital core, 1.056 or 1.104 V from PM8009 */
++};
++
++#define HOTDOG_CAM_SCAN_NUM_SUPPLIES ARRAY_SIZE(hotdog_cam_scan_supplies)
++
++static void hotdog_cam_scan_bus(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	unsigned int found = 0;
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(hotdog_cam_scan_addrs); i++) {
++		u8 addr = hotdog_cam_scan_addrs[i];
++		u8 wbuf[2] = { 0x00, 0x00 };
++		u8 rbuf[2] = { 0xff, 0xff };
++		struct i2c_msg msgs[2] = {
++			{ .addr = addr, .flags = 0,
++			  .len = sizeof(wbuf), .buf = wbuf },
++			{ .addr = addr, .flags = I2C_M_RD,
++			  .len = sizeof(rbuf), .buf = rbuf },
++		};
++
++		if (addr == client->addr)
++			continue;
++
++		if (i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs)) != 2)
++			continue;
++
++		dev_info(dev, "address 0x%02x answers, register 0x0000 = 0x%02x%02x\n",
++			 addr, rbuf[0], rbuf[1]);
++		found++;
++	}
++
++	if (!found)
++		dev_info(dev, "no device answered on this bus\n");
++}
++
++static int hotdog_cam_scan_probe(struct i2c_client *client)
++{
++	struct regulator_bulk_data supplies[HOTDOG_CAM_SCAN_NUM_SUPPLIES];
++	struct device *dev = &client->dev;
++	struct gpio_desc *reset;
++	struct gpio_descs *vana_enable;
++	struct clk *mclk;
++	unsigned int i;
++	int ret;
++
++	if (!scan)
++		return -ENODEV;
++
++	for (i = 0; i < HOTDOG_CAM_SCAN_NUM_SUPPLIES; i++)
++		supplies[i].supply = hotdog_cam_scan_supplies[i];
++
++	ret = devm_regulator_bulk_get(dev, HOTDOG_CAM_SCAN_NUM_SUPPLIES,
++				      supplies);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot get supplies\n");
++
++	/* Held asserted until the rails and the clock are up. */
++	reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(reset))
++		return dev_err_probe(dev, PTR_ERR(reset),
++				     "cannot get reset GPIO\n");
++
++	vana_enable = devm_gpiod_get_array_optional(dev, "vana-enable",
++						    GPIOD_OUT_LOW);
++	if (IS_ERR(vana_enable))
++		return dev_err_probe(dev, PTR_ERR(vana_enable),
++				     "cannot get analogue enable GPIOs\n");
++
++	mclk = devm_clk_get(dev, NULL);
++	if (IS_ERR(mclk))
++		return dev_err_probe(dev, PTR_ERR(mclk), "cannot get MCLK\n");
++
++	ret = clk_set_rate(mclk, HOTDOG_CAM_SCAN_MCLK_RATE);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot set MCLK rate\n");
++
++	guard(mutex)(&hotdog_cam_scan_lock);
++
++	ret = regulator_bulk_enable(HOTDOG_CAM_SCAN_NUM_SUPPLIES, supplies);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot enable supplies\n");
++
++	if (vana_enable) {
++		DECLARE_BITMAP(values, BITS_PER_TYPE(long));
++
++		bitmap_fill(values, vana_enable->ndescs);
++		gpiod_multi_set_value_cansleep(vana_enable, values);
++	}
++	usleep_range(1000, 2000);
++
++	ret = clk_prepare_enable(mclk);
++	if (ret) {
++		dev_err(dev, "cannot enable MCLK: %d\n", ret);
++		goto disable_supplies;
++	}
++	usleep_range(1000, 2000);
++
++	gpiod_set_value_cansleep(reset, 0);
++	usleep_range(10000, 11000);
++
++	dev_info(dev, "slot powered, MCLK at %lu Hz, scanning bus\n",
++		 clk_get_rate(mclk));
++	hotdog_cam_scan_bus(client);
++
++	gpiod_set_value_cansleep(reset, 1);
++	clk_disable_unprepare(mclk);
++
++disable_supplies:
++	if (vana_enable) {
++		DECLARE_BITMAP(values, BITS_PER_TYPE(long));
++
++		bitmap_zero(values, vana_enable->ndescs);
++		gpiod_multi_set_value_cansleep(vana_enable, values);
++	}
++	regulator_bulk_disable(HOTDOG_CAM_SCAN_NUM_SUPPLIES, supplies);
++
++	/*
++	 * Nothing is left bound: the point is the log line above, and leaving
++	 * the address claimed would only get in the way of a real sensor node.
++	 */
++	return ret ? ret : -ENODEV;
++}
++
++static const struct of_device_id hotdog_cam_scan_of_match[] = {
++	{ .compatible = "oneplus,hotdog-camera-scan" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, hotdog_cam_scan_of_match);
++
++static struct i2c_driver hotdog_cam_scan_driver = {
++	.driver = {
++		.name = "hotdog-cam-scan",
++		.of_match_table = hotdog_cam_scan_of_match,
++	},
++	.probe = hotdog_cam_scan_probe,
++};
++module_i2c_driver(hotdog_cam_scan_driver);
++
++MODULE_DESCRIPTION("OnePlus 7T Pro camera slot identification aid");
++MODULE_LICENSE("GPL");
+--
+2.50.1

@@ -1,0 +1,42 @@
+From cb0a1ba8d8e0591490b2f313682c115d36be41ee Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:42:42 +0200
+Subject: [PATCH] media: qcom: hotdog-popup: use realizable LPG periods
+
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 2 +-
+ drivers/media/platform/qcom/hotdog-popup-motor.c   | 5 +++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 91316d8c1..ffbc28227 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -83,7 +83,7 @@ camera_popup: camera-popup {
+ 		mode1-gpios = <&pm8150l_gpios 8 GPIO_ACTIVE_HIGH>;
+ 		sleep-gpios = <&pm8150_gpios 10 GPIO_ACTIVE_HIGH>;
+ 		step-gpios = <&pm8150l_gpios 10 GPIO_ACTIVE_HIGH>;
+-		pwms = <&pm8150l_lpg 4 104166>;
++		pwms = <&pm8150l_lpg 4 105000>;
+ 		pwm-names = "step";
+ 		io-channels = <&hall_up>, <&hall_down>;
+ 		io-channel-names = "hall-up", "hall-down";
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+index 830d14314..297dad2ad 100644
+--- a/drivers/media/platform/qcom/hotdog-popup-motor.c
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -38,8 +38,9 @@
+ #define HOTDOG_HALL_ABS_MAX		450
+ #define HOTDOG_HALL_SUM_MIN		4
+ #define HOTDOG_FULL_OPEN_UP_MIN		300
+-#define HOTDOG_SLOW_PERIOD_NS		104166
+-#define HOTDOG_FAST_PERIOD_NS		12000
++/* Exact periods supported by PM8150L LPG near the downstream 104166/12000 ns. */
++#define HOTDOG_SLOW_PERIOD_NS		105000
++#define HOTDOG_FAST_PERIOD_NS		13125
+ #define HOTDOG_RAMP_MICROSTEPS		(30 * 32)
+ #define HOTDOG_HALL_POLL_US		15000
+ 
+-- 
+2.54.0
+

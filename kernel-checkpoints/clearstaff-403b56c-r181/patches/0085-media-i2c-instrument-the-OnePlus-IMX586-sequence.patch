@@ -1,0 +1,150 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 17:30:00 +0200
+Subject: [PATCH] media: i2c: instrument the OnePlus IMX586 sequence
+
+The OxygenOS power sequence now completes safely, but the sensor still NACKs
+its model-register read. Reproduce the electrical pin configuration from the
+OnePlus downstream tree for reset and both custom power GPIOs, and report the
+logical GPIO levels plus regulator state and voltage at every stage.
+
+Add a bounded, opt-in hold before the model read so the live pinctrl and
+regulator state can be inspected without changing the default timing.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 27 ++++++++++++++--
+ drivers/media/i2c/hotdog-cam-scan.c                | 36 +++++++++++++++++-----
+ 2 files changed, 53 insertions(+), 10 deletions(-)
+
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -49,6 +49,11 @@ static int stage = 6;
+ module_param(stage, int, 0444);
+ MODULE_PARM_DESC(stage, "Stop the power-up after this step, 1 to 6");
+ 
++static unsigned int hold_ms;
++module_param(hold_ms, uint, 0444);
++MODULE_PARM_DESC(hold_ms,
++		 "Hold the powered IMX586 sequence before reading, capped at 5000 ms");
++
+ /* One slot at a time: the two masters of a CCI block share an interrupt. */
+ static DEFINE_MUTEX(hotdog_cam_scan_lock);
+ 
+@@ -179,7 +184,8 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 
+ 	gpiod_set_value_cansleep(custom1, 1);
+ 	custom1_on = true;
+-	dev_info(dev, "IMX586 stage 1: CUSTOM_GPIO1 asserted\n");
++	dev_info(dev, "IMX586 stage 1: CUSTOM_GPIO1 asserted, logical=%d\n",
++		 gpiod_get_value_cansleep(custom1));
+ 	if (stage < 2)
+ 		goto power_down;
+ 
+@@ -191,13 +197,16 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	}
+ 	vdig_on = true;
+ 	usleep_range(1000, 2000);
+-	dev_info(dev, "IMX586 stage 2: VDIG enabled\n");
++	dev_info(dev,
++		 "IMX586 stage 2: VDIG enabled=%d voltage=%d uV\n",
++		 regulator_is_enabled(vdig), regulator_get_voltage(vdig));
+ 	if (stage < 3)
+ 		goto power_down;
+ 
+ 	gpiod_set_value_cansleep(custom2, 1);
+ 	custom2_on = true;
+-	dev_info(dev, "IMX586 stage 3: CUSTOM_GPIO2 asserted\n");
++	dev_info(dev, "IMX586 stage 3: CUSTOM_GPIO2 asserted, logical=%d\n",
++		 gpiod_get_value_cansleep(custom2));
+ 	if (stage < 4)
+ 		goto power_down;
+ 
+@@ -209,7 +218,9 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	}
+ 	vio_on = true;
+ 	usleep_range(1000, 2000);
+-	dev_info(dev, "IMX586 stage 4: VIO enabled\n");
++	dev_info(dev,
++		 "IMX586 stage 4: VIO enabled=%d voltage=%d uV\n",
++		 regulator_is_enabled(vio), regulator_get_voltage(vio));
+ 	if (stage < 5)
+ 		goto power_down;
+ 
+@@ -221,8 +232,8 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	}
+ 	mclk_on = true;
+ 	usleep_range(1000, 2000);
+-	dev_info(dev, "IMX586 stage 5: MCLK running at %lu Hz\n",
+-		 clk_get_rate(mclk));
++	dev_info(dev, "IMX586 stage 5: MCLK running at %lu Hz, reset logical=%d\n",
++		 clk_get_rate(mclk), gpiod_get_value_cansleep(reset));
+ 	if (stage < 6)
+ 		goto power_down;
+ 
+@@ -230,7 +241,16 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	gpiod_set_value_cansleep(reset, 0);
+ 	reset_up = true;
+ 	usleep_range(1000, 2000);
+-	dev_info(dev, "IMX586 stage 6: reset released, reading model\n");
++	dev_info(dev, "IMX586 stage 6: reset released, logical=%d\n",
++		 gpiod_get_value_cansleep(reset));
++	if (hold_ms) {
++		unsigned int delay = min(hold_ms, 5000U);
++
++		dev_info(dev, "IMX586 holding powered sequence for %u ms\n",
++			 delay);
++		msleep(delay);
++	}
++	dev_info(dev, "IMX586 reading model\n");
+ 	hotdog_imx586_read_id(client);
+ 
+ power_down:
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -222,7 +222,31 @@
+ 	};
+ };
+ 
++&pm8150l_gpios {
++	cam0_custom2_default: cam0-custom2-default-state {
++		pins = "gpio1";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
++};
++
+ &tlmm {
++	cam0_custom1_default: cam0-custom1-default-state {
++		pins = "gpio29";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam0_reset_default: cam0-reset-default-state {
++		pins = "gpio30";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	cam1_vaf_default: cam1-vaf-default-state {
+ 		pins = "gpio35";
+ 		function = "gpio";
+@@ -917,7 +938,10 @@
+ 		oneplus,imx586-power-sequence;
+ 
+ 		pinctrl-names = "default";
+-		pinctrl-0 = <&cam_mclk1_default>;
++		pinctrl-0 = <&cam_mclk1_default>,
++			    <&cam0_custom1_default>,
++			    <&cam0_custom2_default>,
++			    <&cam0_reset_default>;
+ 	};
+ };
+ 
+-- 
+2.50.1

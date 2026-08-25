@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 12 Aug 2026 08:30:00 +0200
+Subject: [PATCH] NFC: nxp-nci: report the mode behind a failed read
+
+Powering the controller fails with a -121 read after four interrupts arrive, and
+the driver latches hard_fault on that error so every later interrupt is dropped.
+
+Two things produce -EREMOTEIO here and they need telling apart: a read the
+controller genuinely does not answer, and an interrupt that arrives while the
+driver is still in NXP_NCI_MODE_COLD, where the handler returns -EREMOTEIO
+without touching the bus at all.
+
+Print the mode and the latch state alongside the error. Temporary bring-up aid.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ drivers/nfc/nxp-nci/i2c.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/nfc/nxp-nci/i2c.c
++++ b/drivers/nfc/nxp-nci/i2c.c
+@@ -225,6 +225,11 @@
+ 		break;
+ 	}
+ 
++	if (r < 0)
++		dev_info(&client->dev,
++			 "bring-up: irq read r=%d mode=%d hard_fault=%d\n",
++			 r, info->mode, phy->hard_fault);
++
+ 	if (r == -EREMOTEIO) {
+ 		phy->hard_fault = r;
+ 		if (info->mode == NXP_NCI_MODE_FW)
+--
+2.50.1

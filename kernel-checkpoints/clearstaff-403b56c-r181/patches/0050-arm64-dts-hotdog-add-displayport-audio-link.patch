@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 19:40:00 +0200
+Subject: [PATCH] arm64: dts: qcom: hotdog: add the DisplayPort audio link
+
+Enabling the DisplayPort controller gave the handset video over the Type-C
+dock but no sound through it. The controller registers an hdmi-audio-codec
+and already carries #sound-dai-cells, and the DSP side already knows the
+DISPLAY_PORT_RX port, but the sound card never referenced either, so no PCM
+and no sink existed for the external display.
+
+Add the missing back end.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -421,6 +421,22 @@
+ 		};
+ 	};
+ 
++	dp-dai-link {
++		link-name = "DisplayPort Playback";
++
++		cpu {
++			sound-dai = <&q6afedai DISPLAY_PORT_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&mdss_dp>;
++		};
++	};
++
+ 	speaker-dai-link {
+ 		link-name = "Speaker Playback";
+ 
+--
+2.50.1

@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Fri, 7 Aug 2026 19:41:00 +0200
+Subject: [PATCH] ASoC: sm8150: accept the DisplayPort back end
+
+A DisplayPort back end reaches the machine driver with a DAI id none of its
+three switches list, so opening, configuring or closing a stream to an
+external display each log an "invalid dai id" error. The streams are not
+rejected, because those default branches only complain, but the log is
+misleading.
+
+The DisplayPort controller configures its own audio path, so there is
+nothing for the machine driver to do beyond not complaining.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ sound/soc/qcom/sm8150.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -211,6 +211,8 @@
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 		ret = sm8150_slim_snd_hw_params(substream, params);
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;
+@@ -332,6 +334,8 @@
+ 		break;
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;
+@@ -358,6 +362,8 @@
+ 	case SLIMBUS_0_RX...SLIMBUS_6_TX:
+ 	case QUATERNARY_MI2S_RX:
+ 		break;
++	case DISPLAY_PORT_RX:
++		break;
+ 	default:
+ 		pr_err("%s: invalid dai id 0x%x\n", __func__, cpu_dai->id);
+ 		break;
+--
+2.50.1

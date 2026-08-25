@@ -1,0 +1,87 @@
+From: hotdog-linux-bringup <hotdog-linux-bringup@localhost>
+Subject: [PATCH] media: i2c: apply the IMX586 VDIG load vote
+
+The shipped OnePlus camera module asks the regulator framework for a
+1.1 A operating load before enabling the IMX586 digital rail.  Permit
+dynamic regulator mode switching for PM8009 LDO1 and reproduce that
+consumer vote only while the diagnostic sequence is active.
+
+This switches the NLDO to HPM at camera power-up without forcing HPM at
+regulator registration or changing the sequencing of any other rail.
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts |  6 ++++++
+ drivers/media/i2c/hotdog-cam-scan.c                | 18 +++++++++++++++---
+ 2 files changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -952,6 +952,12 @@
+ 	status = "okay";
+ };
+ 
++&vreg_l1f_1p1 {
++	regulator-allow-set-load;
++	regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
++				   RPMH_REGULATOR_MODE_HPM>;
++};
++
+ &cci1_i2c0 {
+ 	camera-scan@7f {
+ 		compatible = "oneplus,hotdog-camera-scan";
+diff --git a/drivers/media/i2c/hotdog-cam-scan.c b/drivers/media/i2c/hotdog-cam-scan.c
+--- a/drivers/media/i2c/hotdog-cam-scan.c
++++ b/drivers/media/i2c/hotdog-cam-scan.c
+@@ -26,6 +26,7 @@
+ 
+ #define HOTDOG_CAM_SCAN_MCLK_RATE	24000000
+ #define HOTDOG_IMX586_MCLK_RATE		19200000
++#define HOTDOG_IMX586_VDIG_LOAD_UA	1100000
+ 
+ /*
+  * Off unless asked for. Powering a slot and driving its bus is intrusive
+@@ -150,6 +151,7 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	bool custom2_on = false;
+ 	bool mclk_on = false;
+ 	bool reset_up = false;
++	bool vdig_load_set = false;
+ 	bool vdig_on = false;
+ 	bool vio_on = false;
+ 	int ret = 0;
+@@ -192,6 +194,13 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	if (stage < 2)
+ 		goto power_down;
+ 
++	ret = regulator_set_load(vdig, HOTDOG_IMX586_VDIG_LOAD_UA);
++	if (ret) {
++		dev_err(dev, "cannot set IMX586 VDIG load: %d\n", ret);
++		goto power_down;
++	}
++	vdig_load_set = true;
++
+ 	ret = regulator_enable(vdig);
+ 	if (ret) {
+ 		dev_err(dev, "cannot enable IMX586 VDIG: %d\n", ret);
+@@ -201,8 +210,9 @@ static int hotdog_imx586_probe(struct i2c_client *client)
+ 	vdig_on = true;
+ 	usleep_range(1000, 2000);
+ 	dev_info(dev,
+-		 "IMX586 stage 2: VDIG enabled=%d voltage=%d uV\n",
+-		 regulator_is_enabled(vdig), regulator_get_voltage(vdig));
++		 "IMX586 stage 2: VDIG enabled=%d voltage=%d uV load=%d uA mode=%u\n",
++		 regulator_is_enabled(vdig), regulator_get_voltage(vdig),
++		 HOTDOG_IMX586_VDIG_LOAD_UA, regulator_get_mode(vdig));
+ 	if (stage < 3)
+ 		goto power_down;
+ 
+@@ -263,6 +273,8 @@ power_down:
+ 		regulator_disable(vio);
+ 	if (vdig_on)
+ 		regulator_disable(vdig);
++	if (vdig_load_set)
++		regulator_set_load(vdig, 0);
+ 	if (custom2_on)
+ 		gpiod_set_value_cansleep(custom2, 0);
+ 	if (custom1_on)
+-- 
+2.50.1

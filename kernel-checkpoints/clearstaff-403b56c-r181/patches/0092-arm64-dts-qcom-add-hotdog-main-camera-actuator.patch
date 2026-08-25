@@ -1,0 +1,75 @@
+From cee5d2098e5a5fdea6d2f51686d044c373612968 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Sun, 9 Aug 2026 21:01:44 +0200
+Subject: [PATCH] arm64: dts: qcom: add hotdog main camera actuator
+
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 32 +++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 9e4ba7edbb0f..66acc502cf12 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -255,6 +255,13 @@ cam0_reset_default: cam0-reset-default-state {
+ 		bias-disable;
+ 	};
+ 
++	cam0_vaf_default: cam0-vaf-default-state {
++		pins = "gpio25";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	cam1_vaf_default: cam1-vaf-default-state {
+ 		pins = "gpio35";
+ 		function = "gpio";
+@@ -841,6 +848,22 @@ &pon_pwrkey {
+  */
+ 
+ / {
++	/* GPIO25 switches the 3.3 V autofocus rail for camera slot 0. */
++	vreg_cam0_vaf: regulator-cam0-vaf {
++		compatible = "regulator-fixed";
++		regulator-name = "cam0_vaf";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++
++		gpio = <&tlmm 25 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++
++		vin-supply = <&vreg_bob>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam0_vaf_default>;
++	};
++
+ 	/*
+ 	 * Slot 1's analogue supply is the boost converter behind a load switch
+ 	 * the slot owns, so it is a regulator in its own right rather than a
+@@ -932,6 +955,14 @@ s5k3m5_ep: endpoint {
+ };
+ 
+ &cci0_i2c1 {
++	imx586_vcm: lens@c {
++		compatible = "asahi-kasei,ak7374";
++		reg = <0x0c>;
++
++		vdd-supply = <&vreg_cam0_vaf>;
++		vio-supply = <&vreg_l1c_1p8>;
++	};
++
+ 	/* Main 48 MP rear camera, identified on hardware as Sony IMX586. */
+ 	camera@1a {
+ 		compatible = "sony,imx586";
+@@ -951,6 +982,7 @@ camera@1a {
+ 		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>;
+ 		custom1-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
+ 		custom2-gpios = <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
++		lens-focus = <&imx586_vcm>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&cam_mclk1_default>,
+ 			    <&cam0_vana_default>,
+-- 
+2.54.0

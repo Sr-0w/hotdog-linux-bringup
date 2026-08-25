@@ -1,0 +1,38 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 00:52:00 +0200
+Subject: [PATCH] arm64: dts: hotdog: enable Adreno 640 GPU
+
+Enable the A640 GPU and GMU already described by the SM8150 base DTS, and
+provide the handset-specific signed ZAP firmware path.
+
+This was validated on an HD1913 with the upstream msm DRM driver, Turnip,
+and two headless Vulkan workloads. The GMU loads firmware v2.0.261 and the
+GPU exposes all six expected OPPs without IOMMU faults or recovery events.
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -231,6 +231,18 @@
+ 	reg = <0x0 0x99515000 0x0 0x2000>;
+ };
+ 
++&gmu {
++	status = "okay";
++};
++
++&gpu {
++	status = "okay";
++
++	zap-shader {
++		firmware-name = "qcom/sm8150/oneplus/hotdog/a640_zap.mbn";
++	};
++};
++
+ &spss_mem {
+ 	reg = <0x0 0x99600000 0x0 0x100000>;
+ };
+-- 
+2.50.1

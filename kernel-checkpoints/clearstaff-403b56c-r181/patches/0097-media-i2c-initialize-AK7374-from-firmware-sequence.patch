@@ -1,0 +1,92 @@
+From 7e6a84e31c6b8948b2341c698374553065daef81 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 00:00:09 +0200
+Subject: [PATCH] media: i2c: initialize AK7374 from firmware sequence
+
+---
+ drivers/media/i2c/ak7375.c | 35 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 34 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/i2c/ak7375.c b/drivers/media/i2c/ak7375.c
+index 91967011e6f8..52371de8528c 100644
+--- a/drivers/media/i2c/ak7375.c
++++ b/drivers/media/i2c/ak7375.c
+@@ -10,6 +10,11 @@
+ #include <media/v4l2-ctrls.h>
+ #include <media/v4l2-device.h>
+ 
++struct ak73xx_reg8 {
++	u8 addr;
++	u8 value;
++};
++
+ struct ak73xx_chipdef {
+ 	u8 reg_position;
+ 	u8 reg_cont;
+@@ -36,6 +41,14 @@ struct ak73xx_chipdef {
+ 	 * I2C messages.
+ 	 */
+ 	u16 power_delay_us;
++	const struct ak73xx_reg8 *startup_regs;
++	u8 num_startup_regs;
++	u16 startup_reg_delay_us;
++};
++
++static const struct ak73xx_reg8 ak7374_startup_regs[] = {
++	{ 0x00, 0x3c },
++	{ 0x01, 0x00 },
+ };
+ 
+ static const struct ak73xx_chipdef ak7345_cdef = {
+@@ -63,6 +76,9 @@ static const struct ak73xx_chipdef ak7374_cdef = {
+ 	.ctrl_steps	= 16,
+ 	.ctrl_delay_us	= 1000,
+ 	.power_delay_us	= 10000,
++	.startup_regs	= ak7374_startup_regs,
++	.num_startup_regs = ARRAY_SIZE(ak7374_startup_regs),
++	.startup_reg_delay_us = 100,
+ };
+ 
+ static const struct ak73xx_chipdef ak7375_cdef = {
+@@ -306,7 +322,7 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+ 	struct ak7375_device *ak7375_dev = sd_to_ak7375_vcm(sd);
+ 	const struct ak73xx_chipdef *cdef = ak7375_dev->cdef;
+-	int ret, val;
++	int ret, val, i;
+ 
+ 	if (ak7375_dev->active)
+ 		return 0;
+@@ -319,12 +335,29 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 	/* Wait for vcm to become ready */
+ 	usleep_range(cdef->power_delay_us, cdef->power_delay_us + 500);
+ 
++	for (i = 0; i < cdef->num_startup_regs; i++) {
++		ret = ak7375_i2c_write(ak7375_dev,
++				       cdef->startup_regs[i].addr,
++				       cdef->startup_regs[i].value, 1);
++		if (ret) {
++			dev_err(dev, "%s startup register 0x%02x I2C failure: %d\n",
++				__func__, cdef->startup_regs[i].addr, ret);
++			goto err_disable;
++		}
++
++		usleep_range(cdef->startup_reg_delay_us,
++			     cdef->startup_reg_delay_us + 50);
++	}
++
+ 	ret = ak7375_i2c_write(ak7375_dev, cdef->reg_cont,
+ 			       cdef->mode_active, 1);
+ 	if (ret) {
+ 		dev_err(dev, "%s I2C failure: %d\n", __func__, ret);
+ 		goto err_disable;
+ 	}
++	if (cdef->num_startup_regs)
++		usleep_range(cdef->startup_reg_delay_us,
++			     cdef->startup_reg_delay_us + 50);
+ 
+ 	for (val = ak7375_dev->focus->val % cdef->ctrl_steps;
+ 	     val <= ak7375_dev->focus->val;
+-- 
+2.54.0
+
