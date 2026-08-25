@@ -13,7 +13,7 @@
 
 #define STATE_MAX_SIZE 8192
 #define STATE_BASE_KEYS 3
-#define STATE_SUB_KEYS 13
+#define STATE_SUB_KEYS 14
 
 static bool valid_boot_id(const char *value)
 {
@@ -75,6 +75,8 @@ int hotdog_ims_bearer_runtime_validate(
 		    (sub->profile_selected != (sub->profile != 0)) ||
 		    (!!sub->mux_id != !!sub->ifname[0]) ||
 		    (!!sub->route_table != !!sub->fwmark) ||
+		    sub->residue_mask & ~HOTDOG_IMS_RESIDUE_ALL ||
+		    (sub->residue != (sub->residue_mask != 0)) ||
 		    (sub->route_table &&
 		     (sub->route_table != HOTDOG_IMS_ROUTE_TABLE_BASE + index ||
 		      sub->fwmark != (HOTDOG_IMS_FWMARK_BASE | index))) ||
@@ -107,7 +109,8 @@ int hotdog_ims_bearer_runtime_validate(
 				return -EPROTO;
 			break;
 		case HOTDOG_IMS_BEARER_BLOCKED:
-			if (!sub->error || !sub->residue || !sub->mux_id)
+			if (!sub->error || !sub->residue || !sub->residue_mask ||
+			    ((sub->residue_mask & HOTDOG_IMS_RESIDUE_LINK) && !sub->mux_id))
 				return -EPROTO;
 			break;
 		case HOTDOG_IMS_BEARER_ABSENT:
@@ -260,6 +263,7 @@ int hotdog_ims_bearer_runtime_write(
 				      sub->pcscf_domain_count);
 		g_key_file_set_uint64(key_file, group, "error", sub->error);
 		g_key_file_set_boolean(key_file, group, "residue", sub->residue);
+		g_key_file_set_uint64(key_file, group, "residue-mask", sub->residue_mask);
 	}
 	data = g_key_file_to_data(key_file, &size, NULL);
 	g_key_file_unref(key_file);
@@ -361,7 +365,7 @@ int hotdog_ims_bearer_runtime_read(
 		"populated", "status", "profile-selected", "profile", "family",
 		"mux-id", "route-table", "fwmark", "ifname",
 		"pcscf-address-count", "pcscf-domain-count",
-		"error", "residue",
+		"error", "residue", "residue-mask",
 	};
 	GKeyFile *key_file;
 	GError *error = NULL;
@@ -457,6 +461,8 @@ int hotdog_ims_bearer_runtime_read(
 			sub->residue = g_key_file_get_boolean(key_file, group, "residue", &error);
 			if (error) { g_clear_error(&error); result = -EINVAL; }
 		}
+		if (!result) result = get_uint(key_file, group, "residue-mask",
+			HOTDOG_IMS_RESIDUE_ALL, &sub->residue_mask);
 	}
 	if (!result)
 		result = hotdog_ims_bearer_runtime_validate(state);

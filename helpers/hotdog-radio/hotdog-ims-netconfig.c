@@ -72,6 +72,16 @@ static int command_set(struct hotdog_ims_netconfig_command *command,
 	return 0;
 }
 
+int hotdog_ims_netconfig_base_command(
+	const char *ip_path, const char *base_ifname, bool up,
+	struct hotdog_ims_netconfig_command *command)
+{
+	if (!valid_path(ip_path) || !valid_ifname(base_ifname) || !command)
+		return -EINVAL;
+	return command_set(command, 6, ip_path, "link", "set", "dev", base_ifname,
+			   up ? "up" : "down");
+}
+
 static int add_step(struct hotdog_ims_netconfig_plan *plan,
 		    const struct hotdog_ims_netconfig_command *apply,
 		    const struct hotdog_ims_netconfig_command *rollback)

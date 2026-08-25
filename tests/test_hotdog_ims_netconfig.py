@@ -146,6 +146,11 @@ class HotdogImsNetconfigTests(unittest.TestCase):
         self.assertNotIn("sh -c", source)
         self.assertNotIn("system(", source)
 
+    def test_global_base_link_command_is_separate_from_subscription_plan(self) -> None:
+        source = (SOURCE / "hotdog-ims-netconfig.c").read_text(encoding="ascii")
+        self.assertIn("hotdog_ims_netconfig_base_command", source)
+        self.assertIn('up ? "up" : "down"', source)
+
 
 if __name__ == "__main__":
     unittest.main()

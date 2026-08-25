@@ -5,6 +5,11 @@
 #include "hotdog-ims-netconfig.h"
 
 #define HOTDOG_IMS_BEARER_BOOT_ID_SIZE 37
+#define HOTDOG_IMS_RESIDUE_CONFIG (1U << 0)
+#define HOTDOG_IMS_RESIDUE_PACKET (1U << 1)
+#define HOTDOG_IMS_RESIDUE_CLIENT (1U << 2)
+#define HOTDOG_IMS_RESIDUE_LINK   (1U << 3)
+#define HOTDOG_IMS_RESIDUE_ALL    ((1U << 4) - 1)
 
 enum hotdog_ims_bearer_runtime_status {
 	HOTDOG_IMS_BEARER_ABSENT,
@@ -30,6 +35,7 @@ struct hotdog_ims_bearer_subscription_state {
 	size_t pcscf_domain_count;
 	unsigned int error;
 	bool residue;
+	uint32_t residue_mask;
 };
 
 struct hotdog_ims_bearer_runtime_state {

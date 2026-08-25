@@ -95,7 +95,8 @@ class HotdogImsBearerStateTests(unittest.TestCase):
 
     def test_blocked_state_requires_explicit_residue(self) -> None:
         source = (SOURCE / "hotdog-ims-bearer-state.c").read_text(encoding="ascii")
-        self.assertIn("!sub->error || !sub->residue || !sub->mux_id", source)
+        self.assertIn("!sub->error || !sub->residue || !sub->residue_mask", source)
+        self.assertIn("HOTDOG_IMS_RESIDUE_LINK", source)
         self.assertIn("O_NOFOLLOW", source)
         self.assertIn("S_IWGRP | S_IWOTH", source)
 

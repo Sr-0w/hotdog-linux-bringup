@@ -50,5 +50,8 @@ int hotdog_ims_netconfig_rollback(
 	hotdog_ims_netconfig_runner runner, void *user_data);
 int hotdog_ims_netconfig_spawn(
 	const struct hotdog_ims_netconfig_command *command, void *user_data);
+int hotdog_ims_netconfig_base_command(
+	const char *ip_path, const char *base_ifname, bool up,
+	struct hotdog_ims_netconfig_command *command);
 
 #endif
