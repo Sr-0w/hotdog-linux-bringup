@@ -123,6 +123,9 @@ static void pdc_selected_indication(QmiClientPdc *client,
 	print_pdc_id(&active);
 	printf(" pending:");
 	print_pdc_id(&pending);
+	if (remote_result)
+		printf(" result:%s", qmi_protocol_error_get_string(
+			       (QmiProtocolError)remote_result));
 	printf("\n");
 	bootstrap->pdc_query_index++;
 	pdc_query_next(bootstrap);

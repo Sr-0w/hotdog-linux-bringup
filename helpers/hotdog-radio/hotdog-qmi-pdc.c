@@ -148,6 +148,12 @@ int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *outp
 	}
 	if (token != expected_token)
 		return -ESTALE;
+	if (indication_result == QMI_PROTOCOL_ERROR_NOT_PROVISIONED) {
+		*remote_result = indication_result;
+		memset(active, 0, sizeof(*active));
+		memset(pending, 0, sizeof(*pending));
+		return 0;
+	}
 	if (indication_result) {
 		*remote_result = indication_result;
 		return -EREMOTEIO;
