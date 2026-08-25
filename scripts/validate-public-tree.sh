@@ -487,6 +487,7 @@ validate_modemmanager_slot_pin_contract() {
 	local slot_patch="aports/temp/modemmanager/0003-qmi-prefer-populated-active-SIM-slot.patch"
 	local voice_patch="aports/temp/modemmanager/0004-qmi-voice-preserve-numberless-calls.patch"
 	local sms_ims_patch="aports/temp/modemmanager/0005-qmi-preserve-sms-ims-transport-domain.patch"
+	local voice_ims_patch="aports/temp/modemmanager/0006-qmi-select-ip-voice-calls-from-ims-state.patch"
 
 	log "ModemManager QMI SIM-slot PIN contract"
 	[ -f "$apkbuild" ] || die "missing ModemManager override"
@@ -494,6 +495,7 @@ validate_modemmanager_slot_pin_contract() {
 	[ -f "$slot_patch" ] || die "missing ModemManager populated-slot patch"
 	[ -f "$voice_patch" ] || die "missing ModemManager QMI Voice call-list patch"
 	[ -f "$sms_ims_patch" ] || die "missing ModemManager SMS-over-IMS patch"
+	[ -f "$voice_ims_patch" ] || die "missing ModemManager IP Voice dial patch"
 	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
 		die "ModemManager override does not apply the SIM-slot PIN patch"
 	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
@@ -535,6 +537,15 @@ validate_modemmanager_slot_pin_contract() {
 		die "ModemManager SMS-over-IMS state reader follows unsafe files"
 	grep -q 'generation > G_MAXUINT' "$sms_ims_patch" ||
 		die "ModemManager SMS-over-IMS state reader accepts unbounded generations"
+	grep -q '0006-qmi-select-ip-voice-calls-from-ims-state.patch' "$apkbuild" ||
+		die "ModemManager override does not apply the IP Voice dial patch"
+	for marker in \
+		QMI_VOICE_CALL_TYPE_VOICE_IP \
+		qmi_message_voice_dial_call_input_set_audio_attributes \
+		qmi_message_voice_dial_call_input_set_video_attributes; do
+		grep -q "$marker" "$voice_ims_patch" ||
+			die "ModemManager IP Voice patch lacks $marker"
+	done
 	grep -q "sed -i 's|\^Exec=\.\*|Exec=/bin/false|'" "$apkbuild" ||
 		die "ModemManager D-Bus activation bypasses the pre-online gate"
 }
@@ -542,10 +553,12 @@ validate_modemmanager_slot_pin_contract() {
 validate_libqmi_pdc_subscription_contract() {
 	local apkbuild="aports/temp/libqmi/APKBUILD"
 	local patch="aports/temp/libqmi/0001-pdc-add-subscription-id.patch"
+	local voice_patch="aports/temp/libqmi/0002-voice-expose-ip-call-dial-attributes.patch"
 
 	log "libqmi DSDS PDC subscription contract"
 	[ -f "$apkbuild" ] || die "missing libqmi override"
 	[ -f "$patch" ] || die "missing libqmi PDC subscription patch"
+	[ -f "$voice_patch" ] || die "missing libqmi Voice Dial attributes patch"
 	grep -q '0001-pdc-add-subscription-id.patch' "$apkbuild" ||
 		die "libqmi override does not apply the PDC subscription patch"
 	[ "$(grep -c '^+[[:space:]]*"id"[[:space:]]*:[[:space:]]*"0x11"' "$patch")" -eq 3 ] ||
@@ -562,6 +575,13 @@ validate_libqmi_pdc_subscription_contract() {
 		die "qmicli cannot deactivate a config for a subscription"
 	grep -q 'pdc_subscription_id > 2' "$patch" ||
 		die "qmicli PDC subscription option is not bounded"
+	grep -q '0002-voice-expose-ip-call-dial-attributes.patch' "$apkbuild" ||
+		die "libqmi override does not apply the Voice Dial attributes patch"
+	for marker in '"id"            : "0x10"' \
+		'"id"            : "0x18"' '"id"            : "0x19"'; do
+		grep -q "$marker" "$voice_patch" ||
+			die "libqmi Voice Dial patch lacks $marker"
+	done
 }
 
 validate_oxygenos_modem_inventory_contract() {

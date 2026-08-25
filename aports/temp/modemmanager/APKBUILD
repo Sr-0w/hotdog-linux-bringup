@@ -2,7 +2,7 @@
 maintainer="Achill Gilgenast <achill@achill.org>"
 pkgname=modemmanager
 pkgver=1.25.95_git20260709
-pkgrel=7
+pkgrel=8
 _commit=d776ea38d29ca472a12323c1d45002ee19a66f57
 pkgdesc="ModemManager library"
 url="https://www.freedesktop.org/wiki/Software/ModemManager"
@@ -53,6 +53,7 @@ source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$
 	0003-qmi-prefer-populated-active-SIM-slot.patch
 	0004-qmi-voice-preserve-numberless-calls.patch
 	0005-qmi-preserve-sms-ims-transport-domain.patch
+	0006-qmi-select-ip-voice-calls-from-ims-state.patch
 	"
 #builddir="$srcdir"/ModemManager-$pkgver
 builddir="$srcdir"/ModemManager-$_commit
@@ -117,4 +118,5 @@ c5c2f560a7979b20067dc0f0b26fd621e92d7c08717ccd6740758a09faa01fd5ef642820e686f797
 e277839a66c8f668c9adcf82a245cdcacbe094b03bbbbfbe0b542ef0ebe4c213c40b149d7157c51541000c1ec9b8af562fb4ba7577508e5fe14166f21bbb5fb9  0003-qmi-prefer-populated-active-SIM-slot.patch
 874b9dfc4d79201a1575c881417e831705873ed7e8c6af25c7fa78a2d2c0a53c4a4a15da2360ad390c9f9cf86a315140cd58a3e0f5e140e97b53b67ffcaa2eff  0004-qmi-voice-preserve-numberless-calls.patch
 d70106d0ffe7034aa38405984466c9c5aaf7d4a5f9f979c5ae4715f915e4ff3da3bd6e23503c7144a47e68c1ae1d1bc5ed08e086e28e0f04f7ff0414df8a421b  0005-qmi-preserve-sms-ims-transport-domain.patch
+f2f60763d54835d6083e6aa479e967a99d6c275f81dd0b94b000c9ced882a5dd8beb774ec9090ca59422f34461a9bc365a11417a08d4527c11a1aaf36ca0a7a6  0006-qmi-select-ip-voice-calls-from-ims-state.patch
 "

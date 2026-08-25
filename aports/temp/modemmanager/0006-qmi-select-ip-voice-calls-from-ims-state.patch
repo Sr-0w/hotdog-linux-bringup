@@ -1,0 +1,195 @@
+From f5300e010e5b17110da0245fc3e7464334b2079a Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 08:55:22 +0200
+Subject: [PATCH] qmi: select IP voice calls from IMS state
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ src/mm-call-qmi.c   |  7 ++++
+ src/mm-hotdog-ims.c | 80 +++++++++++++++++++++++++++++++++++----------
+ src/mm-hotdog-ims.h |  6 ++++
+ 3 files changed, 76 insertions(+), 17 deletions(-)
+
+diff --git a/src/mm-call-qmi.c b/src/mm-call-qmi.c
+index 44ab1f3..d0f5d06 100644
+--- a/src/mm-call-qmi.c
++++ b/src/mm-call-qmi.c
+@@ -28,6 +28,7 @@
+ #include "mm-modem-helpers-qmi.h"
+ #include "mm-iface-modem.h"
+ #include "mm-iface-modem-voice.h"
++#include "mm-hotdog-ims.h"
+ #include "mm-call-qmi.h"
+ #include "mm-base-modem.h"
+ #include "mm-log-object.h"
+@@ -159,6 +160,12 @@ call_start (MMBaseCall          *self,
+         input,
+         mm_gdbus_call_get_number (MM_GDBUS_CALL (self)),
+         NULL);
++    if (mm_hotdog_ims_voice_available (MM_CALL_QMI (self)->priv->modem)) {
++        qmi_message_voice_dial_call_input_set_call_type (
++            input, QMI_VOICE_CALL_TYPE_VOICE_IP, NULL);
++        qmi_message_voice_dial_call_input_set_audio_attributes (input, 0x3, NULL);
++        qmi_message_voice_dial_call_input_set_video_attributes (input, 0x0, NULL);
++    }
+ 
+     mm_obj_dbg (self, "starting call");
+     qmi_client_voice_dial_call (QMI_CLIENT_VOICE (client),
+diff --git a/src/mm-hotdog-ims.c b/src/mm-hotdog-ims.c
+index 4e70bce..7f20e17 100644
+--- a/src/mm-hotdog-ims.c
++++ b/src/mm-hotdog-ims.c
+@@ -134,7 +134,7 @@ service_rat_valid (guint64      capabilities,
+ static gboolean
+ validate_subscription (GKeyFile  *key_file,
+                        guint      subscription,
+-                       gboolean  *sms_available)
++                       guint64   *available_capabilities)
+ {
+     static const gchar *const keys[] = {
+         "populated", "registration", "rat", "capabilities",
+@@ -206,18 +206,18 @@ validate_subscription (GKeyFile  *key_file,
+     } else if (g_str_equal (registration, "registered") && g_str_equal (rat, "unknown"))
+         return FALSE;
+ 
+-    *sms_available = (populated &&
+-                      g_str_equal (registration, "registered") &&
+-                      !!(capabilities & HOTDOG_IMS_CAP_SMS));
++    *available_capabilities = (populated && g_str_equal (registration, "registered")) ?
++        capabilities : 0;
+     return TRUE;
+ }
+ 
+-gboolean
+-mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
+-                                        const gchar  *boot_id_path,
+-                                        guint         primary_slot,
+-                                        gboolean     *sms_available,
+-                                        GError      **error)
++static gboolean
++capability_available_from_paths (const gchar  *state_path,
++                                 const gchar  *boot_id_path,
++                                 guint         primary_slot,
++                                 guint64       capability,
++                                 gboolean     *available,
++                                 GError      **error)
+ {
+     static const gchar *const base_keys[] = { "schema", "boot-id", "generation" };
+     g_autofree gchar *contents = NULL;
+@@ -232,7 +232,8 @@ mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
+     guint64 generation;
+     gint schema;
+ 
+-    if (!state_path || !boot_id_path || !sms_available ||
++    if (!state_path || !boot_id_path || !available || !capability ||
++        (capability & ~HOTDOG_IMS_CAP_KNOWN) || (capability & (capability - 1)) ||
+         !primary_slot || primary_slot > HOTDOG_IMS_SUBSCRIPTIONS) {
+         g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
+                              "invalid primary SIM slot");
+@@ -293,21 +294,53 @@ mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
+     }
+ 
+     for (i = 0; i < HOTDOG_IMS_SUBSCRIPTIONS; i++) {
+-        gboolean available = FALSE;
++        guint64 available_capabilities = 0;
+ 
+-        if (!validate_subscription (key_file, i, &available)) {
++        if (!validate_subscription (key_file, i, &available_capabilities)) {
+             g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
+                                  "invalid IMS subscription data");
+             return FALSE;
+         }
+         if (i == primary_slot - 1)
+-            *sms_available = available;
++            *available = !!(available_capabilities & capability);
+     }
+     return TRUE;
+ }
+ 
+ gboolean
+-mm_hotdog_ims_sms_available (MMBaseModem *modem)
++mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
++                                        const gchar  *boot_id_path,
++                                        guint         primary_slot,
++                                        gboolean     *sms_available,
++                                        GError      **error)
++{
++    return capability_available_from_paths (state_path,
++                                             boot_id_path,
++                                             primary_slot,
++                                             HOTDOG_IMS_CAP_SMS,
++                                             sms_available,
++                                             error);
++}
++
++gboolean
++mm_hotdog_ims_voice_available_from_paths (const gchar  *state_path,
++                                          const gchar  *boot_id_path,
++                                          guint         primary_slot,
++                                          gboolean     *voice_available,
++                                          GError      **error)
++{
++    return capability_available_from_paths (state_path,
++                                             boot_id_path,
++                                             primary_slot,
++                                             HOTDOG_IMS_CAP_VOICE,
++                                             voice_available,
++                                             error);
++}
++
++static gboolean
++capability_available (MMBaseModem *modem,
++                      guint64      capability,
++                      const gchar *name)
+ {
+     MmGdbusModem *skeleton = NULL;
+     g_autoptr(GError) error = NULL;
+@@ -321,14 +354,27 @@ mm_hotdog_ims_sms_available (MMBaseModem *modem)
+     primary_slot = mm_gdbus_modem_get_primary_sim_slot (skeleton);
+     g_object_unref (skeleton);
+ 
+-    if (!mm_hotdog_ims_sms_available_from_paths (
++    if (!capability_available_from_paths (
+             HOTDOG_IMS_STATE_PATH,
+             "/proc/sys/kernel/random/boot_id",
+             primary_slot,
++            capability,
+             &available,
+             &error)) {
+-        mm_obj_dbg (modem, "SMS over IMS unavailable: %s", error->message);
++        mm_obj_dbg (modem, "%s over IMS unavailable: %s", name, error->message);
+         return FALSE;
+     }
+     return available;
+ }
++
++gboolean
++mm_hotdog_ims_sms_available (MMBaseModem *modem)
++{
++    return capability_available (modem, HOTDOG_IMS_CAP_SMS, "SMS");
++}
++
++gboolean
++mm_hotdog_ims_voice_available (MMBaseModem *modem)
++{
++    return capability_available (modem, HOTDOG_IMS_CAP_VOICE, "voice");
++}
+diff --git a/src/mm-hotdog-ims.h b/src/mm-hotdog-ims.h
+index f671b5a..b9c4bc5 100644
+--- a/src/mm-hotdog-ims.h
++++ b/src/mm-hotdog-ims.h
+@@ -10,6 +10,12 @@ gboolean mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
+                                                  guint         primary_slot,
+                                                  gboolean     *sms_available,
+                                                  GError      **error);
++gboolean mm_hotdog_ims_voice_available_from_paths (const gchar  *state_path,
++                                                   const gchar  *boot_id_path,
++                                                   guint         primary_slot,
++                                                   gboolean     *voice_available,
++                                                   GError      **error);
+ gboolean mm_hotdog_ims_sms_available (MMBaseModem *modem);
++gboolean mm_hotdog_ims_voice_available (MMBaseModem *modem);
+ 
+ #endif /* MM_HOTDOG_IMS_H */
+-- 
+2.54.0

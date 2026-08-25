@@ -178,17 +178,16 @@ active call. Call waiting, CLIP and CLIR state are subscription-scoped; the
 remaining forwarding, conference and transfer request payloads stay in the
 transport parity queue rather than being collapsed into call state.
 
-`hotdog-qmi-voice` now maps only admitted circuit-switched calls to the upstream
-Voice service: Dial preserves the validated number, response yields a nonzero
-modem call ID, and Answer, End and continuous DTMF require that ID. IMS and
-video calls are explicitly rejected at this boundary rather than silently sent
-as CS; they belong to the separate IMS transport/media implementation. The All
-Call Status decoder preserves QMI call ID, subscription, mode, CS/IMS domain,
-direction, emergency flag and every user-visible state. Waiting is an incoming
-call, not a held local leg. Restricted/unavailable presentation never exposes a
-number, while duplicate IDs, unknown directions/states/types and oversized
-numbers fail closed. OTAPA and supplementary control transactions are filtered
-instead of appearing as calls in Plasma.
+`hotdog-qmi-voice` keeps a deliberately narrow CS transport/reference boundary:
+Dial preserves the validated number, response yields a nonzero modem call ID,
+and Answer, End and continuous DTMF require that ID. IMS and video calls cannot
+silently fall through that standalone helper as CS. The All Call Status decoder
+preserves QMI call ID, subscription, mode, CS/IMS domain, direction, emergency
+flag and every user-visible state. Waiting is an incoming call, not a held local
+leg. Restricted/unavailable presentation never exposes a number, while
+duplicate IDs, unknown directions/states/types and oversized numbers fail
+closed. OTAPA and supplementary control transactions are filtered instead of
+appearing as calls in Plasma.
 
 The snapshot is reconciled atomically with the transport-independent call
 table. MO requests bind exactly one remote call ID; MT and recovered calls may
@@ -207,6 +206,32 @@ that standard surface: it creates calls from mandatory Call Information even
 when Remote Party Number is absent, enforces presentation privacy and filters
 control-call types. Plasma therefore receives the corrected call list through
 `org.freedesktop.ModemManager1` without a parallel call daemon.
+
+The OxygenOS 10.0.13 radio library provides the missing Dial contract. Its
+exported `ImsVoiceModule::handleQcRilRequestImsDialMessage()` builds a
+`voice_dial_call_req_msg_v02` and passes it to
+`qcril_qmi_voice_process_dial_call_req()`. The exported
+`convert_call_info_to_qmi()` mapping, checked against its AArch64 code, maps an
+ordinary VOICE request in the PS domain to `CALL_TYPE_VOICE_IP_V02`, audio
+attributes `TX|RX` and video attributes zero, with both attribute TLVs valid.
+The matching public QMI v02 service definition assigns Dial TLVs `0x10`,
+`0x18` and `0x19` to call type, 64-bit audio attributes and 64-bit video
+attributes. The local libqmi extension exposes exactly those fields.
+
+`modemmanager r8` consumes the same strict per-subscription IMS state as the
+SMS path. A normal outgoing call on the primary slot uses the OxygenOS IP Voice
+tuple only when voice is an available registered IMS capability. Missing,
+limited, stale or invalid IMS state preserves the existing automatic/CS Dial.
+Answer, End and DTMF remain call-ID operations. This establishes signaling
+domain parity but does not by itself claim the IMS APN, Q6 voice route or RTP
+media path is complete.
+
+The matching aarch64 protocol packages are
+`libqmi-1.38.0_git20260414-r3` SHA-256
+`aee333cf2050dd773c79107817de02e4a5187adee4d71724491bd8923c787cf4`
+and `libqmi-dev-1.38.0_git20260414-r3` SHA-256
+`342992e0fd191db27da0b560fa63e54cc2dd53bfb84131f444dad91e00b0d8c2`.
+All seven generated libqmi tests pass in the aarch64 build environment.
 
 ### IMS, VoLTE and RCS
 

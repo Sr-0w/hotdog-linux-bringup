@@ -14,13 +14,13 @@ should use `Exec=/bin/false`, but the generated package contained
 
 ## Package correction
 
-`modemmanager-1.25.95_git20260709-r7` rewrites the system-bus activation
+`modemmanager-1.25.95_git20260709-r8` rewrites the system-bus activation
 entry to `Exec=/bin/false`. OpenRC remains the only daemon start path.
 
 | Package | SHA-256 |
 |---|---|
-| `modemmanager-1.25.95_git20260709-r7.apk` | `30f4c3b72072b00aa08a4e4c00392d749746fe30ba11b00766a3932a6f0950b1` |
-| `modemmanager-openrc-1.25.95_git20260709-r7.apk` | `6449e03412c4555c9ea7d4407f8253aedb7b97619fdbcb3a9ca9238fea07cc8f` |
+| `modemmanager-1.25.95_git20260709-r8.apk` | `3825a4bf5fdfaada6f793e1c90c8498eb025c215273c45b366c6713ed45a7354` |
+| `modemmanager-openrc-1.25.95_git20260709-r8.apk` | `e1a0b464e7f3ce7174069abc9dbc048eeb7a782c0ad044de45f57e1613e7a392` |
 
 The APORT also drops its own exact-version `libmm-glib` from build
 dependencies, removing the circular dependency that otherwise made every new
@@ -46,6 +46,12 @@ IMS` consistently on every raw or stored part only when SMS is an available
 IMS capability. Missing, stale, malformed, symlinked or writable state falls
 back to circuit-switched WMS. Transfer-route indications copy the modem's own
 `SMS on IMS` bit into Send Ack. ModemManager still allocates no IMSA CID.
+
+Revision `r8` adds the OxygenOS-proven QMI Voice IP Dial tuple. Registered,
+available IMS voice on the current primary slot selects `VOICE_IP`, audio
+attributes `TX|RX` and video attributes zero. Limited or invalid IMS state
+retains the existing automatic/CS Dial. This is signaling-domain selection,
+not a claim that the IMS bearer, Q6 call route or RTP media is already working.
 
 `device-oneplus-hotdog-nonfree-firmware-3-r31` SHA256
 `950e6553e0567bdbc8ca393e93dd726f50fba15f6259a8e19659e35e111deb8f`

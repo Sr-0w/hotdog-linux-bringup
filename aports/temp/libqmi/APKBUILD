@@ -3,7 +3,7 @@ maintainer="Achill Gilgenast <achill@achill.org>"
 pkgname=libqmi
 pkgver=1.38.0_git20260414
 _commit=cff17a676e10d75081516dafa997fe9bc9043c38
-pkgrel=2
+pkgrel=3
 pkgdesc="QMI modem protocol helper library"
 url="https://www.freedesktop.org/wiki/Software/libqmi"
 arch="all"
@@ -29,6 +29,7 @@ subpackages="
 source="
 	https://gitlab.freedesktop.org/mobile-broadband/libqmi/-/archive/$_commit/libqmi-$_commit.tar.gz
 	0001-pdc-add-subscription-id.patch
+	0002-voice-expose-ip-call-dial-attributes.patch
 	"
 builddir="$srcdir/$pkgname-$_commit"
 
@@ -60,4 +61,5 @@ utils() {
 sha512sums="
 fc178689675b47faaa46c14b126dc054354044238ea00464b4cc4910c5f2c73faaa12d80a5219fbfad65ab575e38f7af3fd79ae7974ea80ed67bfffe027b85c3  libqmi-cff17a676e10d75081516dafa997fe9bc9043c38.tar.gz
 62d975277d7ffe4b6edca66638af78812428a179a426e6eee9b31017e3b6d27999882005fc2ea905302a5dc0901bc9a710df19ba548023e1115848708ce25bf0  0001-pdc-add-subscription-id.patch
+30d42aea04aca64fcab0861804204c6b45c358a988109d7c0ca403afb12732734eb2df90d17f6af0380d7d12b72256c610683cff94b094c406cc7589fab83403  0002-voice-expose-ip-call-dial-attributes.patch
 "

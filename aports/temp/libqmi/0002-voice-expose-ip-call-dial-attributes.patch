@@ -1,0 +1,41 @@
+From e986b73d66b572fe51f487399186d24361c2b11d Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 08:52:55 +0200
+Subject: [PATCH] voice: expose IP call dial attributes
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ data/qmi-service-voice.json | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/data/qmi-service-voice.json b/data/qmi-service-voice.json
+index efd2ffa..f37e7a0 100644
+--- a/data/qmi-service-voice.json
++++ b/data/qmi-service-voice.json
+@@ -132,7 +132,23 @@
+                        "type"          : "TLV",
+                        "since"         : "1.14",
+                        "format"        : "string",
+-                       "personal-info" : "true" } ],
++                       "personal-info" : "true" },
++                     { "name"          : "Call Type",
++                       "id"            : "0x10",
++                       "type"          : "TLV",
++                       "since"         : "1.40",
++                       "format"        : "guint8",
++                       "public-format" : "QmiVoiceCallType" },
++                     { "name"          : "Audio Attributes",
++                       "id"            : "0x18",
++                       "type"          : "TLV",
++                       "since"         : "1.40",
++                       "format"        : "guint64" },
++                     { "name"          : "Video Attributes",
++                       "id"            : "0x19",
++                       "type"          : "TLV",
++                       "since"         : "1.40",
++                       "format"        : "guint64" } ],
+        "output"  : [ { "common-ref" : "Operation Result" },
+                      { "name"      : "Call ID",
+                        "id"        : "0x10",
+-- 
+2.54.0
