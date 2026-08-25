@@ -107,6 +107,30 @@ class HotdogMcfgSecureOpenTests(unittest.TestCase):
             )
             self.assertRegex(output, r"result=-(20|40) size=0")
 
+    def test_private_catalog_counts_when_available(self) -> None:
+        archive = ROOT / "aports/device/testing/firmware-oneplus-hotdog-modem-oos10/mcfg-oos10.0.13.tar.gz"
+        if not archive.is_file():
+            self.skipTest("private OOS10 MCFG archive is not staged")
+        source = r'''#include "hotdog-mcfg.h"
+#include <stdio.h>
+int main(int argc, char **argv) { size_t p,s,f; int r=hotdog_mcfg_tree_counts(argv[1],&p,&s,&f); (void)argc; printf("r=%d p=%zu s=%zu f=%zu\n",r,p,s,f); }
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["tar", "-xzf", str(archive), "-C", str(root)], check=True)
+            cfile = root / "counts.c"
+            binary = root / "counts"
+            cfile.write_text(source)
+            flags = subprocess.run(["pkg-config", "--cflags", "--libs", "glib-2.0"],
+                                   check=True, capture_output=True, text=True).stdout.split()
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                            "-I", str(SOURCE), str(SOURCE / "hotdog-mbn.c"),
+                            str(SOURCE / "hotdog-pdc.c"), str(SOURCE / "hotdog-mcfg.c"),
+                            str(cfile), *flags, "-o", str(binary)], check=True)
+            output = subprocess.run([str(binary), str(root / "mcfg_sw")], check=True,
+                                    capture_output=True, text=True).stdout.strip()
+            self.assertEqual(output, "r=0 p=69 s=69 f=143")
+
 
 if __name__ == "__main__":
     unittest.main()

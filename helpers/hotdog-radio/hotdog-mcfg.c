@@ -363,3 +363,74 @@ void hotdog_mcfg_profile_clear(struct hotdog_mcfg_profile *profile)
 	free(profile->data);
 	memset(profile, 0, sizeof(*profile));
 }
+
+static bool name_has_suffix(const char *name, const char *suffix)
+{
+	size_t name_length = strlen(name), suffix_length = strlen(suffix);
+
+	return name_length >= suffix_length &&
+	       !strcmp(name + name_length - suffix_length, suffix);
+}
+
+static int count_directory(const char *path, size_t *profiles,
+			   size_t *signatures, size_t *files)
+{
+	struct dirent *entry;
+	DIR *directory = opendir(path);
+	int result = 0;
+
+	if (!directory)
+		return -errno;
+	while ((entry = readdir(directory))) {
+		char child[HOTDOG_PDC_PATH_SIZE * 2];
+		struct stat status;
+		int written;
+
+		if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+			continue;
+		written = snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+		if (written < 0 || (size_t)written >= sizeof(child)) {
+			result = -ENAMETOOLONG;
+			break;
+		}
+		if (lstat(child, &status)) {
+			result = -errno;
+			break;
+		}
+		if (S_ISLNK(status.st_mode)) {
+			result = -ELOOP;
+			break;
+		}
+		if (S_ISDIR(status.st_mode)) {
+			result = count_directory(child, profiles, signatures, files);
+			if (result)
+				break;
+		} else if (S_ISREG(status.st_mode)) {
+			(*files)++;
+			if (!strcmp(entry->d_name, "mcfg_sw.mbn"))
+				(*profiles)++;
+			else if (name_has_suffix(entry->d_name, "mcfg_sw.sig"))
+				(*signatures)++;
+		} else {
+			result = -EINVAL;
+			break;
+		}
+	}
+	closedir(directory);
+	return result;
+}
+
+int hotdog_mcfg_tree_counts(const char *root, size_t *profile_count,
+			    size_t *signature_count, size_t *file_count)
+{
+	struct stat status;
+
+	if (!root || !profile_count || !signature_count || !file_count)
+		return -EINVAL;
+	*profile_count = *signature_count = *file_count = 0;
+	if (lstat(root, &status))
+		return -errno;
+	if (!S_ISDIR(status.st_mode))
+		return -ENOTDIR;
+	return count_directory(root, profile_count, signature_count, file_count);
+}

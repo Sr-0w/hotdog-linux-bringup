@@ -25,5 +25,7 @@ int hotdog_mcfg_profile_open(const char *root,
 			     const struct hotdog_pdc_config *config,
 			     struct hotdog_mcfg_profile *profile);
 void hotdog_mcfg_profile_clear(struct hotdog_mcfg_profile *profile);
+int hotdog_mcfg_tree_counts(const char *root, size_t *profile_count,
+			    size_t *signature_count, size_t *file_count);
 
 #endif

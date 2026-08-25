@@ -349,6 +349,11 @@ its exact schema, source/MPSS/catalog hashes and three nonzero file counts are
 required, with the same symlink and permission restrictions. This prevents an
 approval from validating against documentation while the runtime package
 metadata is missing or malformed.
+`hotdog-radio-gate` then recomputes the SHA-256 of the actual MPSS file with a
+128 MiB bound and no final symlink, recounts the MCFG tree without following
+any symlink, checks those values and the parsed catalog against package
+metadata, reads the current boot ID and finally validates the approval against
+fresh subscription selections. This is the single pre-QRTR mutation gate.
 
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and

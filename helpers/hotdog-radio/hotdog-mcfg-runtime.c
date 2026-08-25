@@ -23,14 +23,15 @@ static bool valid_sha256(const char *value)
 	return true;
 }
 
-static int parse_count(const char *value, size_t maximum, size_t *count)
+static int parse_count(const char *value, size_t maximum, bool allow_zero,
+		       size_t *count)
 {
 	char *end;
 	unsigned long parsed;
 
 	errno = 0;
 	parsed = strtoul(value, &end, 10);
-	if (errno || !*value || *end || !parsed || parsed > maximum)
+	if (errno || !*value || *end || (!allow_zero && !parsed) || parsed > maximum)
 		return -EINVAL;
 	*count = (size_t)parsed;
 	return 0;
@@ -81,9 +82,9 @@ int hotdog_mcfg_runtime_read(const char *path,
 		if (seen[key_index]) { result = -EINVAL; break; }
 		seen[key_index] = true;
 		if (key_index == SCHEMA) result = strcmp(value, "1") ? -EINVAL : 0;
-		else if (key_index == PROFILES) result = parse_count(value, 256, &runtime->profile_count);
-		else if (key_index == SIGNATURES) result = parse_count(value, 256, &runtime->signature_count);
-		else if (key_index == FILES) result = parse_count(value, 1024, &runtime->catalog_file_count);
+		else if (key_index == PROFILES) result = parse_count(value, 256, false, &runtime->profile_count);
+		else if (key_index == SIGNATURES) result = parse_count(value, 256, true, &runtime->signature_count);
+		else if (key_index == FILES) result = parse_count(value, 1024, false, &runtime->catalog_file_count);
 		else if (target) {
 			if (strlen(value) >= target_size ||
 			    (key_index != BUILD && !valid_sha256(value))) result = -EINVAL;
