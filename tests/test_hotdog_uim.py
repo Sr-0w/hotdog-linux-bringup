@@ -88,6 +88,7 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
                     "-I", str(SOURCE),
                     str(SOURCE / "hotdog-radio-bootstrapd.c"),
                     str(SOURCE / "hotdog-qmi-dms.c"),
+                    str(SOURCE / "hotdog-qmi-nas.c"),
                     str(SOURCE / "hotdog-qmi-uim.c"),
                     str(SOURCE / "hotdog-uim.c"),
                     "-o", str(binary), *flags.stdout.split(),
@@ -101,6 +102,7 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
             self.assertIn("--mcfg-root=DIR", help_output.stdout)
             self.assertIn("--probe-dms", help_output.stdout)
             self.assertIn("--probe-pdc-catalog", help_output.stdout)
+            self.assertIn("--probe-nas", help_output.stdout)
             unsupported = subprocess.run(
                 [str(binary), "--pdc-subscription=0"], capture_output=True, text=True,
             )

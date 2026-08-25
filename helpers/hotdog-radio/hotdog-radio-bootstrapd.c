@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "hotdog-qmi-uim.h"
 #include "hotdog-qmi-dms.h"
+#include "hotdog-qmi-nas.h"
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 #include "hotdog-mcfg.h"
 #include "hotdog-qmi-pdc.h"
@@ -20,6 +21,7 @@ struct bootstrap {
 	QmiDevice *device;
 	QmiClientUim *uim;
 	QmiClientDms *dms;
+	QmiClientNas *nas;
 	struct hotdog_uim_inventory inventory;
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	QmiClientPdc *pdc;
@@ -42,6 +44,7 @@ struct bootstrap {
 	gboolean plan_pdc;
 	gboolean probe_dms;
 	gboolean probe_pdc_catalog;
+	gboolean probe_nas;
 	int result;
 	bool finished;
 };
@@ -137,6 +140,69 @@ static void start_dms_probe(struct bootstrap *bootstrap)
 	qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_DMS, QMI_CID_NONE, 10,
 				   bootstrap->cancellable,
 				   (GAsyncReadyCallback)dms_client_ready, bootstrap);
+}
+
+static void nas_serving_ready(QmiClientNas *client, GAsyncResult *res,
+			      struct bootstrap *bootstrap)
+{
+	QmiMessageNasGetServingSystemOutput *output;
+	struct hotdog_nas_snapshot snapshot;
+	GError *error = NULL;
+	size_t index;
+	int result;
+
+	output = qmi_client_nas_get_serving_system_finish(client, res, &error);
+	if (!output) {
+		g_printerr("NAS serving-system request failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	result = hotdog_qmi_nas_decode_serving_system(output, &snapshot);
+	qmi_message_nas_get_serving_system_output_unref(output);
+	if (result) {
+		g_printerr("NAS serving-system rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	printf("nas=registration:%s cs:%s ps:%s network:%s interfaces:%zu roaming:%s\n",
+	       hotdog_qmi_nas_registration_name(snapshot.registration),
+	       hotdog_qmi_nas_attach_name(snapshot.cs_attach),
+	       hotdog_qmi_nas_attach_name(snapshot.ps_attach),
+	       hotdog_qmi_nas_network_name(snapshot.network), snapshot.interface_count,
+	       snapshot.roaming_valid ?
+		qmi_nas_roaming_indicator_status_get_string(snapshot.roaming) : "unknown");
+	for (index = 0; index < snapshot.interface_count; index++)
+		printf("nas-interface%zu=%s\n", index,
+		       qmi_nas_radio_interface_get_string(snapshot.interfaces[index]));
+	finish(bootstrap, 0);
+}
+
+static void nas_client_ready(QmiDevice *device, GAsyncResult *res,
+			     struct bootstrap *bootstrap)
+{
+	QmiClient *client;
+	GError *error = NULL;
+
+	client = qmi_device_allocate_client_finish(device, res, &error);
+	if (!client) {
+		g_printerr("NAS client allocation failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	bootstrap->nas = QMI_CLIENT_NAS(client);
+	qmi_client_nas_get_serving_system(bootstrap->nas, NULL, 10,
+					  bootstrap->cancellable,
+					  (GAsyncReadyCallback)nas_serving_ready,
+					  bootstrap);
+}
+
+static void start_nas_probe(struct bootstrap *bootstrap)
+{
+	qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_NAS, QMI_CID_NONE, 10,
+				   bootstrap->cancellable,
+				   (GAsyncReadyCallback)nas_client_ready, bootstrap);
 }
 
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
@@ -569,6 +635,8 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 						   bootstrap);
 		else if (bootstrap->probe_dms)
 			start_dms_probe(bootstrap);
+		else if (bootstrap->probe_nas)
+			start_nas_probe(bootstrap);
 		else
 			finish(bootstrap, 0);
 		return;
@@ -579,6 +647,8 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 #else
 	if (bootstrap->probe_dms)
 		start_dms_probe(bootstrap);
+	else if (bootstrap->probe_nas)
+		start_nas_probe(bootstrap);
 	else
 		finish(bootstrap, 0);
 #endif
@@ -601,7 +671,8 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
 	qmi_message_uim_get_card_status_output_unref(output);
 	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc ||
-			bootstrap->probe_dms || bootstrap->probe_pdc_catalog) &&
+			bootstrap->probe_dms || bootstrap->probe_nas ||
+			bootstrap->probe_pdc_catalog) &&
 			(result == -EIO || result == -ENODEV))) {
 		g_printerr("UIM inventory rejected: %d\n", result);
 		finish(bootstrap, 1);
@@ -710,6 +781,8 @@ int main(int argc, char **argv)
 		{ "probe-pdc-catalog", 0, 0, G_OPTION_ARG_NONE,
 		  &bootstrap.probe_pdc_catalog,
 		  "Read and print resident software PDC config IDs", NULL },
+		{ "probe-nas", 0, 0, G_OPTION_ARG_NONE, &bootstrap.probe_nas,
+		  "Read and print the NAS serving-system state", NULL },
 		{ NULL }
 	};
 
@@ -737,15 +810,20 @@ int main(int argc, char **argv)
 		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
-	if (bootstrap.plan_pdc && bootstrap.probe_dms) {
+	if (bootstrap.plan_pdc && (bootstrap.probe_dms || bootstrap.probe_nas)) {
 		g_printerr("Combine DMS probing with a later verified PDC plan, not this dry-run\n");
 		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
 	if (bootstrap.probe_pdc_catalog &&
-	    (bootstrap.plan_pdc || bootstrap.probe_dms ||
+	    (bootstrap.plan_pdc || bootstrap.probe_dms || bootstrap.probe_nas ||
 	     bootstrap.pdc_probe_subscription >= 0)) {
 		g_printerr("PDC catalog probing must run as a separate read-only operation\n");
+		g_free(bootstrap.mcfg_root);
+		return 2;
+	}
+	if (bootstrap.probe_dms && bootstrap.probe_nas) {
+		g_printerr("DMS and NAS probes must run as separate read-only operations\n");
 		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
@@ -778,6 +856,8 @@ int main(int argc, char **argv)
 	g_clear_object(&bootstrap.uim);
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.dms));
 	g_clear_object(&bootstrap.dms);
+	release_client(&bootstrap, QMI_CLIENT(bootstrap.nas));
+	g_clear_object(&bootstrap.nas);
 	g_clear_object(&bootstrap.device);
 	g_clear_object(&bootstrap.bus);
 	g_clear_object(&bootstrap.cancellable);

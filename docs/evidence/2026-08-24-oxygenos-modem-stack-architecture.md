@@ -373,6 +373,12 @@ a remoteproc failure. Earlier Set Online evidence crashed the modem when no
 MCFG was active, so the daemon must preserve this mode through PDC verification;
 see [the DMS shutdown gate](2026-08-25-radio-dms-shutdown-gate.md).
 
+`hotdog-qmi-nas` decodes the serving-system baseline into bounded registration,
+CS/PS attach, selected-network, radio-interface and roaming state. The daemon
+exposes it only through a standalone read-only `--probe-nas` operation. It does
+not print PLMN/operator identity and does not request registration; active NAS
+registration remains downstream of verified PDC and DMS Online.
+
 ## Parity gates
 
 Offline replay must cover every request/response/indication family before a SIM

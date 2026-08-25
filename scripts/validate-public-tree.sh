@@ -570,6 +570,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-dms.c hotdog-qmi-dms.h; do
 		[ -f "$source_dir/$source" ] || die "missing DMS gate source: $source"
 	done
+	for source in hotdog-qmi-nas.c hotdog-qmi-nas.h; do
+		[ -f "$source_dir/$source" ] || die "missing NAS snapshot source: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
