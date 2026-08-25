@@ -1,45 +1,27 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "hotdog-ims-bearer.h"
-#include "hotdog-qmi-wds-profile.h"
+#include "hotdog-qmi-wds-discovery.h"
 
 #include <errno.h>
 #include <gio/gio.h>
 #include <libqmi-glib.h>
 #include <libqrtr-glib.h>
 #include <stdio.h>
-#include <string.h>
 
-#define PROFILE_TIMEOUT_SECONDS 10
-
-struct profile_probe;
-
-struct probe_subscription {
-	struct profile_probe *probe;
-	QmiClientWds *client;
-	struct hotdog_wds_profile_ref refs[HOTDOG_IMS_MAX_PROFILES];
-	struct hotdog_ims_profile profiles[HOTDOG_IMS_MAX_PROFILES];
-	unsigned int index;
-	size_t ref_count;
-	size_t next_ref;
-	size_t profile_count;
-};
+#define PROBE_TIMEOUT_SECONDS 10
 
 struct profile_probe {
 	GMainLoop *loop;
 	GCancellable *cancellable;
 	QrtrBus *bus;
 	QmiDevice *device;
-	struct probe_subscription subscriptions[HOTDOG_NETWORK_MAX_SUBSCRIPTIONS];
+	struct hotdog_qmi_wds_discovery
+		discoveries[HOTDOG_NETWORK_MAX_SUBSCRIPTIONS];
 	unsigned int node;
 	unsigned int subscription_count;
 	unsigned int next_subscription;
 	gulong node_removed_handler;
 	bool finished;
 	int result;
-};
-
-struct release_wait {
-	bool done;
 };
 
 static void finish(struct profile_probe *probe, int result)
@@ -54,191 +36,66 @@ static void finish(struct profile_probe *probe, int result)
 		g_main_loop_quit(probe->loop);
 }
 
-#if QMI_CHECK_VERSION(1, 37, 0)
 static void start_next_subscription(struct profile_probe *probe);
 
-static void finish_subscription(struct probe_subscription *subscription)
+static void discovery_done(struct hotdog_qmi_wds_discovery *discovery,
+			   int result, void *user_data)
 {
-	struct hotdog_ims_profile_selection selection;
-	int result;
+	struct profile_probe *probe = user_data;
+	size_t index;
 
-	result = hotdog_ims_profile_select(
-		subscription->profiles, subscription->profile_count,
-		subscription->index, HOTDOG_BEARER_IMS, NULL, &selection);
+	if (probe->finished)
+		return;
+	for (index = 0; index < discovery->profile_count; index++) {
+		const struct hotdog_ims_profile *profile = &discovery->profiles[index];
+
+		printf("subscription=%u profile=%u usable=1 family=%u mask=0x%llx "
+		       "pcscf-pco=%u apn=%s\n",
+		       discovery->subscription, profile->index, profile->pdp_type,
+		       (unsigned long long)profile->apn_type_mask,
+		       profile->pcscf_via_pco, profile->apn);
+	}
 	if (!result) {
 		printf("subscription=%u profiles=%zu usable=%zu ims-profile=%u "
 		       "family=%s mask=0x%llx apn=%s\n",
-		       subscription->index, subscription->ref_count,
-		       subscription->profile_count, selection.index,
-		       hotdog_ip_family_name(selection.family),
-		       (unsigned long long)selection.apn_type_mask, selection.apn);
-	} else {
+		       discovery->subscription, discovery->ref_count,
+		       discovery->profile_count, discovery->selection.index,
+		       hotdog_ip_family_name(discovery->selection.family),
+		       (unsigned long long)discovery->selection.apn_type_mask,
+		       discovery->selection.apn);
+	} else if (result == -ENOENT || result == -ENOTUNIQ ||
+		   result == -EAFNOSUPPORT) {
 		printf("subscription=%u profiles=%zu usable=%zu ims-profile=none "
-		       "selection=%d\n",
-		       subscription->index, subscription->ref_count,
-		       subscription->profile_count, result);
-	}
-	subscription->probe->next_subscription = subscription->index + 1;
-	start_next_subscription(subscription->probe);
-}
-
-static void start_next_profile(struct probe_subscription *subscription);
-
-static void profile_settings_ready(QmiClientWds *client, GAsyncResult *res,
-				   struct probe_subscription *subscription)
-{
-	g_autoptr(QmiMessageWdsGetProfileSettingsOutput) output = NULL;
-	struct hotdog_ims_profile profile;
-	unsigned int index = subscription->refs[subscription->next_ref].index;
-	uint16_t remote = 0;
-	GError *error = NULL;
-	int result;
-
-	output = qmi_client_wds_get_profile_settings_finish(client, res, &error);
-	if (!output) {
-		g_printerr("WDS profile settings request failed for subscription %u "
-			   "profile %u: %s\n", subscription->index, index,
-			   error ? error->message : "missing output");
-		g_clear_error(&error);
-		finish(subscription->probe, 1);
-		return;
-	}
-	result = hotdog_qmi_wds_decode_profile_settings(
-		output, subscription->index, index, &profile, &remote);
-	if (!result) {
-		if (subscription->profile_count == HOTDOG_IMS_MAX_PROFILES) {
-			finish(subscription->probe, 1);
-			return;
-		}
-		subscription->profiles[subscription->profile_count++] = profile;
+		       "selection=%d\n", discovery->subscription,
+		       discovery->ref_count, discovery->profile_count, result);
 	} else {
-		printf("subscription=%u profile=%u unusable=%d remote=%u\n",
-		       subscription->index, index, result, remote);
-	}
-	subscription->next_ref++;
-	start_next_profile(subscription);
-}
-
-static void start_next_profile(struct probe_subscription *subscription)
-{
-	g_autoptr(QmiMessageWdsGetProfileSettingsInput) input = NULL;
-
-	if (subscription->next_ref == subscription->ref_count) {
-		finish_subscription(subscription);
+		g_printerr("subscription %u WDS discovery failed: %d remote=%u "
+			   "residue=%u\n", discovery->subscription, result,
+			   discovery->remote_result, discovery->residue);
+		finish(probe, 1);
 		return;
 	}
-	if (hotdog_qmi_wds_profile_settings_input(
-		    subscription->refs[subscription->next_ref].index, &input)) {
-		finish(subscription->probe, 1);
-		return;
-	}
-	qmi_client_wds_get_profile_settings(
-		subscription->client, input, PROFILE_TIMEOUT_SECONDS,
-		subscription->probe->cancellable,
-		(GAsyncReadyCallback)profile_settings_ready, subscription);
-}
-
-static void profile_list_ready(QmiClientWds *client, GAsyncResult *res,
-			       struct probe_subscription *subscription)
-{
-	g_autoptr(QmiMessageWdsGetProfileListOutput) output = NULL;
-	uint16_t remote = 0;
-	GError *error = NULL;
-	int result;
-
-	output = qmi_client_wds_get_profile_list_finish(client, res, &error);
-	if (!output) {
-		g_printerr("WDS profile list request failed for subscription %u: %s\n",
-			   subscription->index,
-			   error ? error->message : "missing output");
-		g_clear_error(&error);
-		finish(subscription->probe, 1);
-		return;
-	}
-	result = hotdog_qmi_wds_decode_profile_list(
-		output, subscription->refs, G_N_ELEMENTS(subscription->refs),
-		&subscription->ref_count, &remote);
-	if (result) {
-		g_printerr("WDS profile list rejected for subscription %u: %d "
-			   "remote=%u\n", subscription->index, result, remote);
-		finish(subscription->probe, 1);
-		return;
-	}
-	start_next_profile(subscription);
-}
-
-static void bind_ready(QmiClientWds *client, GAsyncResult *res,
-		       struct probe_subscription *subscription)
-{
-	g_autoptr(QmiMessageWdsBindSubscriptionOutput) output = NULL;
-	g_autoptr(QmiMessageWdsGetProfileListInput) input = NULL;
-	uint16_t remote = 0;
-	GError *error = NULL;
-	int result;
-
-	output = qmi_client_wds_bind_subscription_finish(client, res, &error);
-	if (!output) {
-		g_printerr("WDS subscription bind failed for subscription %u: %s\n",
-			   subscription->index,
-			   error ? error->message : "missing output");
-		g_clear_error(&error);
-		finish(subscription->probe, 1);
-		return;
-	}
-	result = hotdog_qmi_wds_decode_bind_subscription(output, &remote);
-	if (result || hotdog_qmi_wds_profile_list_input(&input)) {
-		g_printerr("WDS subscription bind rejected for subscription %u: %d "
-			   "remote=%u\n", subscription->index, result, remote);
-		finish(subscription->probe, 1);
-		return;
-	}
-	qmi_client_wds_get_profile_list(
-		client, input, PROFILE_TIMEOUT_SECONDS, subscription->probe->cancellable,
-		(GAsyncReadyCallback)profile_list_ready, subscription);
-}
-
-static void client_ready(QmiDevice *device, GAsyncResult *res,
-			 struct probe_subscription *subscription)
-{
-	g_autoptr(QmiMessageWdsBindSubscriptionInput) input = NULL;
-	QmiClient *client;
-	GError *error = NULL;
-
-	client = qmi_device_allocate_client_finish(device, res, &error);
-	if (!client) {
-		g_printerr("WDS client allocation failed for subscription %u: %s\n",
-			   subscription->index,
-			   error ? error->message : "missing client");
-		g_clear_error(&error);
-		finish(subscription->probe, 1);
-		return;
-	}
-	subscription->client = QMI_CLIENT_WDS(client);
-	if (hotdog_qmi_wds_bind_subscription_input(subscription->index, &input)) {
-		finish(subscription->probe, 1);
-		return;
-	}
-	qmi_client_wds_bind_subscription(
-		subscription->client, input, PROFILE_TIMEOUT_SECONDS,
-		subscription->probe->cancellable,
-		(GAsyncReadyCallback)bind_ready, subscription);
+	probe->next_subscription = discovery->subscription + 1;
+	start_next_subscription(probe);
 }
 
 static void start_next_subscription(struct profile_probe *probe)
 {
-	struct probe_subscription *subscription;
+	int result;
 
 	if (probe->next_subscription == probe->subscription_count) {
 		finish(probe, 0);
 		return;
 	}
-	subscription = &probe->subscriptions[probe->next_subscription];
-	qmi_device_allocate_client(
-		probe->device, QMI_SERVICE_WDS, QMI_CID_NONE,
-		PROFILE_TIMEOUT_SECONDS, probe->cancellable,
-		(GAsyncReadyCallback)client_ready, subscription);
+	result = hotdog_qmi_wds_discovery_start(
+		&probe->discoveries[probe->next_subscription], probe->device,
+		probe->next_subscription, discovery_done, probe);
+	if (result) {
+		g_printerr("subscription %u WDS discovery start failed: %d\n",
+			   probe->next_subscription, result);
+		finish(probe, 1);
+	}
 }
-#endif
 
 static void device_open_ready(QmiDevice *device, GAsyncResult *res,
 			      struct profile_probe *probe)
@@ -252,12 +109,7 @@ static void device_open_ready(QmiDevice *device, GAsyncResult *res,
 		finish(probe, 1);
 		return;
 	}
-#if QMI_CHECK_VERSION(1, 37, 0)
 	start_next_subscription(probe);
-#else
-	g_printerr("subscription-scoped WDS profile probing requires libqmi 1.37\n");
-	finish(probe, 2);
-#endif
 }
 
 static void device_ready(GObject *source, GAsyncResult *res,
@@ -275,18 +127,23 @@ static void device_ready(GObject *source, GAsyncResult *res,
 		return;
 	}
 	qmi_device_open(probe->device, QMI_DEVICE_OPEN_FLAGS_NONE,
-			PROFILE_TIMEOUT_SECONDS, probe->cancellable,
+			PROBE_TIMEOUT_SECONDS, probe->cancellable,
 			(GAsyncReadyCallback)device_open_ready, probe);
 }
 
 static void node_removed(QrtrBus *bus, guint node_id,
 			 struct profile_probe *probe)
 {
+	unsigned int index;
+
 	(void)bus;
-	if (node_id == probe->node) {
-		g_printerr("WDS QRTR node removed\n");
-		finish(probe, 1);
-	}
+	if (node_id != probe->node)
+		return;
+	for (index = 0; index < probe->subscription_count; index++)
+		if (probe->discoveries[index].active)
+			hotdog_qmi_wds_discovery_abort_ssr(&probe->discoveries[index]);
+	g_printerr("WDS QRTR node removed\n");
+	finish(probe, 1);
 }
 
 static void bus_ready(GObject *source, GAsyncResult *res,
@@ -315,34 +172,6 @@ static void bus_ready(GObject *source, GAsyncResult *res,
 	}
 	qmi_device_new_from_node(node, probe->cancellable,
 				 (GAsyncReadyCallback)device_ready, probe);
-}
-
-static void release_ready(QmiDevice *device, GAsyncResult *res,
-			  struct release_wait *wait)
-{
-	GError *error = NULL;
-
-	if (!qmi_device_release_client_finish(device, res, &error)) {
-		g_printerr("WDS client release failed: %s\n",
-			   error ? error->message : "unknown error");
-		g_clear_error(&error);
-	}
-	wait->done = true;
-}
-
-static void release_client(struct profile_probe *probe, QmiClientWds *client)
-{
-	struct release_wait wait = { 0 };
-
-	if (!probe->device || !client)
-		return;
-	qmi_device_release_client(
-		probe->device, QMI_CLIENT(client),
-		QMI_DEVICE_RELEASE_CLIENT_FLAGS_RELEASE_CID,
-		PROFILE_TIMEOUT_SECONDS, NULL,
-		(GAsyncReadyCallback)release_ready, &wait);
-	while (!wait.done)
-		g_main_context_iteration(NULL, TRUE);
 }
 
 int main(int argc, char **argv)
@@ -374,10 +203,8 @@ int main(int argc, char **argv)
 		g_printerr("invalid WDS profile probe configuration\n");
 		return 2;
 	}
-	for (index = 0; index < probe.subscription_count; index++) {
-		probe.subscriptions[index].probe = &probe;
-		probe.subscriptions[index].index = index;
-	}
+	for (index = 0; index < probe.subscription_count; index++)
+		hotdog_qmi_wds_discovery_init(&probe.discoveries[index]);
 	probe.loop = g_main_loop_new(NULL, FALSE);
 	probe.cancellable = g_cancellable_new();
 	qrtr_bus_new(1000, probe.cancellable, (GAsyncReadyCallback)bus_ready, &probe);
@@ -386,8 +213,9 @@ int main(int argc, char **argv)
 	if (probe.bus && probe.node_removed_handler)
 		g_signal_handler_disconnect(probe.bus, probe.node_removed_handler);
 	for (index = 0; index < probe.subscription_count; index++) {
-		release_client(&probe, probe.subscriptions[index].client);
-		g_clear_object(&probe.subscriptions[index].client);
+		if (probe.discoveries[index].active || probe.discoveries[index].residue)
+			hotdog_qmi_wds_discovery_abort_ssr(&probe.discoveries[index]);
+		hotdog_qmi_wds_discovery_clear(&probe.discoveries[index]);
 	}
 	g_clear_object(&probe.device);
 	g_clear_object(&probe.bus);

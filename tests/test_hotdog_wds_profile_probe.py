@@ -21,7 +21,8 @@ class HotdogWdsProfileProbeTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         cls.binary = Path(cls.temp.name) / "hotdog-wds-profile-probe"
         sources = [
-            "hotdog-wds-profile-probe.c", "hotdog-qmi-wds-profile.c",
+            "hotdog-wds-profile-probe.c", "hotdog-qmi-wds-discovery.c",
+            "hotdog-qmi-wds-profile.c",
             "hotdog-ims-bearer.c", "hotdog-network.c",
         ]
         subprocess.run(
@@ -50,10 +51,7 @@ class HotdogWdsProfileProbeTests(unittest.TestCase):
 
     def test_probe_is_read_only_and_subscription_scoped(self) -> None:
         source = (SOURCE / "hotdog-wds-profile-probe.c").read_text(encoding="ascii")
-        self.assertIn("QMI_SERVICE_WDS", source)
-        self.assertIn("hotdog_qmi_wds_bind_subscription_input", source)
-        self.assertIn("qmi_client_wds_get_profile_list", source)
-        self.assertIn("qmi_client_wds_get_profile_settings", source)
+        self.assertIn("hotdog_qmi_wds_discovery_start", source)
         self.assertNotIn("start_network", source.lower())
         self.assertNotIn("stop_network", source.lower())
         self.assertNotIn("QMI_SERVICE_UIM", source)

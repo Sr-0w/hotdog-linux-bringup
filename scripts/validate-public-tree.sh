@@ -707,6 +707,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wds-profile.c hotdog-qmi-wds-profile.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS profile transport: $source"
 	done
+	for source in hotdog-qmi-wds-discovery.c hotdog-qmi-wds-discovery.h; do
+		[ -f "$source_dir/$source" ] || die "missing reusable WDS discovery: $source"
+	done
 	[ -f "$source_dir/hotdog-wds-profile-probe.c" ] ||
 		die "missing read-only WDS profile probe"
 	grep -q 'hotdog-wds-profile-probe.c' \
@@ -730,6 +733,12 @@ validate_hotdog_radio_state_contract() {
 		"$source_dir/hotdog-wds-profile-probe.c"; then
 		die "read-only WDS profile probe contains a mutating modem operation"
 	fi
+	grep -q 'hotdog_qmi_wds_discovery_start' \
+		"$source_dir/hotdog-wds-profile-probe.c" ||
+		die "diagnostic probe diverges from daemon WDS discovery"
+	grep -q 'discovery->result = -EUCLEAN' \
+		"$source_dir/hotdog-qmi-wds-discovery.c" ||
+		die "WDS discovery hides a failed CID release"
 	for source in hotdog-network.c hotdog-network.h \
 		hotdog-ims-bearer.c hotdog-ims-bearer.h \
 		hotdog-ims-executor.c hotdog-ims-executor.h \

@@ -124,6 +124,11 @@ that CID, reads the profile list and settings, reports the selected IMS profile
 or a bounded reason for no selection, then releases every CID. It has no UIM,
 Start/Stop Network, rmnet-link or credential API, so it is suitable for a
 no-SIM transport smoke test but cannot be mistaken for a data-call test.
+The probe and daemon now share `hotdog-qmi-wds-discovery`; neither carries a
+private copy of the sequence. Only malformed or incomplete profile records are
+skipped. QMI transport failures stop discovery, while a failed CID release is
+reported as an explicit cleanup residue and prevents reuse until SSR invalidates
+that QMI generation.
 
 The model now retains the exact IPv4 and IPv6 packet handles. A bearer cannot
 become connected until every family it requested has both a handle and valid
