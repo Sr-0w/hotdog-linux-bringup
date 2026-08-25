@@ -109,6 +109,39 @@ class HotdogPdcTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("=load-config,", result.stdout)
 
+    def test_cleanup_deletes_only_unmatched_inactive_residents(self) -> None:
+        result = self.replay(
+            "CONFIG current 1 WILDCARD\n"
+            "SUB 0 1111110000000000000 0 0 -\n"
+            "RESIDENT current\nRESIDENT stale-a\nRESIDENT stale-b\nCLEANUP\nPLAN\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("cleanup-unmatched=2", result.stdout)
+        self.assertIn("cleanup-result=0 operations=2", result.stdout)
+        self.assertIn("id=stale-a", result.stdout)
+        self.assertIn("id=stale-b", result.stdout)
+        self.assertNotIn("=delete-config,sub0,expected0,id=current", result.stdout)
+        self.assertNotIn("=load-config,", result.stdout)
+
+    def test_cleanup_refuses_unknown_active_or_pending_resident(self) -> None:
+        active = self.replay(
+            "CONFIG current 1 WILDCARD\nSUB 0 1111110000000000000 0 0 stale\n"
+            "RESIDENT stale\nCLEANUP\n"
+        )
+        self.assertIn("cleanup-result=-16 operations=0", active.stdout)
+        pending = self.replay(
+            "CONFIG current 1 WILDCARD\nSUB 0 1111110000000000000 0 0 -\n"
+            "PENDING 0 stale\nRESIDENT stale\nCLEANUP\n"
+        )
+        self.assertIn("cleanup-result=-16 operations=0", pending.stdout)
+
+    def test_cleanup_rejects_duplicate_resident_ids(self) -> None:
+        result = self.replay(
+            "CONFIG current 1 WILDCARD\nSUB 0 1111110000000000000 0 0 -\n"
+            "RESIDENT stale\nRESIDENT stale\nCLEANUP\n"
+        )
+        self.assertIn("cleanup-result=-17 operations=0", result.stdout)
+
     def test_unmatched_card_fails_before_mutation(self) -> None:
         result = self.replay(
             "CONFIG carrier 1 IIN 123456\n"

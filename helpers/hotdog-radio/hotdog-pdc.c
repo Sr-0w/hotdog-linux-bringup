@@ -216,6 +216,62 @@ size_t hotdog_pdc_mark_loaded(struct hotdog_pdc_catalog *catalog,
 	return unmatched;
 }
 
+int hotdog_pdc_plan_cleanup(struct hotdog_pdc_catalog *catalog,
+			    const struct hotdog_pdc_id *resident_ids,
+			    size_t resident_count,
+			    const struct hotdog_pdc_subscription *subscriptions,
+			    size_t subscription_count,
+			    struct hotdog_pdc_plan *plan,
+			    size_t *unmatched_count)
+{
+	bool matched[HOTDOG_PDC_MAX_CONFIGS] = { false };
+	size_t resident, config, subscription, previous;
+
+	if (!catalog || (!resident_ids && resident_count) || !subscriptions || !plan ||
+	    !unmatched_count || resident_count > HOTDOG_PDC_MAX_CONFIGS ||
+	    subscription_count > HOTDOG_PDC_MAX_SUBSCRIPTIONS)
+		return -EINVAL;
+	memset(plan, 0, sizeof(*plan));
+	*unmatched_count = 0;
+	for (config = 0; config < catalog->count; config++)
+		catalog->configs[config].loaded = false;
+	for (resident = 0; resident < resident_count; resident++) {
+		if (!resident_ids[resident].length ||
+		    resident_ids[resident].length > HOTDOG_PDC_ID_SIZE)
+			return -EINVAL;
+		for (previous = 0; previous < resident; previous++)
+			if (hotdog_pdc_id_equal(&resident_ids[previous], &resident_ids[resident]))
+				return -EEXIST;
+		for (config = 0; config < catalog->count; config++) {
+			if (!hotdog_pdc_id_equal(&catalog->configs[config].id,
+						&resident_ids[resident]))
+				continue;
+			catalog->configs[config].loaded = true;
+			matched[resident] = true;
+			break;
+		}
+		if (matched[resident])
+			continue;
+		(*unmatched_count)++;
+		for (subscription = 0; subscription < subscription_count; subscription++)
+			if (hotdog_pdc_id_equal(&subscriptions[subscription].active,
+						&resident_ids[resident]) ||
+			    hotdog_pdc_id_equal(&subscriptions[subscription].pending,
+						&resident_ids[resident]))
+				return -EBUSY;
+	}
+	if (*unmatched_count > HOTDOG_PDC_MAX_OPERATIONS)
+		return -ENOSPC;
+	for (resident = 0; resident < resident_count; resident++) {
+		if (matched[resident])
+			continue;
+		if (append_operation(plan, HOTDOG_PDC_DELETE_CONFIG, 0,
+				     &resident_ids[resident], 0))
+			return -ENOSPC;
+	}
+	return 0;
+}
+
 const char *hotdog_pdc_operation_name(enum hotdog_pdc_operation_type type)
 {
 	switch (type) {

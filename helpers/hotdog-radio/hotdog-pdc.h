@@ -79,6 +79,13 @@ int hotdog_pdc_plan_activation(const struct hotdog_pdc_catalog *catalog,
 int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions,
 			     size_t subscription_count,
 			     struct hotdog_pdc_plan *plan);
+int hotdog_pdc_plan_cleanup(struct hotdog_pdc_catalog *catalog,
+			    const struct hotdog_pdc_id *resident_ids,
+			    size_t resident_count,
+			    const struct hotdog_pdc_subscription *subscriptions,
+			    size_t subscription_count,
+			    struct hotdog_pdc_plan *plan,
+			    size_t *unmatched_count);
 bool hotdog_pdc_plan_verified(const struct hotdog_pdc_subscription *subscriptions,
 			      size_t subscription_count);
 size_t hotdog_pdc_mark_loaded(struct hotdog_pdc_catalog *catalog,

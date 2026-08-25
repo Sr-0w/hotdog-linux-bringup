@@ -131,8 +131,10 @@ int main(void)
 {
 	struct hotdog_pdc_catalog catalog = { 0 };
 	struct hotdog_pdc_subscription subscriptions[HOTDOG_PDC_MAX_SUBSCRIPTIONS] = { 0 };
+	struct hotdog_pdc_id resident_ids[HOTDOG_PDC_MAX_CONFIGS] = { 0 };
 	struct hotdog_pdc_plan plan;
 	size_t subscription_count = 0;
+	size_t resident_count = 0;
 	char line[1024];
 	unsigned int line_number = 0;
 
@@ -172,6 +174,32 @@ int main(void)
 			    index >= subscription_count ||
 			    set_id(&subscriptions[index].active, fields[2]))
 				goto malformed;
+			continue;
+		}
+		if (!strcmp(fields[0], "PENDING") && count == 3) {
+			unsigned long index;
+
+			if (parse_uint(fields[1], HOTDOG_PDC_MAX_SUBSCRIPTIONS - 1, &index) ||
+			    index >= subscription_count ||
+			    set_id(&subscriptions[index].pending, fields[2]))
+				goto malformed;
+			continue;
+		}
+		if (!strcmp(fields[0], "RESIDENT") && count == 2) {
+			if (resident_count >= HOTDOG_PDC_MAX_CONFIGS ||
+			    set_id(&resident_ids[resident_count], fields[1]))
+				goto malformed;
+			resident_count++;
+			continue;
+		}
+		if (!strcmp(fields[0], "CLEANUP") && count == 1) {
+			size_t unmatched = 0;
+			int result = hotdog_pdc_plan_cleanup(
+				&catalog, resident_ids, resident_count, subscriptions,
+				subscription_count, &plan, &unmatched);
+
+			printf("cleanup-unmatched=%zu\n", unmatched);
+			print_plan("cleanup", result, &plan);
 			continue;
 		}
 		if (!strcmp(fields[0], "VERIFY") && count == 1) {

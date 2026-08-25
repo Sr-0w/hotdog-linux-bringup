@@ -311,6 +311,14 @@ OOS12 F.22 cross-check. They are persistent stale state and must be handled by
 the guarded cleanup transaction; see
 [the resident PDC inventory](2026-08-25-radio-pdc-resident-catalog.md).
 
+The cleanup planner is all-or-nothing. It first marks exact current-catalog
+matches as loaded, rejects duplicate or malformed resident IDs, and scans the
+active and pending state of every supplied subscription. Any unmatched active
+or pending ID returns `EBUSY` with zero operations. Only unmatched inactive
+residents become Delete Config operations; the current profile is never
+deleted and will not be loaded again. The hardware executor must supply all
+three APSS subscription readbacks before this offline plan can be authorized.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;
