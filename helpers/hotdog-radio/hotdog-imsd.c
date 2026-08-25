@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #define _POSIX_C_SOURCE 200809L
+#include "hotdog-ims-bearer-state.h"
 #include "hotdog-ims-state.h"
 #include "hotdog-mcfg-runtime.h"
 #include "hotdog-qmi-imsa.h"
+#include "hotdog-qmi-wds-discovery.h"
 #include "hotdog-radio-readiness.h"
 
 #include <errno.h>
@@ -17,8 +19,16 @@
 
 #define DEFAULT_READINESS_PATH "/run/hotdog-radio/readiness"
 #define DEFAULT_IMS_STATE_PATH "/run/hotdog-radio/ims-state"
+#define DEFAULT_IMS_BEARER_PATH "/run/hotdog-radio/ims-bearer"
 #define DEFAULT_BOOT_ID_PATH "/proc/sys/kernel/random/boot_id"
 #define DEFAULT_RUNTIME_MANIFEST "/usr/share/hotdog-radio/mcfg/MANIFEST"
+
+/* The IMSA side counts subscriptions with the telephony bound and the bearer
+ * side with the network one. They are indexed by the same subscription here,
+ * so a divergence would walk off the end of the bearer array. */
+_Static_assert(HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS ==
+	       HOTDOG_NETWORK_MAX_SUBSCRIPTIONS,
+	       "IMSA and bearer subscription bounds must agree");
 
 struct imsd;
 
@@ -26,6 +36,7 @@ struct imsd_subscription {
 	struct imsd *imsd;
 	unsigned int index;
 	QmiClientImsa *client;
+	struct hotdog_qmi_wds_discovery discovery;
 	gulong registration_handler;
 	gulong services_handler;
 	bool registration_indicated;
@@ -39,13 +50,16 @@ struct imsd {
 	QmiDevice *device;
 	struct hotdog_radio_readiness readiness;
 	struct hotdog_ims_runtime_state state;
+	struct hotdog_ims_bearer_runtime_state bearer;
 	struct imsd_subscription subscriptions[HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS];
 	char *readiness_path;
 	char *state_path;
+	char *bearer_path;
 	char *boot_id_path;
 	char *runtime_manifest;
 	unsigned int node;
 	unsigned int next_subscription;
+	unsigned int next_discovery;
 	unsigned int generation;
 	gulong node_removed_handler;
 	guint readiness_poll_id;
@@ -68,6 +82,8 @@ static void finish(struct imsd *imsd, int result)
 		g_cancellable_cancel(imsd->cancellable);
 	if (unlink(imsd->state_path) && errno != ENOENT)
 		g_printerr("IMS state removal failed: %s\n", g_strerror(errno));
+	if (unlink(imsd->bearer_path) && errno != ENOENT)
+		g_printerr("IMS bearer removal failed: %s\n", g_strerror(errno));
 	g_main_loop_quit(imsd->loop);
 }
 
@@ -143,6 +159,101 @@ static int publish_state(struct imsd *imsd)
 	else
 		printf("ims-state=published generation=%u\n", imsd->state.generation);
 	return result;
+}
+
+static int publish_bearer(struct imsd *imsd)
+{
+	int result = hotdog_ims_bearer_runtime_write(imsd->bearer_path, &imsd->bearer);
+
+	if (result)
+		g_printerr("IMS bearer publication failed: %d\n", result);
+	else
+		printf("ims-bearer=published generation=%u\n", imsd->bearer.generation);
+	return result;
+}
+
+static void start_next_discovery(struct imsd *imsd);
+
+static void discovery_done(struct hotdog_qmi_wds_discovery *discovery,
+			   int result, void *user_data)
+{
+	struct imsd_subscription *subscription = user_data;
+	struct imsd *imsd = subscription->imsd;
+	struct hotdog_ims_bearer_subscription_state *bearer =
+		&imsd->bearer.subscriptions[subscription->index];
+
+	/* An SSR abort completes every outstanding discovery synchronously,
+	 * so this runs again on the way out of a teardown already decided. */
+	if (imsd->finished)
+		return;
+	if (!result && discovery->selection.index) {
+		bearer->status = HOTDOG_IMS_BEARER_STARTING;
+		bearer->profile_selected = true;
+		bearer->profile = discovery->selection.index;
+		bearer->family = discovery->selection.family;
+		printf("ims-profile subscription=%u profile=%u family=%s apn=%s\n",
+		       subscription->index, discovery->selection.index,
+		       hotdog_ip_family_name(discovery->selection.family),
+		       discovery->selection.apn);
+	} else if (!result || result == -ENOENT || result == -ENOTUNIQ ||
+		   result == -EAFNOSUPPORT) {
+		/* Profile 0 is not a 3GPP profile identifier, so a selection
+		 * naming it describes no bearer an executor could start. */
+		bearer->status = HOTDOG_IMS_BEARER_UNAVAILABLE;
+		bearer->error = result ? (unsigned int)-result : EPROTO;
+		printf("ims-profile subscription=%u profile=none reason=%u\n",
+		       subscription->index, bearer->error);
+	} else {
+		bearer->error = result < 0 ? (unsigned int)-result : EPROTO;
+		if (discovery->residue) {
+			bearer->status = HOTDOG_IMS_BEARER_BLOCKED;
+			bearer->residue = true;
+			bearer->residue_mask = HOTDOG_IMS_RESIDUE_CLIENT;
+		} else {
+			bearer->status = HOTDOG_IMS_BEARER_FAILED;
+		}
+		g_printerr("subscription %u WDS discovery failed: %d remote=%u "
+			   "residue=%u\n", subscription->index, result,
+			   discovery->remote_result, discovery->residue);
+		publish_bearer(imsd);
+		finish(imsd, 1);
+		return;
+	}
+	if (publish_bearer(imsd)) {
+		finish(imsd, 1);
+		return;
+	}
+	imsd->next_discovery = subscription->index + 1;
+	start_next_discovery(imsd);
+}
+
+static void start_next_discovery(struct imsd *imsd)
+{
+	struct imsd_subscription *subscription;
+	int result;
+
+	while (imsd->next_discovery < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS &&
+	       !imsd->bearer.subscriptions[imsd->next_discovery].populated)
+		imsd->next_discovery++;
+	if (imsd->next_discovery == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS)
+		return;
+	subscription = &imsd->subscriptions[imsd->next_discovery];
+	result = hotdog_qmi_wds_discovery_start(
+		&subscription->discovery, imsd->device, subscription->index,
+		discovery_done, subscription);
+	if (!result)
+		return;
+	/* A build without the subscription-scoped profile API can select no IMS
+	 * bearer at all. Record that in the state before leaving, rather than
+	 * exiting with the reason only in the log. */
+	imsd->bearer.subscriptions[subscription->index].status =
+		HOTDOG_IMS_BEARER_UNAVAILABLE;
+	imsd->bearer.subscriptions[subscription->index].error =
+		result < 0 ? (unsigned int)-result : EPROTO;
+	g_printerr("subscription %u WDS discovery start failed: %d\n",
+		   subscription->index, result);
+	publish_bearer(imsd);
+	finish(imsd, 1);
 }
 
 static void registration_indication(
@@ -326,9 +437,26 @@ static void start_next_subscription(struct imsd *imsd)
 	       !imsd->state.subscriptions[imsd->next_subscription].populated)
 		imsd->next_subscription++;
 	if (imsd->next_subscription == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS) {
+		size_t index;
+
 		imsd->initialized = true;
-		if (publish_state(imsd))
+		if (publish_state(imsd)) {
 			finish(imsd, 1);
+			return;
+		}
+		/* Every populated subscription enters discovery together: a
+		 * populated one left absent is not a publishable state, and the
+		 * requests themselves stay sequential on the one device. */
+		for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
+			if (imsd->bearer.subscriptions[index].populated)
+				imsd->bearer.subscriptions[index].status =
+					HOTDOG_IMS_BEARER_DISCOVERING;
+		}
+		if (publish_bearer(imsd)) {
+			finish(imsd, 1);
+			return;
+		}
+		start_next_discovery(imsd);
 		return;
 	}
 	qmi_device_allocate_client(
@@ -369,11 +497,18 @@ static void device_ready(GObject *source, GAsyncResult *res, struct imsd *imsd)
 
 static void node_removed(QrtrBus *bus, guint node_id, struct imsd *imsd)
 {
+	size_t index;
+
 	(void)bus;
-	if (node_id == imsd->node) {
-		g_printerr("IMSA QRTR node removed\n");
-		finish(imsd, 1);
-	}
+	if (node_id != imsd->node)
+		return;
+	g_printerr("IMSA QRTR node removed\n");
+	/* Decide the teardown before aborting: the abort completes each
+	 * outstanding discovery synchronously, and those completions must not
+	 * republish state the removal has already invalidated. */
+	finish(imsd, 1);
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++)
+		hotdog_qmi_wds_discovery_abort_ssr(&imsd->subscriptions[index].discovery);
 }
 
 static void bus_ready(GObject *source, GAsyncResult *res, struct imsd *imsd)
@@ -457,6 +592,8 @@ int main(int argc, char **argv)
 		  "Readiness record", "FILE" },
 		{ "state", 0, 0, G_OPTION_ARG_FILENAME, &imsd.state_path,
 		  "IMS runtime state", "FILE" },
+		{ "ims-bearer", 0, 0, G_OPTION_ARG_FILENAME, &imsd.bearer_path,
+		  "IMS bearer runtime state", "FILE" },
 		{ "boot-id", 0, 0, G_OPTION_ARG_FILENAME, &imsd.boot_id_path,
 		  "Kernel boot ID", "FILE" },
 		{ "runtime-manifest", 0, 0, G_OPTION_ARG_FILENAME, &imsd.runtime_manifest,
@@ -466,7 +603,8 @@ int main(int argc, char **argv)
 	size_t index;
 	int result;
 
-	options = g_option_context_new("- monitor per-subscription IMSA state");
+	options = g_option_context_new(
+		"- monitor per-subscription IMSA state and select IMS bearer profiles");
 	g_option_context_add_main_entries(options, entries, NULL);
 	if (!g_option_context_parse(options, &argc, &argv, &error)) {
 		g_printerr("option parsing failed: %s\n", error->message);
@@ -477,10 +615,11 @@ int main(int argc, char **argv)
 	g_option_context_free(options);
 	if (!imsd.readiness_path) imsd.readiness_path = g_strdup(DEFAULT_READINESS_PATH);
 	if (!imsd.state_path) imsd.state_path = g_strdup(DEFAULT_IMS_STATE_PATH);
+	if (!imsd.bearer_path) imsd.bearer_path = g_strdup(DEFAULT_IMS_BEARER_PATH);
 	if (!imsd.boot_id_path) imsd.boot_id_path = g_strdup(DEFAULT_BOOT_ID_PATH);
 	if (!imsd.runtime_manifest) imsd.runtime_manifest = g_strdup(DEFAULT_RUNTIME_MANIFEST);
-	if (!imsd.readiness_path || !imsd.state_path || !imsd.boot_id_path ||
-	    !imsd.runtime_manifest || imsd.node > UINT16_MAX ||
+	if (!imsd.readiness_path || !imsd.state_path || !imsd.bearer_path ||
+	    !imsd.boot_id_path || !imsd.runtime_manifest || imsd.node > UINT16_MAX ||
 	    imsd.generation > 1000000) {
 		g_printerr("invalid IMS daemon configuration\n");
 		result = -EINVAL;
@@ -493,10 +632,15 @@ int main(int argc, char **argv)
 	}
 	memcpy(imsd.state.boot_id, imsd.readiness.boot_id, sizeof(imsd.state.boot_id));
 	imsd.state.generation = imsd.generation;
+	memcpy(imsd.bearer.boot_id, imsd.readiness.boot_id, sizeof(imsd.bearer.boot_id));
+	imsd.bearer.generation = imsd.generation;
 	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
 		imsd.subscriptions[index].imsd = &imsd;
 		imsd.subscriptions[index].index = index;
+		hotdog_qmi_wds_discovery_init(&imsd.subscriptions[index].discovery);
 		imsd.state.subscriptions[index].populated =
+			imsd.readiness.subscriptions[index].populated;
+		imsd.bearer.subscriptions[index].populated =
 			imsd.readiness.subscriptions[index].populated;
 	}
 	imsd.loop = g_main_loop_new(NULL, FALSE);
@@ -514,6 +658,9 @@ int main(int argc, char **argv)
 	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
 		struct imsd_subscription *subscription = &imsd.subscriptions[index];
 
+		if (subscription->discovery.active || subscription->discovery.residue)
+			hotdog_qmi_wds_discovery_abort_ssr(&subscription->discovery);
+		hotdog_qmi_wds_discovery_clear(&subscription->discovery);
 		if (subscription->client && subscription->registration_handler)
 			g_signal_handler_disconnect(
 				subscription->client, subscription->registration_handler);
@@ -530,6 +677,7 @@ int main(int argc, char **argv)
 out:
 	g_free(imsd.readiness_path);
 	g_free(imsd.state_path);
+	g_free(imsd.bearer_path);
 	g_free(imsd.boot_id_path);
 	g_free(imsd.runtime_manifest);
 	return result ? 1 : 0;

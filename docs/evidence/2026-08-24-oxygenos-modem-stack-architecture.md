@@ -392,8 +392,28 @@ query response, the indication wins and the older response is discarded.
 Subsequent partial indications atomically rewrite the runtime file. A change in
 populated slots or active/selected PDC identity, readiness loss, malformed IMSA
 data, SIGTERM or QRTR node removal removes the file and releases every client.
-This service owns no WDS, WMS or Voice CID and therefore does not compete with
-ModemManager.
+This service owns no WMS or Voice CID and therefore does not compete with
+ModemManager for messaging or calls.
+
+Once every IMSA client is bound, the same daemon selects the IMS bearer profile
+for each populated subscription and publishes a second record, schema-1
+`ims-bearer`, beside the IMSA one. Discovery is subscription-scoped and
+sequential on the one device, and it holds a WDS CID only for the read-only
+profile list and settings of the subscription being examined; the client is
+released before the next one starts. The whole populated set moves to
+`discovering` before the first record is written, because a populated
+subscription left `absent` is not a publishable state.
+
+Each subscription then resolves to exactly one of three resting states. A
+usable 3GPP IMS profile gives `starting` with the selected index and IP family.
+No usable profile — none present, several equally eligible, or an unsupported
+family — gives `unavailable` with the reason, which is the expected outcome
+with no card and on a libqmi without the subscription-scoped profile API. Any
+other QMI failure gives `failed`, or `blocked` when the WDS client could not be
+released, so the supervisor can see the residue it must clear. Establishing the
+bearer from `starting` — link, sessions, P-CSCF and routing — remains the next
+phase; the executor and its transactional rollback already exist and are not
+yet driven by this daemon.
 
 The packaged OpenRC graph does not place `hotdog-imsd` directly in a boot
 runlevel. The lifecycle supervisor creates verified readiness and starts the
@@ -415,7 +435,7 @@ only the missing Qualcomm/Hotdog orchestration:
 | libqmi | Typed QMI protocol implementation, including Hotdog-validated missing PDC fields |
 | ModemManager QMI plugin | Standard modem, SIM, bearer, SMS, voice and D-Bus objects |
 | NetworkManager | IP configuration, routes and user-visible connectivity |
-| `hotdog-imsd` | Sole per-subscription IMSA client owner and strict runtime-state publisher |
+| `hotdog-imsd` | Sole per-subscription IMSA client owner, IMS profile selection, and strict runtime-state publisher |
 | Plasma Mobile | Standard ModemManager/NetworkManager/Calls/Spacebar user interface |
 
 `hotdog-radio-bootstrapd` must be the sole owner of the pre-online state. It

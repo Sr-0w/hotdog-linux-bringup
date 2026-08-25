@@ -24,7 +24,9 @@ class HotdogImsdTests(unittest.TestCase):
             "hotdog-imsd.c", "hotdog-ims-state.c", "hotdog-qmi-imsa.c",
             "hotdog-radio-readiness.c", "hotdog-mcfg-runtime.c",
             "hotdog-telephony.c", "hotdog-pdc.c", "hotdog-uim.c",
-            "hotdog-mbn.c",
+            "hotdog-mbn.c", "hotdog-ims-bearer-state.c",
+            "hotdog-qmi-wds-discovery.c", "hotdog-qmi-wds-profile.c",
+            "hotdog-ims-bearer.c", "hotdog-network.c",
         ]
         subprocess.run(
             ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
@@ -42,19 +44,23 @@ class HotdogImsdTests(unittest.TestCase):
         self.assertIn("--generation=GENERATION", output)
         self.assertIn("--readiness=FILE", output)
         self.assertIn("--state=FILE", output)
+        self.assertIn("--ims-bearer=FILE", output)
         self.assertNotIn("iccid", output.lower())
         self.assertNotIn("imsi", output.lower())
 
     def test_missing_readiness_fails_before_qrtr_or_state_creation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "ims-state"
+            bearer = Path(directory) / "ims-bearer"
             result = subprocess.run(
                 [str(self.binary), "--readiness", str(Path(directory) / "missing"),
-                 "--state", str(state)], capture_output=True, text=True,
+                 "--state", str(state), "--ims-bearer", str(bearer)],
+                capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("startup readiness rejected", result.stderr)
             self.assertFalse(state.exists())
+            self.assertFalse(bearer.exists())
 
     def test_one_imsa_client_is_bound_per_populated_subscription(self) -> None:
         source = (SOURCE / "hotdog-imsd.c").read_text()
@@ -70,6 +76,39 @@ class HotdogImsdTests(unittest.TestCase):
         self.assertIn("QRTR node removed", source)
         self.assertIn("readiness became invalid", source)
         self.assertIn("unlink(imsd->state_path)", source)
+        self.assertIn("unlink(imsd->bearer_path)", source)
+
+    def test_populated_subscriptions_enter_discovery_together(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        # A populated subscription left absent is not a publishable bearer
+        # state, so the whole set has to move to discovering before the
+        # first record is written.
+        discovering = source.index("HOTDOG_IMS_BEARER_DISCOVERING")
+        first_start = source.index("start_next_discovery(imsd);\n\t\treturn;")
+        self.assertLess(discovering, first_start)
+        self.assertIn("hotdog_qmi_wds_discovery_init", source)
+        self.assertIn("hotdog_qmi_wds_discovery_start(", source)
+
+    def test_discovery_outcomes_map_to_distinct_bearer_states(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        self.assertIn("HOTDOG_IMS_BEARER_STARTING", source)
+        self.assertIn("HOTDOG_IMS_BEARER_UNAVAILABLE", source)
+        self.assertIn("HOTDOG_IMS_BEARER_FAILED", source)
+        self.assertIn("HOTDOG_IMS_BEARER_BLOCKED", source)
+        # A blocked outcome is the one that leaves a QMI client behind, and
+        # the state record has to name that residue for the supervisor.
+        self.assertIn("HOTDOG_IMS_RESIDUE_CLIENT", source)
+        for outcome in ("-ENOENT", "-ENOTUNIQ", "-EAFNOSUPPORT"):
+            self.assertIn(outcome, source)
+
+    def test_ssr_decides_teardown_before_aborting_discovery(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        removed = source.index("static void node_removed(")
+        body = source[removed:source.index("\n}", removed)]
+        # The abort completes each discovery synchronously; if it ran first
+        # those completions would republish state the removal invalidated.
+        self.assertLess(body.index("finish(imsd, 1);"),
+                        body.index("hotdog_qmi_wds_discovery_abort_ssr"))
 
 
 if __name__ == "__main__":
