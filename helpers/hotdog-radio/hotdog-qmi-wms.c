@@ -4,6 +4,42 @@
 #include <errno.h>
 #include <string.h>
 
+int hotdog_wms_classify_3gpp(const unsigned char *pdu, size_t pdu_size,
+			     enum hotdog_wms_mt_kind *kind,
+			     uint8_t *message_reference,
+			     uint8_t *delivery_status)
+{
+	size_t address_bytes, status_offset, tpdu;
+	uint8_t mti;
+
+	if (!pdu || !pdu_size || !kind || !message_reference || !delivery_status)
+		return -EINVAL;
+	*message_reference = 0;
+	*delivery_status = 0;
+	if ((size_t)pdu[0] + 1 >= pdu_size)
+		return -EPROTO;
+	tpdu = (size_t)pdu[0] + 1;
+	mti = pdu[tpdu] & 0x03;
+	if (mti == 0) {
+		*kind = HOTDOG_WMS_MT_DELIVER;
+		return 0;
+	}
+	if (mti != 2)
+		return -EOPNOTSUPP;
+	if (pdu_size - tpdu < 4 || !pdu[tpdu + 2])
+		return -EPROTO;
+	address_bytes = ((size_t)pdu[tpdu + 2] + 1) / 2;
+	if (address_bytes > pdu_size || tpdu + 4 > pdu_size - address_bytes)
+		return -EPROTO;
+	status_offset = tpdu + 4 + address_bytes + 14;
+	if (status_offset >= pdu_size || pdu[status_offset] > 0x7f)
+		return -EPROTO;
+	*kind = HOTDOG_WMS_MT_STATUS_REPORT;
+	*message_reference = pdu[tpdu + 1];
+	*delivery_status = pdu[status_offset];
+	return 0;
+}
+
 int hotdog_qmi_wms_raw_send_input(
 	const struct hotdog_sms *message, const unsigned char *pdu, size_t pdu_size,
 	QmiMessageWmsRawSendInput **input)
@@ -76,6 +112,7 @@ int hotdog_qmi_wms_decode_event(
 	GError *error = NULL;
 	gboolean ims = FALSE;
 	guint32 transaction;
+	int result;
 
 	if (!output || !pdu || !capacity || !incoming)
 		return -EINVAL;
@@ -91,6 +128,11 @@ int hotdog_qmi_wms_decode_event(
 	if (qmi_indication_wms_event_report_output_get_message_mode(output, &mode, NULL) &&
 	    mode != QMI_WMS_MESSAGE_MODE_GSM_WCDMA)
 		return -EPROTO;
+	result = hotdog_wms_classify_3gpp(
+		(const unsigned char *)raw->data, raw->len, &incoming->kind,
+		&incoming->message_reference, &incoming->delivery_status);
+	if (result)
+		return result;
 	qmi_indication_wms_event_report_output_get_sms_on_ims(output, &ims, NULL);
 	memcpy(pdu, raw->data, raw->len);
 	incoming->transaction_id = transaction;

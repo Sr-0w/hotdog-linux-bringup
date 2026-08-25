@@ -245,6 +245,55 @@ int hotdog_sms_update(struct hotdog_telephony *telephony, unsigned int message_i
 	return 0;
 }
 
+int hotdog_sms_delivery_report(struct hotdog_telephony *telephony,
+			       unsigned int subscription,
+			       enum hotdog_transport transport,
+			       unsigned int message_reference,
+			       unsigned int delivery_status,
+			       unsigned int *message_id)
+{
+	struct hotdog_sms *match = NULL;
+	size_t index;
+
+	if (!telephony || !message_id ||
+	    subscription >= HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS ||
+	    transport == HOTDOG_TRANSPORT_AUTO || transport > HOTDOG_TRANSPORT_IMS ||
+	    message_reference > UINT8_MAX || delivery_status > 0x7f)
+		return -EINVAL;
+	*message_id = 0;
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SMS; index++) {
+		struct hotdog_sms *message = &telephony->messages[index];
+
+		if (!message->id || message->generation != telephony->generation ||
+		    message->direction != HOTDOG_SMS_MO || !message->delivery_report ||
+		    message->subscription != subscription ||
+		    message->transport != transport ||
+		    message->message_reference != message_reference ||
+		    (message->state != HOTDOG_SMS_SENT &&
+		     message->state != HOTDOG_SMS_DELIVERED &&
+		     message->state != HOTDOG_SMS_FAILED))
+			continue;
+		if (match)
+			return -ENOTUNIQ;
+		match = message;
+	}
+	if (!match)
+		return -ENOENT;
+	*message_id = match->id;
+	if (match->state != HOTDOG_SMS_SENT)
+		return -EALREADY;
+	if (delivery_status <= 0x1f) {
+		match->state = HOTDOG_SMS_DELIVERED;
+		match->error = 0;
+	} else if (delivery_status <= 0x3f) {
+		match->error = delivery_status;
+	} else {
+		match->state = HOTDOG_SMS_FAILED;
+		match->error = delivery_status;
+	}
+	return 0;
+}
+
 static bool valid_number(const char *number)
 {
 	size_t i;

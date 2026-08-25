@@ -59,6 +59,26 @@ class HotdogTelephonyTests(unittest.TestCase):
         )
         self.assertIn("sms-state-result=-71", skipped.stdout)
 
+    def test_delivery_reports_preserve_retry_and_terminal_status(self) -> None:
+        result = self.replay(
+            "SUB 0 1 1 1\nSMS 0 cs 24 1 0 0 0\n"
+            "SMS_STATE 1 submitted 77 0\nSMS_STATE 1 sent 77 0\n"
+            "SMS_REPORT 0 cs 77 32\nSTATUS\n"
+            "SMS_REPORT 0 cs 77 0\nSMS_REPORT 0 cs 77 0\nSTATUS\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("sms-report-result=0 id=1", result.stdout)
+        self.assertIn("sms1=sent,cs,sub0,gen0,bytes24,ref77,error32", result.stdout)
+        self.assertIn("sms1=delivered,cs,sub0,gen0,bytes24,ref77,error0", result.stdout)
+        self.assertIn("sms-report-result=-114 id=1", result.stdout)
+
+        failed = self.replay(
+            "SUB 0 1 1 1\nSMS 0 cs 24 1 0 0 0\n"
+            "SMS_STATE 1 submitted 78 0\nSMS_STATE 1 sent 78 0\n"
+            "SMS_REPORT 0 cs 78 64\nSTATUS\n"
+        )
+        self.assertIn("sms1=failed,cs,sub0,gen0,bytes24,ref78,error64", failed.stdout)
+
     def test_incoming_sms_keeps_transport_storage_and_reference(self) -> None:
         result = self.replay(
             "SUB 1 1 1 1\nSMS_IN 1 cs 88 sim 19\nSTATUS\n"

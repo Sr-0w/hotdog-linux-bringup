@@ -187,6 +187,12 @@ int hotdog_sms_receive(struct hotdog_telephony *telephony, unsigned int subscrip
 int hotdog_sms_update(struct hotdog_telephony *telephony, unsigned int message_id,
 		      enum hotdog_sms_state state, unsigned int message_reference,
 		      unsigned int error);
+int hotdog_sms_delivery_report(struct hotdog_telephony *telephony,
+			       unsigned int subscription,
+			       enum hotdog_transport transport,
+			       unsigned int message_reference,
+			       unsigned int delivery_status,
+			       unsigned int *message_id);
 int hotdog_call_dial(struct hotdog_telephony *telephony, unsigned int subscription,
 		     enum hotdog_transport requested, const char *number,
 		     bool emergency, bool video, unsigned int *call_id);

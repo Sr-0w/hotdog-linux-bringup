@@ -135,6 +135,16 @@ then echoes that transaction with WCDMA protocol and the same domain, adding
 RP/TP causes only on failure. Stored UIM/NV notifications remain a separate Raw
 Read path rather than being misread as inline PDUs.
 
+The 3GPP envelope is now classified before creating a message object. The SMSC
+length locates TP-MTI; `SMS-DELIVER` remains an incoming message, while a
+bounded `SMS-STATUS-REPORT` extracts TP-MR and TP-ST after the variable remote
+address and two timestamps. Completed statuses mark the unique matching MO
+message delivered, `0x20..0x3f` preserves `sent` while the service centre keeps
+retrying, and final failure classes mark it failed. Matching is scoped by
+generation, subscription and CS/IMS domain; missing, duplicate or ambiguous
+references fail closed. Reserved MTI, truncated addresses/timestamps and
+reserved status values never surface as phantom SMS messages.
+
 ### Voice and supplementary services
 
 QMI Voice covers dial, answer, hangup, call state, DTMF, call waiting,

@@ -6,12 +6,25 @@
 
 #include <libqmi-glib.h>
 
+enum hotdog_wms_mt_kind {
+	HOTDOG_WMS_MT_DELIVER,
+	HOTDOG_WMS_MT_STATUS_REPORT,
+};
+
 struct hotdog_wms_incoming {
 	uint32_t transaction_id;
 	size_t pdu_size;
 	enum hotdog_transport transport;
+	enum hotdog_wms_mt_kind kind;
+	uint8_t message_reference;
+	uint8_t delivery_status;
 	bool ack_required;
 };
+
+int hotdog_wms_classify_3gpp(const unsigned char *pdu, size_t pdu_size,
+			     enum hotdog_wms_mt_kind *kind,
+			     uint8_t *message_reference,
+			     uint8_t *delivery_status);
 
 int hotdog_qmi_wms_raw_send_input(
 	const struct hotdog_sms *message, const unsigned char *pdu, size_t pdu_size,

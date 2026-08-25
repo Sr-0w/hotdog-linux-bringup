@@ -179,6 +179,16 @@ int main(void)
 			printf("sms-in-result=%d id=%u\n", result, id);
 			continue;
 		}
+		if (!strcmp(field[0], "SMS_REPORT") && count == 5 &&
+		    !number(field[1], 2, &a) && !number(field[3], UINT8_MAX, &b) &&
+		    !number(field[4], 0x7f, &c)) {
+			unsigned int id = 0;
+
+			result = hotdog_sms_delivery_report(
+				&telephony, a, transport(field[2]), b, c, &id);
+			printf("sms-report-result=%d id=%u\n", result, id);
+			continue;
+		}
 		if (!strcmp(field[0], "DIAL") && count == 6 && !number(field[1], 2, &a) &&
 		    !number(field[3], 1, &b) && !number(field[4], 1, &c)) {
 			unsigned int id = 0;
