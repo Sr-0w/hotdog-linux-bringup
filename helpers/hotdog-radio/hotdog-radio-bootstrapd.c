@@ -31,6 +31,35 @@ struct bootstrap {
 	bool finished;
 };
 
+struct release_wait {
+	bool done;
+};
+
+static void client_release_ready(QmiDevice *device, GAsyncResult *res,
+				 struct release_wait *wait)
+{
+	GError *error = NULL;
+
+	if (!qmi_device_release_client_finish(device, res, &error)) {
+		g_printerr("QMI client release failed: %s\n", error->message);
+		g_clear_error(&error);
+	}
+	wait->done = true;
+}
+
+static void release_client(struct bootstrap *bootstrap, QmiClient *client)
+{
+	struct release_wait wait = { 0 };
+
+	if (!bootstrap->device || !client)
+		return;
+	qmi_device_release_client(bootstrap->device, client,
+				  QMI_DEVICE_RELEASE_CLIENT_FLAGS_RELEASE_CID,
+				  10, NULL, (GAsyncReadyCallback)client_release_ready, &wait);
+	while (!wait.done)
+		g_main_context_iteration(NULL, TRUE);
+}
+
 static void finish(struct bootstrap *bootstrap, int result)
 {
 	if (bootstrap->finished)
@@ -69,15 +98,19 @@ static void pdc_selected_indication(QmiClientPdc *client,
 {
 	struct hotdog_pdc_id active, pending;
 	const struct hotdog_uim_session *session;
+	uint16_t remote_result = 0;
 	int result;
 
 	(void)client;
 	result = hotdog_qmi_pdc_decode_selected(output, bootstrap->pdc_expected_token,
-						 &active, &pending);
+						 &active, &pending, &remote_result);
 	if (result == -ESTALE)
 		return;
 	if (result) {
-		g_printerr("PDC selected-config indication rejected: %d\n", result);
+		g_printerr("PDC selected-config indication rejected: %d remote=%u (%s)\n",
+			   result, remote_result,
+			   remote_result ? qmi_protocol_error_get_string(
+				   (QmiProtocolError)remote_result) : "none");
 		finish(bootstrap, 1);
 		return;
 	}
@@ -351,8 +384,10 @@ int main(int argc, char **argv)
 		g_source_remove(bootstrap.pdc_timeout_id);
 	if (bootstrap.pdc && bootstrap.pdc_indication_id)
 		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_indication_id);
+	release_client(&bootstrap, QMI_CLIENT(bootstrap.pdc));
 	g_clear_object(&bootstrap.pdc);
 #endif
+	release_client(&bootstrap, QMI_CLIENT(bootstrap.uim));
 	g_clear_object(&bootstrap.uim);
 	g_clear_object(&bootstrap.device);
 	g_clear_object(&bootstrap.bus);

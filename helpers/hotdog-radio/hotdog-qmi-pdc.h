@@ -18,6 +18,7 @@ int hotdog_qmi_pdc_deactivate_input(unsigned int subscription, uint32_t token,
 int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *output,
 				   uint32_t expected_token,
 				   struct hotdog_pdc_id *active,
-				   struct hotdog_pdc_id *pending);
+				   struct hotdog_pdc_id *pending,
+				   uint16_t *remote_result);
 
 #endif

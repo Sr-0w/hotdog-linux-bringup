@@ -128,7 +128,8 @@ static int copy_id(GArray *source, struct hotdog_pdc_id *destination)
 int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *output,
 				   uint32_t expected_token,
 				   struct hotdog_pdc_id *active,
-				   struct hotdog_pdc_id *pending)
+				   struct hotdog_pdc_id *pending,
+				   uint16_t *remote_result)
 {
 	GArray *active_array = NULL, *pending_array = NULL;
 	GError *error = NULL;
@@ -136,8 +137,9 @@ int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *outp
 	guint16 indication_result;
 	int result;
 
-	if (!output || !active || !pending)
+	if (!output || !active || !pending || !remote_result)
 		return -EINVAL;
+	*remote_result = 0;
 	if (!qmi_indication_pdc_get_selected_config_output_get_token(output, &token, &error) ||
 	    !qmi_indication_pdc_get_selected_config_output_get_indication_result(
 		    output, &indication_result, &error)) {
@@ -146,8 +148,10 @@ int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *outp
 	}
 	if (token != expected_token)
 		return -ESTALE;
-	if (indication_result)
+	if (indication_result) {
+		*remote_result = indication_result;
 		return -EREMOTEIO;
+	}
 	qmi_indication_pdc_get_selected_config_output_get_active_id(
 		output, &active_array, NULL);
 	qmi_indication_pdc_get_selected_config_output_get_pending_id(
