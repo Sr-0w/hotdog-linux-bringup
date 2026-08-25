@@ -438,10 +438,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The current slice is packaged as `hotdog-radio-bootstrap-0.19-r0` plus its
+The current slice is packaged as `hotdog-radio-bootstrap-0.20-r0` plus its
 OpenRC service. The aarch64 APKs have SHA-256
-`834bf9c0effcfab94b88de3d28db2d2b45d4912956d9e31c59ef9f348b42ff70`
-and `9156a110e0b8cc335a0328ae9e6da5238a6851311fb851b9af05713d82e6c340`.
+`6247172487f16abbf12e603b9aa64f5372579e5b5d539b7da1c25c8f1754d7cc`
+and `6b8ea7db8bc87d887228caf37f6b4db67e4270c257f943b85dd4e35f2032041b`.
 The default service writes boot ID, kernel identity, UIM and PDC output
 atomically to `/run/hotdog-radio/observation`; it remains read-only. PDC
 mutation requires a separate boot-bound approval manifest. The OpenRC

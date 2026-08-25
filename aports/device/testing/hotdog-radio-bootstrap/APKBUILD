@@ -1,5 +1,5 @@
 pkgname=hotdog-radio-bootstrap
-pkgver=0.19
+pkgver=0.20
 pkgrel=0
 pkgdesc="Verified radio bootstrap and lifecycle supervisor for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
@@ -11,7 +11,7 @@ depends="libqmi libqrtr-glib"
 makedepends="glib-dev libqmi-dev libqrtr-glib-dev pkgconf"
 subpackages="$pkgname-openrc"
 
-_commit="24f1e2fdb755b9a4752703471e18c2bfc1d164f0"
+_commit="aa92d6d8e24bfb5928e79aa987a3d2d88b65d385"
 source="
 	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
 	hotdog-radio-bootstrap.initd
@@ -54,6 +54,7 @@ build() {
 		-Ihelpers/hotdog-radio \
 		helpers/hotdog-radio/hotdog-radio-supervisord.c \
 		helpers/hotdog-radio/hotdog-radio-supervisor.c \
+		helpers/hotdog-radio/hotdog-radio-reattest.c \
 		helpers/hotdog-radio/hotdog-radio-readiness.c \
 		helpers/hotdog-radio/hotdog-mcfg-runtime.c \
 		helpers/hotdog-radio/hotdog-pdc.c \
@@ -77,6 +78,7 @@ build() {
 	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
 		-Ihelpers/hotdog-radio \
 		helpers/hotdog-radio/hotdog-wds-profile-probe.c \
+		helpers/hotdog-radio/hotdog-qmi-wds-discovery.c \
 		helpers/hotdog-radio/hotdog-qmi-wds-profile.c \
 		helpers/hotdog-radio/hotdog-ims-bearer.c \
 		helpers/hotdog-radio/hotdog-network.c \
@@ -106,7 +108,7 @@ openrc() {
 }
 
 sha512sums="
-ce85b7505be49909cba409edd3b137d95b809694188e040e747ba0844135673956b96a982f9057fccb4d1f3a11a32a37d1c81886cf566bf92e3c6ce129439fd3  hotdog-radio-bootstrap-24f1e2fdb755b9a4752703471e18c2bfc1d164f0.tar.gz
+5a3cfea99c7c6bad95c61f89a312ce91a769558df43bd7ec50935d6b33f2d7b002502e0fe5608e3800e2dd795d274adefc5eb1cf88bc968ab7da7ceaea3d3885  hotdog-radio-bootstrap-aa92d6d8e24bfb5928e79aa987a3d2d88b65d385.tar.gz
 4daa5a5aad64e5b804de6d08c2ed4224dfda36f45edca3af7cfe0bc47820f5407f9e6ecdf5f02fe3e2fe67f9f483009b7656b9a051c796e2b90ba9d54cfb21a0  hotdog-radio-bootstrap.initd
 5bc713a246425e9748689aad0a95b30e184cc1322c6b0e9c1080f2f9b7a5724a866b2c01d66305b25abee39c265fac27df280e172967202d96980f9a9c3b96b8  hotdog-radio-supervisor.initd
 65c68b25a4f8d8b914da5b7aa2f4bb3193cd7205da3f048904b812f92a8d3dcaa36003d40862133f791f8ac260a49eb9d322848b68cd18bd43f517fe3d1f7a5c  hotdog-imsd.initd

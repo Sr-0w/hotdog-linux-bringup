@@ -456,6 +456,9 @@ validate_hotdog_wifi_package_contract() {
 	grep -q 'hotdog-radio-supervisord' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap package does not build the lifecycle supervisor"
+	grep -q 'hotdog-radio-reattest.c' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "radio supervisor package omits post-PIN request validation"
 	grep -q 'hotdog-imsd' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap package does not build the IMSA owner"
@@ -724,6 +727,9 @@ validate_hotdog_radio_state_contract() {
 	grep -q 'hotdog-wds-profile-probe.c' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "WDS profile probe is not built by the radio package"
+	grep -q 'hotdog-qmi-wds-discovery.c' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "radio package probe omits shared WDS discovery"
 	grep -q 'usr/libexec/hotdog-wds-profile-probe' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "WDS profile probe is not installed by the radio package"
