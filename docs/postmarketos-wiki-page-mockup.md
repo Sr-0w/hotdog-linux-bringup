@@ -496,7 +496,9 @@ Charging termination, low-battery behaviour, JEITA/thermal policy, off-mode char
 * The internal display has unresolved intermittent DSI transport errors, primarily affecting the 90 Hz path.
 * Touch/input resume lifecycle still requires broader validation.
 * DisplayPort audio is not working.
-* UFS inline encryption/ICE is not currently used by the working storage path.
+* UFS ICE and the blk-crypto profile are operational. The current root
+  filesystem is not claimed encrypted; encrypted-volume provisioning and
+  ciphertext validation remain separate work.
 * Camera image processing and colour calibration are not production-ready.
 * Camera flash synchronization with capture frames remains incomplete.
 * The earpiece, headset path and several microphone/audio routes are not yet supported.

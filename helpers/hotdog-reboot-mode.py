@@ -23,13 +23,13 @@ import sys
 LINUX_REBOOT_MAGIC1 = 0xFEE1DEAD
 LINUX_REBOOT_MAGIC2 = 672274793
 LINUX_REBOOT_CMD_RESTART2 = 0xA1B2C3D4
+SYS_REBOOT = 142  # aarch64
 
 # Ce que msm-poweroff.c ecrit en downstream, pour memoire : le cookie IMEM
 # accompagne toujours une raison PON.
 COOKIES = {
     "bootloader": 0x77665500,
     "recovery": 0x77665502,
-    "rtc": 0x77665503,
 }
 
 
@@ -39,26 +39,32 @@ def main():
     if len(args) != 1:
         sys.exit(__doc__.strip().splitlines()[0])
     mode = args[0]
+    if mode not in COOKIES:
+        sys.exit("mode non supporte: %s" % mode)
 
     cookie = COOKIES.get(mode)
     print("mode=%s%s" % (mode,
                          "  cookie IMEM attendu=0x%08x" % cookie if cookie else
-                         "  (pas de cookie connu, le noyau decidera)"))
+                         "  (pas de cookie connu, le noyau decidera)"), flush=True)
     if dry:
         print("dry-run : reboot(RESTART2, %r) non emis" % mode)
         return 0
     if os.geteuid() != 0:
         sys.exit("a lancer en root")
 
-    libc = ctypes.CDLL("libc.so.6", use_errno=True)
-    libc.reboot.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                            ctypes.c_char_p]
+    # La fonction reboot() de la libc ne prend qu'un argument : lui passer les
+    # quatre de l'appel systeme rend EINVAL, et cet EINVAL ne dit rien du
+    # materiel. Seul syscall() transporte la chaine.
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    libc.syscall.argtypes = [ctypes.c_long, ctypes.c_long, ctypes.c_long,
+                             ctypes.c_long, ctypes.c_char_p]
     os.sync()
-    rc = libc.reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
-                     LINUX_REBOOT_CMD_RESTART2, mode.encode())
+    rc = libc.syscall(SYS_REBOOT, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+                      LINUX_REBOOT_CMD_RESTART2, mode.encode())
     # On n'arrive ici que si l'appel a echoue.
     err = ctypes.get_errno()
-    sys.exit("reboot(RESTART2, %r) a echoue: rc=%d errno=%d (%s)"
+    sys.exit("syscall(reboot, RESTART2, %r) a echoue: rc=%d errno=%d (%s)"
              % (mode, rc, err, os.strerror(err)))
 
 

@@ -1063,11 +1063,13 @@ validate_hotdog_avb_contract() {
 
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
+	local reboot_helper="helpers/hotdog-reboot-mode.py"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
 	local initramfs_builder="scripts/build-mainline-pmos-wrapper-initramfs.sh"
 	local dtb_builder="scripts/build-mainline-pmos-boot-dtb.sh"
 
 	[ -f "$source" ] || die "missing rescue supervisor source: $source"
+	[ -f "$reboot_helper" ] || die "missing userspace reboot-mode helper"
 	[ -x "$builder" ] || die "missing executable rescue supervisor builder: $builder"
 	[ -x "$initramfs_builder" ] ||
 		die "missing executable initramfs builder: $initramfs_builder"
@@ -1106,6 +1108,13 @@ validate_rescue_supervisor_source() {
 		die "mainline boot DTB builder lacks the PM8150 Fastboot mode"
 	grep -q 'mode-recovery 1' "$dtb_builder" ||
 		die "mainline boot DTB builder lacks the PM8150 recovery mode"
+	grep -q 'SYS_REBOOT = 142' "$reboot_helper" ||
+		die "userspace reboot helper does not use the aarch64 syscall number"
+	grep -q 'libc.syscall' "$reboot_helper" ||
+		die "userspace reboot helper does not issue raw RESTART2"
+	if grep -q 'libc.reboot' "$reboot_helper"; then
+		die "userspace reboot helper calls the one-argument libc wrapper"
+	fi
 }
 
 validate_bounded_exec_source() {
