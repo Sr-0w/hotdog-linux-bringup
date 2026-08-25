@@ -4,6 +4,7 @@
 #include "hotdog-ims-state.h"
 #include "hotdog-mcfg-runtime.h"
 #include "hotdog-qmi-imsa.h"
+#include "hotdog-qmi-ims-session.h"
 #include "hotdog-qmi-wds-discovery.h"
 #include "hotdog-radio-readiness.h"
 
@@ -22,6 +23,19 @@
 #define DEFAULT_IMS_BEARER_PATH "/run/hotdog-radio/ims-bearer"
 #define DEFAULT_BOOT_ID_PATH "/proc/sys/kernel/random/boot_id"
 #define DEFAULT_RUNTIME_MANIFEST "/usr/share/hotdog-radio/mcfg/MANIFEST"
+#define DEFAULT_IP_PATH "/usr/sbin/ip"
+
+/* The OxygenOS 10 msmnile data configuration fixes the kernel-facing side
+ * of the IMS path: the physical device is rmnet_ipa0 behind the IPA driver,
+ * with MAPv4 aggregation. Only the mux is dynamic, and rmnet allocates it. */
+#define RMNET_DRIVER "ipa"
+#define RMNET_BASE_IFNAME "rmnet_ipa0"
+#define RMNET_LINK_PREFIX "ims"
+#define RMNET_OFFLOAD "MAPv4"
+
+/* IFF_UP. <net/if.h> hides the flag behind feature-test macros this file
+ * deliberately keeps narrow, and the value is kernel ABI. */
+#define NET_FLAG_UP 0x1u
 
 /* The IMSA side counts subscriptions with the telephony bound and the bearer
  * side with the network one. They are indexed by the same subscription here,
@@ -37,10 +51,13 @@ struct imsd_subscription {
 	unsigned int index;
 	QmiClientImsa *client;
 	struct hotdog_qmi_wds_discovery discovery;
+	struct hotdog_qmi_ims_session session;
+	struct hotdog_ims_netconfig_plan netconfig;
 	gulong registration_handler;
 	gulong services_handler;
 	bool registration_indicated;
 	bool services_indicated;
+	bool base_was_up;
 };
 
 struct imsd {
@@ -57,9 +74,11 @@ struct imsd {
 	char *bearer_path;
 	char *boot_id_path;
 	char *runtime_manifest;
+	char *ip_path;
 	unsigned int node;
 	unsigned int next_subscription;
 	unsigned int next_discovery;
+	unsigned int next_session;
 	unsigned int generation;
 	gulong node_removed_handler;
 	guint readiness_poll_id;
@@ -173,6 +192,24 @@ static int publish_bearer(struct imsd *imsd)
 }
 
 static void start_next_discovery(struct imsd *imsd);
+static void start_next_session(struct imsd *imsd);
+
+static void bearer_failed(struct imsd *imsd, unsigned int index, int result)
+{
+	struct hotdog_ims_bearer_subscription_state *bearer =
+		&imsd->bearer.subscriptions[index];
+
+	bearer->status = HOTDOG_IMS_BEARER_FAILED;
+	bearer->error = result < 0 ? (unsigned int)-result : EPROTO;
+	bearer->mux_id = 0;
+	bearer->route_table = 0;
+	bearer->fwmark = 0;
+	bearer->ifname[0] = '\0';
+	bearer->pcscf_address_count = 0;
+	bearer->pcscf_domain_count = 0;
+	bearer->residue = false;
+	bearer->residue_mask = 0;
+}
 
 static void discovery_done(struct hotdog_qmi_wds_discovery *discovery,
 			   int result, void *user_data)
@@ -235,8 +272,10 @@ static void start_next_discovery(struct imsd *imsd)
 	while (imsd->next_discovery < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS &&
 	       !imsd->bearer.subscriptions[imsd->next_discovery].populated)
 		imsd->next_discovery++;
-	if (imsd->next_discovery == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS)
+	if (imsd->next_discovery == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS) {
+		start_next_session(imsd);
 		return;
+	}
 	subscription = &imsd->subscriptions[imsd->next_discovery];
 	result = hotdog_qmi_wds_discovery_start(
 		&subscription->discovery, imsd->device, subscription->index,
@@ -252,6 +291,221 @@ static void start_next_discovery(struct imsd *imsd)
 		result < 0 ? (unsigned int)-result : EPROTO;
 	g_printerr("subscription %u WDS discovery start failed: %d\n",
 		   subscription->index, result);
+	publish_bearer(imsd);
+	finish(imsd, 1);
+}
+
+/* Whether the base rmnet device was already up when the bearer claimed it. The
+ * netconfig plan needs this so its rollback never takes down a link this daemon
+ * did not raise. */
+static bool base_link_is_up(const char *ifname)
+{
+	char path[64];
+	unsigned long flags;
+	FILE *stream;
+	int items;
+
+	if (snprintf(path, sizeof(path), "/sys/class/net/%s/flags", ifname) >=
+	    (int)sizeof(path))
+		return false;
+	stream = fopen(path, "r");
+	if (!stream)
+		return false;
+	items = fscanf(stream, "%lx", &flags);
+	fclose(stream);
+	return items == 1 && (flags & NET_FLAG_UP);
+}
+
+static uint32_t bearer_residue_mask(const struct imsd_subscription *subscription)
+{
+	const struct hotdog_ims_executor *executor = &subscription->session.executor;
+	uint32_t mask = 0;
+	size_t leg;
+
+	if (subscription->netconfig.residue)
+		mask |= HOTDOG_IMS_RESIDUE_CONFIG;
+	for (leg = 0; leg < HOTDOG_IMS_EXECUTOR_MAX_LEGS; leg++)
+		if (executor->packet_handles[leg])
+			mask |= HOTDOG_IMS_RESIDUE_PACKET;
+	if (executor->clients_owned)
+		mask |= HOTDOG_IMS_RESIDUE_CLIENT;
+	if (executor->link_owned)
+		mask |= HOTDOG_IMS_RESIDUE_LINK;
+	return mask;
+}
+
+static void bearer_clear_link(struct hotdog_ims_bearer_subscription_state *bearer)
+{
+	bearer->mux_id = 0;
+	bearer->route_table = 0;
+	bearer->fwmark = 0;
+	bearer->ifname[0] = '\0';
+	bearer->pcscf_address_count = 0;
+	bearer->pcscf_domain_count = 0;
+}
+
+static void bearer_set_ifname(
+	struct hotdog_ims_bearer_subscription_state *bearer, const char *ifname)
+{
+	memcpy(bearer->ifname, ifname, sizeof(bearer->ifname));
+	bearer->ifname[sizeof(bearer->ifname) - 1] = '\0';
+}
+
+static void configure_required(struct imsd_subscription *subscription)
+{
+	struct imsd *imsd = subscription->imsd;
+	struct hotdog_qmi_ims_session *session = &subscription->session;
+	const struct hotdog_bearer_runtime *runtime =
+		hotdog_qmi_ims_session_runtime(session);
+	int result;
+
+	subscription->base_was_up = base_link_is_up(RMNET_BASE_IFNAME);
+	result = runtime ? hotdog_ims_netconfig_plan_build(
+				   imsd->ip_path, RMNET_BASE_IFNAME,
+				   subscription->base_was_up, session->executor.ifname,
+				   subscription->index,
+				   subscription->discovery.selection.family, runtime,
+				   &subscription->netconfig)
+			 : -EINVAL;
+	if (!result)
+		result = hotdog_ims_netconfig_apply(
+			&subscription->netconfig, hotdog_ims_netconfig_spawn, NULL);
+	if (result) {
+		g_printerr("subscription %u IMS link configuration failed: %d "
+			   "residue=%u\n", subscription->index, result,
+			   subscription->netconfig.residue);
+		/* A failed apply has already rolled its own steps back; the
+		 * session unwinds its QMI ownership from here. */
+		hotdog_qmi_ims_session_configuration_failed(
+			session, result < 0 ? (unsigned int)-result : EPROTO);
+		return;
+	}
+	printf("ims-link subscription=%u ifname=%s mux=%u table=%u steps=%zu\n",
+	       subscription->index, session->executor.ifname,
+	       session->executor.mux_id, subscription->netconfig.table,
+	       subscription->netconfig.count);
+	hotdog_qmi_ims_session_configured(session);
+}
+
+static void session_event(struct hotdog_qmi_ims_session *session,
+			  enum hotdog_qmi_ims_session_event event,
+			  unsigned int error, void *user_data)
+{
+	struct imsd_subscription *subscription = user_data;
+	struct imsd *imsd = subscription->imsd;
+	struct hotdog_ims_bearer_subscription_state *bearer =
+		&imsd->bearer.subscriptions[subscription->index];
+	const struct hotdog_bearer_runtime *runtime;
+	uint32_t mask;
+
+	/* An SSR unwind reports through this callback too, after the teardown
+	 * has already been decided. */
+	if (imsd->finished)
+		return;
+	switch (event) {
+	case HOTDOG_QMI_IMS_SESSION_CONFIGURE_REQUIRED:
+		configure_required(subscription);
+		return;
+	case HOTDOG_QMI_IMS_SESSION_UNCONFIGURE_REQUIRED:
+		if (hotdog_ims_netconfig_rollback(&subscription->netconfig,
+						  hotdog_ims_netconfig_spawn, NULL))
+			g_printerr("subscription %u IMS link rollback failed: "
+				   "residue=%u\n", subscription->index,
+				   subscription->netconfig.residue);
+		hotdog_qmi_ims_session_unconfigured(session);
+		return;
+	case HOTDOG_QMI_IMS_SESSION_UP:
+		runtime = hotdog_qmi_ims_session_runtime(session);
+		bearer->status = HOTDOG_IMS_BEARER_UP;
+		bearer->error = 0;
+		bearer->mux_id = session->executor.mux_id;
+		bearer->route_table = subscription->netconfig.table;
+		bearer->fwmark = subscription->netconfig.fwmark;
+		bearer_set_ifname(bearer, session->executor.ifname);
+		bearer->pcscf_address_count = runtime ? runtime->pcscf_address_count : 0;
+		bearer->pcscf_domain_count = runtime ? runtime->pcscf_domain_count : 0;
+		printf("ims-bearer subscription=%u up ifname=%s mux=%u pcscf=%zu/%zu\n",
+		       subscription->index, bearer->ifname, bearer->mux_id,
+		       bearer->pcscf_address_count, bearer->pcscf_domain_count);
+		break;
+	case HOTDOG_QMI_IMS_SESSION_DOWN:
+		bearer_clear_link(bearer);
+		if (error) {
+			bearer->status = HOTDOG_IMS_BEARER_FAILED;
+			bearer->error = error;
+		} else {
+			/* Nothing is established and nothing failed, so the
+			 * subscription is back to what its selected profile
+			 * alone describes. */
+			bearer->status = HOTDOG_IMS_BEARER_STARTING;
+			bearer->error = 0;
+		}
+		printf("ims-bearer subscription=%u down reason=%u\n",
+		       subscription->index, error);
+		break;
+	case HOTDOG_QMI_IMS_SESSION_BLOCKED:
+		mask = bearer_residue_mask(subscription);
+		if (!mask) {
+			/* Blocked with nothing actually left behind is a plain
+			 * failure; claiming residue would send the supervisor
+			 * after something that does not exist. */
+			bearer_failed(imsd, subscription->index,
+				      -(int)(error ? error : EPROTO));
+		} else {
+			bearer->status = HOTDOG_IMS_BEARER_BLOCKED;
+			bearer->error = error ? error : EPROTO;
+			bearer->residue = true;
+			bearer->residue_mask = mask;
+			if (mask & HOTDOG_IMS_RESIDUE_LINK) {
+				bearer->mux_id = session->executor.mux_id;
+				bearer_set_ifname(bearer, session->executor.ifname);
+			} else {
+				bearer->mux_id = 0;
+				bearer->ifname[0] = '\0';
+			}
+		}
+		g_printerr("subscription %u IMS bearer blocked: error=%u residue=0x%x\n",
+			   subscription->index, error, mask);
+		publish_bearer(imsd);
+		finish(imsd, 1);
+		return;
+	}
+	if (publish_bearer(imsd)) {
+		finish(imsd, 1);
+		return;
+	}
+	imsd->next_session = subscription->index + 1;
+	start_next_session(imsd);
+}
+
+static void start_next_session(struct imsd *imsd)
+{
+	struct hotdog_qmi_ims_session_config config;
+	struct imsd_subscription *subscription;
+	int result;
+
+	while (imsd->next_session < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS &&
+	       imsd->bearer.subscriptions[imsd->next_session].status !=
+		       HOTDOG_IMS_BEARER_STARTING)
+		imsd->next_session++;
+	if (imsd->next_session == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS)
+		return;
+	subscription = &imsd->subscriptions[imsd->next_session];
+	memset(&config, 0, sizeof(config));
+	result = hotdog_qmi_rmnet_plan_build(
+		RMNET_DRIVER, 0, RMNET_BASE_IFNAME, RMNET_LINK_PREFIX,
+		RMNET_OFFLOAD, RMNET_OFFLOAD, &config.rmnet);
+	if (!result) {
+		config.device = imsd->device;
+		config.profile = subscription->discovery.selection;
+		result = hotdog_qmi_ims_session_start(
+			&subscription->session, &config, session_event, subscription);
+	}
+	if (!result)
+		return;
+	g_printerr("subscription %u IMS bearer start failed: %d\n",
+		   subscription->index, result);
+	bearer_failed(imsd, subscription->index, result);
 	publish_bearer(imsd);
 	finish(imsd, 1);
 }
@@ -507,8 +761,12 @@ static void node_removed(QrtrBus *bus, guint node_id, struct imsd *imsd)
 	 * outstanding discovery synchronously, and those completions must not
 	 * republish state the removal has already invalidated. */
 	finish(imsd, 1);
-	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++)
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
 		hotdog_qmi_wds_discovery_abort_ssr(&imsd->subscriptions[index].discovery);
+		/* Remote CIDs and packet handles died with the QMI generation;
+		 * only the still-local rmnet link is worth unwinding. */
+		hotdog_qmi_ims_session_ssr(&imsd->subscriptions[index].session);
+	}
 }
 
 static void bus_ready(GObject *source, GAsyncResult *res, struct imsd *imsd)
@@ -598,6 +856,8 @@ int main(int argc, char **argv)
 		  "Kernel boot ID", "FILE" },
 		{ "runtime-manifest", 0, 0, G_OPTION_ARG_FILENAME, &imsd.runtime_manifest,
 		  "Packaged MCFG manifest", "FILE" },
+		{ "ip-path", 0, 0, G_OPTION_ARG_FILENAME, &imsd.ip_path,
+		  "iproute2 binary used for IMS link configuration", "FILE" },
 		{ NULL }
 	};
 	size_t index;
@@ -618,9 +878,10 @@ int main(int argc, char **argv)
 	if (!imsd.bearer_path) imsd.bearer_path = g_strdup(DEFAULT_IMS_BEARER_PATH);
 	if (!imsd.boot_id_path) imsd.boot_id_path = g_strdup(DEFAULT_BOOT_ID_PATH);
 	if (!imsd.runtime_manifest) imsd.runtime_manifest = g_strdup(DEFAULT_RUNTIME_MANIFEST);
+	if (!imsd.ip_path) imsd.ip_path = g_strdup(DEFAULT_IP_PATH);
 	if (!imsd.readiness_path || !imsd.state_path || !imsd.bearer_path ||
-	    !imsd.boot_id_path || !imsd.runtime_manifest || imsd.node > UINT16_MAX ||
-	    imsd.generation > 1000000) {
+	    !imsd.boot_id_path || !imsd.runtime_manifest || !imsd.ip_path ||
+	    imsd.node > UINT16_MAX || imsd.generation > 1000000) {
 		g_printerr("invalid IMS daemon configuration\n");
 		result = -EINVAL;
 		goto out;
@@ -638,6 +899,7 @@ int main(int argc, char **argv)
 		imsd.subscriptions[index].imsd = &imsd;
 		imsd.subscriptions[index].index = index;
 		hotdog_qmi_wds_discovery_init(&imsd.subscriptions[index].discovery);
+		hotdog_qmi_ims_session_init(&imsd.subscriptions[index].session);
 		imsd.state.subscriptions[index].populated =
 			imsd.readiness.subscriptions[index].populated;
 		imsd.bearer.subscriptions[index].populated =
@@ -661,6 +923,7 @@ int main(int argc, char **argv)
 		if (subscription->discovery.active || subscription->discovery.residue)
 			hotdog_qmi_wds_discovery_abort_ssr(&subscription->discovery);
 		hotdog_qmi_wds_discovery_clear(&subscription->discovery);
+		hotdog_qmi_ims_session_clear(&subscription->session);
 		if (subscription->client && subscription->registration_handler)
 			g_signal_handler_disconnect(
 				subscription->client, subscription->registration_handler);
@@ -679,6 +942,7 @@ out:
 	g_free(imsd.state_path);
 	g_free(imsd.bearer_path);
 	g_free(imsd.boot_id_path);
+	g_free(imsd.ip_path);
 	g_free(imsd.runtime_manifest);
 	return result ? 1 : 0;
 }

@@ -410,10 +410,30 @@ No usable profile — none present, several equally eligible, or an unsupported
 family — gives `unavailable` with the reason, which is the expected outcome
 with no card and on a libqmi without the subscription-scoped profile API. Any
 other QMI failure gives `failed`, or `blocked` when the WDS client could not be
-released, so the supervisor can see the residue it must clear. Establishing the
-bearer from `starting` — link, sessions, P-CSCF and routing — remains the next
-phase; the executor and its transactional rollback already exist and are not
-yet driven by this daemon.
+released, so the supervisor can see the residue it must clear.
+
+From `starting` the same daemon drives the transactional executor, one
+subscription at a time. The kernel-facing side comes from the OxygenOS
+`msmnile` configuration — IPA driver, `rmnet_ipa0`, MAPv4 both ways, link
+prefix `ims` — and the mux is never named: rmnet allocates it and the executor
+retains what it returns. When the executor asks for local configuration the
+daemon builds the netconfig plan from the session's own Current Settings and
+applies it, then reports back; a failed apply has already rolled its own steps
+back, and the session unwinds its QMI ownership from there. The reverse event
+rolls the plan back before the session continues its teardown.
+
+Whether the base device was already up is read from
+`/sys/class/net/rmnet_ipa0/flags` before the plan is built, so a rollback never
+takes down a link this daemon did not raise. On success the record becomes `up`
+with the mux, interface, route table, firewall mark and P-CSCF counts. A clean
+stop returns the subscription to `starting`, which is exactly what its selected
+profile alone still describes. A session that ends with an error gives `failed`.
+`blocked` is reserved for real residue and its mask is derived from what the
+executor still owns — configuration, packet handles, CIDs, link — so a block
+with nothing left behind is recorded as a plain failure rather than sending the
+supervisor after something that does not exist.
+
+Registration, call audio and the RTP path remain.
 
 The packaged OpenRC graph does not place `hotdog-imsd` directly in a boot
 runlevel. The lifecycle supervisor creates verified readiness and starts the

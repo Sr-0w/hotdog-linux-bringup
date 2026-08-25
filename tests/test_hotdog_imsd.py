@@ -27,6 +27,8 @@ class HotdogImsdTests(unittest.TestCase):
             "hotdog-mbn.c", "hotdog-ims-bearer-state.c",
             "hotdog-qmi-wds-discovery.c", "hotdog-qmi-wds-profile.c",
             "hotdog-ims-bearer.c", "hotdog-network.c",
+            "hotdog-qmi-ims-session.c", "hotdog-ims-executor.c",
+            "hotdog-ims-netconfig.c", "hotdog-qmi-rmnet.c", "hotdog-qmi-wds.c",
         ]
         subprocess.run(
             ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
@@ -45,6 +47,7 @@ class HotdogImsdTests(unittest.TestCase):
         self.assertIn("--readiness=FILE", output)
         self.assertIn("--state=FILE", output)
         self.assertIn("--ims-bearer=FILE", output)
+        self.assertIn("--ip-path=FILE", output)
         self.assertNotIn("iccid", output.lower())
         self.assertNotIn("imsi", output.lower())
 
@@ -109,6 +112,54 @@ class HotdogImsdTests(unittest.TestCase):
         # those completions would republish state the removal invalidated.
         self.assertLess(body.index("finish(imsd, 1);"),
                         body.index("hotdog_qmi_wds_discovery_abort_ssr"))
+        self.assertIn("hotdog_qmi_ims_session_ssr", body)
+
+    def test_bearer_topology_matches_the_oxygenos_data_configuration(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        self.assertIn('#define RMNET_DRIVER "ipa"', source)
+        self.assertIn('#define RMNET_BASE_IFNAME "rmnet_ipa0"', source)
+        self.assertIn('#define RMNET_LINK_PREFIX "ims"', source)
+        self.assertIn('#define RMNET_OFFLOAD "MAPv4"', source)
+        # The mux is the one part OxygenOS leaves to DSI, so nothing here may
+        # name a fixed rmnet_data handle.
+        self.assertNotIn("rmnet_data", source)
+
+    def test_session_events_are_all_answered(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        for call in ("hotdog_qmi_ims_session_start",
+                     "hotdog_qmi_ims_session_configured",
+                     "hotdog_qmi_ims_session_configuration_failed",
+                     "hotdog_qmi_ims_session_unconfigured",
+                     "hotdog_qmi_ims_session_clear"):
+            self.assertIn(call, source)
+        # The link plan has to know whether it raised the base device, or its
+        # rollback would take down a link somebody else owned.
+        self.assertIn("base_was_up", source)
+        self.assertIn("hotdog_ims_netconfig_plan_build", source)
+        self.assertIn("hotdog_ims_netconfig_rollback", source)
+
+    def test_blocked_without_residue_is_recorded_as_a_plain_failure(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        blocked = source.index("case HOTDOG_QMI_IMS_SESSION_BLOCKED:")
+        body = source[blocked:source.index(
+            "static void start_next_session(struct imsd *imsd)\n{", blocked)]
+        # Claiming residue the executor never left would send the supervisor
+        # after something that does not exist.
+        self.assertIn("if (!mask)", body)
+        self.assertIn("bearer_failed(", body)
+        for flag in ("HOTDOG_IMS_RESIDUE_CONFIG", "HOTDOG_IMS_RESIDUE_PACKET",
+                     "HOTDOG_IMS_RESIDUE_CLIENT", "HOTDOG_IMS_RESIDUE_LINK"):
+            self.assertIn(flag, source)
+
+    def test_a_clean_session_stop_returns_the_subscription_to_starting(self) -> None:
+        source = (SOURCE / "hotdog-imsd.c").read_text()
+        down = source.index("case HOTDOG_QMI_IMS_SESSION_DOWN:")
+        body = source[down:source.index("case HOTDOG_QMI_IMS_SESSION_BLOCKED:")]
+        # A profile is still selected and nothing failed, which is exactly the
+        # state the validator calls starting.
+        self.assertIn("HOTDOG_IMS_BEARER_STARTING", body)
+        self.assertIn("HOTDOG_IMS_BEARER_FAILED", body)
+        self.assertIn("bearer_clear_link(bearer)", body)
 
 
 if __name__ == "__main__":
