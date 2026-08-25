@@ -30,6 +30,8 @@ MIC_CONTROLS = (
 INPUT_NAME = "Elliptic ultrasonic proximity"
 STATE_FILE = pathlib.Path("/run/hotdog-proximity")
 
+MICROPHONE_INDEX_MAX = 7
+
 SND_PCM_STREAM_PLAYBACK = 0
 SND_PCM_STREAM_CAPTURE = 1
 SND_PCM_FORMAT_S16_LE = 2
@@ -212,7 +214,7 @@ def wait_for_state(event_file, expected, timeout, output):
 
 
 def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
-          operation_mode=699):
+          operation_mode=699, microphone_index=0):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -237,6 +239,16 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     ramp_down = enable.parent / "ramp_down"
     if not ramp_down.exists():
         raise SmokeError("missing Elliptic ramp-down control")
+    # Older builds of the driver have no such control. They are still usable
+    # for everything else, so only refuse when a channel was actually asked
+    # for -- silently running on the DSP default is what hid this for days.
+    mic_control = enable.parent / "microphone_index"
+    if not mic_control.exists():
+        if microphone_index is not None:
+            raise SmokeError(
+                "driver has no microphone_index control; rebuild it or pass "
+                "--microphone-index none")
+        mic_control = None
     event_path = find_input_event()
     output = open(log_path, "a") if log_path else None
     hostless = None
@@ -245,6 +257,7 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     control_prestates = []
     events = 0
     mode_prestate = mode_control.read_text().strip()
+    mic_prestate = mic_control.read_text().strip() if mic_control else None
 
     try:
         log_line(output, "kernel=%s card=%d playback=%d capture=%d event=%s mode=%d"
@@ -260,6 +273,9 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
         # TX/RX PCMs. Some firmware revisions do not begin processing when
         # that order is reversed.
         mode_control.write_text("%d\n" % operation_mode)
+        if mic_control and microphone_index is not None:
+            mic_control.write_text("%d\n" % microphone_index)
+            log_line(output, "microphone-index %d" % microphone_index)
         enable.write_text("1\n")
         armed = True
 
@@ -356,6 +372,11 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
             mode_control.write_text(mode_prestate + "\n")
         except OSError as error:
             log_line(output, "ERROR mode rollback: %s" % error)
+        if mic_control and mic_prestate is not None:
+            try:
+                mic_control.write_text(mic_prestate + "\n")
+            except OSError as error:
+                log_line(output, "ERROR microphone-index rollback: %s" % error)
         STATE_FILE.write_text("unknown\n")
         if output:
             output.close()
@@ -365,12 +386,48 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     return 0
 
 
+def sweep(args):
+    """Try every microphone channel, one bounded run each.
+
+    Only worth running if channel 0 -- the value OxygenOS writes -- produces
+    nothing. Each run arms and rolls back on its own, so a failure on one
+    channel leaves nothing behind for the next.
+    """
+    print("Couvrez et decouvrez le haut du telephone sans vous arreter")
+    print("pendant tout le balayage. Journal: %s\n" % args.log)
+    found = []
+    for index in range(MICROPHONE_INDEX_MAX + 1):
+        print("  canal %d ... " % index, end="", flush=True)
+        try:
+            smoke(args.duration, args.log, False, False,
+                  args.operation_mode, index)
+        except (OSError, SmokeError, subprocess.CalledProcessError) as error:
+            print("rien (%s)" % error)
+            continue
+        print("EVENEMENT RECU")
+        found.append(index)
+    if not found:
+        print("\nAucun canal n'a produit le parametre 16.")
+        return 1
+    print("\nCanaux ayant produit un evenement: %s"
+          % ", ".join(str(i) for i in found))
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=60.0)
     parser.add_argument("--log", type=pathlib.Path)
     parser.add_argument("--operation-mode", type=int, choices=(693, 699),
                         default=699)
+    parser.add_argument("--microphone-index", default="0",
+                        help="channel the engine listens on; stock uses 0. "
+                             "'none' leaves the DSP on its own default, which "
+                             "is what every run before this one did.")
+    parser.add_argument("--sweep-microphone", action="store_true",
+                        help="try each channel in turn, keeping the engine "
+                             "down between runs. Cover and uncover the top of "
+                             "the phone continuously for the whole sweep.")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--interactive", action="store_true", dest="interactive")
     mode.add_argument("--monitor", action="store_false", dest="interactive")
@@ -379,18 +436,33 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.duration <= 0 or args.duration > 300:
         parser.error("duration must be in ]0, 300] seconds")
+    if args.microphone_index == "none":
+        args.microphone_index = None
+    else:
+        try:
+            args.microphone_index = int(args.microphone_index, 0)
+        except ValueError:
+            parser.error("--microphone-index takes an integer or 'none'")
+        if not 0 <= args.microphone_index <= MICROPHONE_INDEX_MAX:
+            parser.error("--microphone-index must be in [0, %d]"
+                         % MICROPHONE_INDEX_MAX)
+    if args.sweep_microphone:
+        args.interactive = False
     if args.electronic_probe:
         args.interactive = False
-    if args.interactive and args.log is None:
+    if (args.interactive or args.sweep_microphone) and args.log is None:
         args.log = pathlib.Path("/home/user/proximity-test-%s.log"
                                 % time.strftime("%Y%m%d-%H%M%S"))
-    if args.interactive and os.geteuid() != 0:
+    if (args.interactive or args.sweep_microphone) and os.geteuid() != 0:
         command = ["doas", sys.executable, str(pathlib.Path(__file__).resolve())]
         command.extend(sys.argv[1:])
         os.execvp(command[0], command)
+    if args.sweep_microphone:
+        return sweep(args)
     try:
         result = smoke(args.duration, args.log, args.interactive,
-                       args.electronic_probe, args.operation_mode)
+                       args.electronic_probe, args.operation_mode,
+                       args.microphone_index)
         if args.interactive:
             print("\nPASS: trois cycles near/far recus.")
             print("Journal: %s" % args.log)

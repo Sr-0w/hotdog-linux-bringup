@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import os
 import pathlib
 import tempfile
@@ -73,6 +75,30 @@ class EllipticProximitySmokeTests(unittest.TestCase):
 
             self.assertEqual(state, "near")
             self.assertEqual(state_file.read_text(), "near\n")
+
+    def test_microphone_index_is_bounded_and_may_be_left_to_the_dsp(self):
+        # Stock writes channel 0 on every boot. "none" reproduces what every
+        # run before this one did, which is to leave the DSP on its own
+        # default -- keep it reachable so the two can be compared.
+        for bad in ("8", "-1", "abc"):
+            with self.assertRaises(SystemExit):
+                smoke.main(["--microphone-index", bad, "--monitor"])
+
+    def test_sweep_covers_every_channel_once(self):
+        calls = []
+
+        def fake_smoke(duration, log, interactive, probe, mode, index):
+            calls.append(index)
+            raise smoke.SmokeError("no proximity event")
+
+        args = unittest.mock.Mock(duration=1.0, log=pathlib.Path("/dev/null"),
+                                  operation_mode=699)
+        with unittest.mock.patch.object(smoke, "smoke", fake_smoke), \
+                contextlib.redirect_stdout(io.StringIO()):
+            result = smoke.sweep(args)
+
+        self.assertEqual(result, 1)
+        self.assertEqual(calls, list(range(smoke.MICROPHONE_INDEX_MAX + 1)))
 
 
 if __name__ == "__main__":
