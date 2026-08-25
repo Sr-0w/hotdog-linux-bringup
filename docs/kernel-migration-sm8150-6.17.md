@@ -46,7 +46,7 @@ the final binding/maintenance cleanup. Its first offline build produced:
 | Artifact | SHA256 |
 |---|---|
 | `Image` | `dd99ebf24fef1343f43b693e4c228f3057759d4659eed5a0fef58aad769dd4ce` |
-| Hotdog DTB before final schema cleanup | `424274ebaaaf6302bc840063a138c34f620bdf12d550a0457cf928072840d436` |
+| Final Hotdog DTB | `0f30f299f7c1faaec7370ce735f921df917631495428d705e4bd434f99e7619a` |
 | Host-resolved config | `6bc1071a7b58fb215ee8a446b58230b3e87a48d69f80637188aeb0989a584c2c` |
 | `System.map` | `de9cb3fbf9c8a9bc753117a9f5eb1296f10bb392de36473aedaf317233bf31ad` |
 | `s6sy761.ko` | `340db8b61f3a9f18091891b8a6117d33fc5c0b77445328015812cdaec47b9385` |
@@ -80,7 +80,8 @@ boot must not be interpreted as restoring the full r181 feature matrix.
 - New panel and touch bindings: PASS under direct `dt-doc-validate`.
 - Full DT schema: retains pre-existing SM8150 common-tree warnings for UFS,
   PMIC, APR and RPMh naming; new Hotdog-specific schema findings are addressed.
-- Packaged pmaports build: pending.
+- Packaged pmaports build: PASS, strict isolated build, APK SHA256
+  `229373be81468c6c124fa754998200638fabc87a295bb1d8212c09667430fcd9`.
 - Full image assembly/offline image QA: pending.
 - Hardware boot: not run.
 

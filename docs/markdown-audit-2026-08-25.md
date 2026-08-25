@@ -13,17 +13,17 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **208 Markdown files**.
+Total: **210 Markdown files**.
 
 | Role | Count |
 |---|---:|
 | Audit register | 1 |
-| Current documentation | 29 |
+| Current documentation | 30 |
 | Disabled helper | 1 |
 | Evidence | 160 |
 | Evidence policy | 1 |
 | Mail archive | 1 |
-| Package documentation | 4 |
+| Package documentation | 5 |
 | Package history | 1 |
 | Project history | 3 |
 | Release record | 5 |
@@ -41,6 +41,7 @@ Total: **208 Markdown files**.
 | `aports/device/testing/firmware-oneplus-hotdog-modem-oos10/README.md` | Package documentation | Reviewed against current package roles |
 | `aports/device/testing/firmware-oneplus-hotdog-slpi/README.md` | Package documentation | Reviewed against current package roles |
 | `aports/device/testing/linux-oneplus-hotdog-mainline616/README.md` | Package documentation | Reviewed against current package roles |
+| `aports/device/testing/linux-oneplus-hotdog-mainline617-clean/README.md` | Package documentation | Reviewed against current package roles |
 | `aports/device/testing/linux-oneplus-hotdog-mainline617-k1/README.md` | Package history | Historical K1 package scope stated |
 | `docs/README.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/android-reference.md` | Current documentation | Reviewed against Alpha 5 and current status |
@@ -216,6 +217,7 @@ Total: **208 Markdown files**.
 | `docs/factory-calibration.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/hardware-roadmap.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/host-setup.md` | Current documentation | Reviewed against Alpha 5 and current status |
+| `docs/kernel-migration-sm8150-6.17.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/mainline-bringup.md` | Project history | Historical scope/supersession stated |
 | `docs/markdown-audit-2026-08-25.md` | Audit register | Generated and checked by this audit tool |
 | `docs/pmaports-upstreaming.md` | Current documentation | Reviewed against Alpha 5 and current status |

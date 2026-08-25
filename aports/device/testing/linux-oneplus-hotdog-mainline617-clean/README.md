@@ -49,3 +49,19 @@ DTB reservations/devices, built-in panel and touch module vermagic.
 This is an offline baseline only. Do not replace the hardware-tested kernel or
 publish a release from it until a packaged image has passed the normal offline
 image gate and a supervised hardware boot.
+
+## First strict package build
+
+The isolated pmbootstrap build completed on 2026-08-25. Package readback
+confirmed the distinct kernelrelease, 828 installed modules, matching module
+vermagic, Hotdog DTB and the exact direct-boot header fields.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r0.apk` | 22,934,952 | `229373be81468c6c124fa754998200638fabc87a295bb1d8212c09667430fcd9` |
+| packaged `boot/vmlinuz` | 31,492,608 | `ac520482fb0b5d13005db60dd3ecc9ee0868c7dfc81aaf6a7f0c40da2a98c9a1` |
+| packaged Hotdog DTB | 100,101 | `0f30f299f7c1faaec7370ce735f921df917631495428d705e4bd434f99e7619a` |
+| packaged `s6sy761.ko` | - | `4dd2988cb68386746cb56e10e3f83a426c05e03159f1be3a161c6bbc1ca8cb5a` |
+
+These hashes describe the offline package checkpoint, not a hardware-approved
+boot image or release.
