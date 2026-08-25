@@ -71,6 +71,7 @@ Recent evidence and current regression records:
 - [Read-only DMS shutdown gate](evidence/2026-08-25-radio-dms-shutdown-gate.md)
 - [Read-only NAS pre-online baseline](evidence/2026-08-25-radio-nas-preonline.md)
 - [Read-only resident PDC catalog](evidence/2026-08-25-radio-pdc-resident-catalog.md)
+- [PDC apply no-SIM fail-closed validation](evidence/2026-08-25-radio-pdc-apply-nosim.md)
 - [OxygenOS 11/12 modem firmware bundle](evidence/2026-08-25-oxygenos-modem-firmware-bundle.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)

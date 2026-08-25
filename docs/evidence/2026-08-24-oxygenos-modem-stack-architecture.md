@@ -182,10 +182,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The read-only slice is packaged as `hotdog-radio-bootstrap-0.11-r0` plus an
+The current slice is packaged as `hotdog-radio-bootstrap-0.12-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
-`86b143742d9a465408349548d068771ee919a3c3408b87db360b9f1b82eea8b8`
-and `aa86308d2648b70a975720b209e60e02771d85af0709fb25323f8707df25cb90`.
+`a1a6f56dda0ca70613047bc5b33bc60d2e009b43c9adde02c9a2cc77b9189b06`
+and `017c8e4294275e87a7c958f70fafdf30a0e81f4f72759d8964bdadd76c1c8dc7`.
 The binary links to the four subscription setters from libqmi `r2`. The
 disabled service writes boot ID, kernel identity, UIM and PDC output atomically
 to `/run/hotdog-radio/observation`. It deliberately does not create the future
@@ -369,6 +369,9 @@ transaction controller. Bus node removal/addition and PDC service return drive
 the reconnect/rebind path. A committed transaction stops before DMS Online and
 before deferred stale cleanup; those are separate post-verification phases and
 no readiness file is published yet.
+The target no-SIM apply probe fails at the populated-GW gate before reading a
+deliberately absent approval and leaves resident PDC count, DMS and MPSS
+unchanged; see [the apply fail-closed validation](2026-08-25-radio-pdc-apply-nosim.md).
 
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
