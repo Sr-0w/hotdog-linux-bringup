@@ -213,10 +213,18 @@ capabilities, fails in-flight SMS with `ENETRESET`, ends calls, drops audio and
 advances the generation so stale indications cannot complete new operations.
 
 `hotdog-qmi-imsa` now binds a dedicated client to subscription 0..2, registers
-for registration/service indications and decodes registration, WWAN/WLAN RAT,
-SIP error plus independently available voice, video and SMS capabilities into
-the model. It deliberately does not infer UT or RCS from base IMSA status;
-those remain owned by their separate service transports.
+for registration/service indications and decodes both initial responses and
+partial asynchronous updates. The model retains the global registration RAT,
+SIP error, available and limited masks, plus WWAN/WLAN RAT independently for
+voice, video and SMS. A service indication may precede registration and may
+omit its own RAT; in that case the proven registration RAT is the only allowed
+fallback. Unregistration clears every effective and limited capability, while
+unknown enums or a registered state without technology fail closed. Automatic
+domain selection still requires `registered` plus an available capability, so
+limited service never becomes a callable transport. The adapter deliberately
+does not infer UT or RCS from base IMSA status; those remain owned by their
+separate service transports. No APN, RTP or IMS call claim follows from IMSA
+alone.
 
 ## Mainline ownership model
 

@@ -97,8 +97,12 @@ int hotdog_telephony_set_ims(struct hotdog_telephony *telephony,
 		return -ENODEV;
 	state->ims.registration = registration;
 	state->ims.rat = rat;
-	state->ims.capabilities = registration == HOTDOG_IMS_REGISTERED ? capabilities : 0;
+	state->ims.capabilities = capabilities;
+	state->ims.limited_capabilities = 0;
 	state->ims.sip_code = sip_code;
+	state->ims.voice_rat = capabilities & HOTDOG_IMS_CAP_VOICE ? rat : HOTDOG_IMS_RAT_UNKNOWN;
+	state->ims.video_rat = capabilities & HOTDOG_IMS_CAP_VIDEO ? rat : HOTDOG_IMS_RAT_UNKNOWN;
+	state->ims.sms_rat = capabilities & HOTDOG_IMS_CAP_SMS ? rat : HOTDOG_IMS_RAT_UNKNOWN;
 	return 0;
 }
 
@@ -648,10 +652,8 @@ void hotdog_telephony_ssr(struct hotdog_telephony *telephony)
 	telephony->generation++;
 	for (i = 0; i < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; i++) {
 		telephony->subscriptions[i].cs_registered = false;
-		telephony->subscriptions[i].ims.registration = HOTDOG_IMS_NONE;
-		telephony->subscriptions[i].ims.rat = HOTDOG_IMS_RAT_UNKNOWN;
-		telephony->subscriptions[i].ims.capabilities = 0;
-		telephony->subscriptions[i].ims.sip_code = 0;
+		memset(&telephony->subscriptions[i].ims, 0,
+		       sizeof(telephony->subscriptions[i].ims));
 	}
 	for (i = 0; i < HOTDOG_TELEPHONY_MAX_SMS; i++) {
 		struct hotdog_sms *message = &telephony->messages[i];

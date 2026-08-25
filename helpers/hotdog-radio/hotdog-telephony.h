@@ -85,7 +85,11 @@ struct hotdog_ims_state {
 	enum hotdog_ims_registration registration;
 	enum hotdog_ims_rat rat;
 	uint32_t capabilities;
+	uint32_t limited_capabilities;
 	unsigned int sip_code;
+	enum hotdog_ims_rat voice_rat;
+	enum hotdog_ims_rat video_rat;
+	enum hotdog_ims_rat sms_rat;
 };
 
 struct hotdog_supplementary {

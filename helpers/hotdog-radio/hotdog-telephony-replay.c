@@ -76,10 +76,12 @@ static void status(const struct hotdog_telephony *telephony)
 
 		if (!sub->populated)
 			continue;
-		printf("sub%zu=cs%u,emergency%u,ims-%s,rat%u,caps0x%x,sip%u,cw%u,clip%u,clir%u\n",
+		printf("sub%zu=cs%u,emergency%u,ims-%s,rat%u,caps0x%x,limited0x%x,sip%u,service-rats%u/%u/%u,cw%u,clip%u,clir%u\n",
 		       i, sub->cs_registered, sub->emergency_available,
 		       hotdog_ims_registration_name(sub->ims.registration), sub->ims.rat,
-		       sub->ims.capabilities, sub->ims.sip_code,
+		       sub->ims.capabilities, sub->ims.limited_capabilities,
+		       sub->ims.sip_code, sub->ims.voice_rat, sub->ims.video_rat,
+		       sub->ims.sms_rat,
 		       sub->supplementary.call_waiting, sub->supplementary.clip,
 		       sub->supplementary.clir_mode);
 	}
