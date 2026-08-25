@@ -47,12 +47,33 @@ worth reporting.
 
 | Project | Issue | State |
 | --- | --- | --- |
-| iio-sensor-proxy 3.9 | A `Claim*` that arrives before the matching driver has registered is accepted and lost. The daemon owns its D-Bus name before it finishes enumerating SSC sensors, so any client watching the name wins the race | Local, reproduced repeatedly on hotdog |
+| iio-sensor-proxy 3.9 | A `Claim*` that arrives before the matching driver has registered is accepted and lost. The daemon owns its D-Bus name before it finishes enumerating SSC sensors, so any client watching the name wins the race | Patch written, not yet submitted |
 
 The daemon takes `net.hadess.SensorProxy` and only then discovers sensors. On a
 Qualcomm SSC device that discovery is a QMI round trip per sensor over QRTR —
 tens of milliseconds — while a client watching the bus name claims within ten.
 Measured on this phone, one restart under a running KWin:
+
+A patch now exists. `bus_acquired_handler` registers both D-Bus objects,
+making every method callable, while discovery and `driver_open` run afterwards
+in `name_acquired_handler`; a claim landing between the two is answered against
+a NULL client array and a NULL device, and asserts twice:
+
+```
+g_ptr_array_add: assertion 'rarray' failed
+driver_set_polling: assertion 'sensor_device' failed
+```
+
+The proximity work measured the window directly: the device is found, and the
+claim arrives 15 ms later, before anything has been opened. The patch moves
+discovery and opening ahead of the object registration, so no method is
+callable until the devices behind it exist. It is
+[`0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch`](../src/postmarketos/pmaports-sm8150/temp/iio-sensor-proxy/0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch)
+in the local aport series and builds clean, but is **not verified on the
+device**. That verification is its gate, and it decides more than proximity: if
+the patch is right, `hotdog-sensor-gate` no longer needs to exist for the
+accelerometer either. It goes to the project as a merge request, not to a
+mailing list.
 
 ```
 15:09:20.410  Handling driver refcounting method 'ClaimAccelerometer'
