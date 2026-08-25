@@ -15,10 +15,10 @@ hardware-tested package and is not selected by the device package yet.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The eight patches are exported from the local kernel branch
+name. The nine patches are exported from the local kernel branch
 `bringup/hotdog-sm8150-clean-baseline` at commit
-`c1d178e9b8cb7a7b5a6714413402c578426831af`, tree
-`86422c1a7fb531b24d1a29a775a2bcbec72201b3`, and retain their commit
+`f01bb6f3bd0443e473f9c566c181358a13cf0d56`, tree
+`29ec82f64056f9311a319ae57be21dba2ac599d4`, and retain their commit
 identities.
 
 ## Included foundation

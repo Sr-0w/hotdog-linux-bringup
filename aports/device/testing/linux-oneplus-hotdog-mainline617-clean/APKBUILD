@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -45,6 +45,7 @@ source="
 	0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
 	0007-dt-bindings-document-hotdog-display-and-touch.patch
 	0008-arm64-qcom-restore-hotdog-platform-controls.patch
+	0009-arm64-dts-preserve-hotdog-overlay-symbols.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -104,5 +105,6 @@ dbf833378c382cce33786b26d2a30a78ef5a9587767488ea3439329745f6c9ac89b4562103fdcf58
 3595e29daf0d3261e94279be1d86dadea72ee02e8223f923ae2809a6a5144c61c386ecce07b4c39969a14b84e654af51ea4586461b71ba82b73f5889ad27ed59  0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
 39bb91b41e0642b9310ac66a84cdb350a28f24fd5e09f27ad128f0af5b989a1c61ce5d3f786d7eee4f68dee611c94f0166a57bd0f82f1def4dbb2c664c4d5d9d  0007-dt-bindings-document-hotdog-display-and-touch.patch
 94987c08445380883d30b2ac187cdf3d7b0cfd0bf066c0d071bcd10458b57c23540d62ccaf04d9672d4b13946e648c3f28bc04b0dd54ec6cb743c0148a65104e  0008-arm64-qcom-restore-hotdog-platform-controls.patch
-143d17acd9fffb92ecbfc558df6c80b442767f00e2527a89593a5c019cb6e46f8130ddfa4207ea1833505d8b89c7634128dc70a3c0c3c9f85d6adf1f17f9864b  validate-mainline617-clean-build.sh
+6dd0c400042fe9e61d94957c5a5eb1e80a63c0382b3468e4106fa6c57a9e62d70d53395e9e077cfee8f4c9f5f9607c1cab2f28a281fd880d61b14f8f5d41ef63  0009-arm64-dts-preserve-hotdog-overlay-symbols.patch
+5aa72440774a9344e7f3bfa1664225cb54443a2d114c919d70fd0f7ebb70eb7c218dc860a47be27b7fe736ffd8b846b1d2d0d5dd7cb2c39bfe65dc3b7369afd4  validate-mainline617-clean-build.sh
 "

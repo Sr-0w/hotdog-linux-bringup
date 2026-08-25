@@ -93,6 +93,11 @@ done
 grep -aFq 'samsung,oneplus-dsc' "$image" ||
 	die "built-in panel driver is absent from Image"
 
+for symbol in mdss_dsi0 mdss_dsi1 mdss_mdp pcie0 sdhc_2 soc spmi_bus tlmm; do
+	fdtget -p "$dtb" /__symbols__ | grep -qx "$symbol" ||
+		die "missing bootloader-overlay symbol: $symbol"
+done
+
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	touch_module=$(find "$modules_dir" -type f -name 's6sy761.ko' -print -quit)

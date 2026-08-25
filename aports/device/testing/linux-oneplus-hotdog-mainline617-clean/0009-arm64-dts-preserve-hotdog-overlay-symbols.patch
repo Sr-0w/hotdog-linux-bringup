@@ -1,0 +1,22 @@
+From f01bb6f3bd0443e473f9c566c181358a13cf0d56 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Wed, 26 Aug 2026 00:17:56 +0200
+Subject: [PATCH] arm64: dts: preserve hotdog overlay symbols
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index fa13fa398406..4357b237c9df 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -278,6 +278,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-xiaomi-cepheus.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-xiaomi-nabu.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-guacamole.dtb
++DTC_FLAGS_sm8150-oneplus-hotdog := -@
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdog.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-oneplus-hotdogb.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
+-- 
+2.54.0
+
