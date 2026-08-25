@@ -174,6 +174,16 @@ The complete target-only path was compiled against the postmarketOS aarch64
 libqmi 1.39 headers with `-Wall -Wextra -Werror`. The resulting session object
 has SHA-256 `fd863c7c8e497fad1208be3690106ebeab0888daa7cf7e82172e71ec40631267`.
 
+The separate `hotdog-ims-bearer-state` file is the boot-bound handoff to other
+services. For each subscription it distinguishes absent, discovery, operator
+unavailable, starting, up, cleaned failure and blocked rollback. It records the
+selected profile/family, owned mux/interface, P-CSCF evidence counts, error and
+an explicit residue bit, but no APN, credentials, ICCID, IMSI or P-CSCF value.
+Atomic writes require a non-writable trusted directory; reads reject symlinks,
+group/world-writable files, unknown/duplicate keys and inconsistent states.
+In particular, `up` requires profile+mux+P-CSCF evidence, while `blocked`
+requires both an error and retained ownership.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and

@@ -732,7 +732,8 @@ validate_hotdog_radio_state_contract() {
 	fi
 	for source in hotdog-network.c hotdog-network.h \
 		hotdog-ims-bearer.c hotdog-ims-bearer.h \
-		hotdog-ims-executor.c hotdog-ims-executor.h; do
+		hotdog-ims-executor.c hotdog-ims-executor.h \
+		hotdog-ims-bearer-state.c hotdog-ims-bearer-state.h; do
 		[ -f "$source_dir/$source" ] || die "missing IMS bearer model: $source"
 	done
 	grep -q 'HOTDOG_APN_TYPE_IMS' "$source_dir/hotdog-ims-bearer.h" ||
@@ -749,6 +750,10 @@ validate_hotdog_radio_state_contract() {
 	grep -q 'HOTDOG_IMS_EXECUTOR_ACTION_RELEASE_CLIENTS' \
 		"$source_dir/hotdog-ims-executor.c" ||
 		die "IMS executor does not release WDS clients during rollback"
+	grep -q 'HOTDOG_IMS_BEARER_BLOCKED' "$source_dir/hotdog-ims-bearer-state.c" ||
+		die "IMS bearer runtime cannot expose unresolved ownership"
+	grep -q 'O_NOFOLLOW' "$source_dir/hotdog-ims-bearer-state.c" ||
+		die "IMS bearer runtime state does not reject symlinks"
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done
