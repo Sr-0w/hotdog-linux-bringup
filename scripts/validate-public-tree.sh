@@ -506,10 +506,12 @@ validate_libqmi_pdc_subscription_contract() {
 
 validate_oxygenos_modem_inventory_contract() {
 	local inventory="scripts/inventory-oxygenos-modem-stack.py"
+	local firmware_inventory="scripts/inventory-oxygenos-modem-firmware.py"
 	local evidence="docs/evidence/2026-08-24-oxygenos-modem-stack-architecture.md"
 
 	log "OxygenOS modem stack inventory contract"
 	[ -x "$inventory" ] || die "missing executable OxygenOS modem stack inventory"
+	[ -x "$firmware_inventory" ] || die "missing executable OxygenOS modem firmware inventory"
 	[ -f "$evidence" ] || die "missing OxygenOS modem stack architecture evidence"
 	for marker in qcrild netmgrd imsqmidaemon imsdatadaemon rmt_storage; do
 		grep -q "\"bin/.*$marker\|\"bin/hw/$marker" "$inventory" ||
@@ -523,6 +525,10 @@ validate_oxygenos_modem_inventory_contract() {
 		die "modem architecture lacks the pre-online owner"
 	grep -q 'hotdog-imsd' "$evidence" ||
 		die "modem architecture lacks the IMS owner"
+	grep -q 'profiles_unique_casefold' "$firmware_inventory" ||
+		die "modem firmware inventory lacks duplicate-safe MCFG counts"
+	grep -q 'bundle_sha256' "$firmware_inventory" ||
+		die "modem firmware inventory lacks source identity"
 }
 
 validate_hotdog_radio_state_contract() {
