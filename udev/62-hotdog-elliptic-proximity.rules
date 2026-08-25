@@ -1,0 +1,5 @@
+# The Elliptic ultrasonic engine reports a decision, not a distance: the
+# channel reads 1 for near and 0 for far. iio-sensor-proxy refuses a proximity
+# sensor that does not say where its near threshold is -- "Found proximity
+# sensor but no PROXIMITY_NEAR_LEVEL udev property" -- so state it.
+SUBSYSTEM=="iio", ATTR{name}=="elliptic_proximity", ENV{PROXIMITY_NEAR_LEVEL}="1"
