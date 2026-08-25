@@ -462,6 +462,13 @@ validate_hotdog_wifi_package_contract() {
 	grep -q 'hotdog-imsd' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap package does not build the IMSA owner"
+	for source in hotdog-ims-bearer-state.c hotdog-qmi-wds-discovery.c \
+		hotdog-qmi-wds-profile.c hotdog-ims-bearer.c; do
+		sed -n '/-o hotdog-radio-supervisord$/,/-o hotdog-imsd$/p' \
+			"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" |
+			grep -q "$source" ||
+			die "IMSA owner package omits IMS bearer selection: $source"
+	done
 	grep -q '^command="/usr/libexec/hotdog-radio-supervisord"$' \
 		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-supervisor.initd" ||
 		die "radio supervisor OpenRC service has the wrong executable"
