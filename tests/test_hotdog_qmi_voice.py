@@ -25,11 +25,24 @@ int main(void) {
     QmiIndicationVoiceAllCallStatusOutputCallInformationCall info={.id=9,
         .state=QMI_VOICE_CALL_STATE_WAITING,.type=QMI_VOICE_CALL_TYPE_VOICE,
         .direction=QMI_VOICE_CALL_DIRECTION_MT,.mode=QMI_VOICE_CALL_MODE_UMTS};
-    struct hotdog_qmi_voice_call mapped;
+    struct hotdog_qmi_voice_call mapped; struct hotdog_qmi_voice_snapshot snapshot={0};
+    struct hotdog_call_changes changes; struct hotdog_telephony telephony; unsigned int local;
     if(hotdog_qmi_voice_map_call(&info,1,&mapped)) return 3;
-    printf("number=%s call=%u digit=%c mapped=%u/%u/%s/%u\n",number,id,digit,
+    hotdog_telephony_init(&telephony);
+    if(hotdog_telephony_set_subscription(&telephony,1,true,true,true)) return 4;
+    snapshot.subscription=1; snapshot.count=1; snapshot.calls[0]=mapped;
+    snapshot.calls[0].number_present=true;
+    strcpy(snapshot.calls[0].call.number,"+32123456789");
+    if(hotdog_qmi_voice_apply_snapshot(&telephony,&snapshot,&changes)) return 5;
+    local=changes.changes[0].call_id;
+    snapshot.calls[0].call.state=HOTDOG_CALL_ACTIVE;
+    if(hotdog_qmi_voice_apply_snapshot(&telephony,&snapshot,&changes)) return 6;
+    snapshot.count=0;
+    if(hotdog_qmi_voice_apply_snapshot(&telephony,&snapshot,&changes)) return 7;
+    printf("number=%s call=%u digit=%c mapped=%u/%u/%s/%u changes=0/1/2 local=%u remote=%u final=%s\n",number,id,digit,
         mapped.qmi_call_id,mapped.call.subscription,
-        hotdog_call_state_name(mapped.call.state),mapped.call.transport);
+        hotdog_call_state_name(mapped.call.state),mapped.call.transport,local,
+        telephony.calls[0].remote_id,hotdog_call_state_name(telephony.calls[0].state));
     qmi_message_voice_dial_call_input_unref(dial);
     qmi_message_voice_start_continuous_dtmf_input_unref(dtmf); return 0;
 }
@@ -59,7 +72,8 @@ class HotdogQmiVoiceTests(unittest.TestCase):
                                 capture_output=True, text=True).stdout.strip()
         self.assertEqual(
             output,
-            "number=+32000000000 call=7 digit=5 mapped=9/1/incoming/1",
+            "number=+32000000000 call=7 digit=5 mapped=9/1/incoming/1 "
+            "changes=0/1/2 local=1 remote=9 final=ended",
         )
 
     def test_ims_or_video_cannot_fall_through_qmi_voice(self) -> None:

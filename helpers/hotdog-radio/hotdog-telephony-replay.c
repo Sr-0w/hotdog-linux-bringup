@@ -100,10 +100,11 @@ static void status(const struct hotdog_telephony *telephony)
 
 		if (!call->id)
 			continue;
-		printf("call%u=%s,%s,sub%u,gen%u,emergency%u,video%u,audio%u,number=%s\n",
+		printf("call%u=%s,%s,sub%u,gen%u,remote%u,emergency%u,video%u,audio%u,number=%s\n",
 		       call->id, hotdog_call_state_name(call->state),
 		       hotdog_transport_name(call->transport), call->subscription,
-		       call->generation, call->emergency, call->video, call->audio_ready,
+		       call->generation, call->remote_id, call->emergency, call->video,
+		       call->audio_ready,
 		       call->number);
 	}
 }
@@ -200,6 +201,13 @@ int main(void)
 		    !number(field[1], UINT32_MAX, &a)) {
 			printf("call-state-result=%d\n", hotdog_call_transition(&telephony, a,
 									 call_state(field[2])));
+			continue;
+		}
+		if (!strcmp(field[0], "BIND") && count == 3 &&
+		    !number(field[1], UINT32_MAX, &a) &&
+		    !number(field[2], UINT32_MAX, &b)) {
+			printf("bind-result=%d\n",
+			       hotdog_call_bind_remote(&telephony, a, b));
 			continue;
 		}
 		if (!strcmp(field[0], "AUDIO") && count == 3 &&

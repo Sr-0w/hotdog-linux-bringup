@@ -85,7 +85,7 @@ class HotdogTelephonyTests(unittest.TestCase):
             "SUB 0 1 0 1\nDIAL 0 auto 1 0 112\nSTATUS\n"
         )
         self.assertIn("dial-result=0 id=1", emergency.stdout)
-        self.assertIn("call1=dialing,cs,sub0,gen0,emergency1", emergency.stdout)
+        self.assertIn("call1=dialing,cs,sub0,gen0,remote0,emergency1", emergency.stdout)
 
         video = self.replay("SUB 0 1 1 1\nDIAL 0 auto 0 1 +32000000000\n")
         self.assertIn("dial-result=-95 id=0", video.stdout)
@@ -103,6 +103,62 @@ class HotdogTelephonyTests(unittest.TestCase):
         self.assertIn("sms1=failed,ims,sub0,gen0,bytes24,ref7,error102", result.stdout)
         self.assertIn("call1=ended,ims,sub0,gen0", result.stdout)
         self.assertIn("audio0", result.stdout)
+
+    def test_mo_call_binds_one_remote_identity(self) -> None:
+        result = self.replay(
+            "SUB 0 1 1 1\nDIAL 0 cs 0 0 +32000000000\n"
+            "BIND 1 9\nBIND 1 9\nBIND 1 10\nSTATUS\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bind-result=0", result.stdout)
+        self.assertIn("bind-result=-114", result.stdout)
+        self.assertIn("bind-result=-16", result.stdout)
+        self.assertIn("call1=dialing,cs,sub0,gen0,remote9", result.stdout)
+
+    def test_complete_snapshot_can_replace_all_calls_and_is_subscription_scoped(self) -> None:
+        source = r'''#include "hotdog-telephony.h"
+#include <stdio.h>
+#include <string.h>
+static void fill(struct hotdog_call_observation *o,unsigned sub,unsigned base) {
+ size_t i; memset(o,0,sizeof(*o)*HOTDOG_TELEPHONY_MAX_CALLS);
+ for(i=0;i<HOTDOG_TELEPHONY_MAX_CALLS;i++) { o[i].remote_id=base+i;
+  o[i].subscription=sub; o[i].transport=HOTDOG_TRANSPORT_CS;
+  o[i].direction=HOTDOG_CALL_MT; o[i].state=HOTDOG_CALL_INCOMING; }
+}
+int main(void) { struct hotdog_telephony t; struct hotdog_call_observation o[8];
+ struct hotdog_call_changes c; size_t i; hotdog_telephony_init(&t);
+ hotdog_telephony_set_subscription(&t,0,true,true,true);
+ hotdog_telephony_set_subscription(&t,1,true,true,true);
+ fill(o,0,1); if(hotdog_call_reconcile(&t,0,o,8,&c)) return 1;
+ printf("first=%zu ",c.count); fill(o,0,9);
+ if(hotdog_call_reconcile(&t,0,o,8,&c)) return 2;
+ printf("replace=%zu ids=",c.count);
+ for(i=0;i<8;i++) printf("%u%s",t.calls[i].remote_id,i==7?" ":",");
+ if(hotdog_call_reconcile(&t,0,NULL,0,&c)) return 3;
+ printf("empty=%zu ",c.count); memset(o,0,sizeof(o)); o[0].remote_id=1;
+ o[0].subscription=1; o[0].transport=HOTDOG_TRANSPORT_CS;
+ o[0].direction=HOTDOG_CALL_MT; o[0].state=HOTDOG_CALL_INCOMING;
+ if(hotdog_call_reconcile(&t,1,o,1,&c)) return 4;
+ if(hotdog_call_reconcile(&t,0,NULL,0,&c)) return 5;
+ printf("sub1=%s remote=%u\n",hotdog_call_state_name(t.calls[0].state),t.calls[0].remote_id);
+}
+'''
+        cfile = Path(self._temporary.name) / "snapshot.c"
+        binary = Path(self._temporary.name) / "snapshot"
+        cfile.write_text(source)
+        subprocess.run(
+            ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+             "-I", str(SOURCE), str(SOURCE / "hotdog-telephony.c"),
+             str(cfile), "-o", str(binary)],
+            check=True,
+        )
+        output = subprocess.run([str(binary)], check=True, capture_output=True,
+                                text=True).stdout.strip()
+        self.assertEqual(
+            output,
+            "first=8 replace=16 ids=9,10,11,12,13,14,15,16 empty=8 "
+            "sub1=incoming remote=1",
+        )
 
     def test_invalid_number_and_input_fail_closed(self) -> None:
         invalid_number = self.replay("SUB 0 1 1 1\nDIAL 0 cs 0 0 not-a-number\n")

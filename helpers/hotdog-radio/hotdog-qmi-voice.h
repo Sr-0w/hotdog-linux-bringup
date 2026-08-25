@@ -14,6 +14,7 @@ struct hotdog_qmi_voice_call {
 };
 
 struct hotdog_qmi_voice_snapshot {
+	unsigned int subscription;
 	size_t count;
 	struct hotdog_qmi_voice_call calls[HOTDOG_TELEPHONY_MAX_CALLS];
 };
@@ -36,5 +37,9 @@ int hotdog_qmi_voice_map_call(
 int hotdog_qmi_voice_decode_all_calls(
 	QmiIndicationVoiceAllCallStatusOutput *output, unsigned int subscription,
 	struct hotdog_qmi_voice_snapshot *snapshot);
+int hotdog_qmi_voice_apply_snapshot(
+	struct hotdog_telephony *telephony,
+	const struct hotdog_qmi_voice_snapshot *snapshot,
+	struct hotdog_call_changes *changes);
 
 #endif

@@ -161,6 +161,16 @@ number, while duplicate IDs, unknown directions/states/types and oversized
 numbers fail closed. OTAPA and supplementary control transactions are filtered
 instead of appearing as calls in Plasma.
 
+The snapshot is reconciled atomically with the transport-independent call
+table. MO requests bind exactly one remote call ID; MT and recovered calls may
+be created from observations with a hidden number. Immutable direction/domain/
+emergency/video fields cannot drift, and all state changes still pass through
+the call transition graph. Because All Call Status is a complete snapshot,
+previous remote calls absent from the same subscription are ended before new
+ones are allocated. This permits complete eight-call churn without false
+`ENOSPC`, does not end another SIM subscription, and returns bounded
+add/update/end deltas for the future D-Bus publisher.
+
 ### IMS, VoLTE and RCS
 
 OxygenOS splits IMS into `imsqmidaemon`, `imsdatadaemon`, `ims_rtp_daemon` and

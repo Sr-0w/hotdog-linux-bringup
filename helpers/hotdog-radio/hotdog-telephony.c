@@ -362,6 +362,187 @@ static bool call_transition_allowed(enum hotdog_call_state from, enum hotdog_cal
 	return false;
 }
 
+static struct hotdog_call *find_remote_call(
+	struct hotdog_telephony *telephony, unsigned int subscription,
+	enum hotdog_transport transport, unsigned int remote_id)
+{
+	size_t index;
+
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_CALLS; index++) {
+		struct hotdog_call *call = &telephony->calls[index];
+
+		if (call->id && call->generation == telephony->generation &&
+		    call->state != HOTDOG_CALL_ENDED &&
+		    call->subscription == subscription && call->transport == transport &&
+		    call->remote_id == remote_id)
+			return call;
+	}
+	return NULL;
+}
+
+int hotdog_call_bind_remote(struct hotdog_telephony *telephony,
+			    unsigned int call_id, unsigned int remote_id)
+{
+	struct hotdog_call *call;
+
+	if (!telephony || !remote_id)
+		return -EINVAL;
+	call = find_call(telephony, call_id);
+	if (!call)
+		return -ENOENT;
+	if (call->generation != telephony->generation ||
+	    call->state == HOTDOG_CALL_ENDED)
+		return -EPROTO;
+	if (call->remote_id)
+		return call->remote_id == remote_id ? -EALREADY : -EBUSY;
+	if (find_remote_call(telephony, call->subscription, call->transport, remote_id))
+		return -EEXIST;
+	call->remote_id = remote_id;
+	return 0;
+}
+
+static int add_change(struct hotdog_call_changes *changes,
+		      enum hotdog_call_change_type type, unsigned int call_id)
+{
+	if (changes->count >= HOTDOG_TELEPHONY_MAX_CALL_CHANGES)
+		return -EOVERFLOW;
+	changes->changes[changes->count].type = type;
+	changes->changes[changes->count].call_id = call_id;
+	changes->count++;
+	return 0;
+}
+
+static bool observation_seen(
+	const struct hotdog_call_observation *observations, size_t count,
+	const struct hotdog_call *call)
+{
+	size_t index;
+
+	for (index = 0; index < count; index++)
+		if (observations[index].remote_id == call->remote_id &&
+		    observations[index].subscription == call->subscription &&
+		    observations[index].transport == call->transport)
+			return true;
+	return false;
+}
+
+int hotdog_call_reconcile(struct hotdog_telephony *telephony,
+			  unsigned int subscription,
+			  const struct hotdog_call_observation *observations,
+			  size_t observation_count,
+			  struct hotdog_call_changes *changes)
+{
+	struct hotdog_telephony candidate;
+	struct hotdog_call_changes pending = { 0 };
+	size_t index, previous;
+	int result;
+
+	if (!telephony || !changes ||
+	    subscription >= HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS ||
+	    (observation_count && !observations) ||
+	    observation_count > HOTDOG_TELEPHONY_MAX_CALLS ||
+	    !telephony->subscriptions[subscription].populated)
+		return -EINVAL;
+	candidate = *telephony;
+	for (index = 0; index < observation_count; index++) {
+		const struct hotdog_call_observation *observation = &observations[index];
+
+		if (!observation->remote_id ||
+		    observation->subscription != subscription ||
+		    observation->transport == HOTDOG_TRANSPORT_AUTO ||
+		    observation->transport > HOTDOG_TRANSPORT_IMS ||
+		    observation->direction > HOTDOG_CALL_MT ||
+		    observation->state > HOTDOG_CALL_ENDED ||
+		    (observation->number_present && !valid_number(observation->number)) ||
+		    !candidate.subscriptions[observation->subscription].populated)
+			return -EINVAL;
+		for (previous = 0; previous < index; previous++)
+			if (observations[previous].remote_id == observation->remote_id &&
+			    observations[previous].subscription == observation->subscription &&
+				    observations[previous].transport == observation->transport)
+					return -EPROTO;
+	}
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_CALLS; index++) {
+		struct hotdog_call *call = &candidate.calls[index];
+
+		if (!call->id || !call->remote_id ||
+		    call->generation != candidate.generation ||
+		    call->subscription != subscription ||
+		    call->state == HOTDOG_CALL_ENDED ||
+		    observation_seen(observations, observation_count, call))
+			continue;
+		call->state = HOTDOG_CALL_ENDED;
+		call->audio_ready = false;
+		result = add_change(&pending, HOTDOG_CALL_ENDED_CHANGE, call->id);
+		if (result)
+			return result;
+	}
+	for (index = 0; index < observation_count; index++) {
+		const struct hotdog_call_observation *observation = &observations[index];
+		struct hotdog_call *call;
+		bool changed = false;
+
+		call = find_remote_call(&candidate, observation->subscription,
+					observation->transport, observation->remote_id);
+		if (!call) {
+			if (observation->state == HOTDOG_CALL_ENDED)
+				continue;
+			call = allocate_call(&candidate);
+			if (!call)
+				return -ENOSPC;
+			memset(call, 0, sizeof(*call));
+			call->id = candidate.next_call_id++;
+			call->remote_id = observation->remote_id;
+			call->subscription = observation->subscription;
+			call->generation = candidate.generation;
+			call->transport = observation->transport;
+			call->direction = observation->direction;
+			call->state = observation->state;
+			call->emergency = observation->emergency;
+			call->video = observation->video;
+			if (observation->number_present)
+				memcpy(call->number, observation->number,
+				       strlen(observation->number) + 1);
+			result = add_change(&pending, HOTDOG_CALL_ADDED, call->id);
+			if (result)
+				return result;
+			continue;
+		}
+		if (call->direction != observation->direction ||
+		    call->emergency != observation->emergency ||
+		    call->video != observation->video)
+			return -EPROTO;
+		if (observation->number_present) {
+			if (call->number[0] && strcmp(call->number, observation->number))
+				return -EPROTO;
+			if (!call->number[0]) {
+				memcpy(call->number, observation->number,
+				       strlen(observation->number) + 1);
+				changed = true;
+			}
+		}
+		if (call->state != observation->state) {
+			if (!call_transition_allowed(call->state, observation->state))
+				return -EPROTO;
+			call->state = observation->state;
+			if (call->state != HOTDOG_CALL_ACTIVE)
+				call->audio_ready = false;
+			changed = true;
+		}
+		if (changed) {
+			result = add_change(&pending,
+				call->state == HOTDOG_CALL_ENDED ?
+				HOTDOG_CALL_ENDED_CHANGE : HOTDOG_CALL_UPDATED,
+				call->id);
+			if (result)
+				return result;
+		}
+	}
+	*telephony = candidate;
+	*changes = pending;
+	return 0;
+}
+
 int hotdog_call_transition(struct hotdog_telephony *telephony, unsigned int call_id,
 			   enum hotdog_call_state state)
 {

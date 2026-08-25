@@ -9,6 +9,7 @@
 #define HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS 3
 #define HOTDOG_TELEPHONY_MAX_SMS 16
 #define HOTDOG_TELEPHONY_MAX_CALLS 8
+#define HOTDOG_TELEPHONY_MAX_CALL_CHANGES (HOTDOG_TELEPHONY_MAX_CALLS * 2)
 #define HOTDOG_TELEPHONY_NUMBER_SIZE 48
 
 enum hotdog_ims_registration {
@@ -74,6 +75,12 @@ enum hotdog_call_state {
 	HOTDOG_CALL_ENDED,
 };
 
+enum hotdog_call_change_type {
+	HOTDOG_CALL_ADDED,
+	HOTDOG_CALL_UPDATED,
+	HOTDOG_CALL_ENDED_CHANGE,
+};
+
 struct hotdog_ims_state {
 	enum hotdog_ims_registration registration;
 	enum hotdog_ims_rat rat;
@@ -114,6 +121,7 @@ struct hotdog_sms {
 
 struct hotdog_call {
 	unsigned int id;
+	unsigned int remote_id;
 	unsigned int subscription;
 	unsigned int generation;
 	enum hotdog_transport transport;
@@ -123,6 +131,28 @@ struct hotdog_call {
 	bool audio_ready;
 	bool video;
 	char number[HOTDOG_TELEPHONY_NUMBER_SIZE];
+};
+
+struct hotdog_call_observation {
+	unsigned int remote_id;
+	unsigned int subscription;
+	enum hotdog_transport transport;
+	enum hotdog_call_direction direction;
+	enum hotdog_call_state state;
+	bool emergency;
+	bool video;
+	bool number_present;
+	char number[HOTDOG_TELEPHONY_NUMBER_SIZE];
+};
+
+struct hotdog_call_change {
+	enum hotdog_call_change_type type;
+	unsigned int call_id;
+};
+
+struct hotdog_call_changes {
+	size_t count;
+	struct hotdog_call_change changes[HOTDOG_TELEPHONY_MAX_CALL_CHANGES];
 };
 
 struct hotdog_telephony {
@@ -165,6 +195,13 @@ int hotdog_call_incoming(struct hotdog_telephony *telephony, unsigned int subscr
 			 bool emergency, unsigned int *call_id);
 int hotdog_call_transition(struct hotdog_telephony *telephony, unsigned int call_id,
 			   enum hotdog_call_state state);
+int hotdog_call_bind_remote(struct hotdog_telephony *telephony,
+			    unsigned int call_id, unsigned int remote_id);
+int hotdog_call_reconcile(struct hotdog_telephony *telephony,
+			  unsigned int subscription,
+			  const struct hotdog_call_observation *observations,
+			  size_t observation_count,
+			  struct hotdog_call_changes *changes);
 int hotdog_call_set_audio(struct hotdog_telephony *telephony, unsigned int call_id,
 			  bool ready);
 int hotdog_call_dtmf(const struct hotdog_telephony *telephony, unsigned int call_id,

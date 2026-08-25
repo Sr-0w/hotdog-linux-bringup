@@ -224,6 +224,7 @@ int hotdog_qmi_voice_decode_all_calls(
 	    subscription >= HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS)
 		return -EINVAL;
 	memset(snapshot, 0, sizeof(*snapshot));
+	snapshot->subscription = subscription;
 	if (!qmi_indication_voice_all_call_status_output_get_call_information(
 		    output, &information, &error)) {
 		g_clear_error(&error);
@@ -273,4 +274,36 @@ int hotdog_qmi_voice_decode_all_calls(
 		call->number_present = true;
 	}
 	return 0;
+}
+
+int hotdog_qmi_voice_apply_snapshot(
+	struct hotdog_telephony *telephony,
+	const struct hotdog_qmi_voice_snapshot *snapshot,
+	struct hotdog_call_changes *changes)
+{
+	struct hotdog_call_observation observations[HOTDOG_TELEPHONY_MAX_CALLS];
+	size_t index;
+
+	if (!telephony || !snapshot || !changes ||
+	    snapshot->count > HOTDOG_TELEPHONY_MAX_CALLS)
+		return -EINVAL;
+	memset(observations, 0, sizeof(observations));
+	for (index = 0; index < snapshot->count; index++) {
+		const struct hotdog_qmi_voice_call *source = &snapshot->calls[index];
+		struct hotdog_call_observation *target = &observations[index];
+
+		target->remote_id = source->qmi_call_id;
+		target->subscription = source->call.subscription;
+		target->transport = source->call.transport;
+		target->direction = source->call.direction;
+		target->state = source->call.state;
+		target->emergency = source->call.emergency;
+		target->video = source->call.video;
+		target->number_present = source->number_present;
+		if (source->number_present)
+			memcpy(target->number, source->call.number,
+			       strlen(source->call.number) + 1);
+	}
+	return hotdog_call_reconcile(telephony, snapshot->subscription,
+				 observations, snapshot->count, changes);
 }
