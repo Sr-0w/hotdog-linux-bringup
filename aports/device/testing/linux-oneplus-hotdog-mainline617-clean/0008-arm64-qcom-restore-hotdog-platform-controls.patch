@@ -1,0 +1,1652 @@
+From c1d178e9b8cb7a7b5a6714413402c578426831af Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 23:56:46 +0200
+Subject: [PATCH] arm64: qcom: restore hotdog platform controls
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+
+diff --git a/Documentation/devicetree/bindings/input/awinic,aw8697.yaml b/Documentation/devicetree/bindings/input/awinic,aw8697.yaml
+new file mode 100644
+index 000000000000..ea70e9ab122f
+--- /dev/null
++++ b/Documentation/devicetree/bindings/input/awinic,aw8697.yaml
+@@ -0,0 +1,47 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/input/awinic,aw8697.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Awinic AW8697 LRA haptics controller
++
++maintainers:
++  - Sr-0w <Sr-0w@users.noreply.github.com>
++
++properties:
++  compatible:
++    const: awinic,aw8697
++
++  reg:
++    maxItems: 1
++
++  reset-gpios:
++    maxItems: 1
++
++  interrupts:
++    maxItems: 1
++
++required:
++  - compatible
++  - reg
++  - reset-gpios
++
++additionalProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/gpio/gpio.h>
++    #include <dt-bindings/interrupt-controller/irq.h>
++
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        haptics@5a {
++            compatible = "awinic,aw8697";
++            reg = <0x5a>;
++            interrupts-extended = <&tlmm 24 IRQ_TYPE_EDGE_FALLING>;
++            reset-gpios = <&tlmm 116 GPIO_ACTIVE_LOW>;
++        };
++    };
+diff --git a/Documentation/devicetree/bindings/net/nfc/nxp,nci.yaml b/Documentation/devicetree/bindings/net/nfc/nxp,nci.yaml
+index 364b36151180..f6e8a55529d8 100644
+--- a/Documentation/devicetree/bindings/net/nfc/nxp,nci.yaml
++++ b/Documentation/devicetree/bindings/net/nfc/nxp,nci.yaml
+@@ -26,6 +26,16 @@ properties:
+   firmware-gpios:
+     description: Output GPIO pin used to enter firmware download mode
+ 
++  firmware-name:
++    description:
++      Name of a firmware file containing a sequence of complete, unfragmented
++      NCI configuration command packets. The commands are applied after the
++      controller completes CORE_INIT and before RF discovery is configured.
++
++  clocks:
++    maxItems: 1
++    description: Optional controller reference clock
++
+   interrupts:
+     maxItems: 1
+ 
+@@ -59,5 +69,6 @@ examples:
+ 
+             enable-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
+             firmware-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>;
++            firmware-name = "nxp/pn553-example.nci";
+         };
+     };
+diff --git a/arch/arm64/boot/dts/qcom/pm8150.dtsi b/arch/arm64/boot/dts/qcom/pm8150.dtsi
+index 18dfe2a5d3d1..7acf8da30995 100644
+--- a/arch/arm64/boot/dts/qcom/pm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/pm8150.dtsi
+@@ -49,6 +49,8 @@ pm8150_0: pmic@0 {
+ 		pon: pon@800 {
+ 			compatible = "qcom,pm8998-pon";
+ 			reg = <0x0800>;
++			mode-bootloader = <0x2>;
++			mode-recovery = <0x1>;
+ 
+ 			pon_pwrkey: pwrkey {
+ 				compatible = "qcom,pm8941-pwrkey";
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index f2975a4b05a2..80356a1e44e1 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -9,9 +9,11 @@
+ 
+ /dts-v1/;
+ 
++#include <dt-bindings/clock/qcom,rpmh.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/usb/pd.h>
+ #include "sm8150-oneplus-common.dtsi"
+ 
+ /delete-node/ &rmtfs_mem;
+@@ -54,6 +56,54 @@ framebuffer0: framebuffer@9c000000 {
+ 		};
+ 	};
+ 
++	battery: battery {
++		compatible = "simple-battery";
++		device-chemistry = "lithium-ion-polymer";
++		charge-full-design-microamp-hours = <4085000>;
++		voltage-min-design-microvolt = <3300000>;
++		voltage-max-design-microvolt = <4420000>;
++		constant-charge-current-max-microamp = <1500000>;
++		constant-charge-voltage-max-microvolt = <4400000>;
++		charge-term-current-microamp = <310000>;
++	};
++
++	alert-slider {
++		compatible = "gpio-keys";
++		label = "Alert slider";
++		pinctrl-names = "default";
++		pinctrl-0 = <&alert_slider_default>;
++
++		switch-top {
++			label = "Silent";
++			gpios = <&tlmm 125 GPIO_ACTIVE_LOW>;
++			linux,input-type = <EV_ABS>;
++			linux,code = <ABS_SND_PROFILE>;
++			linux,input-value = <SND_PROFILE_SILENT>;
++			linux,can-disable;
++			debounce-interval = <15>;
++		};
++
++		switch-middle {
++			label = "Vibrate";
++			gpios = <&tlmm 134 GPIO_ACTIVE_LOW>;
++			linux,input-type = <EV_ABS>;
++			linux,code = <ABS_SND_PROFILE>;
++			linux,input-value = <SND_PROFILE_VIBRATE>;
++			linux,can-disable;
++			debounce-interval = <15>;
++		};
++
++		switch-bottom {
++			label = "Ring";
++			gpios = <&tlmm 27 GPIO_ACTIVE_LOW>;
++			linux,input-type = <EV_ABS>;
++			linux,code = <ABS_SND_PROFILE>;
++			linux,input-value = <SND_PROFILE_RING>;
++			linux,can-disable;
++			debounce-interval = <15>;
++		};
++	};
++
+ 	reserved-memory {
+ 		/* Complete the stock-owned XBL/AOP interval. */
+ 		xbl_aop_gap: memory@85e40000 {
+@@ -226,6 +276,36 @@ volume_down_state: volume-down-state {
+ };
+ 
+ &tlmm {
++	alert_slider_default: alert-slider-default-state {
++		pins = "gpio27", "gpio125", "gpio134";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	nfc_default: nfc-default-state {
++		irq-pins {
++			pins = "gpio47";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		enable-pins {
++			pins = "gpio41", "gpio48";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		clk-req-pins {
++			pins = "gpio113";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++	};
++
+ 	panel_avdd_default: panel-avdd-default-state {
+ 		pins = "gpio130";
+ 		function = "gpio";
+@@ -264,6 +344,51 @@ &gpi_dma2 {
+ 	status = "okay";
+ };
+ 
++&i2c7 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <400000>;
++	status = "okay";
++
++	haptics@5a {
++		compatible = "awinic,aw8697";
++		reg = <0x5a>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
++		reset-gpios = <&tlmm 116 GPIO_ACTIVE_LOW>;
++	};
++};
++
++&i2c8 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <100000>;
++	status = "okay";
++
++	fuel-gauge@55 {
++		compatible = "ti,bq27411";
++		reg = <0x55>;
++	};
++};
++
++&i2c9 {
++	clock-frequency = <100000>;
++	status = "okay";
++
++	nfc@28 {
++		compatible = "nxp,pn553", "nxp,nxp-nci-i2c";
++		reg = <0x28>;
++		firmware-name = "nxp/pn553-hotdog.nci";
++		interrupt-parent = <&tlmm>;
++		interrupts = <47 IRQ_TYPE_LEVEL_HIGH>;
++		enable-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
++		firmware-gpios = <&tlmm 48 GPIO_ACTIVE_HIGH>;
++		clocks = <&rpmhcc RPMH_LN_BB_CLK3>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&nfc_default>;
++	};
++};
++
+ &i2c17 {
+ 	clock-frequency = <400000>;
+ 	status = "okay";
+@@ -297,6 +422,68 @@ &ufs_mem_hc {
+ 	iommus = <&apps_smmu 0x300 0>;
+ };
+ 
++&usb_1_qmpphy {
++	orientation-switch;
++};
++
++&usb_1_qmpphy_out {
++	remote-endpoint = <&pm8150b_typec_mux_in>;
++};
++
++&usb_1_dwc3 {
++	dr_mode = "otg";
++	usb-role-switch;
++	usb-psy-name = "pm8150b-charger";
++};
++
++&usb_1_dwc3_hs {
++	remote-endpoint = <&pm8150b_role_switch_in>;
++};
++
++&pm8150b_vbus {
++	status = "okay";
++};
++
++&pm8150b_typec {
++	vdd-pdphy-supply = <&vdda_usb_hs_3p1>;
++	status = "okay";
++
++	connector {
++		compatible = "usb-c-connector";
++		power-role = "dual";
++		data-role = "dual";
++		self-powered;
++		source-pdos = <PDO_FIXED(5000, 3000,
++					 PDO_FIXED_DUAL_ROLE |
++					 PDO_FIXED_USB_COMM |
++					 PDO_FIXED_DATA_SWAP)>;
++		sink-pdos = <PDO_FIXED(5000, 3000,
++				       PDO_FIXED_DUAL_ROLE |
++				       PDO_FIXED_USB_COMM |
++				       PDO_FIXED_DATA_SWAP)>;
++		op-sink-microwatt = <10000000>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++				pm8150b_role_switch_in: endpoint {
++					remote-endpoint = <&usb_1_dwc3_hs>;
++				};
++			};
++
++			port@1 {
++				reg = <1>;
++				pm8150b_typec_mux_in: endpoint {
++					remote-endpoint = <&usb_1_qmpphy_out>;
++				};
++			};
++		};
++	};
++};
++
+ &mdss {
+ 	status = "okay";
+ };
+@@ -345,3 +532,14 @@ &pon_pwrkey {
+ &pon_resin {
+ 	status = "disabled";
+ };
++
++&pm8150b_charger {
++	monitored-battery = <&battery>;
++	status = "okay";
++};
++
++&pm8150b_fg {
++	/delete-property/ monitored-battery;
++	/delete-property/ power-supplies;
++	status = "disabled";
++};
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+index 4c9b7355179c..f742117834b9 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -4248,6 +4248,22 @@ spmi_bus: spmi@c440000 {
+ 			#interrupt-cells = <4>;
+ 		};
+ 
++		sram@146bf000 {
++			compatible = "qcom,sm8150-imem", "syscon", "simple-mfd";
++			reg = <0 0x146bf000 0 0x1000>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			ranges = <0 0 0x146bf000 0x1000>;
++
++			reboot-mode@65c {
++				compatible = "syscon-reboot-mode";
++				reg = <0x65c 0x4>;
++				offset = <0x65c>;
++				mode-bootloader = <0x77665500>;
++				mode-recovery = <0x77665502>;
++			};
++		};
++
+ 		apps_smmu: iommu@15000000 {
+ 			compatible = "qcom,sm8150-smmu-500", "qcom,smmu-500", "arm,mmu-500";
+ 			reg = <0 0x15000000 0 0x100000>;
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index ff2289b52c84..a7725ef46593 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -415,6 +415,13 @@ static void geni_i2c_tx_msg_cleanup(struct geni_i2c_dev *gi2c,
+ 	}
+ }
+ 
++/*
++ * Diagnostic: SE-DMA wedges this SM8150 serial engine on transfers of 32
++ * bytes and above, which is exactly where the driver switches away from
++ * FIFO. Raise the threshold so every transfer stays in FIFO mode.
++ */
++#define GENI_I2C_DMA_THRESHOLD	65536
++
+ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 				u32 m_param)
+ {
+@@ -425,7 +432,7 @@ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = i2c_get_dma_safe_msg_buf(msg, GENI_I2C_DMA_THRESHOLD);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -464,7 +471,7 @@ static int geni_i2c_tx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = i2c_get_dma_safe_msg_buf(msg, GENI_I2C_DMA_THRESHOLD);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
+index 0fb21c99a5e3..3b9d43991214 100644
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -101,6 +101,19 @@ config INPUT_ARIZONA_HAPTICS
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called arizona-haptics.
+ 
++config INPUT_AW8697_HAPTICS
++	tristate "Awinic AW8697 haptics support"
++	depends on I2C
++	select INPUT_FF_MEMLESS
++	select REGMAP_I2C
++	help
++	  Say Y to enable support for the Awinic AW8697 LRA haptics
++	  controller. The device is exposed through the input force-feedback
++	  interface with rumble intensity control.
++
++	  To compile this driver as a module, choose M here: the module will be
++	  called aw8697-haptics.
++
+ config INPUT_ATC260X_ONKEY
+ 	tristate "Actions Semi ATC260x PMIC ONKEY"
+ 	depends on MFD_ATC260X
+diff --git a/drivers/input/misc/Makefile b/drivers/input/misc/Makefile
+index d468c8140b93..4809b4499e90 100644
+--- a/drivers/input/misc/Makefile
++++ b/drivers/input/misc/Makefile
+@@ -18,6 +18,7 @@ obj-$(CONFIG_INPUT_ADXL34X_SPI)		+= adxl34x-spi.o
+ obj-$(CONFIG_INPUT_APANEL)		+= apanel.o
+ obj-$(CONFIG_INPUT_ARIEL_PWRBUTTON)	+= ariel-pwrbutton.o
+ obj-$(CONFIG_INPUT_ARIZONA_HAPTICS)	+= arizona-haptics.o
++obj-$(CONFIG_INPUT_AW8697_HAPTICS)	+= aw8697-haptics.o
+ obj-$(CONFIG_INPUT_ATC260X_ONKEY)	+= atc260x-onkey.o
+ obj-$(CONFIG_INPUT_ATI_REMOTE2)		+= ati_remote2.o
+ obj-$(CONFIG_INPUT_ATLAS_BTNS)		+= atlas_btns.o
+diff --git a/drivers/input/misc/aw8697-haptics.c b/drivers/input/misc/aw8697-haptics.c
+new file mode 100644
+index 000000000000..2ec6e0b70cbb
+--- /dev/null
++++ b/drivers/input/misc/aw8697-haptics.c
+@@ -0,0 +1,417 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Awinic AW8697 LRA haptics controller
++ *
++ * Register programming is based on the AW8697 driver published by OnePlus.
++ * The input force-feedback interface follows the upstream AW86927 driver.
++ */
++
++#include <linux/bits.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/module.h>
++#include <linux/regmap.h>
++
++#define AW8697_ID_REG			0x00
++#define AW8697_CHIP_ID			0x97
++#define AW8697_SOFT_RESET		0xaa
++
++#define AW8697_SYSINT_REG		0x02
++#define AW8697_SYSINTM_REG		0x03
++#define AW8697_SYSCTRL_REG		0x04
++#define AW8697_SYSCTRL_PLAY_MODE_MASK	GENMASK(3, 2)
++#define AW8697_SYSCTRL_PLAY_MODE_CONT	(2 << 2)
++#define AW8697_SYSCTRL_BST_MODE_MASK	BIT(1)
++#define AW8697_SYSCTRL_WORK_MODE_MASK	BIT(0)
++#define AW8697_SYSCTRL_STANDBY		BIT(0)
++#define AW8697_GO_REG			0x05
++#define AW8697_GO_ENABLE			BIT(0)
++
++#define AW8697_DATCTRL_REG		0x2b
++#define AW8697_DATCTRL_FC_MASK		GENMASK(7, 6)
++#define AW8697_DATCTRL_FC_1000HZ		(3 << 6)
++#define AW8697_DATCTRL_LPF_ENABLE	BIT(5)
++#define AW8697_PWMDBG_REG		0x2e
++#define AW8697_PWMDBG_MODE_MASK		GENMASK(6, 5)
++#define AW8697_PWMDBG_24KHZ		(2 << 5)
++#define AW8697_BSTDBG1_REG		0x31
++#define AW8697_BSTDBG2_REG		0x32
++#define AW8697_BSTDBG3_REG		0x33
++#define AW8697_BSTCFG_REG		0x34
++#define AW8697_BSTCFG_PEAK_MASK		GENMASK(2, 0)
++#define AW8697_BSTCFG_PEAK_3P5A		5
++#define AW8697_ANADBG_REG		0x35
++#define AW8697_ANADBG_IOC_MASK		GENMASK(3, 2)
++#define AW8697_ANADBG_IOC_4P65A		(3 << 2)
++#define AW8697_BST_AUTO_REG		0x47
++#define AW8697_BST_AUTO_AUTOSW		BIT(2)
++
++#define AW8697_GLB_STATE_REG		0x46
++#define AW8697_GLB_STATE_MASK		GENMASK(3, 0)
++#define AW8697_CONT_CTRL_REG		0x48
++#define AW8697_CONT_ZC_ENABLE		BIT(7)
++#define AW8697_CONT_CLOSE_PLAYBACK	BIT(3)
++#define AW8697_CONT_AUTO_BRAKE		BIT(0)
++#define AW8697_F_PRE_H_REG		0x49
++#define AW8697_F_PRE_L_REG		0x4a
++#define AW8697_TD_H_REG			0x4b
++#define AW8697_TD_L_REG			0x4c
++#define AW8697_TSET_REG			0x4d
++#define AW8697_R_SPARE_REG		0x5d
++#define AW8697_ADCTEST_REG		0x66
++#define AW8697_ADCTEST_VBAT_HW_COMP	BIT(6)
++#define AW8697_ZC_THRSH_H_REG		0x72
++#define AW8697_ZC_THRSH_L_REG		0x73
++#define AW8697_BEMF_VTHH_H_REG		0x74
++#define AW8697_BEMF_VTHH_L_REG		0x75
++#define AW8697_BEMF_VTHL_H_REG		0x76
++#define AW8697_BEMF_VTHL_L_REG		0x77
++#define AW8697_BEMF_NUM_REG		0x78
++#define AW8697_BEMF_NUM_BRAKE_MASK	GENMASK(3, 0)
++#define AW8697_TIME_NZC_REG		0x7a
++#define AW8697_DRV_LVL_REG		0x7b
++#define AW8697_DRV_LVL_OV_REG		0x7c
++
++/* OnePlus hotdog uses the 170 Hz actuator profile. */
++#define AW8697_F0_PRE			1700
++#define AW8697_F0_COEFF			260
++#define AW8697_CONT_DRV_LVL_MAX		60
++#define AW8697_CONT_DRV_LVL_OV		125
++#define AW8697_CONT_TD			0x009a
++#define AW8697_CONT_ZC_THR		0x0ff1
++#define AW8697_CONT_BRAKE_COUNT		3
++
++struct aw8697_haptics {
++	struct device *dev;
++	struct input_dev *input;
++	struct regmap *regmap;
++	struct gpio_desc *reset_gpio;
++	struct work_struct play_work;
++	u16 level;
++};
++
++static const struct regmap_config aw8697_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = AW8697_DRV_LVL_OV_REG,
++	.cache_type = REGCACHE_NONE,
++};
++
++static void aw8697_hw_reset(struct aw8697_haptics *haptics)
++{
++	gpiod_set_value_cansleep(haptics->reset_gpio, 1);
++	usleep_range(1000, 2000);
++	gpiod_set_value_cansleep(haptics->reset_gpio, 0);
++	usleep_range(8000, 8500);
++}
++
++static int aw8697_wait_standby(struct aw8697_haptics *haptics)
++{
++	unsigned int value;
++
++	return regmap_read_poll_timeout(haptics->regmap, AW8697_GLB_STATE_REG,
++					value,
++					!(value & AW8697_GLB_STATE_MASK),
++					2000, 120000);
++}
++
++static int aw8697_stop(struct aw8697_haptics *haptics)
++{
++	int error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_GO_REG,
++				   AW8697_GO_ENABLE, 0);
++	if (error)
++		return error;
++
++	error = aw8697_wait_standby(haptics);
++	if (error)
++		dev_warn(haptics->dev,
++			 "playback did not stop cleanly, forcing standby\n");
++
++	return regmap_update_bits(haptics->regmap, AW8697_SYSCTRL_REG,
++				  AW8697_SYSCTRL_WORK_MODE_MASK,
++				  AW8697_SYSCTRL_STANDBY);
++}
++
++static int aw8697_play_continuous(struct aw8697_haptics *haptics)
++{
++	unsigned int sysint;
++	u16 f0_reg = 1000000000U / (AW8697_F0_PRE * AW8697_F0_COEFF);
++	u8 drive_level;
++	int error;
++
++	error = aw8697_stop(haptics);
++	if (error)
++		return error;
++
++	drive_level = DIV_ROUND_UP((u32)haptics->level *
++				   AW8697_CONT_DRV_LVL_MAX, U16_MAX);
++
++	error = regmap_update_bits(haptics->regmap, AW8697_SYSCTRL_REG,
++				   AW8697_SYSCTRL_PLAY_MODE_MASK |
++				   AW8697_SYSCTRL_BST_MODE_MASK |
++				   AW8697_SYSCTRL_WORK_MODE_MASK,
++				   AW8697_SYSCTRL_PLAY_MODE_CONT);
++	if (error)
++		return error;
++
++	/* Reading SYSINT clears any latched interrupt before playback. */
++	regmap_read(haptics->regmap, AW8697_SYSINT_REG, &sysint);
++
++	error = regmap_update_bits(haptics->regmap, AW8697_DATCTRL_REG,
++				   AW8697_DATCTRL_FC_MASK |
++				   AW8697_DATCTRL_LPF_ENABLE,
++				   AW8697_DATCTRL_FC_1000HZ |
++				   AW8697_DATCTRL_LPF_ENABLE);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_CONT_CTRL_REG,
++			     AW8697_CONT_ZC_ENABLE |
++			     AW8697_CONT_CLOSE_PLAYBACK |
++			     AW8697_CONT_AUTO_BRAKE);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_F_PRE_H_REG, f0_reg >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_F_PRE_L_REG, f0_reg);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TD_H_REG, AW8697_CONT_TD >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TD_L_REG, AW8697_CONT_TD);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TSET_REG, 0x12);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_ZC_THRSH_H_REG,
++			     AW8697_CONT_ZC_THR >> 8);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_ZC_THRSH_L_REG,
++			     AW8697_CONT_ZC_THR);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHH_H_REG, 0x10);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHH_L_REG, 0x08);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHL_H_REG, 0x03);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BEMF_VTHL_L_REG, 0xf8);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BEMF_NUM_REG,
++				   AW8697_BEMF_NUM_BRAKE_MASK,
++				   AW8697_CONT_BRAKE_COUNT);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TIME_NZC_REG, 0x23);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_DRV_LVL_REG, drive_level);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_DRV_LVL_OV_REG,
++			     AW8697_CONT_DRV_LVL_OV);
++	if (error)
++		return error;
++
++	return regmap_update_bits(haptics->regmap, AW8697_GO_REG,
++				  AW8697_GO_ENABLE, AW8697_GO_ENABLE);
++}
++
++static void aw8697_play_work(struct work_struct *work)
++{
++	struct aw8697_haptics *haptics =
++		container_of(work, struct aw8697_haptics, play_work);
++	int error;
++
++	if (haptics->level)
++		error = aw8697_play_continuous(haptics);
++	else
++		error = aw8697_stop(haptics);
++
++	if (error)
++		dev_err(haptics->dev, "failed to update playback: %d\n", error);
++}
++
++static int aw8697_play_effect(struct input_dev *input, void *data,
++			      struct ff_effect *effect)
++{
++	struct aw8697_haptics *haptics = input_get_drvdata(input);
++	u16 level = effect->u.rumble.strong_magnitude;
++
++	if (!level)
++		level = effect->u.rumble.weak_magnitude;
++	if (level == haptics->level)
++		return 0;
++
++	haptics->level = level;
++	schedule_work(&haptics->play_work);
++
++	return 0;
++}
++
++static void aw8697_input_close(struct input_dev *input)
++{
++	struct aw8697_haptics *haptics = input_get_drvdata(input);
++
++	haptics->level = 0;
++	cancel_work_sync(&haptics->play_work);
++	if (aw8697_stop(haptics))
++		dev_warn(haptics->dev, "failed to stop haptics on close\n");
++}
++
++static int aw8697_init(struct aw8697_haptics *haptics)
++{
++	int error;
++
++	error = aw8697_stop(haptics);
++	if (error)
++		return error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_PWMDBG_REG,
++				   AW8697_PWMDBG_MODE_MASK, AW8697_PWMDBG_24KHZ);
++	if (error)
++		return error;
++
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG1_REG, 0x30);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG2_REG, 0xeb);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_BSTDBG3_REG, 0xd4);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_TSET_REG, 0x12);
++	if (error)
++		return error;
++	error = regmap_write(haptics->regmap, AW8697_R_SPARE_REG, 0x68);
++	if (error)
++		return error;
++
++	error = regmap_update_bits(haptics->regmap, AW8697_ANADBG_REG,
++				   AW8697_ANADBG_IOC_MASK,
++				   AW8697_ANADBG_IOC_4P65A);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BSTCFG_REG,
++				   AW8697_BSTCFG_PEAK_MASK,
++				   AW8697_BSTCFG_PEAK_3P5A);
++	if (error)
++		return error;
++	error = regmap_update_bits(haptics->regmap, AW8697_BST_AUTO_REG,
++				   AW8697_BST_AUTO_AUTOSW, 0);
++	if (error)
++		return error;
++
++	return regmap_update_bits(haptics->regmap, AW8697_ADCTEST_REG,
++				  AW8697_ADCTEST_VBAT_HW_COMP,
++				  AW8697_ADCTEST_VBAT_HW_COMP);
++}
++
++static int aw8697_probe(struct i2c_client *client)
++{
++	struct aw8697_haptics *haptics;
++	unsigned int chip_id;
++	int error;
++
++	haptics = devm_kzalloc(&client->dev, sizeof(*haptics), GFP_KERNEL);
++	if (!haptics)
++		return -ENOMEM;
++
++	haptics->dev = &client->dev;
++	haptics->regmap = devm_regmap_init_i2c(client, &aw8697_regmap_config);
++	if (IS_ERR(haptics->regmap))
++		return dev_err_probe(&client->dev, PTR_ERR(haptics->regmap),
++				     "failed to initialize regmap\n");
++
++	haptics->reset_gpio = devm_gpiod_get(&client->dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(haptics->reset_gpio))
++		return dev_err_probe(&client->dev, PTR_ERR(haptics->reset_gpio),
++				     "failed to request reset GPIO\n");
++
++	aw8697_hw_reset(haptics);
++	error = regmap_read(haptics->regmap, AW8697_ID_REG, &chip_id);
++	if (error)
++		return dev_err_probe(&client->dev, error, "failed to read chip ID\n");
++	if (chip_id != AW8697_CHIP_ID)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unexpected chip ID 0x%02x\n", chip_id);
++
++	error = regmap_write(haptics->regmap, AW8697_ID_REG, AW8697_SOFT_RESET);
++	if (error)
++		return dev_err_probe(&client->dev, error, "software reset failed\n");
++	usleep_range(3000, 3500);
++
++	INIT_WORK(&haptics->play_work, aw8697_play_work);
++	haptics->input = devm_input_allocate_device(&client->dev);
++	if (!haptics->input)
++		return -ENOMEM;
++
++	haptics->input->name = "Awinic AW8697 haptics";
++	haptics->input->close = aw8697_input_close;
++	input_set_drvdata(haptics->input, haptics);
++	input_set_capability(haptics->input, EV_FF, FF_RUMBLE);
++
++	error = input_ff_create_memless(haptics->input, NULL, aw8697_play_effect);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to create force-feedback device\n");
++
++	error = aw8697_init(haptics);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to initialize haptics controller\n");
++
++	i2c_set_clientdata(client, haptics);
++	error = input_register_device(haptics->input);
++	if (error)
++		return dev_err_probe(&client->dev, error,
++				     "failed to register input device\n");
++
++	dev_info(&client->dev, "AW8697 haptics controller detected\n");
++	return 0;
++}
++
++static void aw8697_remove(struct i2c_client *client)
++{
++	struct aw8697_haptics *haptics = i2c_get_clientdata(client);
++
++	haptics->level = 0;
++	cancel_work_sync(&haptics->play_work);
++	aw8697_stop(haptics);
++}
++
++static const struct of_device_id aw8697_of_match[] = {
++	{ .compatible = "awinic,aw8697" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, aw8697_of_match);
++
++static struct i2c_driver aw8697_driver = {
++	.driver = {
++		.name = "aw8697-haptics",
++		.of_match_table = aw8697_of_match,
++	},
++	.probe = aw8697_probe,
++	.remove = aw8697_remove,
++};
++module_i2c_driver(aw8697_driver);
++
++MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_DESCRIPTION("Awinic AW8697 LRA haptics driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/nfc/nxp-nci/core.c b/drivers/nfc/nxp-nci/core.c
+index 66b198663387..0127cd124b1a 100644
+--- a/drivers/nfc/nxp-nci/core.c
++++ b/drivers/nfc/nxp-nci/core.c
+@@ -13,6 +13,7 @@
+ #include <linux/delay.h>
+ #include <linux/module.h>
+ #include <linux/nfc.h>
++#include <linux/property.h>
+ 
+ #include <net/nfc/nci_core.h>
+ 
+@@ -20,6 +21,8 @@
+ 
+ #define NXP_NCI_HDR_LEN	4
+ 
++#define NXP_NCI_CONFIG_MAX_SIZE	4096
++
+ #define NXP_NCI_NFC_PROTOCOLS (NFC_PROTO_JEWEL_MASK | \
+ 			       NFC_PROTO_MIFARE_MASK | \
+ 			       NFC_PROTO_FELICA_MASK | \
+@@ -29,6 +32,7 @@
+ 
+ #define NXP_NCI_RF_PLL_UNLOCKED_NTF nci_opcode_pack(NCI_GID_RF_MGMT, 0x21)
+ #define NXP_NCI_RF_TXLDO_ERROR_NTF nci_opcode_pack(NCI_GID_RF_MGMT, 0x23)
++#define NXP_NCI_SET_MODE_CMD nci_opcode_pack(NCI_GID_PROPRIETARY, 0x02)
+ 
+ static int nxp_nci_open(struct nci_dev *ndev)
+ {
+@@ -122,13 +126,112 @@ static const struct nci_driver_ops nxp_nci_core_ops[] = {
+ 	},
+ };
+ 
++static int nxp_nci_set_mode_rsp_packet(struct nci_dev *ndev,
++				       struct sk_buff *skb)
++{
++	__u8 status = skb->len ? skb->data[0] : NCI_STATUS_SYNTAX_ERROR;
++
++	nci_req_complete(ndev, status);
++
++	return 0;
++}
++
++static const struct nci_driver_ops nxp_nci_prop_ops[] = {
++	{
++		.opcode = NXP_NCI_SET_MODE_CMD,
++		.rsp = nxp_nci_set_mode_rsp_packet,
++	},
++};
++
++static int nxp_nci_apply_config(struct nci_dev *ndev)
++{
++	struct nxp_nci_info *info = nci_get_drvdata(ndev);
++	const struct firmware *config;
++	const u8 *frame;
++	size_t remaining;
++	int r;
++
++	if (!info->config_name)
++		return 0;
++
++	r = request_firmware(&config, info->config_name, info->pdev);
++	if (r) {
++		dev_err(info->pdev, "failed to load NCI configuration %s: %d\n",
++			info->config_name, r);
++		return r;
++	}
++
++	if (!config->size || config->size > NXP_NCI_CONFIG_MAX_SIZE) {
++		dev_err(info->pdev, "invalid NCI configuration size: %zu\n",
++			config->size);
++		r = -EINVAL;
++		goto release_config;
++	}
++
++	dev_info(info->pdev,
++		 "NCI limits: max ctrl packet payload %u\n",
++		 ndev->max_ctrl_pkt_payload_len);
++
++	frame = config->data;
++	remaining = config->size;
++	while (remaining) {
++		size_t frame_size;
++		u16 opcode;
++
++		if (remaining < NCI_CTRL_HDR_SIZE) {
++			r = -EINVAL;
++			goto invalid_config;
++		}
++
++		frame_size = NCI_CTRL_HDR_SIZE + nci_plen(frame);
++		if (frame_size > remaining || nci_mt(frame) != NCI_MT_CMD_PKT ||
++		    nci_pbf(frame) != NCI_PBF_LAST) {
++			r = -EINVAL;
++			goto invalid_config;
++		}
++
++		opcode = nci_opcode(frame);
++		if (opcode != NCI_OP_CORE_SET_CONFIG_CMD &&
++		    opcode != NXP_NCI_SET_MODE_CMD) {
++			r = -EINVAL;
++			goto invalid_config;
++		}
++
++		r = nci_core_cmd(ndev, opcode, nci_plen(frame),
++				 frame + NCI_CTRL_HDR_SIZE);
++		if (r) {
++			dev_err(info->pdev,
++				"NCI configuration command failed at offset %zu: %d\n",
++				config->size - remaining, r);
++			goto release_config;
++		}
++
++		frame += frame_size;
++		remaining -= frame_size;
++	}
++
++	dev_info(info->pdev, "applied NCI configuration %s\n",
++		 info->config_name);
++	goto release_config;
++
++invalid_config:
++	dev_err(info->pdev, "invalid NCI configuration at offset %zu\n",
++		config->size - remaining);
++release_config:
++	release_firmware(config);
++	return r;
++}
++
+ static const struct nci_ops nxp_nci_ops = {
+ 	.open = nxp_nci_open,
+ 	.close = nxp_nci_close,
+ 	.send = nxp_nci_send,
++	.post_setup = nxp_nci_apply_config,
+ 	.fw_download = nxp_nci_fw_download,
+ 	.core_ops = nxp_nci_core_ops,
+ 	.n_core_ops = ARRAY_SIZE(nxp_nci_core_ops),
++	.prop_ops = nxp_nci_prop_ops,
++	.n_prop_ops = ARRAY_SIZE(nxp_nci_prop_ops),
+ };
+ 
+ int nxp_nci_probe(void *phy_id, struct device *pdev,
+@@ -147,6 +250,7 @@ int nxp_nci_probe(void *phy_id, struct device *pdev,
+ 	info->pdev = pdev;
+ 	info->phy_ops = phy_ops;
+ 	info->max_payload = max_payload;
++	device_property_read_string(pdev, "firmware-name", &info->config_name);
+ 	INIT_WORK(&info->fw_info.work, nxp_nci_fw_work);
+ 	init_completion(&info->fw_info.cmd_completion);
+ 	mutex_init(&info->info_lock);
+diff --git a/drivers/nfc/nxp-nci/i2c.c b/drivers/nfc/nxp-nci/i2c.c
+index 049662ffdf97..9f2b4e2f5ca2 100644
+--- a/drivers/nfc/nxp-nci/i2c.c
++++ b/drivers/nfc/nxp-nci/i2c.c
+@@ -18,6 +18,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/module.h>
+ #include <linux/nfc.h>
++#include <linux/clk.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/unaligned.h>
+ 
+@@ -34,6 +35,7 @@ struct nxp_nci_i2c_phy {
+ 	struct nci_dev *ndev;
+ 
+ 	struct gpio_desc *gpiod_en;
++	struct clk *clk;
+ 	struct gpio_desc *gpiod_fw;
+ 
+ 	int hard_fault; /*
+@@ -51,8 +53,13 @@ static int nxp_nci_i2c_set_mode(void *phy_id,
+ 	gpiod_set_value(phy->gpiod_en, (mode != NXP_NCI_MODE_COLD) ? 1 : 0);
+ 	usleep_range(10000, 15000);
+ 
+-	if (mode == NXP_NCI_MODE_COLD)
+-		phy->hard_fault = 0;
++	/*
++	 * Any mode change restarts the transport, so a fault latched from a
++	 * previous attempt must not survive it. Clearing this only on the way
++	 * into cold mode left a single marginal read ending the session for
++	 * good, with every later interrupt dropped.
++	 */
++	phy->hard_fault = 0;
+ 
+ 	return 0;
+ }
+@@ -221,10 +228,19 @@ static irqreturn_t nxp_nci_i2c_irq_thread_fn(int irq, void *phy_id)
+ 		r = nxp_nci_i2c_fw_read(phy, &skb);
+ 		break;
+ 	case NXP_NCI_MODE_COLD:
+-		r = -EREMOTEIO;
+-		break;
++		/*
++		 * The controller can assert its interrupt before the driver
++		 * has left cold mode. That is not a transport failure and
++		 * must not poison the phy: drop the frame and wait.
++		 */
++		goto exit_irq_handled;
+ 	}
+ 
++	if (r < 0)
++		dev_info(&client->dev,
++			 "bring-up: irq read r=%d mode=%d hard_fault=%d\n",
++			 r, info->mode, phy->hard_fault);
++
+ 	if (r == -EREMOTEIO) {
+ 		phy->hard_fault = r;
+ 		if (info->mode == NXP_NCI_MODE_FW)
+@@ -298,6 +314,17 @@ static int nxp_nci_i2c_probe(struct i2c_client *client)
+ 		return PTR_ERR(phy->gpiod_fw);
+ 	}
+ 
++	/*
++	 * Boards that do not fit the controller with its own crystal feed it a
++	 * reference from the platform instead. The digital side runs off an
++	 * internal oscillator either way, so a missing reference is invisible
++	 * over NCI and only shows up as a carrier that never appears.
++	 */
++	phy->clk = devm_clk_get_optional_enabled(dev, NULL);
++	if (IS_ERR(phy->clk))
++		return dev_err_probe(dev, PTR_ERR(phy->clk),
++				     "Failed to get reference clock\n");
++
+ 	r = nxp_nci_probe(phy, &client->dev, &i2c_phy_ops,
+ 			  NXP_NCI_I2C_MAX_PAYLOAD, &phy->ndev);
+ 	if (r < 0)
+diff --git a/drivers/nfc/nxp-nci/nxp-nci.h b/drivers/nfc/nxp-nci/nxp-nci.h
+index ae3fb2735a4e..af9f0254954b 100644
+--- a/drivers/nfc/nxp-nci/nxp-nci.h
++++ b/drivers/nfc/nxp-nci/nxp-nci.h
+@@ -53,6 +53,7 @@ struct nxp_nci_info {
+ 	struct nci_dev *ndev;
+ 	void *phy_id;
+ 	struct device *pdev;
++	const char *config_name;
+ 
+ 	enum nxp_nci_mode mode;
+ 
+diff --git a/drivers/power/supply/qcom_smbx.c b/drivers/power/supply/qcom_smbx.c
+index 2b5d20bac290..b5db39b169c6 100644
+--- a/drivers/power/supply/qcom_smbx.c
++++ b/drivers/power/supply/qcom_smbx.c
+@@ -113,6 +113,7 @@ enum smb_generation {
+ #define ICL_OVERRIDE_AFTER_APSD_BIT			BIT(4)
+ 
+ #define USBIN_ICL_OPTIONS				0x366
++#define CFG_USB3P0_SEL_BIT				BIT(2)
+ #define USB51_MODE_BIT					BIT(1)
+ #define USBIN_MODE_CHG_BIT				BIT(0)
+ 
+@@ -145,6 +146,7 @@ enum smb_generation {
+ #define INPUT_CURRENT_LIMIT_MASK			GENMASK(7, 0)
+ 
+ #define POWER_PATH_STATUS(smb)				(SMB_REG_OFFSET(smb) + 0x0B)
++#define P_PATH_USBIN_SUSPEND_STS_BIT			BIT(6)
+ #define P_PATH_USE_USBIN_BIT				BIT(4)
+ #define P_PATH_VALID_INPUT_POWER_SOURCE_STS_BIT		BIT(0)
+ 
+@@ -177,6 +179,9 @@ enum smb_generation {
+ #define BARK_BITE_WDOG_PET				0x643
+ #define BARK_BITE_WDOG_PET_BIT				BIT(0)
+ 
++#define AICL_CMD					0x644
++#define RERUN_AICL_BIT					BIT(0)
++
+ #define WD_CFG						0x651
+ #define WATCHDOG_TRIGGER_AFP_EN_BIT			BIT(7)
+ #define BARK_WDOG_INT_EN_BIT				BIT(6)
+@@ -193,12 +198,13 @@ enum smb_generation {
+ #define STAT_SW_OVERRIDE_CFG_BIT			BIT(6)
+ 
+ #define SDP_CURRENT_UA					500000
++#define USB3_SDP_CURRENT_UA				900000
+ #define CDP_CURRENT_UA					1500000
+ #define DCP_CURRENT_UA					1500000
+ #define CURRENT_MAX_UA					DCP_CURRENT_UA
+ 
+-/* pmi8998 registers represent current in increments of 1/40th of an amp */
+-#define CURRENT_SCALE_FACTOR				25000
++/* PMI8998 registers represent current in increments of 1/40th of an amp. */
++#define SMB2_CURRENT_STEP_UA				25000
+ /* clang-format on */
+ 
+ enum charger_status {
+@@ -239,6 +245,8 @@ struct smb_chip {
+ 	struct regmap *regmap;
+ 	struct power_supply_battery_info *batt_info;
+ 	enum smb_generation gen;
++	unsigned int icl_max_ua;
++	unsigned int icl_step_ua;
+ 
+ 	struct delayed_work status_change_work;
+ 	int cable_irq;
+@@ -254,6 +262,13 @@ struct smb_match_data {
+ 	const char *name;
+ 	enum smb_generation gen;
+ 	size_t init_seq_len;
++	unsigned int fv_min_uv;
++	unsigned int fv_max_uv;
++	unsigned int fv_step_uv;
++	unsigned int fcc_max_ua;
++	unsigned int fcc_step_ua;
++	unsigned int icl_max_ua;
++	unsigned int icl_step_ua;
+ 	const struct smb_init_register *init_seq;
+ };
+ 
+@@ -261,6 +276,7 @@ static enum power_supply_property smb_properties[] = {
+ 	POWER_SUPPLY_PROP_MANUFACTURER,
+ 	POWER_SUPPLY_PROP_MODEL_NAME,
+ 	POWER_SUPPLY_PROP_CURRENT_MAX,
++	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+ 	POWER_SUPPLY_PROP_CURRENT_NOW,
+ 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+ 	POWER_SUPPLY_PROP_STATUS,
+@@ -352,7 +368,7 @@ static int smbx_ov_status(struct smb_chip *chip)
+ 	if (rc)
+ 		return rc;
+ 
+-	return !!(reg & mask);
++	return !!(val & mask);
+ }
+ 
+ static int smb_get_prop_status(struct smb_chip *chip, int *val)
+@@ -414,23 +430,72 @@ static inline int smb_get_current_limit(struct smb_chip *chip,
+ 	int rc = regmap_read(chip->regmap, chip->base + ICL_STATUS(chip), val);
+ 
+ 	if (rc >= 0)
+-		*val *= CURRENT_SCALE_FACTOR;
++		*val *= chip->icl_step_ua;
+ 	return rc;
+ }
+ 
++static int smb_rerun_aicl(struct smb_chip *chip)
++{
++	unsigned int stat;
++	int rc;
++
++	rc = regmap_read(chip->regmap, chip->base + POWER_PATH_STATUS(chip),
++			 &stat);
++	if (rc < 0)
++		return rc;
++
++	if (stat & P_PATH_USBIN_SUSPEND_STS_BIT)
++		return 0;
++
++	rc = regmap_update_bits(chip->regmap,
++				chip->base + USBIN_AICL_OPTIONS_CFG,
++				USBIN_AICL_PERIODIC_RERUN_EN_BIT,
++				USBIN_AICL_PERIODIC_RERUN_EN_BIT);
++	if (rc < 0)
++		return rc;
++
++	return regmap_update_bits(chip->regmap, chip->base + AICL_CMD,
++				  RERUN_AICL_BIT, RERUN_AICL_BIT);
++}
++
++static int smb_select_smb5_icl_mode(struct smb_chip *chip, unsigned int val)
++{
++	unsigned int mode = 0;
++
++	if (val == SDP_CURRENT_UA)
++		mode = USB51_MODE_BIT;
++	else if (val == USB3_SDP_CURRENT_UA)
++		mode = CFG_USB3P0_SEL_BIT | USB51_MODE_BIT;
++
++	return regmap_update_bits(chip->regmap,
++				  chip->base + USBIN_ICL_OPTIONS,
++				  CFG_USB3P0_SEL_BIT | USB51_MODE_BIT, mode);
++}
++
+ static int smb_set_current_limit(struct smb_chip *chip, unsigned int val)
+ {
+ 	unsigned char val_raw;
++	int rc;
+ 
+-	if (val > 4800000) {
++	if (val > chip->icl_max_ua) {
+ 		dev_err(chip->dev,
+-			"Can't set current limit higher than 4800000uA");
++			"Can't set current limit higher than %uuA",
++			chip->icl_max_ua);
+ 		return -EINVAL;
+ 	}
+-	val_raw = val / CURRENT_SCALE_FACTOR;
++	val_raw = val / chip->icl_step_ua;
++	if (chip->gen == SMB5) {
++		rc = smb_select_smb5_icl_mode(chip, val);
++		if (rc < 0)
++			return rc;
++	}
++
++	rc = regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
++			  val_raw);
++	if (rc < 0 || chip->gen != SMB5)
++		return rc;
+ 
+-	return regmap_write(chip->regmap, chip->base + USBIN_CURRENT_LIMIT_CFG,
+-			    val_raw);
++	return smb_rerun_aicl(chip);
+ }
+ 
+ static void smb_status_change_work(struct work_struct *work)
+@@ -605,6 +670,7 @@ static int smb_get_property(struct power_supply *psy,
+ 		val->strval = chip->name;
+ 		return 0;
+ 	case POWER_SUPPLY_PROP_CURRENT_MAX:
++	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+ 		return smb_get_current_limit(chip, &val->intval);
+ 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+ 		return smb_get_iio_chan(chip, chip->usb_in_i_chan,
+@@ -642,6 +708,7 @@ static int smb_set_property(struct power_supply *psy,
+ 		return regmap_update_bits(chip->regmap, chip->base + USBIN_CMD_IL,
+ 					  USBIN_SUSPEND_BIT, !val->intval);
+ 	case POWER_SUPPLY_PROP_CURRENT_MAX:
++	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+ 		return smb_set_current_limit(chip, val->intval);
+ 	default:
+ 		dev_err(chip->dev, "No setter for property: %d\n", psp);
+@@ -655,6 +722,7 @@ static int smb_property_is_writable(struct power_supply *psy,
+ 	switch (psp) {
+ 	case POWER_SUPPLY_PROP_STATUS:
+ 	case POWER_SUPPLY_PROP_CURRENT_MAX:
++	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+ 		return 1;
+ 	default:
+ 		return 0;
+@@ -726,7 +794,6 @@ static const struct power_supply_desc smb_psy_desc = {
+ 
+ /* Init sequence derived from vendor downstream driver */
+ static const struct smb_init_register smb5_init_seq[] = {
+-	{ .addr = USBIN_CMD_IL, .mask = USBIN_SUSPEND_BIT, .val = 0 },
+ 	/*
+ 	 * By default configure us as an upstream facing port
+ 	 * FIXME: This will be handled by the type-c driver
+@@ -762,10 +829,6 @@ static const struct smb_init_register smb5_init_seq[] = {
+ 	{ .addr = SMB5_CHARGE_RCHG_SOC_THRESHOLD_CFG_REG,
+ 	  .mask = SMB5_CHARGE_RCHG_SOC_THRESHOLD_CFG_MASK,
+ 	  .val = 250 },
+-	/* Enable charging */
+-	{ .addr = CHARGING_ENABLE_CMD,
+-	  .mask = CHARGING_ENABLE_CMD_BIT,
+-	  .val = CHARGING_ENABLE_CMD_BIT },
+ 	/* Enable BC1P2 auto Src detect */
+ 	{ .addr = USBIN_OPTIONS_1_CFG,
+ 	  .mask = AUTO_SRC_DETECT_BIT,
+@@ -796,15 +859,6 @@ static const struct smb_init_register smb5_init_seq[] = {
+ 			| USBIN_AICL_EN_BIT | SUSPEND_ON_COLLAPSE_USBIN_BIT,
+ 	  .val = USBIN_AICL_PERIODIC_RERUN_EN_BIT | USBIN_AICL_ADC_EN_BIT
+ 			| USBIN_AICL_EN_BIT | SUSPEND_ON_COLLAPSE_USBIN_BIT },
+-	/*
+-	 * This overrides all of the other current limit configs and is
+-	 * expected to be used for setting limits based on temperature.
+-	 * We set some relatively safe default value while still allowing
+-	 * a comfortably fast charging rate.
+-	 */
+-	{ .addr = FAST_CHARGE_CURRENT_CFG,
+-	  .mask = FAST_CHARGE_CURRENT_SETTING_MASK,
+-	  .val = 1950000 / CURRENT_SCALE_FACTOR },
+ };
+ 
+ /* Init sequence derived from vendor downstream driver */
+@@ -898,35 +952,63 @@ static const struct smb_init_register smb2_init_seq[] = {
+ 	 */
+ 	{ .addr = PRE_CHARGE_CURRENT_CFG,
+ 	  .mask = PRE_CHARGE_CURRENT_SETTING_MASK,
+-	  .val = 500000 / CURRENT_SCALE_FACTOR },
++	  .val = 500000 / SMB2_CURRENT_STEP_UA },
+ };
+ 
+-struct smb_match_data pmi8998_match_data = {
++static const struct smb_match_data pmi8998_match_data = {
+ 	.init_seq = smb2_init_seq,
+ 	.init_seq_len = ARRAY_SIZE(smb2_init_seq),
+ 	.name = "pmi8998",
+ 	.gen = SMB2,
++	.fv_min_uv = 3487500,
++	.fv_max_uv = 4920000,
++	.fv_step_uv = 7500,
++	.fcc_max_ua = 4500000,
++	.fcc_step_ua = 25000,
++	.icl_max_ua = 4800000,
++	.icl_step_ua = 25000,
+ };
+ 
+-struct smb_match_data pm660_match_data = {
++static const struct smb_match_data pm660_match_data = {
+ 	.init_seq = smb2_init_seq,
+ 	.init_seq_len = ARRAY_SIZE(smb2_init_seq),
+ 	.name = "pm660",
+ 	.gen = SMB2,
++	.fv_min_uv = 3487500,
++	.fv_max_uv = 4920000,
++	.fv_step_uv = 7500,
++	.fcc_max_ua = 4500000,
++	.fcc_step_ua = 25000,
++	.icl_max_ua = 4800000,
++	.icl_step_ua = 25000,
+ };
+ 
+-struct smb_match_data pm8150b_match_data = {
++static const struct smb_match_data pm8150b_match_data = {
+ 	.init_seq = smb5_init_seq,
+ 	.init_seq_len = ARRAY_SIZE(smb5_init_seq),
+ 	.name = "pm8150b",
+ 	.gen = SMB5,
++	.fv_min_uv = 3600000,
++	.fv_max_uv = 4790000,
++	.fv_step_uv = 10000,
++	.fcc_max_ua = 8000000,
++	.fcc_step_ua = 50000,
++	.icl_max_ua = 5000000,
++	.icl_step_ua = 50000,
+ };
+ 
+-struct smb_match_data pm7250b_match_data = {
++static const struct smb_match_data pm7250b_match_data = {
+ 	.init_seq = smb5_init_seq,
+ 	.init_seq_len = ARRAY_SIZE(smb5_init_seq),
+ 	.name = "pm7250b",
+ 	.gen = SMB5,
++	.fv_min_uv = 3600000,
++	.fv_max_uv = 4800000,
++	.fv_step_uv = 10000,
++	.fcc_max_ua = 3000000,
++	.fcc_step_ua = 50000,
++	.icl_max_ua = 3000000,
++	.icl_step_ua = 50000,
+ };
+ 
+ 
+@@ -978,7 +1060,8 @@ static int smb_probe(struct platform_device *pdev)
+ 	struct power_supply_desc *desc;
+ 	struct smb_chip *chip;
+ 	const struct smb_match_data *match_data;
+-	int rc, irq;
++	int rc, irq, float_voltage_uv, fast_charge_current_ua;
++	unsigned int float_voltage_sel, fast_charge_current_sel;
+ 
+ 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
+ 	if (!chip)
+@@ -1009,11 +1092,33 @@ static int smb_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	match_data = (const struct smb_match_data *)device_get_match_data(chip->dev);
++	if (!match_data)
++		return dev_err_probe(chip->dev, -ENODEV,
++				     "missing match data\n");
+ 
+ 	chip->gen = match_data->gen;
++	chip->icl_max_ua = match_data->icl_max_ua;
++	chip->icl_step_ua = match_data->icl_step_ua;
+ 
+ 	dev_info(chip->dev, "Generation %s\n", chip->gen == SMB2 ? "SMB2" : "SMB5");
+ 
++	if (chip->gen == SMB5) {
++		/* Do not use bootloader charge limits while reconfiguring SMB5. */
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + USBIN_CMD_IL,
++					USBIN_SUSPEND_BIT, USBIN_SUSPEND_BIT);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't suspend USB input during setup\n");
++
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + CHARGING_ENABLE_CMD,
++					CHARGING_ENABLE_CMD_BIT, 0);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't disable charging during setup\n");
++	}
++
+ 	rc = smb_init_hw(chip, match_data->init_seq, match_data->init_seq_len);
+ 	if (rc < 0)
+ 		return rc;
+@@ -1050,11 +1155,69 @@ static int smb_probe(struct platform_device *pdev)
+ 		return dev_err_probe(chip->dev, rc,
+ 				     "Failed to init status change work\n");
+ 
+-	rc = (chip->batt_info->voltage_max_design_uv - 3487500) / 7500 + 1;
+-	rc = regmap_update_bits(chip->regmap, chip->base + FLOAT_VOLTAGE_CFG,
+-				FLOAT_VOLTAGE_SETTING_MASK, rc);
+-	if (rc < 0)
+-		return dev_err_probe(chip->dev, rc, "Couldn't set vbat max\n");
++	if (chip->gen == SMB5) {
++		float_voltage_uv =
++			chip->batt_info->constant_charge_voltage_max_uv;
++		if (float_voltage_uv == -EINVAL)
++			float_voltage_uv = chip->batt_info->voltage_max_design_uv;
++
++		if (float_voltage_uv < match_data->fv_min_uv ||
++		    float_voltage_uv > match_data->fv_max_uv)
++			return dev_err_probe(chip->dev, -EINVAL,
++					     "float voltage %d uV outside supported range %u-%u uV\n",
++					     float_voltage_uv,
++					     match_data->fv_min_uv,
++					     match_data->fv_max_uv);
++
++		/* Round down so the hardware limit never exceeds the request. */
++		float_voltage_sel =
++			(float_voltage_uv - match_data->fv_min_uv) /
++			match_data->fv_step_uv;
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + FLOAT_VOLTAGE_CFG,
++					FLOAT_VOLTAGE_SETTING_MASK,
++					float_voltage_sel);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't set float voltage\n");
++
++		fast_charge_current_ua =
++			chip->batt_info->constant_charge_current_max_ua;
++		if (fast_charge_current_ua <= 0 ||
++		    fast_charge_current_ua > match_data->fcc_max_ua)
++			return dev_err_probe(chip->dev, -EINVAL,
++					     "fast charge current %d uA outside supported range 1-%u uA\n",
++					     fast_charge_current_ua,
++					     match_data->fcc_max_ua);
++
++		/* Round down so the hardware limit never exceeds the request. */
++		fast_charge_current_sel = fast_charge_current_ua /
++			match_data->fcc_step_ua;
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + FAST_CHARGE_CURRENT_CFG,
++					FAST_CHARGE_CURRENT_SETTING_MASK,
++					fast_charge_current_sel);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't set fast charge current\n");
++
++		rc = smb_set_current_limit(chip, SDP_CURRENT_UA);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't set safe USB input current\n");
++	} else {
++		rc = (chip->batt_info->voltage_max_design_uv - 3487500) /
++			7500 + 1;
++	}
++
++	if (chip->gen == SMB2) {
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + FLOAT_VOLTAGE_CFG,
++					FLOAT_VOLTAGE_SETTING_MASK, rc);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't set vbat max\n");
++	}
+ 
+ 	rc = smb_init_irq(chip, &irq, "bat-ov", smb_handle_batt_overvoltage);
+ 	if (rc < 0)
+@@ -1081,26 +1244,36 @@ static int smb_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, chip);
+ 
+-	/*
+-	 * This overrides all of the other current limits and is expected
+-	 * to be used for setting limits based on temperature. We set some
+-	 * relatively safe default value while still allowing a comfortably
+-	 * fast charging rate. Once temperature monitoring is hooked up we
+-	 * would expect this to be changed dynamically based on temperature
+-	 * reporting.
+-	 */
+-	rc = regmap_write(chip->regmap, chip->base + FAST_CHARGE_CURRENT_CFG,
+-			  1950000 / CURRENT_SCALE_FACTOR);
+-	if (rc < 0)
+-		return dev_err_probe(chip->dev, rc,
+-				     "Couldn't write fast charge current cfg");
+-
+ 	rc = regmap_write_bits(chip->regmap, chip->base + AICL_RERUN_TIME_CFG,
+ 			       AICL_RERUN_TIME_MASK, AIC_RERUN_TIME_3_SECS);
+ 	if (rc < 0)
+ 		return dev_err_probe(chip->dev, rc,
+ 				     "Couldn't write fast AICL rerun time");
+ 
++	if (chip->gen == SMB5) {
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + CHARGING_ENABLE_CMD,
++					CHARGING_ENABLE_CMD_BIT,
++					CHARGING_ENABLE_CMD_BIT);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't enable charging\n");
++
++		rc = regmap_update_bits(chip->regmap,
++					chip->base + USBIN_CMD_IL,
++					USBIN_SUSPEND_BIT, 0);
++		if (rc < 0)
++			return dev_err_probe(chip->dev, rc,
++					     "Couldn't enable USB input\n");
++
++		dev_info(chip->dev,
++			 "charge limits: float=%u uV fast=%u uA input=%u uA\n",
++			 match_data->fv_min_uv +
++				float_voltage_sel * match_data->fv_step_uv,
++			 fast_charge_current_sel * match_data->fcc_step_ua,
++			 SDP_CURRENT_UA);
++	}
++
+ 	/* Initialise charger state */
+ 	schedule_delayed_work(&chip->status_change_work, 0);
+ 
+diff --git a/drivers/usb/gadget/Kconfig b/drivers/usb/gadget/Kconfig
+index 76521555e3c1..3818e5942bf1 100644
+--- a/drivers/usb/gadget/Kconfig
++++ b/drivers/usb/gadget/Kconfig
+@@ -97,8 +97,8 @@ config USB_GADGET_DEBUG_FS
+ 	   to conserve kernel memory, say "N".
+ 
+ config USB_GADGET_VBUS_DRAW
+-	int "Maximum VBUS Power usage (2-500 mA)"
+-	range 2 500
++	int "Maximum VBUS Power usage (2-900 mA)"
++	range 2 900
+ 	default 2
+ 	help
+ 	   Some devices need to draw power from USB when they are
+@@ -107,8 +107,9 @@ config USB_GADGET_VBUS_DRAW
+ 	   such as an AC adapter or batteries.
+ 
+ 	   Enter the maximum power your device draws through USB, in
+-	   milliAmperes.  The permitted range of values is 2 - 500 mA;
+-	   0 mA would be legal, but can make some hosts misbehave.
++	   milliAmperes.  The permitted range of values is 2 - 900 mA;
++	   USB 2.x configurations are capped at 500 mA.  0 mA would be
++	   legal, but can make some hosts misbehave.
+ 
+ 	   This value will be used except for system-specific gadget
+ 	   drivers that have more specific information.
+diff --git a/include/uapi/linux/input-event-codes.h b/include/uapi/linux/input-event-codes.h
+index ca5851e97fac..9d1a741e92ac 100644
+--- a/include/uapi/linux/input-event-codes.h
++++ b/include/uapi/linux/input-event-codes.h
+@@ -878,6 +878,7 @@
+ 
+ #define ABS_VOLUME		0x20
+ #define ABS_PROFILE		0x21
++#define ABS_SND_PROFILE		0x22
+ 
+ #define ABS_MISC		0x28
+ 
+@@ -987,4 +988,12 @@
+ #define SND_MAX			0x07
+ #define SND_CNT			(SND_MAX+1)
+ 
++/*
++ * ABS_SND_PROFILE values
++ */
++
++#define SND_PROFILE_SILENT	0x00
++#define SND_PROFILE_VIBRATE	0x01
++#define SND_PROFILE_RING	0x02
++
+ #endif
+diff --git a/net/nfc/nci/core.c b/net/nfc/nci/core.c
+index fc921cd2cdff..5a10a489c5aa 100644
+--- a/net/nfc/nci/core.c
++++ b/net/nfc/nci/core.c
+@@ -862,6 +862,9 @@ static int nci_start_poll(struct nfc_dev *nfc_dev,
+ 	rc = nci_request(ndev, nci_rf_discover_req, &param,
+ 			 msecs_to_jiffies(NCI_RF_DISC_TIMEOUT));
+ 
++	pr_info("NCI discover: im=0x%x tm=0x%x rc=%d\n",
++		param.im_protocols, param.tm_protocols, rc);
++
+ 	if (!rc)
+ 		ndev->poll_prots = im_protocols;
+ 
+diff --git a/net/nfc/nci/ntf.c b/net/nfc/nci/ntf.c
+index a818eff27e6b..55b449298912 100644
+--- a/net/nfc/nci/ntf.c
++++ b/net/nfc/nci/ntf.c
+@@ -789,6 +789,10 @@ void nci_ntf_packet(struct nci_dev *ndev, struct sk_buff *skb)
+ {
+ 	__u16 ntf_opcode = nci_opcode(skb->data);
+ 
++	pr_info("NCI ntf: GID=0x%x OID=0x%x plen=%d\n",
++		nci_opcode_gid(ntf_opcode), nci_opcode_oid(ntf_opcode),
++		nci_plen(skb->data));
++
+ 	pr_debug("NCI RX: MT=ntf, PBF=%d, GID=0x%x, OID=0x%x, plen=%d\n",
+ 		 nci_pbf(skb->data),
+ 		 nci_opcode_gid(ntf_opcode),
+-- 
+2.54.0
+

@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=0
+pkgrel=1
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -44,6 +44,7 @@ source="
 	0005-ufs-qcom-retain-SM8150-32-bit-DMA-aperture.patch
 	0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
 	0007-dt-bindings-document-hotdog-display-and-touch.patch
+	0008-arm64-qcom-restore-hotdog-platform-controls.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -94,7 +95,7 @@ package() {
 
 sha512sums="
 dba1bfc3e29ad9fd87c325818b3c265c6f2d2e0c95509e96e31d50b453412308753e99d855fadf291e6446cb2548a98cf19cd54de68870af44fbee577daf8f53  linux-oneplus-hotdog-mainline617-clean-379d8fe35c7ca685a650bd82fd023af0ea3f0de0.tar.gz
-95ce95386f9de62d7089d91213f4919bb2a64f2fb6e8beef0e390142b9e3ae2cbcef3304bfe02553b2b7263d615e1b254d0891dd9ea619f33652bf9f9cc19644  config-oneplus-hotdog-mainline617-clean.aarch64
+50176d5d9721631238150ef7f0470ba70e940a29ec6671479faf486c2dbaa7b0045664f3e23b800dc79087bb6b4d1052d394e1a3d9a9e0ad9c9ab4d3c8dd200e  config-oneplus-hotdog-mainline617-clean.aarch64
 3263ecd1fd86888415ce1a82d178e05436abcf6921f871b73d0d1e9cb5774221d2c4cdfe593aee58adb53c4cda27cf4c5791daba44f767c13cc80092c199a3c6  0001-arm64-add-bounded-hotdog-direct-boot-contract.patch
 f82dc23457e596babf7ba606237c5f44e4b3550e968e6f9f314ff6bc20d9d7c0365be95aa949a0fc5b76bc76a272dd57ef72a2d19841378323556c07cd5e711b  0002-arm64-dts-qcom-add-hotdog-boot-foundation.patch
 13c151831cbcaa8b0ba07e20884e0c6178cf65faa878bc00ff8b7f68a865a8615079632a1331469663f32e135050742eaf11014749f5ea02cdee90c74935816c  0003-Input-s6sy761-restore-hotdog-reset-and-resume.patch
@@ -102,5 +103,6 @@ f82dc23457e596babf7ba606237c5f44e4b3550e968e6f9f314ff6bc20d9d7c0365be95aa949a0fc
 dbf833378c382cce33786b26d2a30a78ef5a9587767488ea3439329745f6c9ac89b4562103fdcf58bd5759763f94789dc69cc8e12fabf8f1af74cefe4d589e3a  0005-ufs-qcom-retain-SM8150-32-bit-DMA-aperture.patch
 3595e29daf0d3261e94279be1d86dadea72ee02e8223f923ae2809a6a5144c61c386ecce07b4c39969a14b84e654af51ea4586461b71ba82b73f5889ad27ed59  0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
 39bb91b41e0642b9310ac66a84cdb350a28f24fd5e09f27ad128f0af5b989a1c61ce5d3f786d7eee4f68dee611c94f0166a57bd0f82f1def4dbb2c664c4d5d9d  0007-dt-bindings-document-hotdog-display-and-touch.patch
-af04be984c75770985247404b010193671d8232257676b1f0d7bd975414dc7ce039ac0b6e3712f30c9c6398a5f6397152a61922d08ef2e358ea06c5d4918e875  validate-mainline617-clean-build.sh
+94987c08445380883d30b2ac187cdf3d7b0cfd0bf066c0d071bcd10458b57c23540d62ccaf04d9672d4b13946e648c3f28bc04b0dd54ec6cb743c0148a65104e  0008-arm64-qcom-restore-hotdog-platform-controls.patch
+143d17acd9fffb92ecbfc558df6c80b442767f00e2527a89593a5c019cb6e46f8130ddfa4207ea1833505d8b89c7634128dc70a3c0c3c9f85d6adf1f17f9864b  validate-mainline617-clean-build.sh
 "

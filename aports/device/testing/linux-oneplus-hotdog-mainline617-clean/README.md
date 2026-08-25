@@ -15,12 +15,11 @@ hardware-tested package and is not selected by the device package yet.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The seven patches are exported from the local kernel branch
-`codex/hotdog-sm8150-clean-baseline` at commit
-`c1b8aff58c2ba5dc428c51e57dfe669a36a189c6`, tree
-`8ddc2f65bd5e097ee5c7f88a42e656573d504690`, and retain their commit
-identities. The cumulative source delta is 17 files, 1,036 insertions and 37
-deletions.
+name. The eight patches are exported from the local kernel branch
+`bringup/hotdog-sm8150-clean-baseline` at commit
+`c1d178e9b8cb7a7b5a6714413402c578426831af`, tree
+`86422c1a7fb531b24d1a29a775a2bcbec72201b3`, and retain their commit
+identities.
 
 ## Included foundation
 
@@ -33,15 +32,17 @@ deletions.
 - Adreno 640 GPU and GMU with the Hotdog ZAP firmware path;
 - power and volume keys;
 - S6SY761 touch with reset and resume recovery;
+- alert slider, PM8150/IMEM bootloader and recovery modes;
+- SMB5 charging policy, external fuel gauge and Type-C role switching;
+- AW8697 haptics and PN553 NFC;
 - the pmaports LLVM prototype fix required by the shared configuration.
 
 ## Deliberately deferred
 
-The first baseline does not yet port audio, modem/data/calls/SMS, Wi-Fi,
-Bluetooth, cameras, popup motor, NFC, haptics, alert slider, SLPI sensors,
-Elliptic proximity, charger policy, or reboot/recovery integration. Those
-remain available in the immutable r181 checkpoint and will be restored only
-after direct boot, storage, USB recovery, display, GPU and input are stable.
+The next blocks still need audio, modem/data/calls/SMS, Wi-Fi, Bluetooth,
+cameras, popup motor, SLPI sensors and Elliptic proximity. Those remain
+available in the immutable r181 checkpoint and are restored only in bounded,
+independently tested groups.
 
 ## Validation state
 
