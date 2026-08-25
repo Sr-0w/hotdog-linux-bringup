@@ -38,8 +38,9 @@ static int build_leg(const struct hotdog_bearer *bearer,
 	success = qmi_message_wds_bind_mux_data_port_input_set_endpoint_info(
 		leg->bind, endpoint_type, endpoint_interface, &error) &&
 		qmi_message_wds_bind_mux_data_port_input_set_mux_id(
-			leg->bind, (guint8)bearer->mux_id, &error) &&
-		qmi_message_wds_bind_mux_data_port_input_set_client_type(
+			leg->bind, (guint8)bearer->mux_id, &error);
+	if (success && client_type != QMI_WDS_CLIENT_TYPE_UNDEFINED)
+		success = qmi_message_wds_bind_mux_data_port_input_set_client_type(
 			leg->bind, client_type, &error);
 	g_clear_error(&error);
 	if (!success)
@@ -79,6 +80,8 @@ int hotdog_qmi_wds_plan_build(
 	    !bearer->mux_id || bearer->mux_id > UINT8_MAX ||
 	    bearer->profile > UINT8_MAX || !bearer->apn[0] ||
 	    bearer->family > HOTDOG_IP_V4V6 || bearer->auth > HOTDOG_AUTH_PAP_CHAP ||
+	    (client_type != QMI_WDS_CLIENT_TYPE_TETHERED &&
+	     client_type != QMI_WDS_CLIENT_TYPE_UNDEFINED) ||
 	    (credentials &&
 	     (!terminated(credentials->username, sizeof(credentials->username)) ||
 	      !terminated(credentials->password, sizeof(credentials->password)))))

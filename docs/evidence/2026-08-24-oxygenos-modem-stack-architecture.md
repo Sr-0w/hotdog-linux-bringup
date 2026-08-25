@@ -160,6 +160,20 @@ CID release or link deletion enters `blocked` without erasing the residue. On
 SSR only, remote CIDs and packet handles are invalidated by the lost QMI
 generation before the still-local rmnet link is removed.
 
+`hotdog-qmi-ims-session` now dispatches that reducer through real asynchronous
+libqmi/rmnet calls. It uses an automatic mux, one WDS CID per requested family,
+Bind Subscription before Bind Mux, the modem profile index/APN, exact packet
+handles and Current Settings. The handset path omits the optional tethered
+client-type TLV, matching ModemManager. Local IP configuration is an explicit
+callback that must be acknowledged before `UP`; transport success alone cannot
+publish readiness. Every request carries a generation token so callbacks from
+an old QRTR generation are ignored. A late successful Add Link is immediately
+deleted, and the public clear API refuses active or blocked ownership.
+
+The complete target-only path was compiled against the postmarketOS aarch64
+libqmi 1.39 headers with `-Wall -Wextra -Werror`. The resulting session object
+has SHA-256 `fd863c7c8e497fad1208be3690106ebeab0888daa7cf7e82172e71ec40631267`.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and

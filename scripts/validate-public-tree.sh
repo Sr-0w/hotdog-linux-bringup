@@ -688,10 +688,22 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-rmnet.c hotdog-qmi-rmnet.h; do
 		[ -f "$source_dir/$source" ] || die "missing QMI rmnet topology adapter: $source"
 	done
+	for source in hotdog-qmi-ims-session.c hotdog-qmi-ims-session.h; do
+		[ -f "$source_dir/$source" ] || die "missing asynchronous IMS WDS session: $source"
+	done
 	grep -q 'QMI_DATA_ENDPOINT_TYPE_EMBEDDED' "$source_dir/hotdog-qmi-rmnet.c" ||
 		die "IPA rmnet topology lacks its embedded QMI endpoint"
 	grep -q 'QMI_DEVICE_MUX_ID_MAX' "$source_dir/hotdog-qmi-rmnet.c" ||
 		die "rmnet link validation does not bound dynamic mux IDs"
+	for call in qmi_device_add_link_with_flags qmi_client_wds_bind_subscription \
+		qmi_client_wds_bind_mux_data_port qmi_client_wds_start_network \
+		qmi_client_wds_get_current_settings qmi_client_wds_stop_network \
+		qmi_device_release_client qmi_device_delete_link; do
+		grep -q "$call" "$source_dir/hotdog-qmi-ims-session.c" ||
+			die "IMS WDS session lacks transaction operation: $call"
+	done
+	grep -q 'QMI_WDS_CLIENT_TYPE_UNDEFINED' "$source_dir/hotdog-qmi-ims-session.c" ||
+		die "IMS handset session incorrectly identifies as tethering"
 	for source in hotdog-qmi-wds-profile.c hotdog-qmi-wds-profile.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS profile transport: $source"
 	done

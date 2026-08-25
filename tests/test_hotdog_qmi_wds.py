@@ -109,6 +109,10 @@ int main(void) { QmiMessageWdsStopNetworkInput *i=NULL; guint32 h=0;
                                 capture_output=True, text=True).stdout
         self.assertIn("settings=ff10", output)
 
+    def test_handset_client_type_may_be_omitted(self) -> None:
+        source = (SOURCE / "hotdog-qmi-wds.c").read_text()
+        self.assertIn("client_type != QMI_WDS_CLIENT_TYPE_UNDEFINED", source)
+
 
 if __name__ == "__main__":
     unittest.main()
