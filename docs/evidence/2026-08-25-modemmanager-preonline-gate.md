@@ -14,13 +14,13 @@ should use `Exec=/bin/false`, but the generated package contained
 
 ## Package correction
 
-`modemmanager-1.25.95_git20260709-r6` rewrites the system-bus activation
+`modemmanager-1.25.95_git20260709-r7` rewrites the system-bus activation
 entry to `Exec=/bin/false`. OpenRC remains the only daemon start path.
 
 | Package | SHA-256 |
 |---|---|
-| `modemmanager-1.25.95_git20260709-r6.apk` | `01bea20052e1684d13e4af86d3bd0ebb2d9991c1e8c6530a30e550ca1f699493` |
-| `modemmanager-openrc-1.25.95_git20260709-r6.apk` | `a5aedbc0c6c7d4ecbee7b7c7586f0c29ad44c82744fb6bbb73488cfa645cadee` |
+| `modemmanager-1.25.95_git20260709-r7.apk` | `30f4c3b72072b00aa08a4e4c00392d749746fe30ba11b00766a3932a6f0950b1` |
+| `modemmanager-openrc-1.25.95_git20260709-r7.apk` | `6449e03412c4555c9ea7d4407f8253aedb7b97619fdbcb3a9ca9238fea07cc8f` |
 
 The APORT also drops its own exact-version `libmm-glib` from build
 dependencies, removing the circular dependency that otherwise made every new
@@ -38,6 +38,14 @@ WDS, WMS or Voice CID. When verified radio readiness exists, it can publish the
 per-subscription IMS snapshot before ModemManager starts; when readiness is
 revoked, it removes that snapshot and exits while the lifecycle supervisor
 stops ModemManager.
+
+Revision `r7` makes the standard QMI messaging owner preserve the WMS transport
+domain. For a 3GPP outgoing message, ModemManager reads the strict, boot-bound
+IMSA snapshot once for the current 1-based primary SIM slot and sets `SMS on
+IMS` consistently on every raw or stored part only when SMS is an available
+IMS capability. Missing, stale, malformed, symlinked or writable state falls
+back to circuit-switched WMS. Transfer-route indications copy the modem's own
+`SMS on IMS` bit into Send Ack. ModemManager still allocates no IMSA CID.
 
 `device-oneplus-hotdog-nonfree-firmware-3-r31` SHA256
 `950e6553e0567bdbc8ca393e93dd726f50fba15f6259a8e19659e35e111deb8f`

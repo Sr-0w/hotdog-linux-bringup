@@ -146,6 +146,14 @@ then echoes that transaction with WCDMA protocol and the same domain, adding
 RP/TP causes only on failure. Stored UIM/NV notifications remain a separate Raw
 Read path rather than being misread as inline PDUs.
 
+The standard ModemManager QMI messaging owner now enforces that domain model at
+runtime. It validates the complete boot-bound `hotdog-ims-state`, maps the
+1-based primary SIM slot to its 0-based subscription and snapshots SMS
+availability once before a multipart send. Raw Send and Send From Memory
+Storage use the same selected domain for every part. An incoming transfer-route
+message copies its indication's `SMS on IMS` value into Send Ack. Invalid or
+unavailable IMS state falls back to CS; no second WMS or IMSA client is created.
+
 The 3GPP envelope is now classified before creating a message object. The SMSC
 length locates TP-MTI; `SMS-DELIVER` remains an incoming message, while a
 bounded `SMS-STATUS-REPORT` extracts TP-MR and TP-ST after the variable remote

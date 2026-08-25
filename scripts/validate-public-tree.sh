@@ -486,12 +486,14 @@ validate_modemmanager_slot_pin_contract() {
 	local patch="aports/temp/modemmanager/0002-qmi-use-the-SIM-slot-for-PIN-operations.patch"
 	local slot_patch="aports/temp/modemmanager/0003-qmi-prefer-populated-active-SIM-slot.patch"
 	local voice_patch="aports/temp/modemmanager/0004-qmi-voice-preserve-numberless-calls.patch"
+	local sms_ims_patch="aports/temp/modemmanager/0005-qmi-preserve-sms-ims-transport-domain.patch"
 
 	log "ModemManager QMI SIM-slot PIN contract"
 	[ -f "$apkbuild" ] || die "missing ModemManager override"
 	[ -f "$patch" ] || die "missing ModemManager SIM-slot PIN patch"
 	[ -f "$slot_patch" ] || die "missing ModemManager populated-slot patch"
 	[ -f "$voice_patch" ] || die "missing ModemManager QMI Voice call-list patch"
+	[ -f "$sms_ims_patch" ] || die "missing ModemManager SMS-over-IMS patch"
 	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
 		die "ModemManager override does not apply the SIM-slot PIN patch"
 	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
@@ -520,6 +522,19 @@ validate_modemmanager_slot_pin_contract() {
 		die "ModemManager QMI Voice patch does not enforce number presentation"
 	grep -q 'QMI_VOICE_CALL_TYPE_SUPS' "$voice_patch" ||
 		die "ModemManager QMI Voice patch does not filter control sessions"
+	grep -q '0005-qmi-preserve-sms-ims-transport-domain.patch' "$apkbuild" ||
+		die "ModemManager override does not apply the SMS-over-IMS patch"
+	for marker in \
+		qmi_message_wms_raw_send_input_set_sms_on_ims \
+		qmi_message_wms_send_from_memory_storage_input_set_sms_on_ims \
+		qmi_message_wms_send_ack_input_set_sms_on_ims; do
+		grep -q "$marker" "$sms_ims_patch" ||
+			die "ModemManager SMS-over-IMS patch lacks $marker"
+	done
+	grep -q 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW' "$sms_ims_patch" ||
+		die "ModemManager SMS-over-IMS state reader follows unsafe files"
+	grep -q 'generation > G_MAXUINT' "$sms_ims_patch" ||
+		die "ModemManager SMS-over-IMS state reader accepts unbounded generations"
 	grep -q "sed -i 's|\^Exec=\.\*|Exec=/bin/false|'" "$apkbuild" ||
 		die "ModemManager D-Bus activation bypasses the pre-online gate"
 }

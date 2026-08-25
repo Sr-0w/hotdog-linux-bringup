@@ -1,0 +1,473 @@
+From eaaf0be5b05f2b8430092bf9d1f8818b90119b37 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 08:22:28 +0200
+Subject: [PATCH] qmi: preserve SMS IMS transport domain
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+ src/meson.build              |   1 +
+ src/mm-broadband-modem-qmi.c |   7 +
+ src/mm-hotdog-ims.c          | 334 +++++++++++++++++++++++++++++++++++
+ src/mm-hotdog-ims.h          |  15 ++
+ src/mm-sms-qmi.c             |  11 ++
+ 5 files changed, 368 insertions(+)
+ create mode 100644 src/mm-hotdog-ims.c
+ create mode 100644 src/mm-hotdog-ims.h
+
+diff --git a/src/meson.build b/src/meson.build
+index 78d8794..efb733d 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -471,6 +471,7 @@ if enable_qmi
+     'mm-bearer-qmi.c',
+     'mm-broadband-modem-qmi.c',
+     'mm-call-qmi.c',
++    'mm-hotdog-ims.c',
+     'mm-shared-qmi.c',
+     'mm-sim-qmi.c',
+     'mm-sms-qmi.c',
+diff --git a/src/mm-broadband-modem-qmi.c b/src/mm-broadband-modem-qmi.c
+index 8a4b1f8..c48d17c 100644
+--- a/src/mm-broadband-modem-qmi.c
++++ b/src/mm-broadband-modem-qmi.c
+@@ -8416,6 +8416,7 @@ messaging_event_report_indication_cb (QmiClientNas *client,
+     guint32 transaction_id;
+     QmiWmsMessageFormat msg_format;
+     GArray *raw_data = NULL;
++    gboolean sms_on_ims = FALSE;
+ 
+     /* Handle transfer-route MT messages */
+     if (qmi_indication_wms_event_report_output_get_transfer_route_mt_message (
+@@ -8426,6 +8427,9 @@ messaging_event_report_indication_cb (QmiClientNas *client,
+             &raw_data,
+             NULL)) {
+         mm_obj_dbg (self, "Got transfer-route MT message");
++        qmi_indication_wms_event_report_output_get_sms_on_ims (output,
++                                                               &sms_on_ims,
++                                                               NULL);
+         /* If this is the first of a multi-part message, send an ACK to get the
+          * second part */
+         if (ack_ind == QMI_WMS_ACK_INDICATOR_SEND) {
+@@ -8450,6 +8454,9 @@ messaging_event_report_indication_cb (QmiClientNas *client,
+                                                             message_protocol,
+                                                             TRUE,
+                                                             NULL);
++            qmi_message_wms_send_ack_input_set_sms_on_ims (ack_input,
++                                                           sms_on_ims,
++                                                           NULL);
+             qmi_client_wms_send_ack (QMI_CLIENT_WMS (client),
+                                      ack_input,
+                                      MM_BASE_SMS_DEFAULT_SEND_TIMEOUT,
+diff --git a/src/mm-hotdog-ims.c b/src/mm-hotdog-ims.c
+new file mode 100644
+index 0000000..4e70bce
+--- /dev/null
++++ b/src/mm-hotdog-ims.c
+@@ -0,0 +1,334 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++
++#define _GNU_SOURCE
++
++#include <errno.h>
++#include <fcntl.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include "mm-hotdog-ims.h"
++#include "mm-iface-modem.h"
++#include "mm-log-object.h"
++
++#define HOTDOG_IMS_STATE_PATH "/run/hotdog-radio/ims-state"
++#define HOTDOG_IMS_STATE_MAX_SIZE 8192
++#define HOTDOG_IMS_SUBSCRIPTIONS 3
++#define HOTDOG_IMS_CAP_VOICE (1U << 0)
++#define HOTDOG_IMS_CAP_VIDEO (1U << 1)
++#define HOTDOG_IMS_CAP_SMS   (1U << 2)
++#define HOTDOG_IMS_CAP_KNOWN (HOTDOG_IMS_CAP_VOICE | HOTDOG_IMS_CAP_VIDEO | HOTDOG_IMS_CAP_SMS)
++
++static gboolean
++read_regular_file (const gchar  *path,
++                   gchar       **contents,
++                   gsize        *length,
++                   GError      **error)
++{
++    struct stat st;
++    gchar      *buffer;
++    gsize       offset = 0;
++    int         fd;
++
++    fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
++    if (fd < 0) {
++        g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
++                     "cannot open IMS state: %s", g_strerror (errno));
++        return FALSE;
++    }
++    if (fstat (fd, &st) < 0 ||
++        !S_ISREG (st.st_mode) ||
++        (st.st_mode & (S_IWGRP | S_IWOTH)) ||
++        st.st_size <= 0 ||
++        st.st_size > HOTDOG_IMS_STATE_MAX_SIZE) {
++        close (fd);
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state file");
++        return FALSE;
++    }
++
++    buffer = g_malloc ((gsize)st.st_size + 1);
++    while (offset < (gsize)st.st_size) {
++        ssize_t n_read;
++
++        n_read = read (fd, buffer + offset, (gsize)st.st_size - offset);
++        if (n_read < 0 && errno == EINTR)
++            continue;
++        if (n_read <= 0) {
++            int saved_errno = errno;
++
++            close (fd);
++            g_free (buffer);
++            g_set_error (error, G_FILE_ERROR,
++                         n_read < 0 ? g_file_error_from_errno (saved_errno) : G_FILE_ERROR_FAILED,
++                         "cannot read IMS state: %s",
++                         n_read < 0 ? g_strerror (saved_errno) : "short read");
++            return FALSE;
++        }
++        offset += (gsize)n_read;
++    }
++    close (fd);
++    if (memchr (buffer, '\0', offset)) {
++        g_free (buffer);
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "IMS state contains NUL data");
++        return FALSE;
++    }
++    buffer[offset] = '\0';
++    *contents = buffer;
++    *length = offset;
++    return TRUE;
++}
++
++static gboolean
++has_exact_keys (GKeyFile          *key_file,
++                const gchar       *group,
++                const gchar *const expected[],
++                gsize              expected_count)
++{
++    g_auto(GStrv) keys = NULL;
++    g_autofree gboolean *seen = NULL;
++    gsize count = 0;
++    gsize i;
++
++    keys = g_key_file_get_keys (key_file, group, &count, NULL);
++    if (!keys || count != expected_count)
++        return FALSE;
++    seen = g_new0 (gboolean, expected_count);
++    for (i = 0; i < count; i++) {
++        gsize candidate;
++
++        for (candidate = 0; candidate < expected_count; candidate++) {
++            if (g_str_equal (keys[i], expected[candidate]))
++                break;
++        }
++        if (candidate == expected_count || seen[candidate])
++            return FALSE;
++        seen[candidate] = TRUE;
++    }
++    return TRUE;
++}
++
++static gboolean
++valid_rat (const gchar *value)
++{
++    return (g_str_equal (value, "unknown") ||
++            g_str_equal (value, "lte") ||
++            g_str_equal (value, "wlan") ||
++            g_str_equal (value, "nr5g"));
++}
++
++static gboolean
++service_rat_valid (guint64      capabilities,
++                   guint64      limited_capabilities,
++                   guint64      capability,
++                   const gchar *rat)
++{
++    gboolean present;
++
++    present = !!((capabilities | limited_capabilities) & capability);
++    return present ? !g_str_equal (rat, "unknown") : g_str_equal (rat, "unknown");
++}
++
++static gboolean
++validate_subscription (GKeyFile  *key_file,
++                       guint      subscription,
++                       gboolean  *sms_available)
++{
++    static const gchar *const keys[] = {
++        "populated", "registration", "rat", "capabilities",
++        "limited-capabilities", "sip-code", "voice-rat", "video-rat", "sms-rat",
++    };
++    g_autofree gchar *registration = NULL;
++    g_autofree gchar *rat = NULL;
++    g_autofree gchar *voice_rat = NULL;
++    g_autofree gchar *video_rat = NULL;
++    g_autofree gchar *sms_rat = NULL;
++    g_autoptr(GError) error = NULL;
++    gchar group[32];
++    gboolean populated;
++    guint64 capabilities;
++    guint64 limited_capabilities;
++    guint64 sip_code;
++
++    g_snprintf (group, sizeof (group), "subscription%u", subscription);
++    if (!has_exact_keys (key_file, group, keys, G_N_ELEMENTS (keys)))
++        return FALSE;
++
++    populated = g_key_file_get_boolean (key_file, group, "populated", &error);
++    if (error)
++        return FALSE;
++    registration = g_key_file_get_string (key_file, group, "registration", &error);
++    if (error)
++        return FALSE;
++    rat = g_key_file_get_string (key_file, group, "rat", &error);
++    if (error)
++        return FALSE;
++    capabilities = g_key_file_get_uint64 (key_file, group, "capabilities", &error);
++    if (error)
++        return FALSE;
++    limited_capabilities = g_key_file_get_uint64 (key_file, group, "limited-capabilities", &error);
++    if (error)
++        return FALSE;
++    sip_code = g_key_file_get_uint64 (key_file, group, "sip-code", &error);
++    if (error)
++        return FALSE;
++    voice_rat = g_key_file_get_string (key_file, group, "voice-rat", &error);
++    if (error)
++        return FALSE;
++    video_rat = g_key_file_get_string (key_file, group, "video-rat", &error);
++    if (error)
++        return FALSE;
++    sms_rat = g_key_file_get_string (key_file, group, "sms-rat", &error);
++    if (error || !registration || !rat || !voice_rat || !video_rat || !sms_rat)
++        return FALSE;
++    if (!(g_str_equal (registration, "none") ||
++          g_str_equal (registration, "registering") ||
++          g_str_equal (registration, "registered") ||
++          g_str_equal (registration, "blocked")) ||
++        !valid_rat (rat) || !valid_rat (voice_rat) ||
++        !valid_rat (video_rat) || !valid_rat (sms_rat) ||
++        (capabilities & ~HOTDOG_IMS_CAP_KNOWN) ||
++        (limited_capabilities & ~HOTDOG_IMS_CAP_KNOWN) ||
++        (capabilities & limited_capabilities) ||
++        sip_code > G_MAXUINT16 ||
++        !service_rat_valid (capabilities, limited_capabilities, HOTDOG_IMS_CAP_VOICE, voice_rat) ||
++        !service_rat_valid (capabilities, limited_capabilities, HOTDOG_IMS_CAP_VIDEO, video_rat) ||
++        !service_rat_valid (capabilities, limited_capabilities, HOTDOG_IMS_CAP_SMS, sms_rat))
++        return FALSE;
++    if (!populated) {
++        if (!g_str_equal (registration, "none") || !g_str_equal (rat, "unknown") ||
++            capabilities || limited_capabilities || sip_code ||
++            !g_str_equal (voice_rat, "unknown") ||
++            !g_str_equal (video_rat, "unknown") || !g_str_equal (sms_rat, "unknown"))
++            return FALSE;
++    } else if (g_str_equal (registration, "registered") && g_str_equal (rat, "unknown"))
++        return FALSE;
++
++    *sms_available = (populated &&
++                      g_str_equal (registration, "registered") &&
++                      !!(capabilities & HOTDOG_IMS_CAP_SMS));
++    return TRUE;
++}
++
++gboolean
++mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
++                                        const gchar  *boot_id_path,
++                                        guint         primary_slot,
++                                        gboolean     *sms_available,
++                                        GError      **error)
++{
++    static const gchar *const base_keys[] = { "schema", "boot-id", "generation" };
++    g_autofree gchar *contents = NULL;
++    g_autofree gchar *state_boot_id = NULL;
++    g_autofree gchar *current_boot_id = NULL;
++    g_auto(GStrv) groups = NULL;
++    g_autoptr(GKeyFile) key_file = NULL;
++    g_autoptr(GError) local_error = NULL;
++    gsize length = 0;
++    gsize group_count = 0;
++    gsize i;
++    guint64 generation;
++    gint schema;
++
++    if (!state_path || !boot_id_path || !sms_available ||
++        !primary_slot || primary_slot > HOTDOG_IMS_SUBSCRIPTIONS) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid primary SIM slot");
++        return FALSE;
++    }
++    if (!read_regular_file (state_path, &contents, &length, error))
++        return FALSE;
++    key_file = g_key_file_new ();
++    if (!g_key_file_load_from_data (key_file, contents, length, G_KEY_FILE_NONE, error))
++        return FALSE;
++
++    groups = g_key_file_get_groups (key_file, &group_count);
++    if (group_count != HOTDOG_IMS_SUBSCRIPTIONS + 1 ||
++        !g_key_file_has_group (key_file, "hotdog-ims")) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state groups");
++        return FALSE;
++    }
++    for (i = 0; i < HOTDOG_IMS_SUBSCRIPTIONS; i++) {
++        g_autofree gchar *group = g_strdup_printf ("subscription%zu", i);
++
++        if (!g_key_file_has_group (key_file, group)) {
++            g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                                 "missing IMS subscription state");
++            return FALSE;
++        }
++    }
++    if (!has_exact_keys (key_file, "hotdog-ims", base_keys, G_N_ELEMENTS (base_keys))) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state header");
++        return FALSE;
++    }
++    schema = g_key_file_get_integer (key_file, "hotdog-ims", "schema", &local_error);
++    if (local_error) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state identity");
++        return FALSE;
++    }
++    state_boot_id = g_key_file_get_string (key_file, "hotdog-ims", "boot-id", &local_error);
++    if (local_error) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state identity");
++        return FALSE;
++    }
++    generation = g_key_file_get_uint64 (key_file, "hotdog-ims", "generation", &local_error);
++    if (local_error || schema != 1 || !state_boot_id || generation > G_MAXUINT) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "invalid IMS state identity");
++        return FALSE;
++    }
++    if (!g_file_get_contents (boot_id_path, &current_boot_id, NULL, error))
++        return FALSE;
++    g_strchomp (current_boot_id);
++    if (!g_str_equal (state_boot_id, current_boot_id)) {
++        g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                             "stale IMS state boot identity");
++        return FALSE;
++    }
++
++    for (i = 0; i < HOTDOG_IMS_SUBSCRIPTIONS; i++) {
++        gboolean available = FALSE;
++
++        if (!validate_subscription (key_file, i, &available)) {
++            g_set_error_literal (error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
++                                 "invalid IMS subscription data");
++            return FALSE;
++        }
++        if (i == primary_slot - 1)
++            *sms_available = available;
++    }
++    return TRUE;
++}
++
++gboolean
++mm_hotdog_ims_sms_available (MMBaseModem *modem)
++{
++    MmGdbusModem *skeleton = NULL;
++    g_autoptr(GError) error = NULL;
++    gboolean available = FALSE;
++    guint primary_slot;
++
++    g_return_val_if_fail (MM_IS_BASE_MODEM (modem), FALSE);
++    g_object_get (modem, MM_IFACE_MODEM_DBUS_SKELETON, &skeleton, NULL);
++    if (!skeleton)
++        return FALSE;
++    primary_slot = mm_gdbus_modem_get_primary_sim_slot (skeleton);
++    g_object_unref (skeleton);
++
++    if (!mm_hotdog_ims_sms_available_from_paths (
++            HOTDOG_IMS_STATE_PATH,
++            "/proc/sys/kernel/random/boot_id",
++            primary_slot,
++            &available,
++            &error)) {
++        mm_obj_dbg (modem, "SMS over IMS unavailable: %s", error->message);
++        return FALSE;
++    }
++    return available;
++}
+diff --git a/src/mm-hotdog-ims.h b/src/mm-hotdog-ims.h
+new file mode 100644
+index 0000000..f671b5a
+--- /dev/null
++++ b/src/mm-hotdog-ims.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++
++#ifndef MM_HOTDOG_IMS_H
++#define MM_HOTDOG_IMS_H
++
++#include "mm-base-modem.h"
++
++gboolean mm_hotdog_ims_sms_available_from_paths (const gchar  *state_path,
++                                                 const gchar  *boot_id_path,
++                                                 guint         primary_slot,
++                                                 gboolean     *sms_available,
++                                                 GError      **error);
++gboolean mm_hotdog_ims_sms_available (MMBaseModem *modem);
++
++#endif /* MM_HOTDOG_IMS_H */
+diff --git a/src/mm-sms-qmi.c b/src/mm-sms-qmi.c
+index a131ccc..a0e8488 100644
+--- a/src/mm-sms-qmi.c
++++ b/src/mm-sms-qmi.c
+@@ -28,6 +28,7 @@
+ #include "mm-modem-helpers-qmi.h"
+ #include "mm-iface-modem.h"
+ #include "mm-iface-modem-messaging.h"
++#include "mm-hotdog-ims.h"
+ #include "mm-sms-qmi.h"
+ #include "mm-base-modem.h"
+ #include "mm-sms-part-3gpp.h"
+@@ -297,6 +298,7 @@ sms_store (MMBaseSms *_self,
+ typedef struct {
+     QmiClientWms *client;
+     gboolean from_storage;
++    gboolean sms_on_ims;
+     GList *current;
+ } SmsSendContext;
+ 
+@@ -424,6 +426,9 @@ sms_send_generic (GTask *task)
+          QMI_WMS_MESSAGE_FORMAT_CDMA),
+         array,
+         NULL);
++    qmi_message_wms_raw_send_input_set_sms_on_ims (input,
++                                                   ctx->sms_on_ims,
++                                                   NULL);
+ 
+     qmi_client_wms_raw_send (ctx->client,
+                              input,
+@@ -551,6 +556,9 @@ sms_send_from_storage (GTask *task)
+          QMI_WMS_MESSAGE_MODE_GSM_WCDMA :
+          QMI_WMS_MESSAGE_MODE_CDMA),
+         NULL);
++    qmi_message_wms_send_from_memory_storage_input_set_sms_on_ims (input,
++                                                                  ctx->sms_on_ims,
++                                                                  NULL);
+ 
+     qmi_client_wms_send_from_memory_storage (
+         ctx->client,
+@@ -618,6 +626,9 @@ sms_send (MMBaseSms           *_self,
+         return;
+     }
+ 
++    ctx->sms_on_ims = (MM_SMS_PART_IS_3GPP ((MMSmsPart *)ctx->current->data) &&
++                       mm_hotdog_ims_sms_available (self->priv->modem));
++
+     sms_send_next_part (task);
+ }
+ 
+-- 
+2.54.0
