@@ -1,6 +1,6 @@
 pkgname=hotdog-radio-bootstrap
-pkgver=0.15
-pkgrel=3
+pkgver=0.16
+pkgrel=0
 pkgdesc="Verified UIM, PDC and DMS bootstrap for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
 arch="aarch64"
@@ -11,7 +11,7 @@ depends="libqmi libqrtr-glib"
 makedepends="glib-dev libqmi-dev libqrtr-glib-dev pkgconf"
 subpackages="$pkgname-openrc"
 
-_commit="1f5c399d3627c7b86823feb459d81e848c433b7b"
+_commit="31e3936bed5a3f255604c7d53c0cdad435b56c33"
 source="
 	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
 	hotdog-radio-bootstrap.initd
@@ -29,6 +29,7 @@ build() {
 		helpers/hotdog-radio/hotdog-qmi-uim.c \
 		helpers/hotdog-radio/hotdog-qmi-dms.c \
 		helpers/hotdog-radio/hotdog-qmi-nas.c \
+		helpers/hotdog-radio/hotdog-network.c \
 		helpers/hotdog-radio/hotdog-uim.c \
 		helpers/hotdog-radio/hotdog-qmi-pdc.c \
 		helpers/hotdog-radio/hotdog-qmi-pdc-list.c \
@@ -61,6 +62,6 @@ openrc() {
 }
 
 sha512sums="
-e9af833b758506017e065f514b2efb9f3fd4f63b515870c204a3b924d2302d591389d2c797d21274ccb91a976c953c733a0f21b128ed20a94111ea1a9e366d5d  hotdog-radio-bootstrap-1f5c399d3627c7b86823feb459d81e848c433b7b.tar.gz
+1e62362089c683a1ddadc575aef020dc3e37feea8d9ccc35050a94cc8b818e7dec11e0ae3627a31b60032f80f81122e484d76bb039bd656926a942248e868716  hotdog-radio-bootstrap-31e3936bed5a3f255604c7d53c0cdad435b56c33.tar.gz
 4daa5a5aad64e5b804de6d08c2ed4224dfda36f45edca3af7cfe0bc47820f5407f9e6ecdf5f02fe3e2fe67f9f483009b7656b9a051c796e2b90ba9d54cfb21a0  hotdog-radio-bootstrap.initd
 "
