@@ -32,6 +32,8 @@ INPUT_NAME = "Elliptic ultrasonic proximity"
 STATE_FILE = pathlib.Path("/run/hotdog-proximity")
 
 MICROPHONE_INDEX_MAX = 7
+# 699 est la proximite globale ; 693 le mode combine seul.
+PROXIMITY_MODE = 699
 
 # The engine confirms near quickly and far over a longer stable window, so a
 # symmetric 15 s gate failed the uncover half of every guided cycle while the
@@ -220,7 +222,7 @@ def wait_for_state(event_file, expected, timeout, output):
 
 
 def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
-          operation_mode=699, microphone_index=0, record=None):
+          operation_mode=PROXIMITY_MODE, microphone_index=0, record=None):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -447,8 +449,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=60.0)
     parser.add_argument("--log", type=pathlib.Path)
-    parser.add_argument("--operation-mode", type=int, choices=(693, 699),
-                        default=699)
+    parser.add_argument("--operation-mode", type=int, choices=(693, PROXIMITY_MODE),
+                        default=PROXIMITY_MODE)
     parser.add_argument("--microphone-index", default="0",
                         help="channel the engine listens on; stock uses 0. "
                              "'none' leaves the DSP on its own default, which "
