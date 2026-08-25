@@ -234,6 +234,16 @@ does not infer UT or RCS from base IMSA status; those remain owned by their
 separate service transports. No APN, RTP or IMS call claim follows from IMSA
 alone.
 
+The IPC boundary for this owner is `hotdog-ims-state`, a strict GLib key file
+under `/run/hotdog-radio`. It contains only boot ID, SSR generation, populated
+subscription flags, registration/RAT, available/limited masks, SIP code and
+per-service RAT; ICCID, IMSI, operator and telephone numbers are absent by
+construction. The writer uses a private temporary file, fsync, atomic rename
+and directory fsync. The reader opens once with `O_NOFOLLOW`, rejects writable
+or oversized files, NUL bytes, unknown/missing/duplicate groups or keys and
+then revalidates every cross-field invariant. This is the bounded state that a
+standard-service adapter may consume without sharing QMI IMSA client ownership.
+
 ## Mainline ownership model
 
 The implementation deliberately keeps proven generic components and replaces
