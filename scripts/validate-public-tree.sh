@@ -476,11 +476,13 @@ validate_modemmanager_slot_pin_contract() {
 	local apkbuild="aports/temp/modemmanager/APKBUILD"
 	local patch="aports/temp/modemmanager/0002-qmi-use-the-SIM-slot-for-PIN-operations.patch"
 	local slot_patch="aports/temp/modemmanager/0003-qmi-prefer-populated-active-SIM-slot.patch"
+	local voice_patch="aports/temp/modemmanager/0004-qmi-voice-preserve-numberless-calls.patch"
 
 	log "ModemManager QMI SIM-slot PIN contract"
 	[ -f "$apkbuild" ] || die "missing ModemManager override"
 	[ -f "$patch" ] || die "missing ModemManager SIM-slot PIN patch"
 	[ -f "$slot_patch" ] || die "missing ModemManager populated-slot patch"
+	[ -f "$voice_patch" ] || die "missing ModemManager QMI Voice call-list patch"
 	grep -q '0002-qmi-use-the-SIM-slot-for-PIN-operations.patch' "$apkbuild" ||
 		die "ModemManager override does not apply the SIM-slot PIN patch"
 	grep -q 'qmi_message_uim_verify_pin_input_set_session' "$patch" ||
@@ -501,6 +503,14 @@ validate_modemmanager_slot_pin_contract() {
 		die "ModemManager override does not apply the populated-slot patch"
 	grep -q 'empty slots. Prefer the first active slot that actually has a card' "$slot_patch" ||
 		die "ModemManager populated-slot patch lacks the DSDS empty-slot guard"
+	grep -q '0004-qmi-voice-preserve-numberless-calls.patch' "$apkbuild" ||
+		die "ModemManager override does not apply the QMI Voice call-list patch"
+	grep -q 'if (!qmi_call_information_list)' "$voice_patch" ||
+		die "ModemManager QMI Voice patch still requires a remote-party number"
+	grep -q 'QMI_VOICE_PRESENTATION_ALLOWED' "$voice_patch" ||
+		die "ModemManager QMI Voice patch does not enforce number presentation"
+	grep -q 'QMI_VOICE_CALL_TYPE_SUPS' "$voice_patch" ||
+		die "ModemManager QMI Voice patch does not filter control sessions"
 	grep -q "sed -i 's|\^Exec=\.\*|Exec=/bin/false|'" "$apkbuild" ||
 		die "ModemManager D-Bus activation bypasses the pre-online gate"
 }

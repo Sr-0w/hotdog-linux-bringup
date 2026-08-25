@@ -192,6 +192,14 @@ ones are allocated. This permits complete eight-call churn without false
 `ENOSPC`, does not end another SIM subscription, and returns bounded
 add/update/end deltas for the future D-Bus publisher.
 
+The delivered ModemManager QMI plugin already owns WDS, WMS and Voice D-Bus
+objects, so these clean-room adapters are protocol/reference tests rather than
+a competing runtime owner. `modemmanager r5` transposes the first finding into
+that standard surface: it creates calls from mandatory Call Information even
+when Remote Party Number is absent, enforces presentation privacy and filters
+control-call types. Plasma therefore receives the corrected call list through
+`org.freedesktop.ModemManager1` without a parallel call daemon.
+
 ### IMS, VoLTE and RCS
 
 OxygenOS splits IMS into `imsqmidaemon`, `imsdatadaemon`, `ims_rtp_daemon` and

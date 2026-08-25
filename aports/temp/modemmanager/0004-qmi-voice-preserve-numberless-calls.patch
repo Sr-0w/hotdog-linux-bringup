@@ -1,0 +1,209 @@
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 07:31:00 +0200
+Subject: [PATCH] qmi: preserve numberless calls and filter control sessions
+
+All Call Status makes Call Information mandatory but the Remote Party Number
+TLV optional. Build every real voice call from Call Information, attach a
+number only when it is present and presentation is allowed, and skip OTAPA,
+OTASP and supplementary-control transactions.
+
+This keeps restricted and temporarily numberless calls visible without
+publishing a withheld number or creating phantom calls from control sessions.
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+---
+--- a/src/mm-broadband-modem-qmi.c
++++ b/src/mm-broadband-modem-qmi.c
+@@ -11596,6 +11596,82 @@
+ /*****************************************************************************/
+ /* All Call Status indications */
+ 
++static MMCallInfo *
++call_info_from_qmi (const QmiIndicationVoiceAllCallStatusOutputCallInformationCall  *qmi_call,
++                    const QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall *qmi_number)
++{
++    MMCallInfo *call_info;
++
++    switch (qmi_call->type) {
++    case QMI_VOICE_CALL_TYPE_VOICE:
++    case QMI_VOICE_CALL_TYPE_VOICE_IP:
++    case QMI_VOICE_CALL_TYPE_EMERGENCY:
++        break;
++    case QMI_VOICE_CALL_TYPE_OTAPA:
++    case QMI_VOICE_CALL_TYPE_NON_STD_OTASP:
++    case QMI_VOICE_CALL_TYPE_SUPS:
++    default:
++        return NULL;
++    }
++
++    call_info = g_slice_new0 (MMCallInfo);
++    call_info->index = qmi_call->id;
++    if (qmi_number &&
++        (qmi_number->presentation_indicator == QMI_VOICE_PRESENTATION_ALLOWED ||
++         qmi_number->presentation_indicator == QMI_VOICE_PRESENTATION_PAYPHONE))
++        call_info->number = g_strdup (qmi_number->type);
++
++    switch (qmi_call->state) {
++    case QMI_VOICE_CALL_STATE_UNKNOWN:
++        call_info->state = MM_CALL_STATE_UNKNOWN;
++        break;
++    case QMI_VOICE_CALL_STATE_ORIGINATION:
++    case QMI_VOICE_CALL_STATE_CC_IN_PROGRESS:
++        call_info->state = MM_CALL_STATE_DIALING;
++        break;
++    case QMI_VOICE_CALL_STATE_ALERTING:
++        call_info->state = MM_CALL_STATE_RINGING_OUT;
++        break;
++    case QMI_VOICE_CALL_STATE_SETUP:
++    case QMI_VOICE_CALL_STATE_INCOMING:
++        call_info->state = MM_CALL_STATE_RINGING_IN;
++        break;
++    case QMI_VOICE_CALL_STATE_CONVERSATION:
++        call_info->state = MM_CALL_STATE_ACTIVE;
++        break;
++    case QMI_VOICE_CALL_STATE_HOLD:
++        call_info->state = MM_CALL_STATE_HELD;
++        break;
++    case QMI_VOICE_CALL_STATE_WAITING:
++        call_info->state = MM_CALL_STATE_WAITING;
++        break;
++    case QMI_VOICE_CALL_STATE_DISCONNECTING:
++    case QMI_VOICE_CALL_STATE_END:
++        call_info->state = MM_CALL_STATE_TERMINATED;
++        break;
++    default:
++        call_info->state = MM_CALL_STATE_UNKNOWN;
++        break;
++    }
++
++    switch (qmi_call->direction) {
++    case QMI_VOICE_CALL_DIRECTION_UNKNOWN:
++        call_info->direction = MM_CALL_DIRECTION_UNKNOWN;
++        break;
++    case QMI_VOICE_CALL_DIRECTION_MO:
++        call_info->direction = MM_CALL_DIRECTION_OUTGOING;
++        break;
++    case QMI_VOICE_CALL_DIRECTION_MT:
++        call_info->direction = MM_CALL_DIRECTION_INCOMING;
++        break;
++    default:
++        call_info->direction = MM_CALL_DIRECTION_UNKNOWN;
++        break;
++    }
++
++    return call_info;
++}
++
+ static void
+ all_call_status_indication_cb (QmiClientVoice                        *client,
+                                QmiIndicationVoiceAllCallStatusOutput *output,
+@@ -11605,86 +11681,41 @@
+     GArray *qmi_call_information_list = NULL;
+     GList  *call_info_list = NULL;
+     guint   i;
+-    guint   j;
+ 
+     qmi_indication_voice_all_call_status_output_get_remote_party_number (output, &qmi_remote_party_number_list, NULL);
+     qmi_indication_voice_all_call_status_output_get_call_information (output, &qmi_call_information_list, NULL);
+ 
+-    if (!qmi_remote_party_number_list || !qmi_call_information_list) {
+-        mm_obj_dbg (self, "Ignoring All Call Status indication. Remote party number or call information not available");
++    if (!qmi_call_information_list) {
++        mm_obj_dbg (self, "Ignoring All Call Status indication. Call information not available");
+         return;
+     }
+ 
+     for (i = 0; i < qmi_call_information_list->len; i++) {
+-        QmiIndicationVoiceAllCallStatusOutputCallInformationCall qmi_call_information;
+-
+-        qmi_call_information = g_array_index (qmi_call_information_list,
+-                                              QmiIndicationVoiceAllCallStatusOutputCallInformationCall,
+-                                              i);
+-        for (j = 0; j < qmi_remote_party_number_list->len; j++) {
+-            QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall qmi_remote_party_number;
+-
+-            qmi_remote_party_number = g_array_index (qmi_remote_party_number_list,
+-                                                     QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall,
+-                                                     j);
+-            if (qmi_call_information.id == qmi_remote_party_number.id) {
+-                MMCallInfo *call_info;
+-
+-                call_info = g_slice_new0 (MMCallInfo);
+-                call_info->index = qmi_call_information.id;
+-                call_info->number = g_strdup (qmi_remote_party_number.type);
+-
+-                switch (qmi_call_information.state) {
+-                case QMI_VOICE_CALL_STATE_UNKNOWN:
+-                    call_info->state = MM_CALL_STATE_UNKNOWN;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_ORIGINATION:
+-                case QMI_VOICE_CALL_STATE_CC_IN_PROGRESS:
+-                    call_info->state = MM_CALL_STATE_DIALING;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_ALERTING:
+-                    call_info->state = MM_CALL_STATE_RINGING_OUT;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_SETUP:
+-                case QMI_VOICE_CALL_STATE_INCOMING:
+-                    call_info->state = MM_CALL_STATE_RINGING_IN;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_CONVERSATION:
+-                    call_info->state = MM_CALL_STATE_ACTIVE;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_HOLD:
+-                    call_info->state = MM_CALL_STATE_HELD;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_WAITING:
+-                    call_info->state = MM_CALL_STATE_WAITING;
+-                    break;
+-                case QMI_VOICE_CALL_STATE_DISCONNECTING:
+-                case QMI_VOICE_CALL_STATE_END:
+-                    call_info->state = MM_CALL_STATE_TERMINATED;
+-                    break;
+-                default:
+-                    call_info->state = MM_CALL_STATE_UNKNOWN;
++        QmiIndicationVoiceAllCallStatusOutputCallInformationCall  *qmi_call;
++        QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall *qmi_number = NULL;
++        MMCallInfo                                                 *call_info;
++        guint                                                       j;
++
++        qmi_call = &g_array_index (qmi_call_information_list,
++                                   QmiIndicationVoiceAllCallStatusOutputCallInformationCall,
++                                   i);
++        if (qmi_remote_party_number_list) {
++            for (j = 0; j < qmi_remote_party_number_list->len; j++) {
++                QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall *candidate;
++
++                candidate = &g_array_index (qmi_remote_party_number_list,
++                                            QmiIndicationVoiceAllCallStatusOutputRemotePartyNumberCall,
++                                            j);
++                if (candidate->id == qmi_call->id) {
++                    qmi_number = candidate;
+                     break;
+                 }
+-
+-                switch (qmi_call_information.direction) {
+-                case QMI_VOICE_CALL_DIRECTION_UNKNOWN:
+-                    call_info->direction = MM_CALL_DIRECTION_UNKNOWN;
+-                    break;
+-                case QMI_VOICE_CALL_DIRECTION_MO:
+-                    call_info->direction = MM_CALL_DIRECTION_OUTGOING;
+-                    break;
+-                case QMI_VOICE_CALL_DIRECTION_MT:
+-                    call_info->direction = MM_CALL_DIRECTION_INCOMING;
+-                    break;
+-                default:
+-                    call_info->direction = MM_CALL_DIRECTION_UNKNOWN;
+-                    break;
+-                }
+-
+-                call_info_list = g_list_append (call_info_list, call_info);
+             }
+         }
++
++        call_info = call_info_from_qmi (qmi_call, qmi_number);
++        if (call_info)
++            call_info_list = g_list_append (call_info_list, call_info);
+     }
+ 
+     mm_iface_modem_voice_report_all_calls (MM_IFACE_MODEM_VOICE (self), call_info_list);

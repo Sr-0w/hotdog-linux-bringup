@@ -2,7 +2,7 @@
 maintainer="Achill Gilgenast <achill@achill.org>"
 pkgname=modemmanager
 pkgver=1.25.95_git20260709
-pkgrel=4
+pkgrel=5
 _commit=d776ea38d29ca472a12323c1d45002ee19a66f57
 pkgdesc="ModemManager library"
 url="https://www.freedesktop.org/wiki/Software/ModemManager"
@@ -51,6 +51,7 @@ source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$
 	0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
 	0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
 	0003-qmi-prefer-populated-active-SIM-slot.patch
+	0004-qmi-voice-preserve-numberless-calls.patch
 	"
 #builddir="$srcdir"/ModemManager-$pkgver
 builddir="$srcdir"/ModemManager-$_commit
@@ -113,4 +114,5 @@ fd659330b2ec4e8368807053ec01498241dec153f6f2491bb17c42e2b81c8d9a98ff5f8c153874a6
 5d79cb678af356a8350ea9c9f41b1af64d72ff5db4f16a5655481e2f7533f32d6ea45c10352d20a15233392cb02fd1d3c490c1268185787b1cc711e0bbda5f7f  0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
 c5c2f560a7979b20067dc0f0b26fd621e92d7c08717ccd6740758a09faa01fd5ef642820e686f7973ad8ba22b3442c869f3167a1898fa87adc888fd3310e0348  0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
 e277839a66c8f668c9adcf82a245cdcacbe094b03bbbbfbe0b542ef0ebe4c213c40b149d7157c51541000c1ec9b8af562fb4ba7577508e5fe14166f21bbb5fb9  0003-qmi-prefer-populated-active-SIM-slot.patch
+874b9dfc4d79201a1575c881417e831705873ed7e8c6af25c7fa78a2d2c0a53c4a4a15da2360ad390c9f9cf86a315140cd58a3e0f5e140e97b53b67ffcaa2eff  0004-qmi-voice-preserve-numberless-calls.patch
 "
