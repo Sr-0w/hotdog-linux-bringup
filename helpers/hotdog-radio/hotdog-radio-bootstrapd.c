@@ -70,6 +70,7 @@ struct bootstrap {
 	gboolean probe_dms;
 	gboolean probe_pdc_catalog;
 	gboolean probe_nas;
+	gboolean defer_handoff;
 	int result;
 	bool finished;
 	gulong bus_node_added_handler;
@@ -265,7 +266,10 @@ static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
 				g_printerr("Radio readiness publication failed: %d\n", result);
 			else {
 				printf("radio-readiness=published phase-safe\n");
-				result = start_modemmanager_handoff();
+				if (!bootstrap->defer_handoff)
+					result = start_modemmanager_handoff();
+				else
+					printf("modemmanager-handoff=deferred\n");
 			}
 			finish(bootstrap, result ? 1 : 0);
 			return;
@@ -1229,6 +1233,8 @@ int main(int argc, char **argv)
 		  "Read and print resident software PDC config IDs", NULL },
 		{ "probe-nas", 0, 0, G_OPTION_ARG_NONE, &bootstrap.probe_nas,
 		  "Read and print the NAS serving-system state", NULL },
+		{ "defer-handoff", 0, 0, G_OPTION_ARG_NONE, &bootstrap.defer_handoff,
+		  "Publish readiness without starting ModemManager", NULL },
 		{ NULL }
 	};
 
@@ -1295,6 +1301,12 @@ int main(int argc, char **argv)
 	}
 	if (bootstrap.probe_dms && bootstrap.probe_nas) {
 		g_printerr("DMS and NAS probes must run as separate read-only operations\n");
+		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
+		return 2;
+	}
+	if (bootstrap.defer_handoff && !bootstrap.apply_pdc) {
+		g_printerr("--defer-handoff requires --apply-pdc\n");
 		g_free(bootstrap.mcfg_root);
 		g_free(bootstrap.apply_pdc);
 		return 2;

@@ -549,6 +549,7 @@ validate_hotdog_radio_state_contract() {
 	local source_dir="helpers/hotdog-radio"
 	local glib_flags=""
 	local qmi_flags=""
+	local supervisor_flags=""
 	local output=""
 	local result=""
 
@@ -592,6 +593,10 @@ validate_hotdog_radio_state_contract() {
 	done
 	for source in hotdog-radio-readiness.c hotdog-radio-readiness.h; do
 		[ -f "$source_dir/$source" ] || die "missing radio readiness source: $source"
+	done
+	for source in hotdog-radio-supervisor.c hotdog-radio-supervisor.h \
+		hotdog-radio-supervisor-replay.c hotdog-radio-supervisord.c; do
+		[ -f "$source_dir/$source" ] || die "missing radio supervisor source: $source"
 	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
@@ -657,6 +662,15 @@ validate_hotdog_radio_state_contract() {
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
 		"$source_dir/hotdog-uim.c" "$source_dir/hotdog-uim-replay.c" \
 		-o "$output"
+	supervisor_flags="$(pkg-config --cflags --libs qrtr-glib gio-2.0 glib-2.0)"
+	# shellcheck disable=SC2086
+	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
+		"$source_dir/hotdog-radio-supervisord.c" \
+		"$source_dir/hotdog-radio-supervisor.c" \
+		"$source_dir/hotdog-radio-readiness.c" \
+		"$source_dir/hotdog-mcfg-runtime.c" "$source_dir/hotdog-pdc.c" \
+		"$source_dir/hotdog-uim.c" "$source_dir/hotdog-mbn.c" \
+		$supervisor_flags -o "$output"
 	rm -f "$output"
 	trap - RETURN
 }

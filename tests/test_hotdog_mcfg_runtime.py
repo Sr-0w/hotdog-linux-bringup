@@ -65,6 +65,16 @@ int main(int argc, char **argv) {
     def test_group_writable_manifest_is_rejected(self) -> None:
         self.assertTrue(self.run_manifest(MANIFEST, 0o664).startswith("result=-1"))
 
+    def test_symlink_manifest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target"
+            link = Path(directory) / "MANIFEST"
+            target.write_text(MANIFEST)
+            link.symlink_to(target)
+            output = subprocess.run([str(self.binary), str(link)], check=True,
+                                    capture_output=True, text=True).stdout
+            self.assertTrue(output.startswith("result=-40"))
+
 
 if __name__ == "__main__":
     unittest.main()

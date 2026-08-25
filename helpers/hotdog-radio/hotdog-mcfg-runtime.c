@@ -3,11 +3,13 @@
 #include "hotdog-mcfg-runtime.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static bool valid_sha256(const char *value)
 {
@@ -45,20 +47,31 @@ int hotdog_mcfg_runtime_read(const char *path,
 	char line[256];
 	struct stat status;
 	FILE *stream;
-	int result = 0;
+	int descriptor, result = 0;
 
 	if (!path || !runtime)
 		return -EINVAL;
 	memset(runtime, 0, sizeof(*runtime));
-	if (lstat(path, &status))
+	descriptor = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (descriptor < 0)
 		return -errno;
-	if (!S_ISREG(status.st_mode) || (status.st_mode & (S_IWGRP | S_IWOTH)))
-		return -EPERM;
-	if (status.st_size <= 0 || status.st_size > 4096)
-		return -EFBIG;
-	stream = fopen(path, "r");
-	if (!stream)
-		return -errno;
+	if (fstat(descriptor, &status))
+		result = -errno;
+	else if (!S_ISREG(status.st_mode) ||
+		 (status.st_mode & (S_IWGRP | S_IWOTH)))
+		result = -EPERM;
+	else if (status.st_size <= 0 || status.st_size > 4096)
+		result = -EFBIG;
+	if (result) {
+		close(descriptor);
+		return result;
+	}
+	stream = fdopen(descriptor, "r");
+	if (!stream) {
+		result = -errno;
+		close(descriptor);
+		return result;
+	}
 	while (fgets(line, sizeof(line), stream)) {
 		char *separator, *key, *value, *target = NULL;
 		size_t target_size = 0, length = strcspn(line, "\r\n");

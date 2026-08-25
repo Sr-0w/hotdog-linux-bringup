@@ -527,6 +527,17 @@ covers normal handoff, invalid/removed readiness, active SSR, start-time SSR,
 late child completion, stop failure and bounded retries. The next slice is the
 long-lived QRTR/file/OpenRC adapter that executes these emitted actions.
 
+That adapter now exists as `hotdog-radio-supervisord`. It watches the configured
+MPSS QRTR node and revalidates the schema-2 record against the current kernel
+boot ID and packaged MCFG/modem hashes. OpenRC start/stop and approved bootstrap
+are fixed-argv asynchronous `GSubprocess` operations; no shell or command-line
+expansion is involved. Readiness is unlinked before a required stop. On SSR, an
+automatic re-attestation runs only when a readable boot-bound approval path was
+explicitly configured; otherwise it waits for manual approval without mutating
+PDC. The bootstrap's `--defer-handoff` mode publishes verified readiness but
+leaves ModemManager startup exclusively to the supervisor. SIGINT/SIGTERM uses
+the same drain-before-block path, including a late start completion.
+
 `hotdog-qmi-dms` provides the typed operating-mode boundary. The standalone
 `--probe-dms` remains read-only. The approved PDC path invokes Set Online only
 after commit, rereads DMS, publishes readiness only after confirmed Online and
