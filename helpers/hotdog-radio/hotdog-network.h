@@ -75,6 +75,7 @@ struct hotdog_bearer_runtime {
 	char ipv4_gateway[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char ipv4_dns1[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char ipv4_dns2[HOTDOG_NETWORK_ADDRESS_SIZE];
+	unsigned int ipv4_prefix;
 	char ipv6[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char ipv6_gateway[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char ipv6_dns1[HOTDOG_NETWORK_ADDRESS_SIZE];

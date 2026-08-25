@@ -194,6 +194,21 @@ group/world-writable files, unknown/duplicate keys and inconsistent states.
 In particular, `up` requires profile+mux+P-CSCF evidence, while `blocked`
 requires both an error and retained ownership.
 
+`hotdog-ims-netconfig` turns Current Settings into a symmetric argv-only
+`iproute2` transaction. It raises the shared base only when it observed it down,
+sets the child MTU, installs the modem IPv4/IPv6 addresses, creates per-family
+defaults in table `12000 + subscription`, and adds only fwmark
+`0x494d5300 | subscription` rules at the matching priority. It never adds a
+default route to the main table. The route table and mark are published in the
+boot-bound state for future IMS clients using `SO_MARK`.
+
+Each successful command owns its exact inverse. Apply failure rolls back prior
+steps in reverse order; rollback continues after individual errors and retains
+only failed inverses for a later retry. The runner uses `g_spawn_sync()` with a
+bounded argv and no shell interpretation. The target AArch64 object, compiled
+with `-Wall -Wextra -Werror`, has SHA-256
+`741fa67c22aeac49da5f444a0a030880b1f0421fd900cb367472c36d8871747b`.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and

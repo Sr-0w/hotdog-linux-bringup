@@ -13,7 +13,7 @@
 
 #define STATE_MAX_SIZE 8192
 #define STATE_BASE_KEYS 3
-#define STATE_SUB_KEYS 11
+#define STATE_SUB_KEYS 13
 
 static bool valid_boot_id(const char *value)
 {
@@ -74,6 +74,10 @@ int hotdog_ims_bearer_runtime_validate(
 		    sub->pcscf_domain_count > HOTDOG_NETWORK_MAX_PCSCF ||
 		    (sub->profile_selected != (sub->profile != 0)) ||
 		    (!!sub->mux_id != !!sub->ifname[0]) ||
+		    (!!sub->route_table != !!sub->fwmark) ||
+		    (sub->route_table &&
+		     (sub->route_table != HOTDOG_IMS_ROUTE_TABLE_BASE + index ||
+		      sub->fwmark != (HOTDOG_IMS_FWMARK_BASE | index))) ||
 		    (sub->ifname[0] && !valid_ifname(sub->ifname)))
 			return -EINVAL;
 		switch (sub->status) {
@@ -92,7 +96,8 @@ int hotdog_ims_bearer_runtime_validate(
 				return -EPROTO;
 			break;
 		case HOTDOG_IMS_BEARER_UP:
-			if (!sub->profile_selected || !sub->mux_id || sub->error || sub->residue ||
+			if (!sub->profile_selected || !sub->mux_id || !sub->route_table ||
+			    !sub->fwmark || sub->error || sub->residue ||
 			    (!sub->pcscf_address_count && !sub->pcscf_domain_count))
 				return -EPROTO;
 			break;
@@ -246,6 +251,8 @@ int hotdog_ims_bearer_runtime_write(
 		g_key_file_set_string(key_file, group, "family",
 			sub->profile_selected ? hotdog_ip_family_name(sub->family) : "-");
 		g_key_file_set_uint64(key_file, group, "mux-id", sub->mux_id);
+		g_key_file_set_uint64(key_file, group, "route-table", sub->route_table);
+		g_key_file_set_uint64(key_file, group, "fwmark", sub->fwmark);
 		g_key_file_set_string(key_file, group, "ifname", sub->ifname[0] ? sub->ifname : "-");
 		g_key_file_set_uint64(key_file, group, "pcscf-address-count",
 				      sub->pcscf_address_count);
@@ -352,7 +359,8 @@ int hotdog_ims_bearer_runtime_read(
 	static const char *const base_keys[] = { "schema", "boot-id", "generation" };
 	static const char *const sub_keys[] = {
 		"populated", "status", "profile-selected", "profile", "family",
-		"mux-id", "ifname", "pcscf-address-count", "pcscf-domain-count",
+		"mux-id", "route-table", "fwmark", "ifname",
+		"pcscf-address-count", "pcscf-domain-count",
 		"error", "residue",
 	};
 	GKeyFile *key_file;
@@ -426,6 +434,10 @@ int hotdog_ims_bearer_runtime_read(
 				-EINVAL;
 		g_free(value);
 		if (!result) result = get_uint(key_file, group, "mux-id", UINT8_MAX, &sub->mux_id);
+		if (!result) result = get_uint(key_file, group, "route-table", UINT_MAX,
+			&sub->route_table);
+		if (!result) result = get_uint(key_file, group, "fwmark", UINT_MAX,
+			&sub->fwmark);
 		value = g_key_file_get_string(key_file, group, "ifname", NULL);
 		if (!result && (!value || strlen(value) >= sizeof(sub->ifname))) result = -EINVAL;
 		else if (!result && strcmp(value, "-")) memcpy(sub->ifname, value, strlen(value) + 1);

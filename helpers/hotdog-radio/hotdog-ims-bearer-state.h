@@ -2,7 +2,7 @@
 #ifndef HOTDOG_IMS_BEARER_STATE_H
 #define HOTDOG_IMS_BEARER_STATE_H
 
-#include "hotdog-network.h"
+#include "hotdog-ims-netconfig.h"
 
 #define HOTDOG_IMS_BEARER_BOOT_ID_SIZE 37
 
@@ -23,6 +23,8 @@ struct hotdog_ims_bearer_subscription_state {
 	unsigned int profile;
 	enum hotdog_ip_family family;
 	unsigned int mux_id;
+	unsigned int route_table;
+	uint32_t fwmark;
 	char ifname[16];
 	size_t pcscf_address_count;
 	size_t pcscf_domain_count;

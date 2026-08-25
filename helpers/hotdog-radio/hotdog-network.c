@@ -250,6 +250,7 @@ static bool valid_runtime(const struct hotdog_bearer *bearer,
 			return false;
 
 	return runtime->mtu >= 576 && runtime->mtu <= 65535 &&
+	       runtime->ipv4_prefix <= 32 &&
 	       runtime->ipv6_prefix <= 128 &&
 	       valid_address(runtime->ipv4, AF_INET, need_v4) &&
 	       valid_address(runtime->ipv4_gateway, AF_INET, false) &&

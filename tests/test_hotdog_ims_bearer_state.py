@@ -25,15 +25,18 @@ int main(int argc, char **argv) {
     state.generation = 7;
     sub->populated = true; sub->status = HOTDOG_IMS_BEARER_UP;
     sub->profile_selected = true; sub->profile = 7; sub->family = HOTDOG_IP_V4V6;
-    sub->mux_id = 11; strcpy(sub->ifname, "ims0"); sub->pcscf_domain_count = 1;
+    sub->mux_id = 11; sub->route_table = HOTDOG_IMS_ROUTE_TABLE_BASE;
+    sub->fwmark = HOTDOG_IMS_FWMARK_BASE; strcpy(sub->ifname, "ims0");
+    sub->pcscf_domain_count = 1;
     if (hotdog_ims_bearer_runtime_write(argv[2], &state)) return 3;
     if (hotdog_ims_bearer_runtime_read(argv[2], &readback)) return 4;
-    printf("generation=%u status=%s profile=%u family=%s mux=%u ifname=%s pcscf=%zu/%zu\n",
+    printf("generation=%u status=%s profile=%u family=%s mux=%u table=%u mark=0x%08x ifname=%s pcscf=%zu/%zu\n",
            readback.generation,
            hotdog_ims_bearer_runtime_status_name(readback.subscriptions[0].status),
            readback.subscriptions[0].profile,
            hotdog_ip_family_name(readback.subscriptions[0].family),
-           readback.subscriptions[0].mux_id, readback.subscriptions[0].ifname,
+           readback.subscriptions[0].mux_id, readback.subscriptions[0].route_table,
+           readback.subscriptions[0].fwmark, readback.subscriptions[0].ifname,
            readback.subscriptions[0].pcscf_address_count,
            readback.subscriptions[0].pcscf_domain_count);
 }
@@ -72,7 +75,7 @@ class HotdogImsBearerStateTests(unittest.TestCase):
             self.assertEqual(
                 output,
                 "generation=7 status=up profile=7 family=ipv4v6 mux=11 "
-                "ifname=ims0 pcscf=0/1",
+                "table=12000 mark=0x494d5300 ifname=ims0 pcscf=0/1",
             )
             self.assertEqual(path.stat().st_mode & 0o777, 0o644)
 

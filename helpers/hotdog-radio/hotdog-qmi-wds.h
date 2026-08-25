@@ -37,6 +37,7 @@ int hotdog_qmi_wds_stop_input(uint32_t packet_handle,
 			      QmiMessageWdsStopNetworkInput **input);
 int hotdog_qmi_wds_current_settings_input(
 	QmiMessageWdsGetCurrentSettingsInput **input);
+int hotdog_qmi_wds_ipv4_prefix(guint32 mask, unsigned int *prefix);
 int hotdog_qmi_wds_decode_current_settings(
 	QmiMessageWdsGetCurrentSettingsOutput *output, QmiWdsIpFamily family,
 	struct hotdog_bearer_runtime *runtime, uint16_t *remote_result);

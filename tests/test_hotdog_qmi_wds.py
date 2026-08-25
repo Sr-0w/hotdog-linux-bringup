@@ -42,6 +42,12 @@ int main(void) {
             settings, &requested, NULL)) return 6;
     printf("settings=%x\n", requested);
     qmi_message_wds_get_current_settings_input_unref(settings);
+    { unsigned int prefix24 = 0, prefix32 = 0, ignored = 0;
+      int result24 = hotdog_qmi_wds_ipv4_prefix(0xffffff00U, &prefix24);
+      int result32 = hotdog_qmi_wds_ipv4_prefix(0xffffffffU, &prefix32);
+      int bad = hotdog_qmi_wds_ipv4_prefix(0xffff00ffU, &ignored);
+      printf("prefix24=%d/%u prefix32=%d/%u bad=%d\n",
+             result24, prefix24, result32, prefix32, bad); }
     hotdog_qmi_wds_plan_clear(&p); return 0;
 }
 '''
@@ -112,6 +118,11 @@ int main(void) { QmiMessageWdsStopNetworkInput *i=NULL; guint32 h=0;
     def test_handset_client_type_may_be_omitted(self) -> None:
         source = (SOURCE / "hotdog-qmi-wds.c").read_text()
         self.assertIn("client_type != QMI_WDS_CLIENT_TYPE_UNDEFINED", source)
+
+    def test_ipv4_subnet_mask_is_contiguous_and_bounded(self) -> None:
+        output = subprocess.run([str(self.binary)], check=True,
+                                capture_output=True, text=True).stdout
+        self.assertIn("prefix24=0/24 prefix32=0/32 bad=-71", output)
 
 
 if __name__ == "__main__":

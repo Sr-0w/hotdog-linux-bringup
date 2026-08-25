@@ -208,6 +208,33 @@ static int ipv4_string(guint32 address, char *target, size_t size)
 	return inet_ntop(AF_INET, &value, target, (socklen_t)size) ? 0 : -EINVAL;
 }
 
+int hotdog_qmi_wds_ipv4_prefix(guint32 mask, unsigned int *prefix)
+{
+	guint32 value = GUINT32_TO_BE(mask);
+	const unsigned char *bytes = (const unsigned char *)&value;
+	bool zero_seen = false;
+	unsigned int bits = 0, byte, bit;
+
+	if (!prefix)
+		return -EINVAL;
+	for (byte = 0; byte < sizeof(value); byte++) {
+		for (bit = 0; bit < 8; bit++) {
+			bool set = bytes[byte] & (1U << (7 - bit));
+
+			if (zero_seen && set)
+				return -EPROTO;
+			if (set)
+				bits++;
+			else
+				zero_seen = true;
+		}
+	}
+	if (!bits)
+		return -EPROTO;
+	*prefix = bits;
+	return 0;
+}
+
 static int ipv6_string(GArray *array, char *target, size_t size)
 {
 	struct in6_addr value = { 0 };
@@ -318,10 +345,17 @@ int hotdog_qmi_wds_decode_current_settings(
 	if (result)
 		return result;
 	if (family == QMI_WDS_IP_FAMILY_IPV4) {
+		guint32 mask;
+
 		if (!qmi_message_wds_get_current_settings_output_get_ipv4_address(
 			    output, &address, NULL))
 			return -ENODATA;
 		result = ipv4_string(address, runtime->ipv4, sizeof(runtime->ipv4));
+		runtime->ipv4_prefix = 32;
+		if (!result &&
+		    qmi_message_wds_get_current_settings_output_get_ipv4_gateway_subnet_mask(
+			    output, &mask, NULL))
+			result = hotdog_qmi_wds_ipv4_prefix(mask, &runtime->ipv4_prefix);
 		if (!result && qmi_message_wds_get_current_settings_output_get_ipv4_gateway_address(
 				 output, &address, NULL))
 			result = ipv4_string(address, runtime->ipv4_gateway,

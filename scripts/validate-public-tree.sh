@@ -742,7 +742,8 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-network.c hotdog-network.h \
 		hotdog-ims-bearer.c hotdog-ims-bearer.h \
 		hotdog-ims-executor.c hotdog-ims-executor.h \
-		hotdog-ims-bearer-state.c hotdog-ims-bearer-state.h; do
+		hotdog-ims-bearer-state.c hotdog-ims-bearer-state.h \
+		hotdog-ims-netconfig.c hotdog-ims-netconfig.h; do
 		[ -f "$source_dir/$source" ] || die "missing IMS bearer model: $source"
 	done
 	grep -q 'HOTDOG_APN_TYPE_IMS' "$source_dir/hotdog-ims-bearer.h" ||
@@ -766,6 +767,13 @@ validate_hotdog_radio_state_contract() {
 		die "IMS bearer runtime cannot expose unresolved ownership"
 	grep -q 'O_NOFOLLOW' "$source_dir/hotdog-ims-bearer-state.c" ||
 		die "IMS bearer runtime state does not reject symlinks"
+	grep -q 'HOTDOG_IMS_FWMARK_BASE' "$source_dir/hotdog-ims-netconfig.h" ||
+		die "IMS network configuration has no isolated routing mark"
+	grep -q 'g_spawn_sync' "$source_dir/hotdog-ims-netconfig.c" ||
+		die "IMS network configuration has no argv runner"
+	if grep -Eq 'sh[[:space:]]+-c|system\(' "$source_dir/hotdog-ims-netconfig.c"; then
+		die "IMS network configuration executes shell text"
+	fi
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done
