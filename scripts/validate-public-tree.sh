@@ -603,6 +603,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done
+	for source in hotdog-qmi-voice.c hotdog-qmi-voice.h; do
+		[ -f "$source_dir/$source" ] || die "missing QMI Voice adapter: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \

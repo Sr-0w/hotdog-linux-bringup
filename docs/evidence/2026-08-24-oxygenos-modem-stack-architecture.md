@@ -144,6 +144,12 @@ active call. Call waiting, CLIP and CLIR state are subscription-scoped; the
 remaining forwarding, conference and transfer request payloads stay in the
 transport parity queue rather than being collapsed into call state.
 
+`hotdog-qmi-voice` now maps only admitted circuit-switched calls to the upstream
+Voice service: Dial preserves the validated number, response yields a nonzero
+modem call ID, and Answer, End and continuous DTMF require that ID. IMS and
+video calls are explicitly rejected at this boundary rather than silently sent
+as CS; they belong to the separate IMS transport/media implementation.
+
 ### IMS, VoLTE and RCS
 
 OxygenOS splits IMS into `imsqmidaemon`, `imsdatadaemon`, `ims_rtp_daemon` and
