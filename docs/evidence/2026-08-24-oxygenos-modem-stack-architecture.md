@@ -261,6 +261,11 @@ complete MBN, matching both libqmi's PDC Load Config implementation and the
 `sm8150.g` list path corresponds to the real `sm8150.p` default profile, so the
 scanner reports list drift but never hides a valid parsed profile. See
 [the OxygenOS catalog reconstruction](2026-08-25-oxygenos-mcfg-catalog.md).
+Immediately before Load Config, the selected profile is reopened one path
+component at a time with `openat`, directory/file `O_NOFOLLOW`, a 16 MiB size
+bound and an exact SHA-1 recheck against the planned ID. A changed file or an
+intermediate/final symlink is therefore rejected even if catalog discovery was
+valid earlier.
 
 The bootstrap daemon exposes this join only as `--plan-pdc --mcfg-root=DIR`.
 Planning requires a real GW application, a physically present card and an

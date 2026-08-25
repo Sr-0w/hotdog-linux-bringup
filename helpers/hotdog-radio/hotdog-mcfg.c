@@ -4,6 +4,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -248,4 +249,117 @@ int hotdog_mcfg_catalog_load(const char *root, struct hotdog_pdc_catalog *catalo
 	qsort(catalog->configs, catalog->count, sizeof(catalog->configs[0]),
 	      compare_config_path);
 	return validate_unique_ids(catalog);
+}
+
+static int open_profile_beneath(const char *root, const char *relative)
+{
+	char path[HOTDOG_PDC_PATH_SIZE];
+	char *part, *separator;
+	int directory, next, result = -EINVAL;
+
+	if (!safe_relative_path(relative) || strlen(relative) >= sizeof(path))
+		return -EINVAL;
+	memcpy(path, relative, strlen(relative) + 1);
+	directory = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (directory < 0)
+		return -errno;
+	part = path;
+	while ((separator = strchr(part, '/'))) {
+		*separator = '\0';
+		next = openat(directory, part,
+			      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+		if (next < 0) {
+			result = -errno;
+			goto out;
+		}
+		close(directory);
+		directory = next;
+		part = separator + 1;
+	}
+	next = openat(directory, part, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (next < 0)
+		result = -errno;
+	else
+		result = next;
+out:
+	close(directory);
+	return result;
+}
+
+int hotdog_mcfg_profile_open(const char *root,
+			     const struct hotdog_pdc_config *config,
+			     struct hotdog_mcfg_profile *profile)
+{
+	struct hotdog_pdc_id actual = { 0 };
+	struct stat status;
+	GChecksum *checksum;
+	gsize digest_length = HOTDOG_PDC_ID_SIZE;
+	ssize_t count;
+	size_t offset = 0;
+	int descriptor, result = 0;
+
+	if (!root || !config || !profile ||
+	    config->id.length != HOTDOG_PDC_ID_SIZE)
+		return -EINVAL;
+	memset(profile, 0, sizeof(*profile));
+	descriptor = open_profile_beneath(root, config->path);
+	if (descriptor < 0)
+		return descriptor;
+	if (fstat(descriptor, &status)) {
+		result = -errno;
+		goto out;
+	}
+	if (!S_ISREG(status.st_mode)) {
+		result = -EINVAL;
+		goto out;
+	}
+	if (status.st_size <= 0 || status.st_size > HOTDOG_MCFG_MAX_FILE_SIZE ||
+	    status.st_size > UINT32_MAX) {
+		result = -EFBIG;
+		goto out;
+	}
+	profile->data = malloc((size_t)status.st_size);
+	if (!profile->data) {
+		result = -ENOMEM;
+		goto out;
+	}
+	profile->size = (uint32_t)status.st_size;
+	while (offset < profile->size) {
+		count = read(descriptor, profile->data + offset, profile->size - offset);
+		if (count < 0) {
+			if (errno == EINTR)
+				continue;
+			result = -errno;
+			goto out;
+		}
+		if (!count) {
+			result = -EIO;
+			goto out;
+		}
+		offset += (size_t)count;
+	}
+	checksum = g_checksum_new(G_CHECKSUM_SHA1);
+	if (!checksum) {
+		result = -ENOMEM;
+		goto out;
+	}
+	g_checksum_update(checksum, profile->data, profile->size);
+	g_checksum_get_digest(checksum, actual.value, &digest_length);
+	g_checksum_free(checksum);
+	actual.length = digest_length;
+	if (!hotdog_pdc_id_equal(&actual, &config->id))
+		result = -ESTALE;
+out:
+	close(descriptor);
+	if (result)
+		hotdog_mcfg_profile_clear(profile);
+	return result;
+}
+
+void hotdog_mcfg_profile_clear(struct hotdog_mcfg_profile *profile)
+{
+	if (!profile)
+		return;
+	free(profile->data);
+	memset(profile, 0, sizeof(*profile));
 }
