@@ -9,6 +9,7 @@
 #define HOTDOG_UIM_MAX_SLOTS 3
 #define HOTDOG_UIM_MAX_APPS 8
 #define HOTDOG_UIM_MAX_AID 32
+#define HOTDOG_UIM_MAX_ICCID 40
 
 enum hotdog_uim_card_state {
 	HOTDOG_UIM_CARD_ABSENT,
@@ -50,6 +51,11 @@ struct hotdog_uim_app {
 struct hotdog_uim_slot {
 	enum hotdog_uim_card_state state;
 	int card_error;
+	bool physical_present;
+	bool logical_active;
+	unsigned int logical_slot;
+	char iccid[HOTDOG_UIM_MAX_ICCID + 1];
+	size_t iccid_length;
 	struct hotdog_uim_app apps[HOTDOG_UIM_MAX_APPS];
 	size_t app_count;
 };
@@ -76,6 +82,10 @@ struct hotdog_uim_inventory {
 void hotdog_uim_inventory_init(struct hotdog_uim_inventory *inventory, size_t slot_count);
 int hotdog_uim_add_app(struct hotdog_uim_inventory *inventory, unsigned int physical_slot,
 		       const struct hotdog_uim_app *app);
+int hotdog_uim_set_slot_identity(struct hotdog_uim_inventory *inventory,
+				 unsigned int physical_slot, bool card_present,
+				 bool logical_active, unsigned int logical_slot,
+				 const unsigned char *iccid_bcd, size_t iccid_bcd_length);
 int hotdog_uim_select_sessions(struct hotdog_uim_inventory *inventory);
 int hotdog_uim_security_slot(unsigned int physical_slot);
 bool hotdog_uim_retry_transition_safe(const struct hotdog_uim_retries *before,

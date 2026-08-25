@@ -62,6 +62,15 @@ class HotdogUimTests(unittest.TestCase):
         result = self.replay("RETRIES 3 10 3 10 2 10 3 10 0\n")
         self.assertEqual(result.stdout.strip(), "retry-safe=0")
 
+    def test_slot_identity_decodes_bcd_and_trims_terminal_filler(self) -> None:
+        result = self.replay("IDENTITY 2 1 1 0 98230021436587F9\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "identity=0 slot:2 iccid:893200123456789")
+
+    def test_empty_slot_cannot_carry_an_iccid(self) -> None:
+        result = self.replay("IDENTITY 1 0 1 0 9823\n")
+        self.assertIn("identity=-22 slot:1", result.stdout)
+
 
 class HotdogQmiUimBuildTests(unittest.TestCase):
     def test_qrtr_uim_bootstrap_builds(self) -> None:

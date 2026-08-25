@@ -8,5 +8,7 @@
 
 int hotdog_qmi_uim_decode(QmiMessageUimGetCardStatusOutput *output,
 			  struct hotdog_uim_inventory *inventory);
+int hotdog_qmi_uim_decode_slot_status(QmiMessageUimGetSlotStatusOutput *output,
+				      struct hotdog_uim_inventory *inventory);
 
 #endif

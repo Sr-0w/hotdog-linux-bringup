@@ -16,9 +16,9 @@ struct bootstrap {
 	QrtrBus *bus;
 	QmiDevice *device;
 	QmiClientUim *uim;
+	struct hotdog_uim_inventory inventory;
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	QmiClientPdc *pdc;
-	struct hotdog_uim_inventory inventory;
 	uint32_t pdc_token;
 	uint32_t pdc_expected_token;
 	size_t pdc_query_index;
@@ -210,9 +210,15 @@ static void print_inventory(const struct hotdog_uim_inventory *inventory)
 	       inventory->slot_count, inventory->gw_count,
 	       inventory->onex_count, inventory->isim_count);
 	for (i = 0; i < inventory->slot_count; i++) {
-		printf("slot%zu=%s apps=%zu error=%d\n", i + 1,
+		printf("slot%zu=%s apps=%zu error=%d physical=%u active=%u logical=%u iccid=%s length=%zu\n",
+		       i + 1,
 		       hotdog_uim_card_state_name(inventory->slots[i].state),
-		       inventory->slots[i].app_count, inventory->slots[i].card_error);
+		       inventory->slots[i].app_count, inventory->slots[i].card_error,
+		       inventory->slots[i].physical_present,
+		       inventory->slots[i].logical_active,
+		       inventory->slots[i].logical_slot,
+		       inventory->slots[i].iccid_length ? "present" : "absent",
+		       inventory->slots[i].iccid_length);
 	}
 	for (i = 0; i < inventory->gw_count; i++) {
 		const struct hotdog_uim_session *session = &inventory->gw_sessions[i];
@@ -223,33 +229,30 @@ static void print_inventory(const struct hotdog_uim_inventory *inventory)
 	}
 }
 
-static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
+static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 			      struct bootstrap *bootstrap)
 {
-	QmiMessageUimGetCardStatusOutput *output;
-	struct hotdog_uim_inventory inventory;
+	QmiMessageUimGetSlotStatusOutput *output;
 	GError *error = NULL;
 	int result;
 
-	output = qmi_client_uim_get_card_status_finish(client, res, &error);
+	output = qmi_client_uim_get_slot_status_finish(client, res, &error);
 	if (!output) {
-		g_printerr("UIM card status failed: %s\n", error->message);
+		g_printerr("UIM slot status failed: %s\n", error->message);
 		g_clear_error(&error);
 		finish(bootstrap, 1);
 		return;
 	}
-	result = hotdog_qmi_uim_decode(output, &inventory);
-	qmi_message_uim_get_card_status_output_unref(output);
-	if (result && !(bootstrap->pdc_probe_subscription >= 0 &&
-			(result == -EIO || result == -ENODEV))) {
-		g_printerr("UIM inventory rejected: %d\n", result);
+	result = hotdog_qmi_uim_decode_slot_status(output, &bootstrap->inventory);
+	qmi_message_uim_get_slot_status_output_unref(output);
+	if (result) {
+		g_printerr("UIM slot identity rejected: %d\n", result);
 		finish(bootstrap, 1);
 		return;
 	}
-	print_inventory(&inventory);
+	print_inventory(&bootstrap->inventory);
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
-	bootstrap->inventory = inventory;
-	if (!inventory.gw_count && bootstrap->pdc_probe_subscription >= 0) {
+	if (!bootstrap->inventory.gw_count && bootstrap->pdc_probe_subscription >= 0) {
 		bootstrap->inventory.gw_count = 1;
 		bootstrap->inventory.gw_sessions[0].subscription =
 			(unsigned int)bootstrap->pdc_probe_subscription;
@@ -264,6 +267,34 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 #else
 	finish(bootstrap, 0);
 #endif
+}
+
+static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
+			      struct bootstrap *bootstrap)
+{
+	QmiMessageUimGetCardStatusOutput *output;
+	GError *error = NULL;
+	int result;
+
+	output = qmi_client_uim_get_card_status_finish(client, res, &error);
+	if (!output) {
+		g_printerr("UIM card status failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
+	qmi_message_uim_get_card_status_output_unref(output);
+	if (result && !(bootstrap->pdc_probe_subscription >= 0 &&
+			(result == -EIO || result == -ENODEV))) {
+		g_printerr("UIM inventory rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	qmi_client_uim_get_slot_status(bootstrap->uim, NULL, 10,
+				       bootstrap->cancellable,
+				       (GAsyncReadyCallback)slot_status_ready,
+				       bootstrap);
 }
 
 static void client_ready(QmiDevice *device, GAsyncResult *res,

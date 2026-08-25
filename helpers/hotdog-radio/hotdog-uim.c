@@ -24,6 +24,42 @@ int hotdog_uim_add_app(struct hotdog_uim_inventory *inventory, unsigned int phys
 	return 0;
 }
 
+int hotdog_uim_set_slot_identity(struct hotdog_uim_inventory *inventory,
+				 unsigned int physical_slot, bool card_present,
+				 bool logical_active, unsigned int logical_slot,
+				 const unsigned char *iccid_bcd, size_t iccid_bcd_length)
+{
+	static const char digits[] = "0123456789ABCDEF";
+	struct hotdog_uim_slot *slot;
+	size_t index, output = 0;
+
+	if (!inventory || !physical_slot || physical_slot > inventory->slot_count ||
+	    (iccid_bcd_length && !iccid_bcd) ||
+	    iccid_bcd_length * 2 > HOTDOG_UIM_MAX_ICCID ||
+	    (!card_present && iccid_bcd_length))
+		return -EINVAL;
+	slot = &inventory->slots[physical_slot - 1];
+	slot->physical_present = card_present;
+	slot->logical_active = logical_active;
+	slot->logical_slot = logical_active ? logical_slot : 0;
+	slot->iccid[0] = '\0';
+	slot->iccid_length = 0;
+	for (index = 0; card_present && index < iccid_bcd_length; index++) {
+		unsigned int low = iccid_bcd[index] & 0xf;
+		unsigned int high = iccid_bcd[index] >> 4;
+
+		if (low == 0xf)
+			break;
+		slot->iccid[output++] = digits[low];
+		if (high == 0xf)
+			break;
+		slot->iccid[output++] = digits[high];
+	}
+	slot->iccid[output] = '\0';
+	slot->iccid_length = output;
+	return 0;
+}
+
 static const struct hotdog_uim_app *find_app(const struct hotdog_uim_slot *slot,
 					      enum hotdog_uim_app_type first,
 					      enum hotdog_uim_app_type second,

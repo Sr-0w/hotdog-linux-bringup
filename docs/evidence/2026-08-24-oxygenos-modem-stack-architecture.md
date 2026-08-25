@@ -211,6 +211,16 @@ counter integrity. This model is shared by the future libqmi transport and the
 offline trace harness, so D-Bus presentation cannot silently alter the slot or
 subscription selected for a PIN operation.
 
+The libqmi transport now combines two distinct UIM views before PDC planning.
+Get Card Status supplies applications, AIDs, PIN/PUK state and retry counters;
+Get Slot Status supplies physical presence, logical-slot activation and the
+BCD ICCID for each physical slot. The decoder preserves both physical slots,
+trims only the terminal ICCID filler nibble and rejects inconsistent slot
+counts or an ICCID attached to an absent card. Runtime logs expose only
+presence and length, never the full ICCID. MCFG selection consumes the value
+internally, so a PIN prompt cannot accidentally become the first operation
+that discovers which card and subscription are active.
+
 ### PDC/MCFG
 
 - parse stock MBN metadata types for carrier name, long IIN, IIN and MCC/MNC;

@@ -30,6 +30,22 @@ static enum hotdog_uim_app_state app_state(const char *name)
 	return HOTDOG_UIM_APP_DETECTED;
 }
 
+static int hex_bytes(const char *text, unsigned char *bytes, size_t *length)
+{
+	size_t index, text_length = strlen(text);
+
+	if (text_length % 2 || text_length / 2 > HOTDOG_UIM_MAX_ICCID / 2)
+		return -1;
+	for (index = 0; index < text_length / 2; index++) {
+		unsigned int byte;
+		if (sscanf(&text[index * 2], "%2x", &byte) != 1)
+			return -1;
+		bytes[index] = (unsigned char)byte;
+	}
+	*length = text_length / 2;
+	return 0;
+}
+
 int main(void)
 {
 	struct hotdog_uim_inventory inventory;
@@ -54,6 +70,26 @@ int main(void)
 			if (hotdog_uim_add_app(&inventory, slot, &app))
 				return 2;
 			continue;
+		}
+		{
+			unsigned int present, active, logical;
+			char encoded[HOTDOG_UIM_MAX_ICCID + 1];
+			if (sscanf(line, "IDENTITY %u %u %u %u %40s", &slot, &present,
+				   &active, &logical, encoded) == 5) {
+				unsigned char bytes[HOTDOG_UIM_MAX_ICCID / 2];
+				size_t length;
+				int result;
+
+				if (hex_bytes(encoded, bytes, &length))
+					return 2;
+				result = hotdog_uim_set_slot_identity(&inventory, slot,
+					present != 0, active != 0, logical, bytes, length);
+				printf("identity=%d slot:%u", result, slot);
+				if (!result)
+					printf(" iccid:%s", inventory.slots[slot - 1].iccid);
+				printf("\n");
+				continue;
+			}
 		}
 		if (!strncmp(line, "SELECT", 6)) {
 			size_t i;

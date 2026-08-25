@@ -99,3 +99,40 @@ int hotdog_qmi_uim_decode(QmiMessageUimGetCardStatusOutput *output,
 	}
 	return hotdog_uim_select_sessions(inventory);
 }
+
+int hotdog_qmi_uim_decode_slot_status(QmiMessageUimGetSlotStatusOutput *output,
+				      struct hotdog_uim_inventory *inventory)
+{
+	GArray *physical_slots = NULL;
+	GError *error = NULL;
+	size_t index;
+
+	if (!output || !inventory || !inventory->slot_count)
+		return -EINVAL;
+	if (!qmi_message_uim_get_slot_status_output_get_result(output, &error)) {
+		g_clear_error(&error);
+		return -EIO;
+	}
+	if (!qmi_message_uim_get_slot_status_output_get_physical_slot_status(
+		    output, &physical_slots, &error)) {
+		g_clear_error(&error);
+		return -ENODATA;
+	}
+	if (physical_slots->len != inventory->slot_count)
+		return -EPROTO;
+	for (index = 0; index < physical_slots->len; index++) {
+		QmiPhysicalSlotStatusSlot *source = &g_array_index(
+			physical_slots, QmiPhysicalSlotStatusSlot, index);
+		bool present = source->physical_card_status == QMI_UIM_PHYSICAL_CARD_STATE_PRESENT;
+		bool active = source->physical_slot_status == QMI_UIM_SLOT_STATE_ACTIVE;
+		int result = hotdog_uim_set_slot_identity(
+			inventory, (unsigned int)index + 1, present, active,
+			source->logical_slot,
+			source->iccid ? (const unsigned char *)source->iccid->data : NULL,
+			source->iccid ? source->iccid->len : 0);
+
+		if (result)
+			return result;
+	}
+	return 0;
+}
