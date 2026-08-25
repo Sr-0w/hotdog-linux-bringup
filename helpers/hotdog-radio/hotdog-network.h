@@ -50,6 +50,14 @@ enum hotdog_bearer_state {
 	HOTDOG_BEARER_FAILED,
 };
 
+enum hotdog_bearer_purpose {
+	HOTDOG_BEARER_DEFAULT,
+	HOTDOG_BEARER_IMS,
+	HOTDOG_BEARER_EMERGENCY,
+	HOTDOG_BEARER_RCS,
+	HOTDOG_BEARER_UT,
+};
+
 struct hotdog_nas_subscription {
 	bool populated;
 	enum hotdog_nas_registration registration;
@@ -83,6 +91,7 @@ struct hotdog_bearer {
 	unsigned int generation;
 	enum hotdog_ip_family family;
 	enum hotdog_data_auth auth;
+	enum hotdog_bearer_purpose purpose;
 	enum hotdog_bearer_state state;
 	uint32_t packet_handle_v4;
 	uint32_t packet_handle_v6;
@@ -137,6 +146,11 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 				unsigned int profile, unsigned int mux_id,
 				enum hotdog_ip_family family, enum hotdog_data_auth auth,
 				const char *apn, unsigned int *bearer_id);
+int hotdog_network_bearer_start_purpose(
+	struct hotdog_network *network, unsigned int subscription,
+	unsigned int profile, unsigned int mux_id, enum hotdog_ip_family family,
+	enum hotdog_data_auth auth, enum hotdog_bearer_purpose purpose,
+	const char *apn, unsigned int *bearer_id);
 int hotdog_network_bearer_connected(struct hotdog_network *network, unsigned int bearer_id,
 				    const struct hotdog_bearer_runtime *runtime);
 int hotdog_network_bearer_leg_started(struct hotdog_network *network,
@@ -161,5 +175,6 @@ const char *hotdog_nas_registration_name(enum hotdog_nas_registration registrati
 const char *hotdog_nas_rat_name(enum hotdog_nas_rat rat);
 const char *hotdog_ip_family_name(enum hotdog_ip_family family);
 const char *hotdog_bearer_state_name(enum hotdog_bearer_state state);
+const char *hotdog_bearer_purpose_name(enum hotdog_bearer_purpose purpose);
 
 #endif

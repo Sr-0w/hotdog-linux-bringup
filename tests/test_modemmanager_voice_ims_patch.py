@@ -55,7 +55,7 @@ class ModemManagerVoiceImsPatchTests(unittest.TestCase):
                 "-c",
                 "user.name=Test",
                 "-c",
-                "user.email=test@example.invalid",
+                "user.email=test@localhost",
                 "commit",
                 "-qm",
                 "base",

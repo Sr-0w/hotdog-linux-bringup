@@ -86,6 +86,8 @@ int hotdog_network_set_default_data(struct hotdog_network *network,
 		if (bearer->state != HOTDOG_BEARER_STARTING &&
 		    bearer->state != HOTDOG_BEARER_CONNECTED)
 			continue;
+		if (bearer->purpose != HOTDOG_BEARER_DEFAULT)
+			continue;
 		if (!force || bearer->packet_handle_v4 || bearer->packet_handle_v6)
 			return -EBUSY;
 	}
@@ -94,6 +96,8 @@ int hotdog_network_set_default_data(struct hotdog_network *network,
 
 		if (bearer->state != HOTDOG_BEARER_STARTING &&
 		    bearer->state != HOTDOG_BEARER_CONNECTED)
+			continue;
+		if (bearer->purpose != HOTDOG_BEARER_DEFAULT)
 			continue;
 		bearer->state = HOTDOG_BEARER_FAILED;
 		bearer->error = ECANCELED;
@@ -108,13 +112,24 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 				enum hotdog_ip_family family, enum hotdog_data_auth auth,
 				const char *apn, unsigned int *bearer_id)
 {
+	return hotdog_network_bearer_start_purpose(
+		network, subscription, profile, mux_id, family, auth,
+		HOTDOG_BEARER_DEFAULT, apn, bearer_id);
+}
+
+int hotdog_network_bearer_start_purpose(
+	struct hotdog_network *network, unsigned int subscription,
+	unsigned int profile, unsigned int mux_id, enum hotdog_ip_family family,
+	enum hotdog_data_auth auth, enum hotdog_bearer_purpose purpose,
+	const char *apn, unsigned int *bearer_id)
+{
 	struct hotdog_nas_subscription *nas;
 	struct hotdog_bearer *available = NULL;
 	size_t i;
 
 	if (!network || !apn || !bearer_id ||
 	    subscription >= HOTDOG_NETWORK_MAX_SUBSCRIPTIONS || family > HOTDOG_IP_V4V6 ||
-	    auth > HOTDOG_AUTH_PAP_CHAP || !mux_id ||
+	    auth > HOTDOG_AUTH_PAP_CHAP || purpose > HOTDOG_BEARER_UT || !mux_id ||
 	    !strnlen(apn, HOTDOG_NETWORK_APN_SIZE) ||
 	    strnlen(apn, HOTDOG_NETWORK_APN_SIZE) >= HOTDOG_NETWORK_APN_SIZE)
 		return -EINVAL;
@@ -122,9 +137,13 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 	nas = &network->subscriptions[subscription];
 	if (!nas->populated)
 		return -ENODEV;
-	if (network->default_data_subscription != subscription)
+	if (purpose == HOTDOG_BEARER_DEFAULT &&
+	    network->default_data_subscription != subscription)
 		return -EACCES;
-	if (!registered(nas) || !nas->ps_attached)
+	if ((!registered(nas) &&
+	     !(purpose == HOTDOG_BEARER_EMERGENCY &&
+	       nas->registration == HOTDOG_NAS_EMERGENCY)) ||
+	    !nas->ps_attached)
 		return -ENETDOWN;
 	for (i = 0; i < HOTDOG_NETWORK_MAX_BEARERS; i++) {
 		struct hotdog_bearer *bearer = &network->bearers[i];
@@ -136,6 +155,9 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 		}
 		if (bearer->mux_id == mux_id)
 			return -EADDRINUSE;
+		if (purpose != HOTDOG_BEARER_DEFAULT &&
+		    bearer->subscription == subscription && bearer->purpose == purpose)
+			return -EALREADY;
 	}
 	if (!available)
 		return -ENOSPC;
@@ -147,6 +169,7 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 	available->generation = network->generation;
 	available->family = family;
 	available->auth = auth;
+	available->purpose = purpose;
 	available->state = HOTDOG_BEARER_STARTING;
 	strcpy(available->apn, apn);
 	*bearer_id = available->id;
@@ -454,4 +477,11 @@ const char *hotdog_bearer_state_name(enum hotdog_bearer_state state)
 {
 	static const char *const names[] = { "idle", "starting", "connected", "stopping", "failed" };
 	return state <= HOTDOG_BEARER_FAILED ? names[state] : "invalid";
+}
+
+const char *hotdog_bearer_purpose_name(enum hotdog_bearer_purpose purpose)
+{
+	static const char *const names[] = { "default", "ims", "emergency", "rcs", "ut" };
+
+	return purpose <= HOTDOG_BEARER_UT ? names[purpose] : "invalid";
 }

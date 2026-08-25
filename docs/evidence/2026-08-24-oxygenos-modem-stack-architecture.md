@@ -247,6 +247,24 @@ services. The required reconstruction surface is:
 - per-subscription IMS state;
 - RCS as a separable feature after core IMS parity.
 
+The OxygenOS data-plane boundary is also explicit. `imsdatadaemon` imports
+`dsi_get_data_srvc_hndl`, `dsi_set_modem_subs_id`,
+`dsi_set_data_call_param`, `dsi_start_data_call`, `dsi_stop_data_call`, address
+and device-name readers. Its diagnostics retain APN name, modem profile number,
+IP family and subscription ID, set the DSI application type to IMS, support
+IPv4 and IPv6 independently, and classify a missing modem link after start as
+a possible modem restart or netmgr crash. IMS, emergency, RCS and UT are
+separate APN purposes; they are not aliases for the user's default-data PDN.
+
+The mainline model therefore discovers profiles from modem state rather than
+hard-coding `ims`. A candidate must be an enabled 3GPP profile on the requested
+subscription, carry the matching WDS APN type mask, expose a bounded APN and a
+supported PDP family, and for IMS request P-CSCF through PCO. An APN learned
+from the modem may disambiguate a carrier profile. Without that evidence an
+exact single-purpose mask wins over a composite mask; multiple remaining
+candidates fail closed. Dedicated IMS/emergency/UT bearers bypass DDS while
+retaining global mux uniqueness and the existing dual-leg handle/SSR rollback.
+
 IMSA registration, RAT, SIP failure and the voice/video/SMS/UT/RCS capability
 mask are represented independently for every subscription. Automatic SMS and
 call domain selection consumes that state. SSR clears registration and

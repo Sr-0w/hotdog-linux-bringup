@@ -685,6 +685,14 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wds.c hotdog-qmi-wds.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS data-plane adapter: $source"
 	done
+	for source in hotdog-network.c hotdog-network.h \
+		hotdog-ims-bearer.c hotdog-ims-bearer.h; do
+		[ -f "$source_dir/$source" ] || die "missing IMS bearer model: $source"
+	done
+	grep -q 'HOTDOG_APN_TYPE_IMS' "$source_dir/hotdog-ims-bearer.h" ||
+		die "IMS bearer model does not identify IMS profiles by APN type"
+	grep -q 'purpose != HOTDOG_BEARER_DEFAULT' "$source_dir/hotdog-network.c" ||
+		die "dedicated IMS bearers are incorrectly tied to DDS switching"
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done
