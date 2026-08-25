@@ -7,6 +7,8 @@
 int hotdog_qmi_dms_decode_operating_mode(QmiMessageDmsGetOperatingModeOutput *output,
 					 QmiDmsOperatingMode *mode);
 int hotdog_qmi_dms_set_online_input(QmiMessageDmsSetOperatingModeInput **input);
+int hotdog_qmi_dms_decode_set_online(QmiMessageDmsSetOperatingModeOutput *output,
+				     uint16_t *remote_result);
 const char *hotdog_qmi_dms_mode_name(QmiDmsOperatingMode mode);
 
 #endif

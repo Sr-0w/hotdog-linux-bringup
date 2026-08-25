@@ -41,6 +41,23 @@ int hotdog_qmi_dms_set_online_input(QmiMessageDmsSetOperatingModeInput **input)
 	return 0;
 }
 
+int hotdog_qmi_dms_decode_set_online(QmiMessageDmsSetOperatingModeOutput *output,
+				     uint16_t *remote_result)
+{
+	GError *error = NULL;
+
+	if (!output || !remote_result)
+		return -EINVAL;
+	*remote_result = 0;
+	if (!qmi_message_dms_set_operating_mode_output_get_result(output, &error)) {
+		if (error && error->domain == QMI_PROTOCOL_ERROR)
+			*remote_result = (uint16_t)error->code;
+		g_clear_error(&error);
+		return -EREMOTEIO;
+	}
+	return 0;
+}
+
 const char *hotdog_qmi_dms_mode_name(QmiDmsOperatingMode mode)
 {
 	switch (mode) {

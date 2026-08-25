@@ -9,6 +9,7 @@
 #include "hotdog-qmi-pdc-backend.h"
 #include "hotdog-qmi-pdc-list.h"
 #include "hotdog-radio-gate.h"
+#include "hotdog-radio-readiness.h"
 #endif
 
 #include <gio/gio.h>
@@ -21,6 +22,7 @@
 #define HOTDOG_MCFG_CANONICAL_ROOT "/usr/share/hotdog-radio/mcfg/mcfg_sw"
 #define HOTDOG_MODEM_CANONICAL_PATH "/usr/lib/firmware/qcom/sm8150/oneplus/hotdog/modem.mbn"
 #define HOTDOG_BOOT_ID_PATH "/proc/sys/kernel/random/boot_id"
+#define HOTDOG_READINESS_PATH "/run/hotdog-radio/readiness"
 
 struct bootstrap {
 	GMainLoop *loop;
@@ -44,6 +46,7 @@ struct bootstrap {
 	struct hotdog_pdc_controller pdc_controller;
 	bool pdc_backend_initialized;
 	bool pdc_controller_initialized;
+	bool pdc_handoff;
 	uint32_t pdc_token;
 	uint32_t pdc_expected_token;
 	size_t pdc_query_index;
@@ -112,6 +115,103 @@ static void finish(struct bootstrap *bootstrap, int result)
 }
 
 static void start_dms_probe(struct bootstrap *bootstrap);
+static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
+			   struct bootstrap *bootstrap);
+
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+static int publish_readiness(struct bootstrap *bootstrap)
+{
+	struct hotdog_radio_readiness readiness = { .dms_online = true };
+	char line[64];
+	FILE *stream;
+	size_t index;
+	bool locked = false;
+
+	stream = fopen(HOTDOG_BOOT_ID_PATH, "r");
+	if (!stream)
+		return -errno;
+	if (!fgets(line, sizeof(line), stream)) {
+		fclose(stream);
+		return -EIO;
+	}
+	fclose(stream);
+	line[strcspn(line, "\r\n")] = '\0';
+	if (strlen(line) >= sizeof(readiness.boot_id))
+		return -EOVERFLOW;
+	memcpy(readiness.boot_id, line, strlen(line) + 1);
+	memcpy(readiness.modem_sha256, bootstrap->runtime.modem_sha256,
+	       sizeof(readiness.modem_sha256));
+	memcpy(readiness.mcfg_sha256, bootstrap->runtime.archive_sha256,
+	       sizeof(readiness.mcfg_sha256));
+	for (index = 0; index < HOTDOG_PDC_MAX_SUBSCRIPTIONS; index++) {
+		const struct hotdog_pdc_subscription *pdc =
+			&bootstrap->pdc_subscriptions[index];
+		struct hotdog_readiness_subscription *target =
+			&readiness.subscriptions[index];
+		size_t session_index;
+
+		if (!pdc->populated)
+			continue;
+		target->populated = true;
+		target->selected = pdc->selected;
+		target->active = pdc->active;
+		target->pending = pdc->pending;
+		for (session_index = 0; session_index < bootstrap->inventory.gw_count;
+		     session_index++) {
+			const struct hotdog_uim_session *session =
+				&bootstrap->inventory.gw_sessions[session_index];
+			const struct hotdog_uim_slot *slot;
+
+			if (session->subscription != index)
+				continue;
+			slot = &bootstrap->inventory.slots[session->physical_slot - 1];
+			if (session->app_index >= slot->app_count)
+				return -EPROTO;
+			target->physical_slot = session->physical_slot;
+			target->app_state = slot->apps[session->app_index].state;
+			target->retries = slot->apps[session->app_index].retries;
+			break;
+		}
+		if (!target->physical_slot)
+			return -ENODATA;
+		if (target->app_state != HOTDOG_UIM_APP_READY)
+			locked = true;
+	}
+	readiness.phase = locked ? HOTDOG_READINESS_LOCKED :
+		HOTDOG_READINESS_REGISTERING;
+	if (g_mkdir_with_parents("/run/hotdog-radio", 0755))
+		return -errno;
+	return hotdog_radio_readiness_write(HOTDOG_READINESS_PATH, &readiness);
+}
+
+static void dms_set_online_ready(QmiClientDms *client, GAsyncResult *res,
+				 struct bootstrap *bootstrap)
+{
+	QmiMessageDmsSetOperatingModeOutput *output;
+	GError *error = NULL;
+	uint16_t remote = 0;
+	int result;
+
+	output = qmi_client_dms_set_operating_mode_finish(client, res, &error);
+	if (!output) {
+		g_printerr("DMS Online request failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	result = hotdog_qmi_dms_decode_set_online(output, &remote);
+	qmi_message_dms_set_operating_mode_output_unref(output);
+	if (result) {
+		g_printerr("DMS Online rejected: %d remote=%u\n", result, remote);
+		finish(bootstrap, 1);
+		return;
+	}
+	qmi_client_dms_get_operating_mode(bootstrap->dms, NULL, 10,
+					  bootstrap->cancellable,
+					  (GAsyncReadyCallback)dms_mode_ready,
+					  bootstrap);
+}
+#endif
 
 static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
 			   struct bootstrap *bootstrap)
@@ -136,6 +236,39 @@ static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
 		return;
 	}
 	printf("dms-operating-mode=%s\n", hotdog_qmi_dms_mode_name(mode));
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap->pdc_handoff) {
+		if (mode == QMI_DMS_OPERATING_MODE_ONLINE) {
+			result = publish_readiness(bootstrap);
+			if (result)
+				g_printerr("Radio readiness publication failed: %d\n", result);
+			else
+				printf("radio-readiness=published phase-safe\n");
+			finish(bootstrap, result ? 1 : 0);
+			return;
+		}
+		if (mode == QMI_DMS_OPERATING_MODE_SHUTTING_DOWN ||
+		    mode == QMI_DMS_OPERATING_MODE_OFFLINE ||
+		    mode == QMI_DMS_OPERATING_MODE_LOW_POWER) {
+			QmiMessageDmsSetOperatingModeInput *input = NULL;
+
+			result = hotdog_qmi_dms_set_online_input(&input);
+			if (result) {
+				finish(bootstrap, 1);
+				return;
+			}
+			qmi_client_dms_set_operating_mode(
+				bootstrap->dms, input, 15, bootstrap->cancellable,
+				(GAsyncReadyCallback)dms_set_online_ready, bootstrap);
+			qmi_message_dms_set_operating_mode_input_unref(input);
+			return;
+		}
+		g_printerr("DMS mode is unsafe for Online transition: %s\n",
+			   hotdog_qmi_dms_mode_name(mode));
+		finish(bootstrap, 1);
+		return;
+	}
+#endif
 	finish(bootstrap, 0);
 }
 
@@ -330,6 +463,19 @@ static void pdc_controller_done(struct hotdog_pdc_controller *controller,
 	(void)controller;
 	printf("pdc-transaction=phase:%s result:%d\n",
 	       hotdog_pdc_executor_phase_name(phase), result);
+	if (!result && phase == HOTDOG_PDC_EXECUTOR_COMMITTED) {
+		memcpy(bootstrap->pdc_subscriptions,
+		       controller->executor.subscriptions,
+		       sizeof(bootstrap->pdc_subscriptions));
+		bootstrap->pdc_handoff = true;
+		if (unlink(HOTDOG_READINESS_PATH) && errno != ENOENT) {
+			g_printerr("Cannot remove stale readiness: %s\n", g_strerror(errno));
+			finish(bootstrap, 1);
+			return;
+		}
+		start_dms_probe(bootstrap);
+		return;
+	}
 	finish(bootstrap, result ? 1 : 0);
 }
 
@@ -518,6 +664,10 @@ static int pdc_apply_start(struct bootstrap *bootstrap)
 	if (result) {
 		g_printerr("PDC execution gate rejected: %d\n", result);
 		return result;
+	}
+	if (unlink(HOTDOG_READINESS_PATH) && errno != ENOENT) {
+		g_printerr("Cannot remove stale readiness: %s\n", g_strerror(errno));
+		return -errno;
 	}
 	result = hotdog_qmi_pdc_backend_init(
 		&bootstrap->pdc_backend, bootstrap->pdc, bootstrap->cancellable,

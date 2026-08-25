@@ -15,6 +15,15 @@ static void controller_finish(struct hotdog_pdc_controller *controller)
 	controller->finished = true;
 	switch (controller->executor.phase) {
 	case HOTDOG_PDC_EXECUTOR_COMMITTED:
+		for (size_t index = 0; index < controller->executor.subscription_count; index++) {
+			struct hotdog_pdc_subscription *subscription =
+				&controller->executor.subscriptions[index];
+
+			if (subscription->populated && subscription->changed) {
+				subscription->active = subscription->selected;
+				memset(&subscription->pending, 0, sizeof(subscription->pending));
+			}
+		}
 		result = 0;
 		break;
 	case HOTDOG_PDC_EXECUTOR_ROLLED_BACK:

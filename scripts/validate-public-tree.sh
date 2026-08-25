@@ -576,6 +576,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-radio-gate.c hotdog-radio-gate.h; do
 		[ -f "$source_dir/$source" ] || die "missing combined radio execution gate: $source"
 	done
+	for source in hotdog-radio-readiness.c hotdog-radio-readiness.h; do
+		[ -f "$source_dir/$source" ] || die "missing radio readiness source: $source"
+	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
 	done

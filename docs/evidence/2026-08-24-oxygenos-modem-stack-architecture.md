@@ -366,9 +366,13 @@ It is mutually exclusive with dry-run and all standalone probes, requires real
 UIM identity, inventories resident configs and all three selected states again,
 prints the rebuilt plan, passes the combined gate and then starts the
 transaction controller. Bus node removal/addition and PDC service return drive
-the reconnect/rebind path. A committed transaction stops before DMS Online and
-before deferred stale cleanup; those are separate post-verification phases and
-no readiness file is published yet.
+the reconnect/rebind path. A committed PDC transaction allows only
+`shutting-down`, offline or low-power to transition to Online, then re-reads
+DMS. `hotdog-radio-readiness` writes schema 2 atomically only after DMS is
+confirmed Online, every populated active ID equals selected and every pending
+ID is empty. The record contains physical slot, application lock state and retry
+counts but no ICCID or PIN. Deferred stale cleanup remains a later maintenance
+phase.
 The target no-SIM apply probe fails at the populated-GW gate before reading a
 deliberately absent approval and leaves resident PDC count, DMS and MPSS
 unchanged; see [the apply fail-closed validation](2026-08-25-radio-pdc-apply-nosim.md).

@@ -27,6 +27,7 @@ int main(void) {
     if (!qmi_message_dms_set_operating_mode_input_get_mode(input, &mode, NULL)) return 2;
     if (mode != QMI_DMS_OPERATING_MODE_ONLINE) return 3;
     qmi_message_dms_set_operating_mode_input_unref(input);
+	if (hotdog_qmi_dms_decode_set_online(NULL, NULL) != -22) return 4;
     printf("online=%s offline=%s low=%s\n",
            hotdog_qmi_dms_mode_name(QMI_DMS_OPERATING_MODE_ONLINE),
            hotdog_qmi_dms_mode_name(QMI_DMS_OPERATING_MODE_OFFLINE),
