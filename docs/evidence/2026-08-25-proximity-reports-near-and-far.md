@@ -138,6 +138,36 @@ both sides of its threshold. The driver now reports 2 for near and 0 for far,
 which is the smallest pair that clears the upper mark and stays under the lower
 one, so the hysteresis works as designed in both directions.
 
+## The chain, closed and measured
+
+With the raw value given headroom, both ends were held at once: the engine
+armed and a `ClaimProximity` held while the phone was taken to the ear and
+away, at whatever pace.
+
+| | |
+| --- | ---: |
+| engine transitions | 30 |
+| `ProximityNear` transitions | 29 |
+| matched within 2 s | 29 / 29 |
+| latency, engine to D-Bus | 0.36 s min, **0.72 s median**, 0.97 s max |
+
+The one unmatched engine event is its baseline `far` at t=0.20, emitted before
+the claim was taken. The median latency sits just under the driver's 700 ms
+polling interval, which is what a polled sensor should cost and no more.
+
+## What remains
+
+The engine only speaks while the ultrasound audio path is armed, and arming it
+is a userspace action: two hostless PCMs and the mixer route. Nothing does that
+on its own yet, so in ordinary use the screen still will not blank during a
+call. A service that arms the path while proximity is claimed, and drops it
+after, is the remaining piece — which is how OxygenOS works too, its sensor HAL
+asking the audio HAL to bring the path up.
+
+Whether the ordering fix lets `hotdog-sensor-gate` be retired is a separate
+question and is **not** answered here: the gate still runs, so it masks the
+race the fix targets. Testing that needs the gate disabled.
+
 `Ultrasound ML`, the 432-byte control, is bidirectional on stock and the audio
 HAL references it. This port neither reads nor writes it, and which direction
 OxygenOS uses has not been determined.
