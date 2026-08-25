@@ -650,7 +650,7 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-imsa.c hotdog-qmi-imsa.h; do
 		[ -f "$source_dir/$source" ] || die "missing IMSA registration adapter: $source"
 	done
-	for source in hotdog-ims-state.c hotdog-ims-state.h; do
+	for source in hotdog-ims-state.c hotdog-ims-state.h hotdog-imsd.c; do
 		[ -f "$source_dir/$source" ] || die "missing IMS runtime state contract: $source"
 	done
 	output="$(mktemp)"

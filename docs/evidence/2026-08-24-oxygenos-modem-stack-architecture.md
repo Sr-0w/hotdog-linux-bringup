@@ -244,6 +244,18 @@ or oversized files, NUL bytes, unknown/missing/duplicate groups or keys and
 then revalidates every cross-field invariant. This is the bounded state that a
 standard-service adapter may consume without sharing QMI IMSA client ownership.
 
+`hotdog-imsd` is the sole long-lived IMSA owner. It refuses startup until
+schema-2 readiness matches the current boot and packaged modem/MCFG identity,
+then allocates one IMSA CID for each populated subscription. Every client is
+bound before indication registration; initial Registration then Services
+queries complete before the first state publication. If an indication races a
+query response, the indication wins and the older response is discarded.
+Subsequent partial indications atomically rewrite the runtime file. A change in
+populated slots or active/selected PDC identity, readiness loss, malformed IMSA
+data, SIGTERM or QRTR node removal removes the file and releases every client.
+This service owns no WDS, WMS or Voice CID and therefore does not compete with
+ModemManager.
+
 ## Mainline ownership model
 
 The implementation deliberately keeps proven generic components and replaces

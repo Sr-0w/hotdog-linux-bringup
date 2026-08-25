@@ -1,0 +1,536 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#define _POSIX_C_SOURCE 200809L
+#include "hotdog-ims-state.h"
+#include "hotdog-mcfg-runtime.h"
+#include "hotdog-qmi-imsa.h"
+#include "hotdog-radio-readiness.h"
+
+#include <errno.h>
+#include <gio/gio.h>
+#include <glib-unix.h>
+#include <libqmi-glib.h>
+#include <libqrtr-glib.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#define DEFAULT_READINESS_PATH "/run/hotdog-radio/readiness"
+#define DEFAULT_IMS_STATE_PATH "/run/hotdog-radio/ims-state"
+#define DEFAULT_BOOT_ID_PATH "/proc/sys/kernel/random/boot_id"
+#define DEFAULT_RUNTIME_MANIFEST "/usr/share/hotdog-radio/mcfg/MANIFEST"
+
+struct imsd;
+
+struct imsd_subscription {
+	struct imsd *imsd;
+	unsigned int index;
+	QmiClientImsa *client;
+	gulong registration_handler;
+	gulong services_handler;
+	bool registration_indicated;
+	bool services_indicated;
+};
+
+struct imsd {
+	GMainLoop *loop;
+	GCancellable *cancellable;
+	QrtrBus *bus;
+	QmiDevice *device;
+	struct hotdog_radio_readiness readiness;
+	struct hotdog_ims_runtime_state state;
+	struct imsd_subscription subscriptions[HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS];
+	char *readiness_path;
+	char *state_path;
+	char *boot_id_path;
+	char *runtime_manifest;
+	unsigned int node;
+	unsigned int next_subscription;
+	unsigned int generation;
+	gulong node_removed_handler;
+	guint readiness_poll_id;
+	bool initialized;
+	bool finished;
+	int result;
+};
+
+struct release_wait {
+	bool done;
+};
+
+static void finish(struct imsd *imsd, int result)
+{
+	if (imsd->finished)
+		return;
+	imsd->finished = true;
+	imsd->result = result;
+	if (imsd->cancellable)
+		g_cancellable_cancel(imsd->cancellable);
+	if (unlink(imsd->state_path) && errno != ENOENT)
+		g_printerr("IMS state removal failed: %s\n", g_strerror(errno));
+	g_main_loop_quit(imsd->loop);
+}
+
+static int read_boot_id(const char *path, char *boot_id, size_t size)
+{
+	FILE *stream;
+	size_t length;
+
+	stream = fopen(path, "r");
+	if (!stream)
+		return -errno;
+	if (!fgets(boot_id, size, stream)) {
+		fclose(stream);
+		return -EIO;
+	}
+	if (fclose(stream))
+		return -EIO;
+	length = strcspn(boot_id, "\r\n");
+	if (boot_id[length] == '\0' && length == size - 1)
+		return -EOVERFLOW;
+	boot_id[length] = '\0';
+	return boot_id[0] ? 0 : -ENODATA;
+}
+
+static int verify_readiness(struct imsd *imsd)
+{
+	struct hotdog_radio_readiness readiness;
+	struct hotdog_mcfg_runtime runtime;
+	char boot_id[HOTDOG_READINESS_BOOT_ID_SIZE + 2];
+	int result;
+
+	result = hotdog_radio_readiness_read(imsd->readiness_path, &readiness);
+	if (result)
+		return result;
+	result = read_boot_id(imsd->boot_id_path, boot_id, sizeof(boot_id));
+	if (result)
+		return result;
+	if (strcmp(readiness.boot_id, boot_id))
+		return -ESTALE;
+	result = hotdog_mcfg_runtime_read(imsd->runtime_manifest, &runtime);
+	if (result)
+		return result;
+	if (strcmp(readiness.modem_sha256, runtime.modem_sha256) ||
+	    strcmp(readiness.mcfg_sha256, runtime.archive_sha256))
+		return -ESTALE;
+	if (imsd->readiness.boot_id[0]) {
+		size_t index;
+
+		for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
+			const struct hotdog_readiness_subscription *old =
+				&imsd->readiness.subscriptions[index];
+			const struct hotdog_readiness_subscription *current =
+				&readiness.subscriptions[index];
+
+			if (old->populated != current->populated ||
+			    old->physical_slot != current->physical_slot ||
+			    memcmp(&old->selected, &current->selected, sizeof(old->selected)) ||
+			    memcmp(&old->active, &current->active, sizeof(old->active)) ||
+			    memcmp(&old->pending, &current->pending, sizeof(old->pending)))
+				return -ESTALE;
+		}
+	}
+	imsd->readiness = readiness;
+	return 0;
+}
+
+static int publish_state(struct imsd *imsd)
+{
+	int result = hotdog_ims_runtime_write(imsd->state_path, &imsd->state);
+
+	if (result)
+		g_printerr("IMS state publication failed: %d\n", result);
+	else
+		printf("ims-state=published generation=%u\n", imsd->state.generation);
+	return result;
+}
+
+static void registration_indication(
+	QmiClientImsa *client,
+	QmiIndicationImsaImsRegistrationStatusChangedOutput *output,
+	struct imsd_subscription *subscription)
+{
+	struct hotdog_ims_state *state =
+		&subscription->imsd->state.subscriptions[subscription->index].ims;
+	int result;
+
+	(void)client;
+	subscription->registration_indicated = true;
+	result = hotdog_qmi_imsa_decode_registration_indication(output, state);
+	if (result || (subscription->imsd->initialized && publish_state(subscription->imsd))) {
+		g_printerr("IMSA registration indication rejected for subscription %u: %d\n",
+			   subscription->index, result);
+		finish(subscription->imsd, 1);
+	}
+}
+
+static void services_indication(
+	QmiClientImsa *client,
+	QmiIndicationImsaImsServicesStatusChangedOutput *output,
+	struct imsd_subscription *subscription)
+{
+	struct hotdog_ims_state *state =
+		&subscription->imsd->state.subscriptions[subscription->index].ims;
+	int result;
+
+	(void)client;
+	subscription->services_indicated = true;
+	result = hotdog_qmi_imsa_decode_services_indication(output, state);
+	if (result || (subscription->imsd->initialized && publish_state(subscription->imsd))) {
+		g_printerr("IMSA services indication rejected for subscription %u: %d\n",
+			   subscription->index, result);
+		finish(subscription->imsd, 1);
+	}
+}
+
+static void start_next_subscription(struct imsd *imsd);
+
+static void services_ready(QmiClientImsa *client, GAsyncResult *res,
+			   struct imsd_subscription *subscription)
+{
+	g_autoptr(QmiMessageImsaGetImsServicesStatusOutput) output = NULL;
+	uint16_t remote = 0;
+	GError *error = NULL;
+	int result;
+
+	output = qmi_client_imsa_get_ims_services_status_finish(client, res, &error);
+	if (!output) {
+		g_printerr("IMSA services request failed for subscription %u: %s\n",
+			   subscription->index, error->message);
+		g_clear_error(&error);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	result = subscription->services_indicated ? 0 : hotdog_qmi_imsa_decode_services(
+		output, &subscription->imsd->state.subscriptions[subscription->index].ims,
+		&remote);
+	if (result) {
+		g_printerr("IMSA services rejected for subscription %u: %d remote=%u\n",
+			   subscription->index, result, remote);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	subscription->imsd->next_subscription = subscription->index + 1;
+	start_next_subscription(subscription->imsd);
+}
+
+static void registration_ready(QmiClientImsa *client, GAsyncResult *res,
+			       struct imsd_subscription *subscription)
+{
+	g_autoptr(QmiMessageImsaGetImsRegistrationStatusOutput) output = NULL;
+	uint16_t remote = 0;
+	GError *error = NULL;
+	int result;
+
+	output = qmi_client_imsa_get_ims_registration_status_finish(client, res, &error);
+	if (!output) {
+		g_printerr("IMSA registration request failed for subscription %u: %s\n",
+			   subscription->index, error->message);
+		g_clear_error(&error);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	result = subscription->registration_indicated ? 0 :
+		hotdog_qmi_imsa_decode_registration(
+			output,
+			&subscription->imsd->state.subscriptions[subscription->index].ims,
+			&remote);
+	if (result) {
+		g_printerr("IMSA registration rejected for subscription %u: %d remote=%u\n",
+			   subscription->index, result, remote);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	qmi_client_imsa_get_ims_services_status(
+		client, NULL, 10, subscription->imsd->cancellable,
+		(GAsyncReadyCallback)services_ready, subscription);
+}
+
+static void indications_ready(QmiClientImsa *client, GAsyncResult *res,
+			      struct imsd_subscription *subscription)
+{
+	g_autoptr(QmiMessageImsaRegisterIndicationsOutput) output = NULL;
+	GError *error = NULL;
+
+	output = qmi_client_imsa_register_indications_finish(client, res, &error);
+	if (!output || !qmi_message_imsa_register_indications_output_get_result(output, &error)) {
+		g_printerr("IMSA indication registration failed for subscription %u: %s\n",
+			   subscription->index, error ? error->message : "missing output");
+		g_clear_error(&error);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	subscription->registration_handler = g_signal_connect(
+		client, "ims-registration-status-changed",
+		G_CALLBACK(registration_indication), subscription);
+	subscription->services_handler = g_signal_connect(
+		client, "ims-services-status-changed",
+		G_CALLBACK(services_indication), subscription);
+	qmi_client_imsa_get_ims_registration_status(
+		client, NULL, 10, subscription->imsd->cancellable,
+		(GAsyncReadyCallback)registration_ready, subscription);
+}
+
+static void bind_ready(QmiClientImsa *client, GAsyncResult *res,
+		       struct imsd_subscription *subscription)
+{
+	g_autoptr(QmiMessageImsaBindOutput) output = NULL;
+	g_autoptr(QmiMessageImsaRegisterIndicationsInput) input = NULL;
+	GError *error = NULL;
+
+	output = qmi_client_imsa_bind_finish(client, res, &error);
+	if (!output || !qmi_message_imsa_bind_output_get_result(output, &error)) {
+		g_printerr("IMSA bind failed for subscription %u: %s\n",
+			   subscription->index, error ? error->message : "missing output");
+		g_clear_error(&error);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	if (hotdog_qmi_imsa_register_input(&input)) {
+		finish(subscription->imsd, 1);
+		return;
+	}
+	qmi_client_imsa_register_indications(
+		client, input, 10, subscription->imsd->cancellable,
+		(GAsyncReadyCallback)indications_ready, subscription);
+}
+
+static void client_ready(QmiDevice *device, GAsyncResult *res,
+			 struct imsd_subscription *subscription)
+{
+	g_autoptr(QmiMessageImsaBindInput) input = NULL;
+	QmiClient *client;
+	GError *error = NULL;
+
+	client = qmi_device_allocate_client_finish(device, res, &error);
+	if (!client) {
+		g_printerr("IMSA client allocation failed for subscription %u: %s\n",
+			   subscription->index, error->message);
+		g_clear_error(&error);
+		finish(subscription->imsd, 1);
+		return;
+	}
+	subscription->client = QMI_CLIENT_IMSA(client);
+	if (hotdog_qmi_imsa_bind_input(subscription->index, &input)) {
+		finish(subscription->imsd, 1);
+		return;
+	}
+	qmi_client_imsa_bind(subscription->client, input, 10,
+			     subscription->imsd->cancellable,
+			     (GAsyncReadyCallback)bind_ready, subscription);
+}
+
+static void start_next_subscription(struct imsd *imsd)
+{
+	while (imsd->next_subscription < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS &&
+	       !imsd->state.subscriptions[imsd->next_subscription].populated)
+		imsd->next_subscription++;
+	if (imsd->next_subscription == HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS) {
+		imsd->initialized = true;
+		if (publish_state(imsd))
+			finish(imsd, 1);
+		return;
+	}
+	qmi_device_allocate_client(
+		imsd->device, QMI_SERVICE_IMSA, QMI_CID_NONE, 10, imsd->cancellable,
+		(GAsyncReadyCallback)client_ready,
+		&imsd->subscriptions[imsd->next_subscription]);
+}
+
+static void device_open_ready(QmiDevice *device, GAsyncResult *res, struct imsd *imsd)
+{
+	GError *error = NULL;
+
+	if (!qmi_device_open_finish(device, res, &error)) {
+		g_printerr("IMSA QMI device open failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(imsd, 1);
+		return;
+	}
+	start_next_subscription(imsd);
+}
+
+static void device_ready(GObject *source, GAsyncResult *res, struct imsd *imsd)
+{
+	GError *error = NULL;
+
+	(void)source;
+	imsd->device = qmi_device_new_finish(res, &error);
+	if (!imsd->device) {
+		g_printerr("IMSA QMI device creation failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(imsd, 1);
+		return;
+	}
+	qmi_device_open(imsd->device, QMI_DEVICE_OPEN_FLAGS_EXPECT_INDICATIONS,
+			10, imsd->cancellable,
+			(GAsyncReadyCallback)device_open_ready, imsd);
+}
+
+static void node_removed(QrtrBus *bus, guint node_id, struct imsd *imsd)
+{
+	(void)bus;
+	if (node_id == imsd->node) {
+		g_printerr("IMSA QRTR node removed\n");
+		finish(imsd, 1);
+	}
+}
+
+static void bus_ready(GObject *source, GAsyncResult *res, struct imsd *imsd)
+{
+	QrtrNode *node;
+	GError *error = NULL;
+
+	(void)source;
+	imsd->bus = qrtr_bus_new_finish(res, &error);
+	if (!imsd->bus) {
+		g_printerr("IMSA QRTR bus failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(imsd, 1);
+		return;
+	}
+	imsd->node_removed_handler = g_signal_connect(
+		imsd->bus, QRTR_BUS_SIGNAL_NODE_REMOVED,
+		G_CALLBACK(node_removed), imsd);
+	node = qrtr_bus_peek_node(imsd->bus, imsd->node);
+	if (!node) {
+		g_printerr("IMSA QRTR node %u unavailable\n", imsd->node);
+		finish(imsd, 1);
+		return;
+	}
+	qmi_device_new_from_node(node, imsd->cancellable,
+				 (GAsyncReadyCallback)device_ready, imsd);
+}
+
+static gboolean poll_readiness(gpointer user_data)
+{
+	struct imsd *imsd = user_data;
+
+	if (!imsd->finished && verify_readiness(imsd)) {
+		g_printerr("IMSA readiness became invalid\n");
+		finish(imsd, 1);
+	}
+	return G_SOURCE_CONTINUE;
+}
+
+static gboolean terminate(gpointer user_data)
+{
+	finish(user_data, 0);
+	return G_SOURCE_REMOVE;
+}
+
+static void release_ready(QmiDevice *device, GAsyncResult *res,
+			  struct release_wait *wait)
+{
+	GError *error = NULL;
+
+	if (!qmi_device_release_client_finish(device, res, &error)) {
+		g_printerr("IMSA client release failed: %s\n", error->message);
+		g_clear_error(&error);
+	}
+	wait->done = true;
+}
+
+static void release_client(struct imsd *imsd, QmiClientImsa *client)
+{
+	struct release_wait wait = { 0 };
+
+	if (!imsd->device || !client)
+		return;
+	qmi_device_release_client(
+		imsd->device, QMI_CLIENT(client), QMI_DEVICE_RELEASE_CLIENT_FLAGS_RELEASE_CID,
+		10, NULL, (GAsyncReadyCallback)release_ready, &wait);
+	while (!wait.done)
+		g_main_context_iteration(NULL, TRUE);
+}
+
+int main(int argc, char **argv)
+{
+	struct imsd imsd = { .node = 0 };
+	GOptionContext *options;
+	GError *error = NULL;
+	GOptionEntry entries[] = {
+		{ "node", 'n', 0, G_OPTION_ARG_INT, &imsd.node, "QRTR node", "ID" },
+		{ "generation", 0, 0, G_OPTION_ARG_INT, &imsd.generation,
+		  "Supervisor SSR generation", "GENERATION" },
+		{ "readiness", 0, 0, G_OPTION_ARG_FILENAME, &imsd.readiness_path,
+		  "Readiness record", "FILE" },
+		{ "state", 0, 0, G_OPTION_ARG_FILENAME, &imsd.state_path,
+		  "IMS runtime state", "FILE" },
+		{ "boot-id", 0, 0, G_OPTION_ARG_FILENAME, &imsd.boot_id_path,
+		  "Kernel boot ID", "FILE" },
+		{ "runtime-manifest", 0, 0, G_OPTION_ARG_FILENAME, &imsd.runtime_manifest,
+		  "Packaged MCFG manifest", "FILE" },
+		{ NULL }
+	};
+	size_t index;
+	int result;
+
+	options = g_option_context_new("- monitor per-subscription IMSA state");
+	g_option_context_add_main_entries(options, entries, NULL);
+	if (!g_option_context_parse(options, &argc, &argv, &error)) {
+		g_printerr("option parsing failed: %s\n", error->message);
+		g_clear_error(&error);
+		g_option_context_free(options);
+		return 2;
+	}
+	g_option_context_free(options);
+	if (!imsd.readiness_path) imsd.readiness_path = g_strdup(DEFAULT_READINESS_PATH);
+	if (!imsd.state_path) imsd.state_path = g_strdup(DEFAULT_IMS_STATE_PATH);
+	if (!imsd.boot_id_path) imsd.boot_id_path = g_strdup(DEFAULT_BOOT_ID_PATH);
+	if (!imsd.runtime_manifest) imsd.runtime_manifest = g_strdup(DEFAULT_RUNTIME_MANIFEST);
+	if (!imsd.readiness_path || !imsd.state_path || !imsd.boot_id_path ||
+	    !imsd.runtime_manifest || imsd.node > UINT16_MAX ||
+	    imsd.generation > 1000000) {
+		g_printerr("invalid IMS daemon configuration\n");
+		result = -EINVAL;
+		goto out;
+	}
+	result = verify_readiness(&imsd);
+	if (result) {
+		g_printerr("IMSA startup readiness rejected: %d\n", result);
+		goto out;
+	}
+	memcpy(imsd.state.boot_id, imsd.readiness.boot_id, sizeof(imsd.state.boot_id));
+	imsd.state.generation = imsd.generation;
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
+		imsd.subscriptions[index].imsd = &imsd;
+		imsd.subscriptions[index].index = index;
+		imsd.state.subscriptions[index].populated =
+			imsd.readiness.subscriptions[index].populated;
+	}
+	imsd.loop = g_main_loop_new(NULL, FALSE);
+	imsd.cancellable = g_cancellable_new();
+	imsd.readiness_poll_id = g_timeout_add_seconds(1, poll_readiness, &imsd);
+	g_unix_signal_add(SIGINT, terminate, &imsd);
+	g_unix_signal_add(SIGTERM, terminate, &imsd);
+	qrtr_bus_new(1000, imsd.cancellable, (GAsyncReadyCallback)bus_ready, &imsd);
+	g_main_loop_run(imsd.loop);
+	result = imsd.result;
+	if (imsd.readiness_poll_id)
+		g_source_remove(imsd.readiness_poll_id);
+	if (imsd.bus && imsd.node_removed_handler)
+		g_signal_handler_disconnect(imsd.bus, imsd.node_removed_handler);
+	for (index = 0; index < HOTDOG_TELEPHONY_MAX_SUBSCRIPTIONS; index++) {
+		struct imsd_subscription *subscription = &imsd.subscriptions[index];
+
+		if (subscription->client && subscription->registration_handler)
+			g_signal_handler_disconnect(
+				subscription->client, subscription->registration_handler);
+		if (subscription->client && subscription->services_handler)
+			g_signal_handler_disconnect(
+				subscription->client, subscription->services_handler);
+		release_client(&imsd, subscription->client);
+		g_clear_object(&subscription->client);
+	}
+	g_clear_object(&imsd.device);
+	g_clear_object(&imsd.bus);
+	g_clear_object(&imsd.cancellable);
+	g_main_loop_unref(imsd.loop);
+out:
+	g_free(imsd.readiness_path);
+	g_free(imsd.state_path);
+	g_free(imsd.boot_id_path);
+	g_free(imsd.runtime_manifest);
+	return result ? 1 : 0;
+}
