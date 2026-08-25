@@ -1,0 +1,202 @@
+From f41fbe8492bb4b7858afa9661208de0777de3c61 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Tue, 25 Aug 2026 18:30:09 +0200
+Subject: [PATCH] drivers/ssc: do not tear down a sensor that was never polled
+
+Every open device is disabled on shutdown, including ones no client ever
+claimed. Those never ran the enable branch, so their sensor pointer is
+NULL and their handler id is zero, and the disable branch walked into
+both regardless:
+
+  ssc_light_set_polling: runtime check failed: (drv_data->measurement_id > 0)
+  g_signal_handler_disconnect: assertion 'G_TYPE_CHECK_INSTANCE (instance)' failed
+  Segmentation fault
+
+Return early when there is no sensor, and clear the handler and the
+object afterwards so a second disable is harmless.
+
+The enable branch's error path called g_object_unref on the SensorDevice,
+which is a plain allocation and not a GObject. Disconnect the handler and
+drop the sensor instead.
+
+measurement_id becomes a gulong. g_signal_connect returns one, so a guint
+truncated it on 64-bit, and g_clear_signal_handler will not take the
+address of the wrong type.
+---
+ src/drv-ssc-accel.c     | 16 ++++++++++++----
+ src/drv-ssc-compass.c   | 16 ++++++++++++----
+ src/drv-ssc-light.c     | 16 ++++++++++++----
+ src/drv-ssc-proximity.c | 16 ++++++++++++----
+ 4 files changed, 48 insertions(+), 16 deletions(-)
+
+diff --git a/src/drv-ssc-accel.c b/src/drv-ssc-accel.c
+index 21c39c4..a9e9b3f 100644
+--- a/src/drv-ssc-accel.c
++++ b/src/drv-ssc-accel.c
+@@ -21,7 +21,7 @@
+ 
+ typedef struct DrvData {
+ 	SSCSensorAccelerometer *sensor;
+-	guint measurement_id;
++	gulong measurement_id;
+ 	AccelVec3 *mount_matrix;
+ 	AccelLocation location;
+ 	AccelScale scale;
+@@ -114,17 +114,25 @@ ssc_accelerometer_set_polling (SensorDevice *sensor_device,
+ 		/* Enable sensor */
+ 		if (!ssc_sensor_accelerometer_open_sync (drv_data->sensor, NULL, &error)) {
+ 			g_warning ("Opening SSC accelerometer sensor failed: %s", error ? error->message : "UNKNOWN");
+-			g_object_unref (sensor_device);
++			g_clear_signal_handler (&drv_data->measurement_id,
++						drv_data->sensor);
++			g_clear_object (&drv_data->sensor);
+ 			return;
+ 		}
+ 	} else {
++		/* Disabling is reached on shutdown for every open device,
++		 * including ones that were never polled and so have no sensor
++		 * to disconnect or close. */
++		if (!drv_data->sensor)
++			return;
++
+ 		/* Stop listening for measurements */
+-		g_warn_if_fail (drv_data->measurement_id > 0);
+-		g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++		g_clear_signal_handler (&drv_data->measurement_id, drv_data->sensor);
+ 
+ 		/* Disable sensor */
+ 		if (!ssc_sensor_accelerometer_close_sync (drv_data->sensor, NULL, &error))
+ 			g_warning ("Closing SSC accelerometer sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_clear_object (&drv_data->sensor);
+ 	}
+ }
+ 
+diff --git a/src/drv-ssc-compass.c b/src/drv-ssc-compass.c
+index ccdb660..6fed91c 100644
+--- a/src/drv-ssc-compass.c
++++ b/src/drv-ssc-compass.c
+@@ -20,7 +20,7 @@
+ 
+ typedef struct DrvData {
+ 	SSCSensorCompass *sensor;
+-	guint measurement_id;
++	gulong measurement_id;
+ } DrvData;
+ 
+ static gboolean
+@@ -94,17 +94,25 @@ ssc_compass_set_polling (SensorDevice *sensor_device,
+ 		/* Enable sensor */
+ 		if (!ssc_sensor_compass_open_sync (drv_data->sensor, NULL, &error)) {
+ 			g_warning ("Opening SSC compass sensor failed: %s", error ? error->message : "UNKNOWN");
+-			g_object_unref (sensor_device);
++			g_clear_signal_handler (&drv_data->measurement_id,
++						drv_data->sensor);
++			g_clear_object (&drv_data->sensor);
+ 			return;
+ 		}
+ 	} else {
++		/* Disabling is reached on shutdown for every open device,
++		 * including ones that were never polled and so have no sensor
++		 * to disconnect or close. */
++		if (!drv_data->sensor)
++			return;
++
+ 		/* Stop listening for measurements */
+-		g_warn_if_fail (drv_data->measurement_id > 0);
+-		g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++		g_clear_signal_handler (&drv_data->measurement_id, drv_data->sensor);
+ 
+ 		/* Disable sensor */
+ 		if (!ssc_sensor_compass_close_sync (drv_data->sensor, NULL, &error))
+ 			g_warning ("Closing SSC compass sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_clear_object (&drv_data->sensor);
+ 	}
+ }
+ 
+diff --git a/src/drv-ssc-light.c b/src/drv-ssc-light.c
+index af2baed..80706c4 100644
+--- a/src/drv-ssc-light.c
++++ b/src/drv-ssc-light.c
+@@ -20,7 +20,7 @@
+ 
+ typedef struct DrvData {
+ 	SSCSensorLight *sensor;
+-	guint measurement_id;
++	gulong measurement_id;
+ } DrvData;
+ 
+ static gboolean
+@@ -91,17 +91,25 @@ ssc_light_set_polling (SensorDevice *sensor_device,
+ 		/* Enable sensor */
+ 		if (!ssc_sensor_light_open_sync (drv_data->sensor, NULL, &error)) {
+ 			g_warning ("Opening SSC light sensor failed: %s", error ? error->message : "UNKNOWN");
+-			g_object_unref (sensor_device);
++			g_clear_signal_handler (&drv_data->measurement_id,
++						drv_data->sensor);
++			g_clear_object (&drv_data->sensor);
+ 			return;
+ 		}
+ 	} else {
++		/* Disabling is reached on shutdown for every open device,
++		 * including ones that were never polled and so have no sensor
++		 * to disconnect or close. */
++		if (!drv_data->sensor)
++			return;
++
+ 		/* Stop listening for measurements */
+-		g_warn_if_fail (drv_data->measurement_id > 0);
+-		g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++		g_clear_signal_handler (&drv_data->measurement_id, drv_data->sensor);
+ 
+ 		/* Disable sensor */
+ 		if (!ssc_sensor_light_close_sync (drv_data->sensor, NULL, &error))
+ 			g_warning ("Closing SSC light sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_clear_object (&drv_data->sensor);
+ 	}
+ }
+ 
+diff --git a/src/drv-ssc-proximity.c b/src/drv-ssc-proximity.c
+index f3fed13..927b0a6 100644
+--- a/src/drv-ssc-proximity.c
++++ b/src/drv-ssc-proximity.c
+@@ -20,7 +20,7 @@
+ 
+ typedef struct DrvData {
+ 	SSCSensorProximity *sensor;
+-	guint measurement_id;
++	gulong measurement_id;
+ } DrvData;
+ 
+ static gboolean
+@@ -90,17 +90,25 @@ ssc_proximity_set_polling (SensorDevice *sensor_device,
+ 		/* Enable sensor */
+ 		if (!ssc_sensor_proximity_open_sync (drv_data->sensor, NULL, &error)) {
+ 			g_warning ("Opening SSC proximity sensor failed: %s", error ? error->message : "UNKNOWN");
+-			g_object_unref (sensor_device);
++			g_clear_signal_handler (&drv_data->measurement_id,
++						drv_data->sensor);
++			g_clear_object (&drv_data->sensor);
+ 			return;
+ 		}
+ 	} else {
++		/* Disabling is reached on shutdown for every open device,
++		 * including ones that were never polled and so have no sensor
++		 * to disconnect or close. */
++		if (!drv_data->sensor)
++			return;
++
+ 		/* Stop listening for measurements */
+-		g_warn_if_fail (drv_data->measurement_id > 0);
+-		g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++		g_clear_signal_handler (&drv_data->measurement_id, drv_data->sensor);
+ 
+ 		/* Disable sensor */
+ 		if (!ssc_sensor_proximity_close_sync (drv_data->sensor, NULL, &error))
+ 			g_warning ("Closing SSC proximity sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_clear_object (&drv_data->sensor);
+ 	}
+ }
+ 
+-- 
+2.54.0
+

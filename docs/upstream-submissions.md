@@ -91,9 +91,22 @@ GLib-GObject-CRITICAL: invalid (NULL) pointer instance
 Segmentation fault
 ```
 
-That is a separate defect in patch 0009 of the local series, not in the
-ordering fix, and it does not stop the daemon from working. A control build
-without the ordering patch crashes identically.
+That was a separate defect in patch 0009 of the local series, not in the
+ordering fix; a control build without the ordering patch crashed identically.
+It is now repaired by
+[`0011-drivers-ssc-do-not-tear-down-a-sensor-that-was-never.patch`](../upstream/2026-08-25/0011-drivers-ssc-do-not-tear-down-a-sensor-that-was-never.patch).
+Every open device is disabled on shutdown, including ones no client ever
+claimed, and those never ran the enable branch: their sensor pointer is NULL
+and their handler id zero. The disable branch walked into both. It now returns
+early and clears what it closed, the error path no longer calls
+`g_object_unref` on a plain allocation, and `measurement_id` becomes the
+`gulong` that `g_signal_connect` actually returns rather than a truncating
+`guint`.
+
+Verified on the device: `Shutting down` with no assertion and no crash, and
+three consecutive service restarts with the daemon still alive. Both patches
+also confirm the ordering fix at last -- under a live KWin every device is open
+before `ClaimAccelerometer` arrives.
 
 ```
 15:09:20.410  Handling driver refcounting method 'ClaimAccelerometer'
