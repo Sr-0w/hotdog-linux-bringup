@@ -516,6 +516,17 @@ and registration loss each republish the phase instead of leaving a stale
 ready-state file behind. The next transport step must execute these actions and
 reattest UIM/PDC/DMS before restarting the generic daemon.
 
+`hotdog-radio-supervisor` now defines the execution-side lifecycle independently
+of GLib/QRTR process plumbing. It waits for QRTR and strict readiness, owns one
+asynchronous ModemManager start/stop operation, bounds repeated start failures
+and enters a permanent blocked phase when stop cannot be confirmed. SSR during
+start is handled explicitly: a late successful child is stopped before the
+supervisor waits for QRTR. A fatal event uses the same drain-before-block rule,
+so blocking never loses ownership of a process still being created. The replay
+covers normal handoff, invalid/removed readiness, active SSR, start-time SSR,
+late child completion, stop failure and bounded retries. The next slice is the
+long-lived QRTR/file/OpenRC adapter that executes these emitted actions.
+
 `hotdog-qmi-dms` provides the typed operating-mode boundary. The standalone
 `--probe-dms` remains read-only. The approved PDC path invokes Set Online only
 after commit, rereads DMS, publishes readiness only after confirmed Online and
