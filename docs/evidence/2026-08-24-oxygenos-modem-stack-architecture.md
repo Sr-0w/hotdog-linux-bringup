@@ -110,6 +110,15 @@ handle. Current Settings decoding preserves per-family address, gateway and DNS
 plus IPv6 prefix and a consistent MTU, rejecting incomplete addresses, malformed
 IPv6 arrays and mismatched dual-stack MTUs before the bearer becomes connected.
 
+`hotdog-qmi-wds-profile` closes the profile-discovery side of that boundary.
+Every WDS client is bound to the intended modem subscription before it lists
+3GPP profiles. Profile settings are accepted only with a nonempty bounded APN,
+a supported PDP family and an APN-type mask; IMS additionally requires the
+modem profile to request P-CSCF discovery through PCO. Zero and duplicate
+profile indexes, oversized inventories and incomplete settings fail closed.
+The adapter deliberately never requests profile usernames or passwords, so
+profile selection cannot leak APN credentials into logs or public state.
+
 The model now retains the exact IPv4 and IPv6 packet handles. A bearer cannot
 become connected until every family it requested has both a handle and valid
 runtime settings. Disconnect produces a bounded stop plan, and each completion

@@ -685,6 +685,20 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wds.c hotdog-qmi-wds.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS data-plane adapter: $source"
 	done
+	for source in hotdog-qmi-wds-profile.c hotdog-qmi-wds-profile.h; do
+		[ -f "$source_dir/$source" ] || die "missing WDS profile transport: $source"
+	done
+	grep -q 'qmi_message_wds_bind_subscription_input_set_subscription_id' \
+		"$source_dir/hotdog-qmi-wds-profile.c" ||
+		die "WDS profile transport does not bind a modem subscription"
+	for getter in get_apn_name get_pdp_type get_apn_type_mask \
+		get_pcscf_address_using_pco; do
+		grep -q "$getter" "$source_dir/hotdog-qmi-wds-profile.c" ||
+			die "WDS profile transport lacks required profile evidence: $getter"
+	done
+	if grep -Eq 'get_(username|password)' "$source_dir/hotdog-qmi-wds-profile.c"; then
+		die "WDS profile discovery must not read APN credentials"
+	fi
 	for source in hotdog-network.c hotdog-network.h \
 		hotdog-ims-bearer.c hotdog-ims-bearer.h; do
 		[ -f "$source_dir/$source" ] || die "missing IMS bearer model: $source"
