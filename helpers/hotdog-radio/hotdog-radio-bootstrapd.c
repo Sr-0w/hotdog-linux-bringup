@@ -26,6 +26,7 @@ struct bootstrap {
 	guint pdc_timeout_id;
 #endif
 	unsigned int node;
+	int pdc_probe_subscription;
 	int result;
 	bool finished;
 };
@@ -211,7 +212,12 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	print_inventory(&inventory);
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	bootstrap->inventory = inventory;
-	if (!inventory.gw_count) {
+	if (!inventory.gw_count && bootstrap->pdc_probe_subscription >= 0) {
+		bootstrap->inventory.gw_count = 1;
+		bootstrap->inventory.gw_sessions[0].subscription =
+			(unsigned int)bootstrap->pdc_probe_subscription;
+	}
+	if (!bootstrap->inventory.gw_count) {
 		finish(bootstrap, 0);
 		return;
 	}
@@ -303,11 +309,14 @@ static void bus_ready(GObject *source, GAsyncResult *res,
 
 int main(int argc, char **argv)
 {
-	struct bootstrap bootstrap = { .node = 0 };
+	struct bootstrap bootstrap = { .node = 0, .pdc_probe_subscription = -1 };
 	GOptionContext *options;
 	GError *error = NULL;
 	GOptionEntry entries[] = {
 		{ "node", 'n', 0, G_OPTION_ARG_INT, &bootstrap.node, "QRTR node", "ID" },
+		{ "pdc-subscription", 0, 0, G_OPTION_ARG_INT,
+		  &bootstrap.pdc_probe_subscription,
+		  "Read one PDC subscription even without a card", "0-2" },
 		{ NULL }
 	};
 
@@ -320,6 +329,17 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	g_option_context_free(options);
+	if (bootstrap.pdc_probe_subscription < -1 ||
+	    bootstrap.pdc_probe_subscription >= HOTDOG_UIM_MAX_SLOTS) {
+		g_printerr("PDC subscription must be between 0 and 2\n");
+		return 2;
+	}
+#ifndef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap.pdc_probe_subscription >= 0) {
+		g_printerr("PDC subscription probing requires the patched libqmi build\n");
+		return 2;
+	}
+#endif
 	bootstrap.loop = g_main_loop_new(NULL, FALSE);
 	bootstrap.cancellable = g_cancellable_new();
 	qrtr_bus_new(1000, bootstrap.cancellable,

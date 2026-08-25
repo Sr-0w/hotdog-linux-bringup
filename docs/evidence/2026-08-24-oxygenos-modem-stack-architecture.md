@@ -184,6 +184,9 @@ and `67a96e17da60a3842a0b2cf0d7dee642efe80ed91efaffc8eef0d8c83311603f`.
 The binary links to the four subscription setters from libqmi `r2`. The service
 writes boot ID, kernel identity, UIM and PDC output atomically under `/run`, but
 is deliberately not auto-enabled before a no-SIM target validation.
+For that validation, `--pdc-subscription=0..2` performs one explicit read-only
+Get Selected even when no UIM application is populated. A build without the
+patched API rejects the option before opening QRTR.
 
 ## Required state machines
 

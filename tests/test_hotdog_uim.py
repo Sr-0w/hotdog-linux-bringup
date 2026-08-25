@@ -86,6 +86,12 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
             )
             help_output = subprocess.run([str(binary), "--help"], check=True, capture_output=True, text=True)
             self.assertIn("--node=ID", help_output.stdout)
+            self.assertIn("--pdc-subscription=0-2", help_output.stdout)
+            unsupported = subprocess.run(
+                [str(binary), "--pdc-subscription=0"], capture_output=True, text=True,
+            )
+            self.assertEqual(unsupported.returncode, 2)
+            self.assertIn("requires the patched libqmi build", unsupported.stderr)
 
 
 if __name__ == "__main__":
