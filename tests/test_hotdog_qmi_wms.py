@@ -54,6 +54,30 @@ class HotdogQmiWmsTests(unittest.TestCase):
         self.assertNotIn("printf", source)
         self.assertNotIn("g_print", source)
 
+    def test_ack_preserves_transaction_protocol_and_domain(self) -> None:
+        flags = subprocess.run(["pkg-config", "--cflags", "--libs", "qmi-glib", "glib-2.0"],
+                               check=True, capture_output=True, text=True).stdout.split()
+        source = r'''#include "hotdog-qmi-wms.h"
+#include <stdio.h>
+int main(void) { struct hotdog_wms_incoming m={.transaction_id=42,.transport=HOTDOG_TRANSPORT_IMS,.ack_required=true};
+ QmiMessageWmsSendAckInput *i=NULL; guint32 tx=0; QmiWmsMessageProtocol p; gboolean ok=FALSE,ims=FALSE;
+ if(hotdog_qmi_wms_ack_input(&m,true,0,0,&i)) return 1;
+ qmi_message_wms_send_ack_input_get_information(i,&tx,&p,&ok,NULL);
+ qmi_message_wms_send_ack_input_get_sms_on_ims(i,&ims,NULL);
+ printf("tx=%u protocol=%u success=%u ims=%u\n",tx,p,ok,ims);
+ qmi_message_wms_send_ack_input_unref(i); }
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cfile = Path(directory) / "ack.c"
+            binary = Path(directory) / "ack"
+            cfile.write_text(source)
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                            "-I", str(SOURCE), str(SOURCE / "hotdog-qmi-wms.c"),
+                            str(cfile), *flags, "-o", str(binary)], check=True)
+            output = subprocess.run([str(binary)], check=True,
+                                    capture_output=True, text=True).stdout.strip()
+            self.assertEqual(output, "tx=42 protocol=1 success=1 ims=1")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 #include "hotdog-qmi-wms.h"
 
 #include <errno.h>
+#include <string.h>
 
 int hotdog_qmi_wms_raw_send_input(
 	const struct hotdog_sms *message, const unsigned char *pdu, size_t pdu_size,
@@ -60,6 +61,71 @@ int hotdog_qmi_wms_decode_raw_send(
 		    output, message_reference, &error)) {
 		g_clear_error(&error);
 		return -ENODATA;
+	}
+	return 0;
+}
+
+int hotdog_qmi_wms_decode_event(
+	QmiIndicationWmsEventReportOutput *output, unsigned char *pdu,
+	size_t capacity, struct hotdog_wms_incoming *incoming)
+{
+	QmiWmsAckIndicator ack;
+	QmiWmsMessageFormat format;
+	QmiWmsMessageMode mode;
+	GArray *raw = NULL;
+	GError *error = NULL;
+	gboolean ims = FALSE;
+	guint32 transaction;
+
+	if (!output || !pdu || !capacity || !incoming)
+		return -EINVAL;
+	memset(incoming, 0, sizeof(*incoming));
+	if (!qmi_indication_wms_event_report_output_get_transfer_route_mt_message(
+		    output, &ack, &transaction, &format, &raw, &error)) {
+		g_clear_error(&error);
+		return -ENODATA;
+	}
+	if (format != QMI_WMS_MESSAGE_FORMAT_GSM_WCDMA_POINT_TO_POINT || !raw ||
+	    !raw->len || raw->len > capacity)
+		return raw && raw->len > capacity ? -EOVERFLOW : -EPROTO;
+	if (qmi_indication_wms_event_report_output_get_message_mode(output, &mode, NULL) &&
+	    mode != QMI_WMS_MESSAGE_MODE_GSM_WCDMA)
+		return -EPROTO;
+	qmi_indication_wms_event_report_output_get_sms_on_ims(output, &ims, NULL);
+	memcpy(pdu, raw->data, raw->len);
+	incoming->transaction_id = transaction;
+	incoming->pdu_size = raw->len;
+	incoming->transport = ims ? HOTDOG_TRANSPORT_IMS : HOTDOG_TRANSPORT_CS;
+	incoming->ack_required = ack == QMI_WMS_ACK_INDICATOR_SEND;
+	return 0;
+}
+
+int hotdog_qmi_wms_ack_input(
+	const struct hotdog_wms_incoming *incoming, bool success,
+	QmiWmsGsmUmtsRpCause rp_cause, QmiWmsGsmUmtsTpCause tp_cause,
+	QmiMessageWmsSendAckInput **input)
+{
+	GError *error = NULL;
+	bool built;
+
+	if (!incoming || !input || !incoming->ack_required || !incoming->transaction_id ||
+	    (incoming->transport != HOTDOG_TRANSPORT_CS &&
+	     incoming->transport != HOTDOG_TRANSPORT_IMS))
+		return -EINVAL;
+	*input = qmi_message_wms_send_ack_input_new();
+	built = qmi_message_wms_send_ack_input_set_information(
+		*input, incoming->transaction_id, QMI_WMS_MESSAGE_PROTOCOL_WCDMA,
+		success, &error) &&
+		qmi_message_wms_send_ack_input_set_sms_on_ims(
+			*input, incoming->transport == HOTDOG_TRANSPORT_IMS, &error);
+	if (built && !success)
+		built = qmi_message_wms_send_ack_input_set_3gpp_failure_information(
+			*input, rp_cause, tp_cause, &error);
+	g_clear_error(&error);
+	if (!built) {
+		qmi_message_wms_send_ack_input_unref(*input);
+		*input = NULL;
+		return -EINVAL;
 	}
 	return 0;
 }

@@ -129,6 +129,11 @@ selecting CS or SMS-over-IMS from the model without logging payload bytes. It
 requires an admitted queued MO message and exact PDU length, then decodes the
 16-bit modem reference or preserves QMI plus packed RP/TP failure causes for the
 submitted/sent/failed transition.
+Transfer-route MT indications are accepted only as bounded 3GPP point-to-point
+PDUs; transaction ID, ACK requirement and CS/IMS domain are retained. Send Ack
+then echoes that transaction with WCDMA protocol and the same domain, adding
+RP/TP causes only on failure. Stored UIM/NV notifications remain a separate Raw
+Read path rather than being misread as inline PDUs.
 
 ### Voice and supplementary services
 
