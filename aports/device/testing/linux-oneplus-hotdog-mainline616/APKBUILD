@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline616
 pkgver=6.16.0
-pkgrel=180
+pkgrel=181
 pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
 maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
 arch="aarch64"
@@ -189,6 +189,7 @@ source="
 	0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
 	0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
 	0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
+	0156-hotdog-integrate-validated-runtime-fixes.patch
 	validate-mainline616-build.sh
 "
 builddir="$srcdir/$_repo-$_commit"
@@ -242,7 +243,7 @@ package() {
 
 sha512sums="
 6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
-d5b81bce30380d83edfe9efcb7c6d8c63e615a63f1334a24b7e445f2e5eead921593e4e129dc6a7321a779f9a193db74a5d964f03b0fe5bd337a2f267671ae95  config-oneplus-hotdog-mainline616.aarch64
+5788702c48dfc68093e9c238e8621bc515728d08469657151c37c6e4935564c414b3a87b6039728bf180daf861a986607f7c007110f17e43e3637bd261f33bbb  config-oneplus-hotdog-mainline616.aarch64
 2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
 36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
 5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
@@ -395,5 +396,6 @@ a518a9ca2c05750d70642522bddc9e1f6e696bc1119f003d2693db2786183a9d3a5cbb3c4757e3c8
 ef627f849a19f47bd0adca0e80727a0e5f4370f94e3ed81634fd7380707e1069577c1b9fceb00870b9e04f83cf0c8fe7708bf812bd645fb75b5205ecc0d9a273  0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
 97f2d38ab45b699ec2de073ddf78f79bbdeefa9b6a06e2c84ebf14960f1107e3aabbd2067ce6d51de7c6a3085d191dd6db1cdee05f0a8161af9e80d8b8495ce8  0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
 8291240ee9800ea21e2b72347931fd32990605e8bb1a72a1c207b01ca2d253cabd8d7a56b966406e478577cea478d57fddf0e4adcd235c7b64bec68383c148d3  0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
-4157b11eb8c60a567343f8452d29d8c30f2b7e30cef8a5789eefddad123ad8a85f77c9b4736eae469435c5f9d1a9e335811822bd20ab3dd27995cdcf9d9d6c78  validate-mainline616-build.sh
+441e11aa9960efd746859fb6625c9a55145e273fac38e05d006355337fb9d7bb2823344e4454f95315ba39fb954433079e03d96d161edcbf61219b695cb08418  0156-hotdog-integrate-validated-runtime-fixes.patch
+3735fb286f708c1375a0cea1fc8c91d27241f3f1747503bbe379bf154d1947d9313522d46dcb86950f2b93606d39e87d5509b54748ccb58674ef28f1ac162abc  validate-mainline616-build.sh
 "

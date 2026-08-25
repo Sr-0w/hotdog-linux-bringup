@@ -66,7 +66,17 @@ Revision `r143` adds the AW8697 haptics controller at the stock-derived I2C
 address and GPIO wiring. A new mainline-style input driver exposes `FF_RUMBLE`
 and uses the HD1913 170 Hz continuous-mode profile without proprietary waveform
 firmware. The driver, DTB, binding schema and strict postmarketOS package build
-pass; physical vibration and feedbackd integration remain pending.
+pass. Physical vibration, repeated stop/start, feedbackd and suspend/resume are
+hardware-validated.
+
+Revision `r181` packages the complete net delta of the current hardware-tested
+kernel rather than only its final ICE change. It carries the accepted
+touch/camera/radio suspend and recovery fixes, generic three-position alert
+slider, QDSP6 hostless and Elliptic ultrasonic proximity path, UFS ICE, and the
+PM8150 plus IMEM bootloader/recovery reasons. The corresponding device package
+owns the sensor gate, SSC probe, calibration import, udev rule and on-demand
+ultrasound arming service that had previously existed only on the running
+rootfs.
 
 ## Source contract
 
@@ -76,8 +86,10 @@ pass; physical vibration and feedbackd integration remain pending.
 - The DWC3 stream keeps the upstream Apps SMMU binding and boots with a
   translated domain (`iommu.passthrough=0`).
 - Revision `r19` keeps the upstream UFS Apps SMMU stream `0x300`, leaves the
-  currently failing ICE dependency disabled, and selects a 32-bit DMA aperture
-  for SM8150 independently of the SMMU attachment.
+  then-failing ICE dependency disabled, and selects a 32-bit DMA aperture for
+  SM8150 independently of the SMMU attachment. Revision `r181` restores the
+  upstream ICE phandle after hardware validation: `qcom-ice` binds, UFS mounts
+  the rootfs and blk-crypto exposes the complete AES-256-XTS profile.
 - Revision `r21` mirrors the stock HD1913 XBL/AOP ownership contract by
   reserving `0x85e40000-0x85f00000` as `no-map`. Together with the adjacent
   generic SM8150 reservations, firmware memory is excluded continuously from
@@ -94,6 +106,13 @@ pass; physical vibration and feedbackd integration remain pending.
   interconnect, and reserved-memory descriptions remain unchanged.
 - PM8150 PON provides Power and Volume Down, while PM8150 GPIO 6 provides the
   active-low, pulled-up Volume Up input through `gpio-keys`.
+- PM8150 PON and SM8150 IMEM both carry the hardware-validated bootloader and
+  recovery reasons. Direct `RESTART2` requests reach protocol-valid fastboot or
+  the existing authorized root-ADB recovery and return to postmarketOS.
+- The three physical alert-slider contacts use generic `gpio-keys` with
+  `ABS_SND_PROFILE` values Silent, Vibrate and Ring. The lower GPIO27 contact is
+  mechanically intermittent on the reference handset but its valid low state
+  is confirmed under both downstream and mainline kernels.
 - A 4085 mAh battery description supplies conservative charge limits to the
   enabled PM8150B fuel gauge and SMB5 charger.
 - SMB2 and SMB5 use their generation-specific voltage and current encodings.
@@ -119,6 +138,11 @@ pass; physical vibration and feedbackd integration remain pending.
   hotdog device tree. The stock OxygenOS odm mixer configuration resolves
   `handset-mic` to `amic4`, reaching SLIM TX0 through ADC4, AMIC MUX0, DEC0
   and CDC_IF TX0, which is the back end already described above.
+- Revision `r181` adds the separately bounded QDSP6 hostless links and Elliptic
+  child used by OxygenOS for ultrasonic proximity. It reports a standard IIO
+  proximity channel and exposes read demand so userspace arms the audio path
+  only while a consumer polls it. The per-device 448-byte calibration is not
+  part of the public kernel package.
 - Both TFA9874 amplifiers use their stock slot mapping and conservative
   container-derived hardware profile on QUAT MI2S. Output stays powered down
   outside an active stream, clock lock is required before amplifier enable,
@@ -131,9 +155,10 @@ pass; physical vibration and feedbackd integration remain pending.
   with `fdtput` or replaced by a prebuilt binary.
 
 `validate-mainline616-build.sh` checks the direct-entry Image window, every DT
-invariant that was present during the successful hardware run, and the exact
-dual-mode panel contract. The package build fails if one of those invariants
-changes.
+invariant that was present during the successful hardware run, the exact
+dual-mode panel contract, ICE and reboot-mode values, alert-slider states,
+Elliptic/hostless links and both new modules. The package build fails if one of
+those invariants changes.
 
 ## Offline-built r143 haptics candidate
 

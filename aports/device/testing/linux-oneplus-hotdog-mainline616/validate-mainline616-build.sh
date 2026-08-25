@@ -52,6 +52,14 @@ tfa9874_source=sound/soc/codecs/tfa9874.c
 sm8150_audio_source=sound/soc/qcom/sm8150.c
 [ -s "$sm8150_audio_source" ] ||
 	die "missing SM8150 audio source: $sm8150_audio_source"
+elliptic_source=sound/soc/qcom/qdsp6/q6elliptic.c
+[ -s "$elliptic_source" ] ||
+	die "missing Elliptic proximity source: $elliptic_source"
+for contract in ELLIPTIC_PROXIMITY_MODE ELLIPTIC_CALIBRATION_V2_SIZE \
+	IIO_PROXIMITY demand_show; do
+	grep -q "$contract" "$elliptic_source" ||
+		die "missing Elliptic source contract: $contract"
+done
 
 python3 - "$smbx_source" <<'PY'
 import pathlib
@@ -310,6 +318,10 @@ if [ -n "$modules_dir" ]; then
 		-print -quit | grep -q . || die "missing Q6ASM DAI module"
 	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6routing.ko' \
 		-print -quit | grep -q . || die "missing Q6 routing module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6hostless.ko' \
+		-print -quit | grep -q . || die "missing Q6 hostless module"
+	find "$modules_dir" -type f -path '*/sound/soc/qcom/qdsp6/q6elliptic.ko' \
+		-print -quit | grep -q . || die "missing Elliptic proximity module"
 	find "$modules_dir" -type f -path '*/sound/soc/qcom/snd-soc-sm8150.ko' \
 		-print -quit | grep -q . || die "missing SM8150 machine sound module"
 fi
@@ -387,6 +399,8 @@ expect_config 'CONFIG_QRTR_SMD=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_AFE_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ASM_DAI=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_ROUTING=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_ELLIPTIC=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_HOSTLESS=m'
 expect_config 'CONFIG_SND_SOC_SM8150=m'
 expect_config 'CONFIG_SND_SOC_TFA9874=y'
 expect_config 'CONFIG_I2C_QCOM_GENI=y'
@@ -400,6 +414,7 @@ stock_removed_gap=$reserved/memory@89b00000
 stock_cdsp_gap=$reserved/memory@99517000
 soc=/soc@0
 ufs=$soc/ufshc@1d84000
+imem_reboot=$soc/sram@146bf000/reboot-mode@65c
 qup=$soc/geniqup@ac0000
 qup0=$soc/geniqup@8c0000
 qup2=$soc/geniqup@cc0000
@@ -422,9 +437,11 @@ dwc3=$soc/usb@a6f8800/usb@a600000
 panel=$soc/display-subsystem@ae00000/dsi@ae94000/panel@0
 battery=/battery
 gpio_keys=/gpio-keys
-volume_up=$gpio_keys/volume-up
-volume_down=$gpio_keys/volume-down
+alert_slider=/alert-slider
+volume_up=$gpio_keys/button-volume-up
+volume_down=$gpio_keys/button-volume-down
 pm8150=$soc/spmi@c440000/pmic@0
+pm8150_pon=$pm8150/pon@800
 pm8150b=$soc/spmi@c440000/pmic@2
 pm8150b_charger=$pm8150b/charger@1000
 pm8150b_fg=$pm8150b/fuel-gauge@4000
@@ -438,6 +455,9 @@ wcd9340=$slim_ngd/codec@1,0
 wcd9340_gpio=$wcd9340/gpio-controller@42
 wcd9340_swm=$wcd9340/soundwire@c85
 sound=/sound
+q6afe=$remoteproc_adsp/glink-edge/apr/apr-service@4
+elliptic=$q6afe/elliptic-ultrasound
+q6hostless=/q6hostless-dais
 q6asmdai=$remoteproc_adsp/glink-edge/apr/apr-service@7/dais
 q6asm_mm1=$q6asmdai/dai@0
 q6asm_mm2=$q6asmdai/dai@1
@@ -446,6 +466,9 @@ sound_mm2=$sound/mm2-dai-link
 sound_speaker=$sound/speaker-dai-link
 sound_slim=$sound/slim-dai-link
 sound_slimcap=$sound/slimcap-dai-link
+sound_ultrasound_input=$sound/ultrasound-input-hostless-dai-link
+sound_ultrasound_output=$sound/ultrasound-output-hostless-dai-link
+sound_ultrasound_mic=$sound/ultrasound-mic-dai-link
 wifi=$soc/wifi@18800000
 uart13=$qup2/serial@c8c000
 bluetooth=$uart13/bluetooth
@@ -550,7 +573,21 @@ vbus=$(fdtget -ts "$dtb" /__symbols__ pm8150b_vbus) ||
 expect_value vbus-status okay fdtget -ts "$dtb" "$vbus" status
 expect_value ufs-iommus "$apps_smmu_phandle 300 0" \
 	fdtget -tx "$dtb" "$ufs" iommus
-expect_absent ufs-ice fdtget "$dtb" "$ufs" qcom,ice
+ice_path=$(fdtget -ts "$dtb" /__symbols__ ice) ||
+	die "missing ICE symbol"
+ice_phandle=$(fdtget -tx "$dtb" "$ice_path" phandle) ||
+	die "missing ICE phandle"
+expect_value ufs-ice "$ice_phandle" fdtget -tx "$dtb" "$ufs" qcom,ice
+expect_value pon-bootloader-mode 2 \
+	fdtget -tx "$dtb" "$pm8150_pon" mode-bootloader
+expect_value pon-recovery-mode 1 \
+	fdtget -tx "$dtb" "$pm8150_pon" mode-recovery
+expect_value imem-reboot-offset 65c \
+	fdtget -tx "$dtb" "$imem_reboot" offset
+expect_value imem-bootloader-mode 77665500 \
+	fdtget -tx "$dtb" "$imem_reboot" mode-bootloader
+expect_value imem-recovery-mode 77665502 \
+	fdtget -tx "$dtb" "$imem_reboot" mode-recovery
 expect_absent qup-iommus fdtget "$dtb" "$qup" iommus
 expect_value qupv3-id0-status okay fdtget -ts "$dtb" "$qup0" status
 expect_absent qupv3-id0-iommus fdtget "$dtb" "$qup0" iommus
@@ -669,6 +706,16 @@ expect_value sound-compatible qcom,sm8150-sndcard \
 	fdtget -ts "$dtb" "$sound" compatible
 expect_value sound-model 'OnePlus 7T Pro' fdtget -ts "$dtb" "$sound" model
 expect_value sound-status okay fdtget -ts "$dtb" "$sound" status
+expect_value elliptic-compatible oneplus,hotdog-elliptic-ultrasound \
+	fdtget -ts "$dtb" "$elliptic" compatible
+expect_value q6hostless-compatible qcom,q6dsp-hostless-dais \
+	fdtget -ts "$dtb" "$q6hostless" compatible
+expect_value ultrasound-input-link 'SLIMBUS2_HOSTLESS Capture' \
+	fdtget -ts "$dtb" "$sound_ultrasound_input" link-name
+expect_value ultrasound-output-link 'Quaternary MI2S_RX Hostless Playback' \
+	fdtget -ts "$dtb" "$sound_ultrasound_output" link-name
+expect_value ultrasound-mic-link 'Ultrasound Microphone' \
+	fdtget -ts "$dtb" "$sound_ultrasound_mic" link-name
 expect_value sound-routing \
 	'RX_BIAS MCLK AMIC1 MIC BIAS1 AMIC2 MIC BIAS2 AMIC3 MIC BIAS4 AMIC4 MIC BIAS1 AMIC5 MIC BIAS1' \
 	fdtget -ts "$dtb" "$sound" audio-routing
@@ -869,6 +916,20 @@ fdtget "$dtb" "$volume_up_state" bias-pull-up >/dev/null ||
 	die "volume-up pin must use a pull-up"
 expect_value power-key-status okay fdtget -ts "$dtb" "$pon_pwrkey" status
 expect_value power-key-code 74 fdtget -tx "$dtb" "$pon_pwrkey" linux,code
+expect_value alert-slider-compatible gpio-keys \
+	fdtget -ts "$dtb" "$alert_slider" compatible
+expect_value alert-slider-top-label Silent \
+	fdtget -ts "$dtb" "$alert_slider/switch-top" label
+expect_value alert-slider-top-value 0 \
+	fdtget -ti "$dtb" "$alert_slider/switch-top" linux,input-value
+expect_value alert-slider-middle-label Vibrate \
+	fdtget -ts "$dtb" "$alert_slider/switch-middle" label
+expect_value alert-slider-middle-value 1 \
+	fdtget -ti "$dtb" "$alert_slider/switch-middle" linux,input-value
+expect_value alert-slider-bottom-label Ring \
+	fdtget -ts "$dtb" "$alert_slider/switch-bottom" label
+expect_value alert-slider-bottom-value 2 \
+	fdtget -ti "$dtb" "$alert_slider/switch-bottom" linux,input-value
 # Volume down is a PMIC GPIO like volume up. RESIN is not wired to it on this
 # board, so it must stay disabled rather than offering a key it cannot report.
 expect_value volume-down-label volume_down fdtget -ts "$dtb" "$volume_down" label
