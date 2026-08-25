@@ -14,13 +14,13 @@ should use `Exec=/bin/false`, but the generated package contained
 
 ## Package correction
 
-`modemmanager-1.25.95_git20260709-r5` rewrites the system-bus activation
+`modemmanager-1.25.95_git20260709-r6` rewrites the system-bus activation
 entry to `Exec=/bin/false`. OpenRC remains the only daemon start path.
 
 | Package | SHA-256 |
 |---|---|
-| `modemmanager-1.25.95_git20260709-r5.apk` | `97ed25ee6a711130faca5a6d7cf990422b1fa17aca602d81063ff36ff6eeb820` |
-| `modemmanager-openrc-1.25.95_git20260709-r5.apk` | `380a202c9b684d13ab8a3892d61652df4c977a4edbb5a2576681bb1efc688d6f` |
+| `modemmanager-1.25.95_git20260709-r6.apk` | `01bea20052e1684d13e4af86d3bd0ebb2d9991c1e8c6530a30e550ca1f699493` |
+| `modemmanager-openrc-1.25.95_git20260709-r6.apk` | `a5aedbc0c6c7d4ecbee7b7c7586f0c29ad44c82744fb6bbb73488cfa645cadee` |
 
 The APORT also drops its own exact-version `libmm-glib` from build
 dependencies, removing the circular dependency that otherwise made every new
@@ -32,10 +32,17 @@ temporarily numberless call remains visible. A number is copied only for
 allowed/payphone presentation, and OTAPA, non-standard OTASP and supplementary
 control sessions are filtered before they can appear as Plasma calls.
 
+Revision `r6` adds only an OpenRC soft dependency and ordering constraint on
+`hotdog-imsd`. The IMSA owner is not enabled in a boot runlevel and owns no
+WDS, WMS or Voice CID. When verified radio readiness exists, it can publish the
+per-subscription IMS snapshot before ModemManager starts; when readiness is
+revoked, it removes that snapshot and exits while the lifecycle supervisor
+stops ModemManager.
+
 `device-oneplus-hotdog-nonfree-firmware-3-r31` SHA256
 `950e6553e0567bdbc8ca393e93dd726f50fba15f6259a8e19659e35e111deb8f`
 depends on the radio bootstrap packages and removes ModemManager from both boot
-and default runlevels. `hotdog-radio-bootstrap-openrc-0.17-r0` repeats that
+and default runlevels. `hotdog-radio-bootstrap-openrc-0.18-r0` repeats that
 policy after Plasma's generic post-install and enables only the read-only
 bootstrap at boot. The clean Alpha 4 rootfs confirms that final ordering.
 

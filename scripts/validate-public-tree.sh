@@ -456,12 +456,21 @@ validate_hotdog_wifi_package_contract() {
 	grep -q 'hotdog-radio-supervisord' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap package does not build the lifecycle supervisor"
+	grep -q 'hotdog-imsd' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "radio bootstrap package does not build the IMSA owner"
 	grep -q '^command="/usr/libexec/hotdog-radio-supervisord"$' \
 		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-supervisor.initd" ||
 		die "radio supervisor OpenRC service has the wrong executable"
 	grep -q 'HOTDOG_PDC_APPROVAL' \
 		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-supervisor.initd" ||
 		die "radio supervisor service has no explicit approval input"
+	grep -q '^command="/usr/libexec/hotdog-imsd"$' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-imsd.initd" ||
+		die "IMSA OpenRC service has the wrong executable"
+	grep -q '^[[:space:]]*use hotdog-imsd$' \
+		"aports/temp/modemmanager/modemmanager.initd" ||
+		die "ModemManager is not soft-ordered after the IMSA owner"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||

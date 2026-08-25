@@ -256,6 +256,14 @@ data, SIGTERM or QRTR node removal removes the file and releases every client.
 This service owns no WDS, WMS or Voice CID and therefore does not compete with
 ModemManager.
 
+The packaged OpenRC graph does not place `hotdog-imsd` directly in a boot
+runlevel. The lifecycle supervisor creates verified readiness and starts the
+generic modem stack; ModemManager has a soft `use` dependency and ordering on
+`hotdog-imsd`, so an IMSA snapshot is available first when the service can be
+started. Readiness or QRTR loss makes `hotdog-imsd` remove its runtime state and
+exit. The supervisor then revokes readiness and stops ModemManager, preventing
+either daemon from retaining state across a modem generation.
+
 ## Mainline ownership model
 
 The implementation deliberately keeps proven generic components and replaces
@@ -268,7 +276,7 @@ only the missing Qualcomm/Hotdog orchestration:
 | libqmi | Typed QMI protocol implementation, including Hotdog-validated missing PDC fields |
 | ModemManager QMI plugin | Standard modem, SIM, bearer, SMS, voice and D-Bus objects |
 | NetworkManager | IP configuration, routes and user-visible connectivity |
-| `hotdog-imsd` | Per-subscription IMS registration, IMS bearer and media-control bridge |
+| `hotdog-imsd` | Sole per-subscription IMSA client owner and strict runtime-state publisher |
 | Plasma Mobile | Standard ModemManager/NetworkManager/Calls/Spacebar user interface |
 
 `hotdog-radio-bootstrapd` must be the sole owner of the pre-online state. It
@@ -291,10 +299,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The current slice is packaged as `hotdog-radio-bootstrap-0.17-r0` plus its
+The current slice is packaged as `hotdog-radio-bootstrap-0.18-r0` plus its
 OpenRC service. The aarch64 APKs have SHA-256
-`be3c595ac5dec8caba5f03f2c35d009d828a2638e729592bacdfb3ecbcc436e8`
-and `939ba2cbcbe9e8e32ddd2682e52ee5ca7d0b544c414ac6793feb2c1f8b91757e`.
+`834bf9c0effcfab94b88de3d28db2d2b45d4912956d9e31c59ef9f348b42ff70`
+and `9156a110e0b8cc335a0328ae9e6da5238a6851311fb851b9af05713d82e6c340`.
 The default service writes boot ID, kernel identity, UIM and PDC output
 atomically to `/run/hotdog-radio/observation`; it remains read-only. PDC
 mutation requires a separate boot-bound approval manifest. The OpenRC

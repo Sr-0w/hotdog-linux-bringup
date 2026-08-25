@@ -9,4 +9,6 @@ description="ModemManager Daemon"
 depend() {
    need dbus
    need polkit
+   use hotdog-imsd
+   after hotdog-radio-supervisor hotdog-imsd
 }
