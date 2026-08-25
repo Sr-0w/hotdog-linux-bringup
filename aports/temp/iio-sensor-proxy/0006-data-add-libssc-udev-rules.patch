@@ -1,0 +1,54 @@
+From 313d84bd57ba0bd240e6ac2d75ed3184212c9911 Mon Sep 17 00:00:00 2001
+From: Dylan Van Assche <me@dylanvanassche.be>
+Date: Wed, 26 Apr 2023 18:54:07 +0200
+Subject: [PATCH 6/8] data: add libssc udev rules
+
+Add udev rules to indicate possible sensor types like
+ssc-accel, ssc-light, ssc-proximity, and ssc-compass
+when a FastRPC node is present. This commit enables
+the usage of the libssc sensor drivers in iio-sensor-proxy
+which are introduced in the previous commits.
+---
+ data/80-iio-sensor-proxy-libssc.rules | 11 +++++++++++
+ data/meson.build                      | 10 +++++++++-
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+ create mode 100644 data/80-iio-sensor-proxy-libssc.rules
+
+diff --git a/data/80-iio-sensor-proxy-libssc.rules b/data/80-iio-sensor-proxy-libssc.rules
+new file mode 100644
+index 0000000..c4fad16
+--- /dev/null
++++ b/data/80-iio-sensor-proxy-libssc.rules
+@@ -0,0 +1,11 @@
++# iio-sensor-proxy: libssc
++# IIO sensor to D-Bus proxy with libssc support
++
++ACTION=="remove", GOTO="iio_sensor_proxy_libssc_end"
++
++# Set the sensor type for all the types we recognise for SDSP/ADSP.
++# Some devices expose the sensors via a separate SDSP while others re-use ADSP.
++# These DSPs expose itself as /dev/fastrpc-* in the misc subsystem.
++SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-light ssc-proximity ssc-compass"
++
++LABEL="iio_sensor_proxy_libssc_end"
+diff --git a/data/meson.build b/data/meson.build
+index 97dbc07..8b78125 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -1,5 +1,13 @@
++rules = files(
++  '80-iio-sensor-proxy.rules'
++)
++
++if get_option('ssc-support')
++  rules += files('80-iio-sensor-proxy-libssc.rules')
++endif
++
+ install_data(
+-  '80-iio-sensor-proxy.rules',
++  rules,
+   install_dir: udev_rules_dir
+ )
+ 
+-- 
+2.45.1

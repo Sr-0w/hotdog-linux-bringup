@@ -1,0 +1,5 @@
+#!/bin/sh
+rc-update del hotdog-proximite default 2>/dev/null || true
+rc-update del iio-sensor-proxy default 2>/dev/null || true
+rc-update add hotdog-sensor-gate default
+rc-update add hotdog-proximity-arm default

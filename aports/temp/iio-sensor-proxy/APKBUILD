@@ -1,0 +1,74 @@
+# Forked from Alpine to add Qualcomm SSC support with libssc
+
+pkgname=iio-sensor-proxy
+pkgver=9999
+pkgrel=9
+pkgdesc="IIO sensors to D-Bus proxy"
+url="https://gitlab.freedesktop.org/hadess/iio-sensor-proxy"
+arch="aarch64"
+license="GPL-2.0-or-later"
+depends="dbus"
+makedepends="
+	eudev-dev
+	glib-dev
+	libgudev-dev
+	meson
+	polkit-dev
+	libssc-dev>=0.1.6
+	"
+subpackages="$pkgname-openrc"
+_commit="fe56bdba1243cc5f6a652eb75d11ae1d1957ff7e"
+builddir="$srcdir/$pkgname-$_commit"
+source="https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/$_commit/iio-sensor-proxy-$_commit.tar.gz
+	iio-sensor-proxy.initd
+	0001-iio-sensor-proxy-depend-on-libssc.patch
+	0002-proximity-support-SSC-proximity-sensor.patch
+	0003-light-support-SSC-light-sensor.patch
+	0004-accelerometer-support-SSC-accelerometer-sensor.patch
+	0005-compass-support-SSC-compass-sensor.patch
+	0006-data-add-libssc-udev-rules.patch
+	0007-CI-add-libssc-build.patch
+	0008-data-iio-sensor-proxy.service.in-add-AF_QIPCRTR.patch
+	0009-drivers-ssc-implement-set_polling-function.patch
+	0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch
+	0011-drivers-ssc-do-not-tear-down-a-sensor-that-was-never.patch
+	"
+# tests fail on armv7 and armhf, and it seems to be due to some weird issue
+# with pmaports qemu CI (not reproducible locally with `pmb build --arch
+# armv7`)
+options="!check"
+build() {
+	abuild-meson \
+		-Db_lto=true \
+		-Dssc-support=true \
+		-Dsystemdsystemunitdir=/no \
+		. output
+	meson compile -C output
+}
+
+check() {
+	meson test --no-rebuild --print-errorlogs -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+	rm -r "$pkgdir"/no
+
+	install -Dm755 "$srcdir"/$pkgname.initd "$pkgdir"/etc/init.d/$pkgname
+}
+
+sha512sums="
+49b96fefbcfabb706fc6189d3f40e6e1a1e847ec6e4101398bf639db9e844c5c5057f2267f3e541d302d002d0042a84fdd56191207ed0e911f80342cd1d416c4  iio-sensor-proxy-fe56bdba1243cc5f6a652eb75d11ae1d1957ff7e.tar.gz
+f695c3f6c7cad50a5da8b8df28172b4a8c0be750e3bfc93a1b80a7fe1e5a05f24fd0e5af3e0af727c05dfe3a98b3067a6ebd7617c13243b60e1e495b2b3d6987  iio-sensor-proxy.initd
+691cfd917685987f50401d31e77ea9e1c7979a6d5d6a89a3716354d098db0dbd1f119da800ba316d74d2b0f839162f493c0f8a283d37c92bcfbb4918bea27fa5  0001-iio-sensor-proxy-depend-on-libssc.patch
+d7400df794fc338e8b2fa061e7f65bff6b0078f5232e0d5691ee50d9cf627da7769486f8051c01e973809b3f8813b3ae41ef124a1d3b57b053761813c0bda929  0002-proximity-support-SSC-proximity-sensor.patch
+4df54e69374519d838fbfe8d15571c9161bfa15d96346c519f1ba0e4d99c73d250430b15ebf45176bf1b27aaf63ddf6e61666f1398cf1f7a1c32455a73858f79  0003-light-support-SSC-light-sensor.patch
+6dc7a939bda7c8932207713ce3607b34c6359e5e49d0abf2d67774b72ce1e3756ea74aeef0f3991cec5aed3f01bb083e61cc7eb4f0368d850159d4255d48ded2  0004-accelerometer-support-SSC-accelerometer-sensor.patch
+ca2e7cd3beb850ebdd388ea64ea09a76757084d515e4d7625d1fff682735e0beeb295e3a522db1bb4f0937e9d8a0205aea99210d4754e400ed32e362ec601d3e  0005-compass-support-SSC-compass-sensor.patch
+644a7659f26b3225ee269be1749e206f3426c6b330c370a2356400a8deeb7d23ef9a959091c7b721014a1d6e6630a7e59f466e3c883aff9621a3e70b62985b11  0006-data-add-libssc-udev-rules.patch
+9b8d8d0a5e6bb0e9bf29c285d9f9c9628eb987afd3cacfbba8ef4b4cd7061ea75e112c4434dc4ca84764ff1761acb3651b59078132a1387205c470ccb9197da6  0007-CI-add-libssc-build.patch
+337c4e67f308a64d857327885005b089397ffcbe5e917e6b6cd3738013a97abf5d579bf475b32b4c281bb2aaf14b72889dd49bc376f8c4f8dfd102b64c9154d7  0008-data-iio-sensor-proxy.service.in-add-AF_QIPCRTR.patch
+2bb22d2db356cb46463f58fdb782b38af5cf386ce1a767ae7a24e6f30526b6e9d9a99a9b007cb6c565722b1244d1591613705fbf21b224395dbf1f839271697c  0009-drivers-ssc-implement-set_polling-function.patch
+2f5648c29892af6516d449f70cdbdf43fd5a774121ae07a135f528ad4578bfdd47bdf5bb4c244c59793bb5f755791268e2df2d0076fa41e044cddc8eff0a247e  0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch
+09aee715710877e5552be029c0644e56fef1e3652aada7fbebabd0962cc81c2f0fa7dcca34daa36d67147f4db0a85ad4771d002e9bd44c9da389c99219d12f05  0011-drivers-ssc-do-not-tear-down-a-sensor-that-was-never.patch
+"

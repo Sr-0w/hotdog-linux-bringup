@@ -399,6 +399,61 @@ validate_mainline616_aport_inputs() {
 		"expected $((source_count - tar_count)) mainline 6.16 local inputs, found $local_count"
 }
 
+validate_hotdog_sensor_package_contract() {
+	local device_dir="aports/device/testing/device-oneplus-hotdog"
+	local device_apkbuild="$device_dir/APKBUILD"
+	local proxy_apkbuild="aports/temp/iio-sensor-proxy/APKBUILD"
+	local filename
+
+	log "hotdog packaged sensor and proximity contract"
+	for filename in 62-hotdog-elliptic-proximity.rules \
+		elliptic-proximity-smoke.py hotdog-elliptic-calibration.py \
+		hotdog-import-factory-calibration.py hotdog-oppo-version-provision \
+		hotdog-proximity-arm.initd hotdog-proximity-armd.py \
+		hotdog-run-hexagonrpcd hotdog-sensor-gate.initd \
+		hotdog-sensor-proxy-gate.sh hotdog-ssc-client.py \
+		device-oneplus-hotdog-sensors.post-install; do
+		[ -f "$device_dir/$filename" ] ||
+			die "missing packaged sensor input: $filename"
+		grep -q "^[[:space:]]*$filename$" "$device_apkbuild" ||
+			die "device source list omits sensor input: $filename"
+	done
+	grep -q '^sensors() {' "$device_apkbuild" ||
+		die "device package has no sensor subpackage"
+	grep -q 'CONFIG_SND_SOC_QDSP6_ELLIPTIC=m' \
+		"aports/device/testing/linux-oneplus-hotdog-mainline616/config-oneplus-hotdog-mainline616.aarch64" ||
+		die "kernel config omits Elliptic proximity"
+	grep -q 'CONFIG_SND_SOC_QDSP6_HOSTLESS=m' \
+		"aports/device/testing/linux-oneplus-hotdog-mainline616/config-oneplus-hotdog-mainline616.aarch64" ||
+		die "kernel config omits QDSP6 hostless audio"
+	grep -q '^rc-update add hotdog-sensor-gate default$' \
+		"$device_dir/device-oneplus-hotdog-sensors.post-install" ||
+		die "sensor package does not enable the SLPI gate"
+	grep -q '^rc-update add hotdog-proximity-arm default$' \
+		"$device_dir/device-oneplus-hotdog-sensors.post-install" ||
+		die "sensor package does not enable proximity arming"
+	grep -q '^rc-update del hotdog-proximite default' \
+		"$device_dir/device-oneplus-hotdog-sensors.post-install" ||
+		die "sensor package leaves the disproved ALS proximity daemon enabled"
+	if grep -R -n '/root/' "$device_dir/hotdog-sensor-gate.initd" \
+		"$device_dir/hotdog-sensor-proxy-gate.sh" \
+		"$device_dir/hotdog-run-hexagonrpcd"; then
+		die "packaged sensor runtime still depends on manual /root files"
+	fi
+	grep -q '^CALIBRATION_SIZE = 448$' \
+		"$device_dir/hotdog-elliptic-calibration.py" ||
+		die "Elliptic provisioner does not validate the calibration size"
+	grep -q 'all-zero calibration' \
+		"$device_dir/hotdog-elliptic-calibration.py" ||
+		die "Elliptic provisioner does not reject empty data"
+	grep -q '0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch' \
+		"$proxy_apkbuild" ||
+		die "iio-sensor-proxy package omits the claim-race fix"
+	grep -q '0011-drivers-ssc-do-not-tear-down-a-sensor-that-was-never.patch' \
+		"$proxy_apkbuild" ||
+		die "iio-sensor-proxy package omits the safe shutdown fix"
+}
+
 validate_hotdog_wifi_package_contract() {
 	local device_apkbuild="aports/device/testing/device-oneplus-hotdog/APKBUILD"
 	local firmware_apkbuild="aports/device/testing/firmware-oneplus-hotdog/APKBUILD"
@@ -1265,6 +1320,7 @@ main() {
 	validate_k1_patch_copies
 	validate_k1_aport_inputs
 	validate_mainline616_aport_inputs
+	validate_hotdog_sensor_package_contract
 	validate_hotdog_wifi_package_contract
 	validate_modemmanager_slot_pin_contract
 	validate_libqmi_pdc_subscription_contract

@@ -1,0 +1,25 @@
+#!/bin/sh
+/usr/libexec/hotdog-oppo-version-provision
+# Demarre le service de fichiers du DSP capteurs et rend la main.
+#
+# -x pour ne comparer que le nom de l'executable : un motif large attraperait
+# le shell distant qui porte le meme mot dans sa ligne de commande.
+#
+# Le noeud FastRPC ne porte pas le meme nom selon le noyau : mainline expose
+# /dev/fastrpc-sdsp, le downstream 4.14 expose les noeuds adsprpc. On prend le
+# premier qui existe pour que le meme script serve les deux bras du controle.
+pkill -x hexagonrpcd 2>/dev/null
+sleep 1
+
+DEV=
+for d in /dev/fastrpc-sdsp /dev/adsprpc-smd-secure /dev/adsprpc-smd /dev/sdsprpc-smd; do
+	[ -e "$d" ] && { DEV=$d; break; }
+done
+[ -n "$DEV" ] || { echo "aucun noeud FastRPC" > /var/log/hexagonrpcd.log; exit 1; }
+
+: > /var/log/hexagonrpcd.log
+echo "noeud FastRPC: $DEV" >> /var/log/hexagonrpcd.log
+setsid hexagonrpcd -f "$DEV" -s -R /usr/share/qcom/ -d sdsp \
+	</dev/null >>/var/log/hexagonrpcd.log 2>&1 &
+sleep 2
+pgrep -x hexagonrpcd >/dev/null && echo "demarre" || echo "echec"

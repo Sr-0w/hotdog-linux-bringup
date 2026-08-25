@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=31
+pkgrel=32
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -35,6 +35,18 @@ source="
 	hotdog-usb-acm
 	hotdog-usb-acm-login
 	hotdog-usb-acm.initd
+	62-hotdog-elliptic-proximity.rules
+	elliptic-proximity-smoke.py
+	hotdog-elliptic-calibration.py
+	hotdog-import-factory-calibration.py
+	hotdog-oppo-version-provision
+	hotdog-proximity-arm.initd
+	hotdog-proximity-armd.py
+	hotdog-run-hexagonrpcd
+	hotdog-sensor-gate.initd
+	hotdog-sensor-proxy-gate.sh
+	hotdog-ssc-client.py
+	device-oneplus-hotdog-sensors.post-install
 	powerdevilrc
 "
 
@@ -44,6 +56,7 @@ subpackages="
 	$pkgname-nonfree-firmware:nonfree_firmware
 	$pkgname-mainline-firmware:mainline_firmware
 	$pkgname-wireplumber:wireplumber
+	$pkgname-sensors:sensors
 	$pkgname-bringup:bringup
 	$pkgname-plasma-mobile-apps:plasma_mobile_apps
 "
@@ -70,6 +83,43 @@ package() {
 		"$pkgdir/usr/libexec/hotdog-usb-acm-login"
 	install -Dm755 "$srcdir/hotdog-usb-acm.initd" \
 		"$pkgdir/etc/init.d/hotdog-usb-acm"
+}
+
+sensors() {
+	pkgdesc="SLPI and Elliptic sensor integration"
+	install="$subpkgname.post-install"
+	install_if="$pkgname-kernel-mainline $pkgname-nonfree-firmware"
+	depends="
+		alsa-utils
+		hexagonrpcd
+		iio-sensor-proxy
+		iio-sensor-proxy-openrc
+		pd-mapper-openrc
+		python3
+		qrtr
+	"
+	install -Dm644 "$srcdir/62-hotdog-elliptic-proximity.rules" \
+		"$subpkgdir/usr/lib/udev/rules.d/62-hotdog-elliptic-proximity.rules"
+	install -Dm755 "$srcdir/elliptic-proximity-smoke.py" \
+		"$subpkgdir/usr/libexec/elliptic-proximity-smoke.py"
+	install -Dm755 "$srcdir/hotdog-elliptic-calibration.py" \
+		"$subpkgdir/usr/libexec/hotdog-elliptic-calibration.py"
+	install -Dm755 "$srcdir/hotdog-import-factory-calibration.py" \
+		"$subpkgdir/usr/libexec/hotdog-import-factory-calibration.py"
+	install -Dm755 "$srcdir/hotdog-oppo-version-provision" \
+		"$subpkgdir/usr/libexec/hotdog-oppo-version-provision"
+	install -Dm755 "$srcdir/hotdog-proximity-arm.initd" \
+		"$subpkgdir/etc/init.d/hotdog-proximity-arm"
+	install -Dm755 "$srcdir/hotdog-proximity-armd.py" \
+		"$subpkgdir/usr/libexec/hotdog-proximity-armd.py"
+	install -Dm755 "$srcdir/hotdog-run-hexagonrpcd" \
+		"$subpkgdir/usr/libexec/hotdog-run-hexagonrpcd"
+	install -Dm755 "$srcdir/hotdog-sensor-gate.initd" \
+		"$subpkgdir/etc/init.d/hotdog-sensor-gate"
+	install -Dm755 "$srcdir/hotdog-sensor-proxy-gate.sh" \
+		"$subpkgdir/usr/libexec/hotdog-sensor-proxy-gate.sh"
+	install -Dm755 "$srcdir/hotdog-ssc-client.py" \
+		"$subpkgdir/usr/libexec/hotdog-ssc-client.py"
 }
 
 kernel_downstream() {
@@ -207,5 +257,17 @@ cb46318d64e85e3fd432aa650784268710aa91226c35aa76d548a289d021f655f3e0c3fc1d4788f8
 94afe445336105e157977aafcc28324d0f702f35e81358b22afd16e6f9f2f5f08223f80aaf19f461031158aa754e5015d3b61e10972c5500d756a4f3a0ed7ca3  hotdog-usb-acm
 30cca79c18d824332630f4d03c4694663e29cd9132d532479d1687da8dc24756e221ecfd11e880a1ba52a2446ec5d2bf8fc933b451501892bd1a9621e2b9cbda  hotdog-usb-acm-login
 dd43abf81951fd66890965916c88d4b290c873b45585be788ce2a7ea7ff3f5943fe0f01ef347d02f655f0921f0176cca0bb37d06a914cb6bc11580748e39fc51  hotdog-usb-acm.initd
+d64438cb45d9cb66f0ba7bd43bd5676f0bb2359fd66458dbd689451d7d5c185b4033b794c4b7fb4316265e05c16867feeb86fc58a30061b468aa83deab7b5599  62-hotdog-elliptic-proximity.rules
+acf359a87c3d531e35689ea2cde01fdbbb3a9d82b5d47088d6be147e594bc2e53f903acd8709ee8a43529dfb74bfcf452e1d51ca22f1e8f51f132913d5f7b2b4  elliptic-proximity-smoke.py
+f059bcbca9e3b56acdccb2e30083dc70c4773ffe97a7a4344ec7271af5a23211ef029b9f25e288a807ac4097b0b12f4206c01bba659a26368f88863dd7026439  hotdog-elliptic-calibration.py
+b931a82f4d0be81217e6755b8f9be9c39c0999e7d233289ee37cdf8772086cccc408e6f4269f5b8fb6d00583b6bb6577cc2381e84bddb50a519fd23a6bf5a011  hotdog-import-factory-calibration.py
+87f375864748076ae71f987b1247f495dfde17602a08267775a92189adc612da708a8d432b7169bd8a5cf190abfada0716fe3a02fea4a1f9ad02a436a5dad464  hotdog-oppo-version-provision
+291b3249007ced021d57b21c509b1987d7737e06c3f23c6d262286ce5f5764b71869682313d3e0297e6bd06d9dff2d106712db06aba0b1a63a137f804002e4a8  hotdog-proximity-arm.initd
+7162f0c6a6aa4adc48412e5016f374cb515c62da6cc3f0f3de0b8872c283717e2fba1462616f372b8f86f7c4cdb20501c4ceacd411f1ccb00b71e1b5daedafdd  hotdog-proximity-armd.py
+8f23e19d36637d479f8fae10a3a076a2e406ba003211907630f112ce18a2f41deaaf9327372972d6fcabd1a502ebfeea333370cdf4228727a07a11422059f9f7  hotdog-run-hexagonrpcd
+cd4ab55bd55d1ffcccc932be4e42cdfb416c234eae9f127e42a895e7eccc489fadbb4d7404c624c005ff9c654fab337f7616f70d54805e10fcb066f3d660c4d4  hotdog-sensor-gate.initd
+3186bdd6115c46833745201493640af4b921472ab1704a42bd4dc552f5b365429f8415e08a72ea1babbaa6999af1add034ab2345b1fc13a069ccf9465f15ae19  hotdog-sensor-proxy-gate.sh
+d86a6bb1924f4f5af9b566a87f7ba6a387e6502d65f96d03284eaa79bd16b773ce7647dca6743bb436adaff61134c84161a9a23a07965395f248379d3feaa418  hotdog-ssc-client.py
+8c1dbadeb7e24d4b94a93c897ec30ed709de6147cee4ad0c477adacae5fd53bd2ee2d58e179a4648b162449ed5c8a8f3cea7bea70b8bdacf394058b368d1dd5d  device-oneplus-hotdog-sensors.post-install
 17911bdd6476f5b0067e584d1c55e2e7a0e3d6ae2f6d0944b66b707ce1433bb98fe3fb5327d39ca4a81e7650dbecde65196b474e940cbf38ba4d04c092bba2b3  powerdevilrc
 "

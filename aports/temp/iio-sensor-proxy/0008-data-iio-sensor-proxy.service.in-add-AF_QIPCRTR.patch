@@ -1,0 +1,28 @@
+From c70950f1e33aba5c58c337e8dfb73d40efed5b5d Mon Sep 17 00:00:00 2001
+From: Dylan Van Assche <me@dylanvanassche.be>
+Date: Sat, 1 Jun 2024 21:15:15 +0200
+Subject: [PATCH 8/8] data: iio-sensor-proxy.service.in: add AF_QIPCRTR
+
+Allow AF_QIPCRTR in lockdown for libssc.
+Libssc uses the QMI protocol over QRTR in the kernel.
+Systemd limits the address families to UNIX, LOCAL, and NETLINK.
+However, QRTR uses its own address family: AF_QIPCRTR.
+Add it to the allowed families.
+---
+ data/iio-sensor-proxy.service.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/data/iio-sensor-proxy.service.in b/data/iio-sensor-proxy.service.in
+index 4bc921b..29ea3c0 100644
+--- a/data/iio-sensor-proxy.service.in
++++ b/data/iio-sensor-proxy.service.in
+@@ -14,6 +14,6 @@ ProtectControlGroups=true
+ ProtectHome=true
+ ProtectKernelModules=true
+ PrivateTmp=true
+-RestrictAddressFamilies=AF_UNIX AF_LOCAL AF_NETLINK
++RestrictAddressFamilies=AF_UNIX AF_LOCAL AF_NETLINK AF_QIPCRTR
+ MemoryDenyWriteExecute=true
+ RestrictRealtime=true
+-- 
+2.45.1

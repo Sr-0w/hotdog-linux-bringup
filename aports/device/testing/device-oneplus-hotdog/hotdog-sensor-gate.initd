@@ -1,0 +1,18 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+description="Amene le coeur capteurs SLPI puis iio-sensor-proxy, avant la session"
+
+depend() {
+	need dbus
+	before display-manager
+}
+
+start() {
+	ebegin "Coeur capteurs SLPI et iio-sensor-proxy"
+	/usr/libexec/hotdog-sensor-proxy-gate.sh
+	eend 0
+}
+
+stop() {
+	return 0
+}

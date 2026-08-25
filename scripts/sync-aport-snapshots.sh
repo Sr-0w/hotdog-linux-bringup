@@ -47,6 +47,7 @@ snapshot_rels=(
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 	"main/hexagonrpcd"
+	"temp/iio-sensor-proxy"
 	"temp/libcamera"
 	"temp/libqmi"
 	"temp/modemmanager"
@@ -129,6 +130,18 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm-login | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm.initd | \
+		device/testing/device-oneplus-hotdog:62-hotdog-elliptic-proximity.rules | \
+		device/testing/device-oneplus-hotdog:elliptic-proximity-smoke.py | \
+		device/testing/device-oneplus-hotdog:hotdog-elliptic-calibration.py | \
+		device/testing/device-oneplus-hotdog:hotdog-import-factory-calibration.py | \
+		device/testing/device-oneplus-hotdog:hotdog-oppo-version-provision | \
+		device/testing/device-oneplus-hotdog:hotdog-proximity-arm.initd | \
+		device/testing/device-oneplus-hotdog:hotdog-proximity-armd.py | \
+		device/testing/device-oneplus-hotdog:hotdog-run-hexagonrpcd | \
+		device/testing/device-oneplus-hotdog:hotdog-sensor-gate.initd | \
+		device/testing/device-oneplus-hotdog:hotdog-sensor-proxy-gate.sh | \
+		device/testing/device-oneplus-hotdog:hotdog-ssc-client.py | \
+		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-sensors.post-install | \
 		device/testing/device-oneplus-hotdog:powerdevilrc | \
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
 		device/testing/device-oneplus-hotdog:HiFi.conf | \
@@ -162,6 +175,9 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh | \
 		main/hexagonrpcd:APKBUILD | \
 		main/hexagonrpcd:*.patch | \
+		temp/iio-sensor-proxy:APKBUILD | \
+		temp/iio-sensor-proxy:*.patch | \
+		temp/iio-sensor-proxy:*.initd | \
 		temp/libcamera:APKBUILD | \
 		temp/libcamera:*.patch | \
 		temp/libcamera:*.yaml | \
