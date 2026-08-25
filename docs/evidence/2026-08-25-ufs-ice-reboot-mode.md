@@ -42,14 +42,36 @@ Evidence directory: `logs/2026-08-25-ice-reboot-mode-handoff`.
 | `04-fastboot-reboot.txt` | `ac672d2f42935eacabc56e7f3666ac2af448fcf4cdf48072f5a0c4cef4f14b55` |
 | `05-pmos-return.txt` | `0180480c303e5451d6e5bc30f5cb1b9feb28c4d738ede35dc6e13c01e528fcb9` |
 
-## Recovery scope
+## Recovery mode
 
-Recovery selection is not yet claimed. The phone carries two different
-100663296-byte recovery partitions with SHA-256
-`299bdf0b3a30311be95418a3f8ae3f64209b661b15ded11b84b95b094439684a`
-and `99f04ece06877cf30224e103f0e5099a1bd991174ca5c5aa1199b04eacc297d7`.
-Neither matches an authorized recovery image currently present in the public
-workspace, so entering recovery without a proven automatic return path would
-be an unsafe test. The DT binding and helper support `recovery`; functional
-validation remains pending an identified recovery image or explicit physical
-fallback.
+With explicit acceptance of a possible physical reset, the same helper was
+tested with `RESTART2("recovery")`. Recovery appeared after ten seconds as an
+authorized ADB target:
+
+```
+state: recovery
+product: OnePlus7TPro
+model: HD1911
+build type: userdebug
+shell: uid=0(root), SELinux context u:r:su:s0
+```
+
+The user also confirmed the recovery UI physically. `adb reboot system`
+returned to postmarketOS after 42 seconds with a new boot ID. ICE still exposed
+AES-256-XTS `0x1fe00`, reboot-mode remained bound, `rmtfs` was active and no
+module section-size error appeared.
+
+Evidence directory: `logs/2026-08-25-recovery-mode-handoff`.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `00-preflight.txt` | `fb662b14f796fe37d11979d4ac3b03170c3b2ebc9b9208a178f295d7e0e9f804` |
+| `02-result.txt` | `8b1db9770e483ae3ba885b2152f8d3d4370666f9eb307dc56a2408039fb39693` |
+| `04-adb-attestation.txt` | `7e3ceb912c474b98fc4e6a37b73d45acebaa9c5d0f9750bcec856a8e5b4c5b86` |
+| `05-adb-reboot-system.txt` | `502627cece5661ab31714064ed499341d77ebbec0298a41e08c738ec9f988e3fb` |
+| `06-pmos-return.txt` | `ed48307dbe4f3fa9d7c8d02bb856b23b3d0f2863e494fdc8ae0d28864352bbb4` |
+
+This validates recovery selection and the existing Android/Lineage recovery
+path. A native postmarketOS recovery image is not supplied yet. Building one
+with an authorized rescue shell, A/B inspection, verified image write/readback
+and rollback remains a separate installation deliverable.

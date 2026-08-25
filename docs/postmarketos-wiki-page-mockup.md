@@ -353,7 +353,7 @@ The current port uses Linux 6.16 and boots directly from the stock OnePlus A/B b
 
 The persistent root filesystem runs from UFS. Plasma Mobile uses accelerated Adreno 640 rendering through Freedreno and Turnip.
 
-Normal software reboot and automatic A/B success marking are validated. Direct recovery selection, complete reboot-mode integration and the final installer rollback flow remain incomplete.
+Normal software reboot, automatic A/B success marking, bootloader selection and recovery selection are validated. The current recovery is an Android/Lineage userdebug environment with authorized root ADB; a native postmarketOS recovery and the final installer rollback flow remain incomplete.
 
 The current development kernel still carries changes that have not all been accepted upstream; <code>status_mainline = Y</code> refers to the close-to-mainline runtime architecture rather than every device-specific change already being merged into Linus' tree.
 
@@ -506,6 +506,8 @@ Charging termination, low-battery behaviour, JEITA/thermal policy, off-mode char
 * Fingerprint authentication is not supported.
 * OnePlus Warp fast charging is not supported.
 * Full-disk encryption has not been revalidated with the current mainline port.
+* A native postmarketOS recovery image is not yet supplied. The validated
+  recovery target is the existing Android/Lineage userdebug recovery.
 * The current installation procedure is a manual development workflow; flashing through <code>pmbootstrap flasher</code> is not yet supported.
 
 == Contributors ==
