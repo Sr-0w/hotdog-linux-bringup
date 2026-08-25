@@ -17,7 +17,7 @@ tree and packages the complete matching set:
 
 ## Current-state changes
 
-- Fresh rootfs composition with `device-oneplus-hotdog 3-r30`, the current
+- Fresh rootfs composition with `device-oneplus-hotdog 3-r31`, the current
   hardware integration and the complete libcamera patch set.
 - `hotdog-radio-bootstrap 0.15-r3` contains the guarded UIM/PDC/DMS bootstrap,
   transactional rollback, strict runtime identity checks and readiness handoff.
