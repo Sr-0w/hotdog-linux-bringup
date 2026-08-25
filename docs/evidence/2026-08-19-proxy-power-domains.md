@@ -1,5 +1,8 @@
 # The proxy power domains are dropped from under a running modem
 
+> Fixed in the current kernel checkpoint. The remaining question is power cost,
+> not whether this crash still occurs.
+
 Date: 2026-08-19
 
 ## Summary

@@ -1,5 +1,8 @@
 # ath10k never declares that it can wake the system, so Wi-Fi dies on suspend
 
+> Fixed in the current kernel checkpoint; Wi-Fi survives the validated suspend
+> cycles. This file remains the root-cause evidence.
+
 Date: 2026-08-19
 
 ## Summary

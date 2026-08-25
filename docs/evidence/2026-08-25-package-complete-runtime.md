@@ -62,3 +62,12 @@ Both filesystems pass `e2fsck -fn`. AVB verification passes, boot and APK
 kernel/DTB payloads are byte-identical, both GPT partitions passed complete
 readback hashing, and `sgdisk --verify` passes. This is offline image evidence;
 the exact package-complete image still needs one guarded hardware boot.
+
+## Publication
+
+The set is published as
+[`v0.1.0-alpha.5`](https://github.com/Sr-0w/hotdog-linux-bringup/releases/tag/v0.1.0-alpha.5).
+GitHub readback reports seven uploaded assets and the downloaded manifest names
+source commit `3769d6a8fc105f51c1995c11345c750d27d50c44`. The compressed rootfs asset is
+804722727 bytes, SHA-256
+`54b87503489bb00447dcca3b09c535775aeb964a82d9f51ccfb8a0bd14dc6b5e`.

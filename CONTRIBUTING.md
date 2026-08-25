@@ -197,11 +197,14 @@ A public image release is an atomic boot and rootfs set. Their UUIDs, packaged
 kernel, DTB, modules, and firmware must match. Never combine assets from
 different releases.
 
-Release candidates require offline integrity checks followed by a full flash
-to physical hardware, direct boot, graphical userspace, storage, input, USB or
-network recovery access, and a second clean boot. Publish hashes, limitations,
-and the matching installation procedure. A boot image tested on an existing
-development rootfs is not a complete release.
+Hardware-qualified releases require offline integrity checks followed by a
+full flash to physical hardware, direct boot, graphical userspace, storage,
+input, USB or network recovery access, and a second clean boot. An explicitly
+experimental pre-release may be published after offline validation only when
+its notes and README state that the exact set is unbooted; it must not claim
+hardware qualification. Publish hashes, limitations, and the matching
+installation procedure. A boot image tested on an existing development rootfs
+is not a hardware-qualified complete release.
 
 ## Commit messages
 

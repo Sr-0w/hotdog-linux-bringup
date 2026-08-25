@@ -1,9 +1,11 @@
 # Factory sensor calibration
 
-Every OnePlus 7T Pro is calibrated individually at the factory. Those values are
-specific to the unit and they still exist on your phone after unlocking and
-flashing — nothing has to be exported by hand, and nothing should be shipped in
-a package.
+Last reviewed: 2026-08-25
+
+Every OnePlus 7T Pro is calibrated individually at the factory. The SEE sensor
+registry values are specific to the unit and remain in `persist` after
+unlocking and flashing; nothing should be copied from another handset or
+shipped in a public package.
 
 ## Why this matters
 
@@ -43,7 +45,9 @@ Each device must read its own.
 
 ## Importing
 
-[`hotdog-import-factory-calibration.py`](../helpers/hotdog-import-factory-calibration.py)
+The packaged `/usr/libexec/hotdog-import-factory-calibration.py`, whose public
+source is
+[`hotdog-import-factory-calibration.py`](../aports/device/testing/device-oneplus-hotdog/hotdog-import-factory-calibration.py),
 mounts `persist` read-only, compares it with the served registry, and copies
 only what is missing.
 
@@ -82,6 +86,20 @@ Two ways, both seen here:
 
 After any registry experiment, re-run the import in `--essai` mode. It is the
 cheapest way to notice that something was quietly reset.
+
+## Elliptic ultrasonic calibration
+
+The ADSP Elliptic path has a separate 448-byte per-device calibration that is
+not one of the SEE JSON registry groups. It is deliberately absent from Git and
+from public release payloads. The sensor package provides
+`/usr/libexec/hotdog-elliptic-calibration.py`: it restores a previously saved
+value from `persist`, requires exactly 448 non-zero bytes and fails closed when
+the value is absent or malformed.
+
+On the reference handset, the already-active calibration was stored once under
+`persist/hotdog/elliptic_calibration_v2.bin` and read back byte-for-byte. Other
+handsets must provision their own value; copying the reference handset's blob
+would violate the same per-unit rule as copying accelerometer or ALS biases.
 
 ## Checking without the tool
 

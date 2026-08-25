@@ -141,7 +141,6 @@ function under **Working** and a broader integration or stability item under
 | Audio | Internal stereo speakers | Both TFA9874 speaker channels are independently hardware-validated through the packaged UCM path. |
 | Audio | Handset microphone | AMIC4 with MIC BIAS1 is acoustically validated from the packaged profile and confirmed by listening. |
 | Wi-Fi | WCN3990 association and IPv4 connectivity | Both bands scan, NetworkManager associates and basic external IPv4 reachability is validated. |
-| Power | System suspend / s2idle | Thirty real cycles across two fresh boots with no modem crash and no Wi-Fi loss. Two power domains were being withdrawn from parts that still needed them: `sdhc_2` sat in the modem's domain, and the PAS proxy votes were dropped at handover. |
 | Cameras | Four-sensor capture | S5K3M5 telephoto, IMX586 main, IMX481 ultra-wide and IMX471 front sensors capture through libcamera. |
 | Cameras | Rear autofocus | The main and telephoto actuators expose calibrated focus control and produce distinct focus planes; experimental continuous autofocus completes. |
 | Cameras | IMX471 pop-up lifecycle | Hall-bounded automatic extension, capture and retraction work at the expected cadence. |
@@ -171,6 +170,7 @@ function under **Working** and a broader integration or stability item under
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
+| Power | Complete system suspend / s2idle | The modem/Wi-Fi path passes thirty real cycles across two fresh boots after fixing the SDHCI and PAS power-domain votes. Aggregate suspend remains partial because Bluetooth can still abort a cycle and camera/touch/session resume need broader coverage. |
 | Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
 | Power | SMB5 charging | The exact v4 candidate passes guarded charging and all tested dock role transitions; the complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
 | Cameras | S5K3M5 telephoto | 4208×3120 RAW10 capture, userspace processing and experimental autofocus work; production 3A/color and broader modes remain. |
@@ -270,7 +270,8 @@ bridge boundary.
 The current public image set is `v0.1.0-alpha.5`, pairing postmarketOS Plasma
 Mobile with kernel `r181`, the matching AVB boot image and the required
 filtered DTBO. The boot, DTBO and rootfs form one atomic set and must not be
-mixed across releases. Follow the [release installation guide](docs/release-install.md).
+mixed across releases. The exact Alpha 5 set is offline-validated but has not
+yet been booted as a unit. Follow the [release installation guide](docs/release-install.md).
 
 Clone and bootstrap the host workspace:
 

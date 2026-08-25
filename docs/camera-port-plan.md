@@ -1,5 +1,10 @@
 # SM8150 camera port: extracted hardware map and plan
 
+> Historical planning record. All four cameras now capture, both rear
+> actuators focus and the IMX471 pop-up lifecycle works. Production 3A/colour,
+> video, OIS/flash synchronization and recovery remain in
+> [the current status](status.md).
+
 This is the knowledge needed to write an SM8150 CAMSS backend, recovered from
 sources rather than guessed. It exists so the driver work can start from facts.
 

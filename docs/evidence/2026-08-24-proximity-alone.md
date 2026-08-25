@@ -1,5 +1,8 @@
 # Proximity, alone
 
+> Historical isolation checkpoint. Proximity is now Working through Elliptic;
+> see [near/far validation](2026-08-25-proximity-reports-near-and-far.md).
+
 Date: 2026-08-24
 
 Ten of the eleven sensors this firmware publishes work. Proximity is the one

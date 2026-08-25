@@ -1,5 +1,8 @@
 # Proximity may not be a SEE sensor on this device
 
+> Confirmed and superseded: OxygenOS uses the Elliptic ADSP path, now validated
+> under Linux. See [the final protocol](2026-08-25-elliptic-protocol-from-oxygenos.md).
+
 Date: 2026-08-24
 
 Two days of work assumed the TCS3701's proximity sub-sensor is this phone's

@@ -54,7 +54,7 @@ State meanings:
 | Audio | Partial | Both internal speakers and the handset microphone work through packaged UCM. Earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio, capture controls and protection telemetry remain. |
 | USB-C host / dock | Partial | Dual-role Type-C, powered host/sink and unpowered host/source modes, USB 3, storage, Ethernet enumeration and DisplayPort video at 2560x1440@60 work. VBUS source mode and storage were validated in both plug orientations, followed by gadget/SSH recovery without reboot. Ethernet traffic, broader HID/hotplug, DP mode pruning, DP audio and docked suspend remain. |
 | Battery / SMB5 charging | Partial | Fuel gauge works. The exact SMB5 v4 candidate passed guarded charging, powered-dock sink and unpowered-dock source transitions in both Type-C orientations. A complete Plasma image also passed 180 s at a 900 mA SuperSpeed input limit with rising battery voltage. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
-| Thermal / suspend | Works | Thirty real `s2idle` cycles across two fresh boots: no modem crash and no Wi-Fi loss, cycles returning in 22.6 s against a 22 s alarm. Two root causes, both a power domain withdrawn from something that still needed it: `sdhc_2` sat in the modem's domain in `sm8150.dtsi`, and `qcom_pas_handover()` dropped the proxy `cx`/`mss` votes so `genpd_suspend_noirq()` took them down on the first suspend of each boot. Wi-Fi needs WoWLAN triggers configured, which needs the `device_init_wakeup()` fix. See [proxy power domains](evidence/2026-08-19-proxy-power-domains.md) and [sdhc_2](evidence/2026-08-18-sdhc2-modem-power-domain.md). |
+| Thermal / suspend | Partial | The modem/Wi-Fi path passes thirty real `s2idle` cycles across two fresh boots, returning in 22.6 s against a 22 s alarm. Two root causes were power domains withdrawn from live clients: `sdhc_2` sat in the modem's domain and `qcom_pas_handover()` dropped proxy `cx`/`mss` votes. Wi-Fi also needs the `device_init_wakeup()` fix plus WoWLAN triggers. Aggregate suspend remains partial because Bluetooth can abort the cycle and camera/touch/session resume need broader coverage. See [proxy power domains](evidence/2026-08-19-proxy-power-domains.md) and [sdhc_2](evidence/2026-08-18-sdhc2-modem-power-domain.md). |
 | Cameras | Partial | All four physical sensors capture through libcamera; rear focus and the Hall-bounded automatic IMX471 pop-up lifecycle work. CAMSS recovery, full AE/AWB/AF convergence, touch focus, production color, video/flash/OIS and broader apps remain. |
 | Camera flash | Partial | Both PM8150L channels pass torch/strobe tests and visible light is physically confirmed. A standard `white:torch` function makes Plasma Mobile's existing flashlight quick setting available and it controls the light. Plasma Camera still exposes no flash control, so capture synchronization remains. |
 | Flashlight / torch | Working | Plasma Mobile's standard quick-setting button discovers `white:torch`, turns the rear light on and off, and was physically confirmed. |
@@ -113,19 +113,21 @@ State meanings:
 
 ## Current checkpoint
 
-Suspend/resume is closed. Thirty real `s2idle` cycles across two fresh boots
-ran with no modem crash and no Wi-Fi loss, where the first suspend of every
-boot used to kill the modem six times out of six. Both root causes were the
-same mistake in different places, a power domain withdrawn from something that
-still depended on it: `sdhc_2` was wired to the modem's domain in
-`sm8150.dtsi`, and `qcom_pas_handover()` released the proxy `cx`/`mss` votes
+The modem/Wi-Fi suspend failure is closed, but aggregate suspend is not while
+Bluetooth can still abort a cycle. Thirty real `s2idle` cycles across two fresh
+boots ran with no modem crash and no Wi-Fi loss, where the first suspend of
+every boot used to kill the modem six times out of six. Both fixed root causes
+were the same mistake in different places, a power domain withdrawn from
+something that still depended on it: `sdhc_2` was wired to the modem's domain
+in `sm8150.dtsi`, and `qcom_pas_handover()` released the proxy `cx`/`mss` votes
 at handover so `genpd_suspend_noirq()` took them down on the first suspend.
 
 What remains on that front is smaller and named: the power cost of holding
 `cx`/`mss` for the life of the modem is unmeasured, and downstream avoids it
 with a ten second proxy timeout; Bluetooth still aborts cycles when `hci_uart`
 is loaded; and the camera CCI, elogind session and touch sensing resume paths
-each need their own work. The active frontier moves to the downstream-4.14
-SLPI route control, normal GNSS/mobile-data integration and upstream revision.
+each need their own work. The SLPI/physical-sensor boundary and ultrasonic
+proximity are closed; the active frontier is the package-complete hardware
+boot, normal GNSS/mobile-data integration and upstream revision.
 Phase 0 of the [roadmap](roadmap.md) still requires every partial/broken row
 above to reach Working and Stable.

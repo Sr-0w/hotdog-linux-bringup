@@ -50,8 +50,14 @@ package metadata, not this list alone, are authoritative.
 HOTDOG_PMAPORTS_SM8150="$PWD/src/postmarketos/pmaports" \
 HOTDOG_PMBOOTSTRAP_WORK="$PWD/pmbootstrap-work-current" \
 ./scripts/pmbootstrap-hotdog.sh -j 32 install --split --no-sparse \
-  --add polkit-elogind
+  --no-recommends \
+  --add polkit-elogind,device-oneplus-hotdog-plasma-mobile-apps,device-oneplus-hotdog-sensors
 ```
+
+The explicit app and sensor packages avoid a moving edge recommendation set;
+the 2026-08-25 edge metadata recommended `index`, which is absent from this
+pinned pmaports snapshot. Do not silently replace the curated application set
+with whichever recommendations happen to resolve on the build day.
 
 The device package generates the header-v2, 100663296-byte AVB boot envelope
 through its `boot-deploy` postprocess. Verify the kernel, DTB, initramfs,

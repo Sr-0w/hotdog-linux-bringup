@@ -68,7 +68,7 @@ For each feature:
 
 <!-- Main Features -->
 | status_flashing = N
-| status_uart     =
+| status_uart     = Y
 | status_usbnet   = Y
 | status_emmc     = Y
 | status_sdcard   = -
@@ -93,17 +93,17 @@ For each feature:
 
 <!-- Connectivity Features -->
 | status_wifi       = Y
-| status_bluetooth  = P
+| status_bluetooth  = N
 | status_ethernet   = P
 | status_gps        = P
-| status_nfc        = P
+| status_nfc        = Y
 | status_calls      = N
 | status_sms        = N
 | status_mobiledata = P
 
 
 <!-- Miscellaneous Features -->
-| status_fde         =
+| status_fde         = N
 | status_usba        = -
 | status_sata        = -
 | status_otg         = Y
@@ -133,7 +133,7 @@ UFS storage, accelerated Adreno 640 graphics, Wi-Fi, USB-C, DisplayPort video, i
 
 The development tree and hardware-validation evidence are maintained in the [https://github.com/Sr-0w/hotdog-linux-bringup hotdog-linux-bringup repository].
 
-{{Note|The development tree is newer than the currently published alpha image. Hardware listed as working on this page is not necessarily available in the latest public release image.}}
+{{Note|Alpha 5 contains the current package-complete kernel and sensor runtime, but the exact Alpha 5 image set is offline-validated only and has not yet been booted as a unit.}}
 
 == Boot modes ==
 
@@ -375,7 +375,7 @@ DisplayPort video works at 2560×1440@60 while the internal display remains acti
 
 The RTL8153 binds to <code>r8152</code> and creates <code>eth0</code>, but complete Ethernet link/data and repeatability testing remain.
 
-CDC ACM also enumerates and exposes <code>ttyGS0</code>, but an interactive serial session has not yet been validated.
+CDC ACM exposes an OpenRC-managed bidirectional root console on <code>ttyGS0</code>. Removing and recreating the ACM function restores the serial path while NCM remains usable.
 
 DisplayPort audio is not working. 2560×1440@120 over the tested two-lane HBR2 link exceeds the available link budget and is not supported.
 
@@ -417,7 +417,7 @@ The front-camera motor and Hall sensors are controlled as part of the camera lif
 
 Production image quality is not yet available. Colour calibration, automatic white balance, noise reduction, sharpening, tone mapping and broader 3A tuning remain development work.
 
-Both PM8150L flash channels register and pass electrical torch/strobe tests without reporting a fault. Visible-light calibration, stock-current calibration and synchronization with camera frames remain incomplete.
+Both PM8150L flash channels pass electrical and visible torch/strobe tests. Plasma Mobile's flashlight quick setting controls the standard <code>white:torch</code> device; synchronization with camera frames remains incomplete.
 
 == Modem and mobile data ==
 
@@ -468,7 +468,7 @@ The PN553 works in reader mode through the Linux NCI stack.
 
 A real ISO 14443-4 target has been detected and activated, and bidirectional ISO 7816-4 APDU exchange has been hardware-tested.
 
-Clean down/up recovery, broader tag coverage, host card emulation and secure-element integration remain incomplete.
+Three consecutive rfkill down/up cycles recover cleanly. Broader tag coverage, host card emulation and secure-element integration remain incomplete.
 
 == Haptics ==
 
@@ -476,7 +476,9 @@ The AW8697 is driven by the Linux force-feedback interface. Physical vibration i
 
 == Suspend and power management ==
 
-System <code>s2idle</code> suspend/resume is functional.
+The modem/Wi-Fi <code>s2idle</code> path is functional; aggregate suspend remains
+partial while Bluetooth can still abort a cycle and the remaining device
+resume paths need coverage.
 
 Thirty real suspend/resume cycles across two fresh boots completed without a modem crash or Wi-Fi loss.
 
@@ -490,7 +492,7 @@ Charging termination, low-battery behaviour, JEITA/thermal policy, off-mode char
 
 * Cellular calls and SMS are not yet supported.
 * SIM registration and real LTE data have not yet been hardware-validated.
-* Bluetooth audio and complete Bluetooth suspend/lifecycle integration are incomplete.
+* Bluetooth is currently broken: controller firmware initialization does not complete, and the QCA suspend/unload lifecycle can time out or crash.
 * The internal display has unresolved intermittent DSI transport errors, primarily affecting the 90 Hz path.
 * Touch/input resume lifecycle still requires broader validation.
 * DisplayPort audio is not working.

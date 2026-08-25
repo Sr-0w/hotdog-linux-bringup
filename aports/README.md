@@ -31,10 +31,14 @@ from this repository, use the reverse direction deliberately:
 
 The mirrored inputs have distinct roles and are not all current kernels:
 
-- Active mainline package: `linux-oneplus-hotdog-mainline617-k1`, the forensic
-  K1 Linux 6.17 reproduction with the captured config and exact base-DTB source.
+- Active mainline package: `linux-oneplus-hotdog-mainline616`, the
+  package-complete Linux 6.16 reference used by the current image line.
 - Device and firmware support: `device-oneplus-hotdog` and
-  `firmware-oneplus-hotdog` (APKBUILD metadata only).
+  `firmware-oneplus-hotdog`, plus `hotdog-radio-bootstrap`.
+- Sensor userspace: `iio-sensor-proxy` with SSC support and the claim/shutdown
+  fixes used by the packaged Hotdog sensor path.
+- Historical forensic package: `linux-oneplus-hotdog-mainline617-k1`, retained
+  with the captured config and exact base-DTB source.
 - Transitional boot bridge: `linux-oneplus-hotdog-lineage414`, the boot-proven
   downstream 4.14 package retained as a temporary kexec bridge into K1.
 - Historical mainline snapshot: `linux-postmarketos-qcom-sm8150` (Linux 6.4).

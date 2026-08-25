@@ -1,5 +1,8 @@
 # The SD host sits in the modem's power domain
 
+> Fixed in the current kernel checkpoint. This record remains the root-cause
+> evidence; see [current status](../status.md).
+
 Date: 2026-08-18
 
 ## Summary

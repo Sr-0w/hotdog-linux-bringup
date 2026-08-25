@@ -36,7 +36,9 @@ The active direct-boot package flow produces and validates:
 The current package metadata and the evidence record are the source of truth
 for hashes. Do not reuse a historical r4/r22/r108 hash for a newer package.
 The first public identities are preserved in
-[Alpha 1 evidence](evidence/2026-08-10-v0.1.0-alpha.1.md).
+[Alpha 1 evidence](evidence/2026-08-10-v0.1.0-alpha.1.md); the current
+package-complete identities are in the
+[Alpha 5 checkpoint](evidence/2026-08-25-package-complete-runtime.md).
 
 The Linux 6.17 `Image`, transformed K1 DTB, wrapper initramfs and downstream
 4.14 bridge described below are historical diagnostic artifacts. They are not

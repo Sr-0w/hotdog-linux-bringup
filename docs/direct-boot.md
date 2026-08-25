@@ -1,6 +1,6 @@
 # Direct mainline boot
 
-Last updated: 2026-08-13
+Last updated: 2026-08-25
 
 ## Current accepted result
 
@@ -8,11 +8,13 @@ Direct boot is complete at the bring-up level. A package-built Linux 6.16
 header-v2 image starts from the OnePlus bootloader, reaches PID 1, mounts the
 writable postmarketOS root, exposes native DRM and USB networking, starts
 accelerated Plasma Mobile, reboots cleanly and marks its A/B slot successful.
-No downstream kernel or kexec bridge executes. See the
+It also reaches protocol-valid bootloader fastboot and the existing root-ADB
+recovery through `RESTART2`. No downstream kernel or kexec bridge executes. See the
 [package evidence](evidence/2026-08-03-mainline616-pmaports.md),
 [public-image evidence](evidence/2026-08-05-mainline616-public-image.md),
 [Alpha 1](evidence/2026-08-10-v0.1.0-alpha.1.md) and
-[A/B evidence](evidence/2026-08-10-ab-slot-success.md).
+[A/B evidence](evidence/2026-08-10-ab-slot-success.md) and
+[ICE/reboot-mode validation](evidence/2026-08-25-ufs-ice-reboot-mode.md).
 
 The D-series and K1 sections below preserve the investigation that produced
 this result. They are not the current validation queue; current work starts
@@ -36,7 +38,7 @@ same payload to Linux correctly.
 
 The kernel tree is based on commit
 `379d8fe35c7ca685a650bd82fd023af0ea3f0de0`. The payload hashes are the
-historical experiment identity. The current r5 package builds offline with a
+historical experiment identity. The historical K1 r5 package builds offline with a
 built-in Qualcomm watchdog, disables the RAID6 benchmark, and installs the
 transformed `cf63ae...` DTB. The RAID6 delta is checkpoint-tested on hardware,
 but the complete r5 payload has not been booted. Revision r4 remains the latest
@@ -94,7 +96,7 @@ its AVB copy SHA256 is
 It has not been tested on hardware.
 
 This standalone debug payload is distinct from the package path. The debug
-payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the current r5 package keeps
+payload also enables `CONFIG_WATCHDOG_SYSFS=y`; the historical K1 r5 package keeps
 that option disabled, changes `CONFIG_QCOM_WDT=m` to `CONFIG_QCOM_WDT=y`, and
 disables `CONFIG_RAID6_PQ_BENCHMARK` relative to the historical K1 config.
 

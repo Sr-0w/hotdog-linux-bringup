@@ -1,5 +1,10 @@
 # IPA v4.1 for SM8150: work in progress
 
+> Historical development note. IPA v4.1 now starts on Hotdog and creates
+> `rmnet_ipa0`; current limitations are tracked in
+> [the status matrix](../../docs/status.md). The steps below preserve how the
+> implementation reached that result.
+
 `ipa_data-v4.1.c` here is complete and written against mainline's structures,
 not copied from downstream. Every number in it is extracted from
 `src/lineage/android_kernel_oneplus_sm8150`, and the derivation is recorded in

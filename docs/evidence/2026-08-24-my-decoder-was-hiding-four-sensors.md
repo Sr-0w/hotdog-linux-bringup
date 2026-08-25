@@ -1,5 +1,8 @@
 # My decoder was hiding four working sensors
 
+> Its remaining-proximity conclusion is superseded by the later identification
+> and validation of the separate Elliptic ADSP path.
+
 Date: 2026-08-24
 
 The SAR, `amd`, `rmd` and `device_orient` were reported silent throughout the

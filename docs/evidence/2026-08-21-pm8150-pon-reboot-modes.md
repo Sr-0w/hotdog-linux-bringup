@@ -1,5 +1,8 @@
 # `reboot bootloader` returns to the OS because PM8150 declares no reboot modes
 
+> Superseded: PM8150 PON plus the SM8150 IMEM cookie now reach bootloader
+> fastboot and recovery. See [hardware validation](2026-08-25-ufs-ice-reboot-mode.md).
+
 Date: 2026-08-21
 
 This is the S65 blocker, and it is one missing device-tree property.

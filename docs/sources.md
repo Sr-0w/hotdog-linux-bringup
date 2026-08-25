@@ -1,6 +1,6 @@
 # Source trees
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-25
 
 External repositories live under ignored `src/` paths and are never vendored.
 Every published result records an exact commit; branch names alone are not
@@ -31,6 +31,12 @@ reproducible identities.
 | [ClearStaff Hotdog Linux](https://github.com/ClearStaff/linux-sm8150-mainline-hotdog) | Hardware-validated Linux 6.16 bring-up baseline being cleaned for upstream. |
 | [sm8150-linux-mainline pmaports](https://github.com/sm8150-linux-mainline/pmaports) | Existing SM8150 packaging and device reference. |
 | [BotchedRPR Halium kernel](https://github.com/BotchedRPR/hotdog-halium-kernel) | Historical comparison only; Halium is not a project endpoint. |
+
+The local OxygenOS reference set also includes a publicly downloaded OnePlus
+7T Pro update archive containing EU, NA and IN OxygenOS 11.0.9.1 and 12 F.22
+packages. It is an ignored reference input, not a vendored source. Record the
+exact archive/package hash in the evidence that uses it; see the
+[Elliptic proximity port](evidence/2026-08-24-elliptic-ultrasonic-proximity-port.md).
 
 OxygenOS partitions may supply firmware and calibration at runtime when the
 licence and upstream Linux ABI permit. Kernel modules built for Android 4.14,

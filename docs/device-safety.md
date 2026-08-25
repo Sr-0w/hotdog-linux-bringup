@@ -1,6 +1,6 @@
 # Device safety
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-25
 
 This project performs low-level boot experiments. Read this document before
 running any script that uses ADB, fastboot, EDL, or raw block devices.
@@ -55,10 +55,12 @@ Historical kexec tests did not persist the mainline payload, while bridge tests
 could update `boot_b`. Those scripts are not the current release procedure.
 
 Never modify `super`, `vbmeta`, `dtbo`, or both boot slots merely to reproduce a
-mainline experiment. An explicit DTBO experiment must pin both candidate and
-original hashes, restore original `dtbo_b` before the known-good `boot_b`, and
-use the versioned dual-partition rescue contract. Understand the exact script
-and artifact first.
+mainline experiment. A reviewed release installation may write `super`, one
+DTBO slot and its matching boot slot only under the atomic backup/readback
+contract in [the release guide](release-install.md). An explicit DTBO experiment
+must pin both candidate and original hashes, restore original `dtbo_b` before
+the known-good `boot_b`, and use the versioned dual-partition rescue contract.
+Understand the exact script and artifact first.
 
 ## Rescue paths
 
@@ -76,9 +78,10 @@ Do not delete a live lock to force concurrent flashing operations.
 Do not assume A/B retry exhaustion will select a successful alternate slot.
 On the tested OnePlus bootloader, slot B remained current at retry count zero
 and firmware stopped at the red failure screen. An unattended direct-boot test
-needs an independently validated reboot-to-fastboot mechanism; the current
-experimental path combines a pre-MMU APSS watchdog with PM8150 PON bootloader
-mode selection.
+must use the hardware-validated PM8150/IMEM `RESTART2("bootloader")` path only
+while the running kernel and helper identity match the approved test plan. The
+pre-MMU APSS watchdog remains a historical early-boot fallback, not the normal
+reboot mechanism.
 
 Every installable image must include `qbootctl` and enable its OpenRC service.
 Once the real root filesystem reaches the default runlevel, the service marks

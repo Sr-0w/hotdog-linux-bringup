@@ -1,5 +1,11 @@
 # Sensors/SLPI reproducibility baseline v1
 
+> Historical baseline: the blocked 45/47-file candidate and its rollback gates
+> remain useful reproducibility evidence, but they are not the current runtime.
+> The sensor-compatible 00083 firmware, selected registry, SLPI gate and
+> Elliptic userspace are now package-owned; see [status](status.md) and the
+> [package-complete checkpoint](evidence/2026-08-25-package-complete-runtime.md).
+
 This branch records the offline candidate for the OnePlus 7T Pro hotdog
 sensor bring-up. It does not contain proprietary firmware, a registry dump,
 or any phone operation.
@@ -170,6 +176,7 @@ inputs remain local captures and are intentionally not copied into this
 branch. Reassemble an ELF only with the recorded split set using
 `scripts/slpi/build-slpi-elf.py`.
 
-The current pmaports recipes do not install SLPI or sensor registry data;
-`hexagonrpcd` supplies mappings only. No pmaports package change is justified
-until the external registry and firmware provenance are complete.
+The current pmaports tree installs the private-source, hash-gated 00083 SLPI
+firmware and the package-owned sensor runtime. This v1 manifest still does not
+publish private registry snapshots or firmware bytes; its blocked candidate
+rules remain applicable only to reproducing that older capture.

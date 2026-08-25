@@ -1,5 +1,9 @@
 # Suspend/resume: one hypothesis closed, four defects opened
 
+> Partly superseded: the modem/Wi-Fi power-domain failures are fixed and pass
+> thirty cycles. Bluetooth remains a current blocker; see
+> [current status](../status.md).
+
 Date: 2026-08-17
 
 ## Status

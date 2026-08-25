@@ -1,5 +1,8 @@
 # Proximity on this phone is ultrasonic
 
+> The identification remains correct; the implementation work described as
+> remaining below is now complete and package-owned.
+
 Date: 2026-08-24
 
 Settled, from the OxygenOS HAL itself. The TCS3701's proximity sub-sensor is

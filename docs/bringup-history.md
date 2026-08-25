@@ -1,6 +1,6 @@
 # Bring-up history and validation narrative
 
-Last updated: 2026-08-13
+Last reviewed: 2026-08-25
 
 This document contains the detailed project-status narrative, boot-path notes,
 recovery experiments, and validated mainline fixes that were previously kept in

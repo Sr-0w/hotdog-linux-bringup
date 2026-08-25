@@ -4,9 +4,10 @@ Last updated: 2026-08-25
 
 ## Current submission snapshot
 
-The normal package flow now produces a hardware-booted direct Linux image,
-writable rootfs, accelerated Plasma session, automatic AVB envelope and A/B
-success marking. The development snapshots are currently
+The normal package flow has produced hardware-booted direct Linux images,
+writable rootfs, accelerated Plasma sessions, automatic AVB envelopes and A/B
+success marking. The package-complete Alpha 5 set itself is offline-validated
+but not yet booted as one exact set. The development snapshots are currently
 `linux-oneplus-hotdog-mainline616` `6.16.0-r181`,
 `device-oneplus-hotdog` `3-r32` and
 `firmware-oneplus-hotdog` `20241212-r7`.
@@ -209,7 +210,7 @@ firmware not already supplied by `linux-firmware` or another pmaports package,
 with reviewable provenance, redistribution terms, source URLs, and checksums.
 Check file ownership and conflicts against existing firmware packages.
 
-The `20241212` package line (currently `r5`) uses usrmerge paths and now carries
+The `20241212` package line (currently `r7`) uses usrmerge paths and now carries
 the firmware/protection-domain data needed by validated GPU, MPSS, WCN3990,
 ADSP and SLPI paths. Runtime success does not itself resolve provenance,
 redistribution or ownership-conflict blockers.

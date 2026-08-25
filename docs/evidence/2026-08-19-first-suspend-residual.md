@@ -1,5 +1,8 @@
 # The residual modem crash happens on the first suspend after boot
 
+> Superseded: the SDHCI and PAS proxy power-domain fixes close this modem
+> failure. Bluetooth still prevents an aggregate suspend `Working` claim.
+
 Date: 2026-08-19
 
 ## What it looks like

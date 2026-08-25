@@ -20,15 +20,15 @@ relevant regression controls.
 
 ## Current hardware frontier
 
-| Area | Proven or observed through 2026-08-20 | Next clean gate |
+| Area | Proven or observed through 2026-08-25 | Next clean gate |
 |---|---|---|
 | Cameras | All four capture through libcamera; rear focus and automatic pop-up lifecycle work. | Recovery, camera quality, full controls, video, flash/OIS and upstream media review. |
 | Display | Native DPU/DSI/DSC scanout and 60/90 Hz operation are validated at the function level. The 2026-08-20 r2 episode recovered immediately after lock/unlock; DSI FIFO/timeout errors and panel reinitialization remain. | Reproduce and isolate the DSI/DSC transport regression without changing DRM/DSI/panel configuration; retain `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`. |
 | IPA / modem / GNSS | IPA v4.1 creates `rmnet_ipa0`; modem QMI and LOC sessions answer without a SIM. | Standard location/mobile-data services, SIM/data/SMS/calls and upstream IPA acceptance. |
-| NFC | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. | Clean down/up lifecycle, HCE and secure-element scope. |
+| NFC | PN553 reader mode detects, activates and types a real ISO 14443-4 document, exchanges bidirectional APDUs and survives three rfkill down/up cycles. | Broader tags, HCE and secure-element scope. |
 | Haptics | AW8697 vibration works from 10-100 percent, across repeated stop/start, feedbackd and suspend/resume. | Upstream driver review and longer lifecycle coverage. |
 | Sensors | SLPI/SEE publishes the physical sensor set, Plasma auto-rotates and Elliptic ultrasonic proximity reaches SensorProxy. Kernel and userspace are package-owned; per-device calibration is provisioned from `persist`. | Boot the complete package-built image, validate proximity blanking during a real call, and complete range-sensor support. |
-| Charging | Fuel gauge and guarded SMB5 v3 charge/VBUS transitions pass. | Termination, JEITA/thermal, low battery, fast charge and suspend. |
+| Charging | Fuel gauge and guarded SMB5 v4 charge/VBUS transitions pass, including the 900 mA SuperSpeed image. | Termination, JEITA/thermal, low battery, fast charge and suspend. |
 | System stability | Direct boot, RAM/UFS pressure, A/B marking, UFS ICE and system/bootloader/recovery selection work. | Display/BT lifecycle, full SMMU cleanup, native pmOS recovery and long-duration tests. |
 
 The complete closure order, including Ubuntu Touch/Lomiri, is maintained in
@@ -82,31 +82,21 @@ the binary control while moving the packaged stack into a fresh image test.
 
 ## 2. Apps SMMU
 
-**Proven current state.** `15000000.iommu` identifies an SMMUv2 with 94 stream
-matching groups and 56 context banks, then registration fails with `-EINVAL`.
-K1 therefore removes `iommus` from UFS, QUP, and DWC3 and uses
-`iommu.passthrough=1 arm-smmu.disable_bypass=0`; see
+**Proven current state.** The `15000000.iommu` provider registers and both
+critical clients use translated domains: DWC3 stream `0x140` and UFS stream
+`0x300`. USB gadget/NCM/ACM and UFS/rootfs operate through those attachments.
+The old `-EINVAL` provider failure and global passthrough description below
+belong to the historical K1 path; see
 [the documented bypass](mainline-bringup.md#3-apps-smmu-failure).
-`CONFIG_ARM_SMMU=y` and `CONFIG_QCOM_IOMMU=y` are already present in the K1
-configuration.
 
-**Hypothesis.** The mainline `dma-coherent` description conflicts with the
-firmware-configured non-coherent table walk. Correcting that mismatch should
-let the provider register before any client stream ID is reattached.
+**Remaining validation.** Audit every populated Apps SMMU client, remove the
+remaining device-specific QUP/bypass assumptions one client at a time and run
+the corresponding peripheral plus storage/USB regressions. Do not infer that
+two working streams prove every firmware-owned stream is safe.
 
-**Single-variable experiment.** Remove only `dma-coherent` from
-`iommu@15000000`. Keep UFS, QUP, and DWC3 bypassed and retain both IOMMU command
-line parameters so the experiment measures provider registration only.
-
-**Success criteria.** The Apps SMMU registers without `-EINVAL`, creates its
-IOMMU device, and introduces no new fault or regression in UFS, rootfs, or USB
-gadget operation. After that result is accepted, reattach clients in separate
-one-client experiments, starting with UFS stream ID `0x300`.
-
-**Risks and fallback.** A provider can register yet use incorrect stream IDs
-or firmware ownership rules. Do not reattach multiple clients together. Keep
-the bypass DTB as the fallback and revert immediately on an SMMU fault,
-translation fault, or loss of storage or USB.
+**Risks and fallback.** A newly attached client can use an incorrect stream ID
+or conflict with firmware ownership. Change one client per candidate and revert
+on the first translation fault or loss of its recovery channel.
 
 ## 3. UFS inline crypto
 
@@ -241,27 +231,24 @@ exact `r13` image as the no-Bluetooth radio fallback.
 
 ## 8. Bluetooth
 
-**Proven current state.** Revision `r15` registers UART13 and the physical
-WCN3990 controller, selects the packaged revision-21 firmware directly, and
-supports BlueZ scans plus real HID connections. Separate 600-second windows
-with Bluetooth blocked and with a controller connected completed cleanly. A
-900-second window after powering off the connected controller also completed
-without a USB transition. One earlier run entered Qualcomm `900e` without a
-panic or system-suspend entry, so the isolated transition remains unexplained.
+**Historical success and current regression.** Revision `r15` once completed
+BlueZ scans and a real HID connection. The current checkpoint no longer
+initializes the controller: `hci0` remains absent/down without firmware
+download, `qca_suspend()` can abort suspend, and unloading `hci_uart` has
+panicked in `qca_power_shutdown()`. The old HID result is retained as proof of
+hardware capability, not as current support.
 
-**Next experiment.** Repeat the original keyboard connection while recording
-integrated IBS and pmsg state, then exercise repeated pair, disconnect, and
-reconnect cycles. Attempt controlled system suspend only after the active path
-remains repeatably stable.
+**Next experiment.** Repair firmware initialization first from a fresh boot,
+then isolate the QCA power/shutdown ordering with pstore armed. Only after both
+paths are safe should repeated pair/disconnect/reconnect and suspend resume.
 
 **Success criteria.** Direct firmware loading, repeated scans, pairing, and a
 sustained connection work without UART timeouts. Only then run one controlled
 suspend/resume cycle with pstore capture prepared.
 
-**Risks and fallback.** The current crash is correlated with sleep but is not
-yet localized to Bluetooth, Wi-Fi, UFS, USB, or a shared power domain. Retain
-`r15` as the fixed-60-Hz radio fallback and do not reset a phone exposed as
-Qualcomm `900e` or `9008` from software.
+**Risks and fallback.** Do not unload the live controller until the shutdown
+fix is validated. Retain `r15` as historical comparison and never reset a phone
+exposed as Qualcomm `900e` or `9008` from software.
 
 ## 9. Audio
 
@@ -272,13 +259,12 @@ Hotdog `SLIMBUS_6_RX` to `AIF4_PB` playback backend. A silent 48 kHz stereo
 S24_LE stream opens without a DSP or transport error while ADSP and MPSS remain
 running. Revisions `r31` and `r32` reproduce the stock QUAT MI2S format, clock,
 and TFA9874 slot mapping. Independent webcam-microphone captures validate both
-internal speakers. Device package `3-r8` exposes the route through UCM and
+internal speakers. The current device package exposes the route through UCM and
 normal Plasma/PulseAudio playback while preserving automatic power-down. See
 the [speaker evidence](evidence/2026-08-05-mainline616-internal-speakers.md).
 
-**Next experiment.** Validate the packaged speaker profile after a complete
-image installation and reboot, then run bounded thermal and repeated
-open/suspend tests at conservative volume. Add the stock-derived WCD9340
+**Next experiment.** Extend the already validated repeated playback,
+feedback/application and suspend coverage with longer thermal runs. Add the stock-derived WCD9340
 wired-headphone controls as a separate UCM device and validate them first with
 a silent stream. The exact two-device container, profiles, TDM slots and AFE
 module identifiers remain documented in the
@@ -292,7 +278,7 @@ microphones and earpiece switching remain separate follow-up tests.
 
 **Risks and fallback.** Codec mixers can expose unsafe gain or connect an
 unintended physical endpoint. Do not copy the complete Android mixer state.
-Keep the speaker-only r8 UCM profile as the fallback and add each remaining
+Keep the speaker-only UCM profile as the fallback and add each remaining
 physical endpoint behind its own independently validated route.
 
 ## 10. USB host mode
@@ -304,15 +290,15 @@ Realtek Ethernet adapter and storage device enumerate, and Plasma drives an
 external monitor correctly at 2560x1440@60. Direct peripheral NCM/SSH remains
 the recovery path. See [USB role evidence](evidence/2026-08-07-mainline616-usb-role.md).
 
-**Remaining validation.** Source VBUS safely for an unpowered peripheral,
-exercise HID/Ethernet/storage and hotplug combinations, recover peripheral mode
-after every host test, validate four-lane/alternate DP contracts and prune
+**Remaining validation.** Source VBUS is proven with an unpowered dock in both
+orientations, and storage plus peripheral-mode recovery pass. Complete Ethernet
+traffic, HID/hotplug combinations, validate alternate DP contracts and prune
 modes that exceed link bandwidth. Complete DP audio and docked suspend only
 after the corresponding audio and power work is ready.
 
 **Risks and fallback.** Role or VBUS mistakes can remove USB recovery or apply
-unsafe power. Use a powered dock until source behavior is proven, keep SSH and a
-known-good boot slot, and change only one role/power/PHY property per test.
+unsafe power. Keep SSH and a known-good boot slot, and change only one
+role/power/PHY property per test.
 
 ## Upstream readiness
 

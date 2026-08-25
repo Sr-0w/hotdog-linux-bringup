@@ -1,6 +1,6 @@
 # Boot architecture
 
-Last updated: 2026-08-13
+Last updated: 2026-08-25
 
 ## Current supported path
 
@@ -23,9 +23,10 @@ sequenceDiagram
     UI->>BL: mark slot successful through qbootctl
 ```
 
-Validated properties include direct kernel entry, native UFS, writable root,
-USB NCM/SSH, native DRM, accelerated Plasma Mobile, clean reboot and A/B success
-marking. The current laboratory installation maps a split image from `super`;
+Validated properties include direct kernel entry, native UFS and ICE, writable
+root, USB NCM/ACM/SSH, native DRM, accelerated Plasma Mobile, clean reboot,
+bootloader/recovery selection and A/B success marking. The current laboratory
+installation maps a split image from `super`;
 the final pmaports installer must replace that layout without changing the
 kernel/DTB hardware contract.
 
@@ -40,7 +41,7 @@ kernel/DTB hardware contract.
 
 The exact validated identities are versioned in
 [package evidence](evidence/2026-08-03-mainline616-pmaports.md) and the
-[Alpha release record](evidence/2026-08-10-v0.1.0-alpha.1.md), rather than
+[Alpha 5 release notes](release-notes-v0.1.0-alpha.5.md), rather than
 hard-coded here as if one historical hash were permanently current.
 
 ## Recovery and A/B behavior
@@ -49,7 +50,10 @@ Every candidate is written only after offline validation and complete readback.
 A known-good slot/image, fastboot, pstore/ramoops and bounded Qualcomm crashdump
 capture remain available. The tested ABL must not be trusted to fall back when
 retry count reaches zero; successful boots must run `qbootctl` and recovery
-must be independently supervised. See [device safety](device-safety.md).
+must be independently supervised. Raw `RESTART2("bootloader")` and
+`RESTART2("recovery")` now reach protocol-valid fastboot and the existing
+root-ADB recovery, but a physical key path remains the independent fallback.
+See [device safety](device-safety.md).
 
 ## Historical bridge path
 

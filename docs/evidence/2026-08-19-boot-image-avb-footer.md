@@ -1,5 +1,8 @@
 # Boot images on this handset are AVB-signed, and a bare image bricks the slot
 
+> The AVB rule remains current. Its then-untested reboot-mode DT change is now
+> hardware-validated; see [ICE/reboot modes](2026-08-25-ufs-ice-reboot-mode.md).
+
 Date: 2026-08-19
 
 ## What happened

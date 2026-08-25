@@ -1,5 +1,7 @@
 # The sensors work; userspace cannot see them yet
 
+> Superseded the same day by [the working userspace path](2026-08-23-userspace-has-a-sensor-path-now.md).
+
 Date: 2026-08-23
 
 Follow-up to the firmware fix, prompted by the screen being upside down.

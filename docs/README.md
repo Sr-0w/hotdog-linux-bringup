@@ -49,12 +49,14 @@ Halium.
   recipients and review workflow.
 - [Repository layout](repository-layout.md): tracked, ignored and local-only
   data boundaries.
+- [Markdown audit](markdown-audit-2026-08-25.md): exhaustive file-by-file
+  review register, checked by CI.
 
 ## Focused technical records
 
 - [Camera port plan](camera-port-plan.md)
 - [Android/OxygenOS reference policy](android-reference.md)
-- [Current hardware evidence](evidence/)
+- [Evidence archive and supersession policy](evidence/README.md)
 
 Recent evidence and current regression records:
 

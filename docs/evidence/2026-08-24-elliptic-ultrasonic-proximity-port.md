@@ -1,5 +1,9 @@
 # Porting the real ultrasonic proximity path
 
+> The “remaining blocker” below is historical. Microphone-index/suspend setup,
+> IIO headroom and on-demand arming now close the path; see
+> [near/far validation](2026-08-25-proximity-reports-near-and-far.md).
+
 Date: 2026-08-24
 
 ## The passive ALS workaround is not proximity

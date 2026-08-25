@@ -217,6 +217,11 @@ if errors:
 PY
 }
 
+validate_markdown_audit() {
+	log "Markdown file-by-file audit register"
+	python3 scripts/audit-markdown-docs.py --check
+}
+
 check_forbidden_pattern() {
 	local label="$1"
 	local pattern="$2"
@@ -1316,6 +1321,7 @@ main() {
 	validate_shell_scripts
 	validate_python_syntax
 	validate_markdown_links
+	validate_markdown_audit
 	validate_public_markers
 	validate_k1_patch_copies
 	validate_k1_aport_inputs

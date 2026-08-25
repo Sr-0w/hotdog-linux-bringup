@@ -1,5 +1,7 @@
 # Android reference collection
 
+Last reviewed: 2026-08-25
+
 Android is used as a hardware-description reference before Linux testing. The
 resulting dumps are device-specific and remain outside Git.
 
@@ -41,3 +43,9 @@ identifiers, account information, and proprietary blobs.
 
 Android behavior is a reference, not proof that a corresponding mainline
 driver is correct.
+
+The current local truth set includes the recovered OxygenOS 10.0.13 vendor
+partition and a publicly downloaded multi-region OnePlus 7T Pro update archive
+with OxygenOS 11.0.9.1 and 12 F.22 packages. Both remain ignored inputs. Every
+finding must identify the exact regional package/version and hash rather than
+refer generically to “OxygenOS”, because their DSP and modem payloads differ.

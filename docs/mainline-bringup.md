@@ -2,12 +2,12 @@
 
 > This document preserves the earlier Linux 6.17/kexec and V33 localization
 > history. The current direct-pmaports status is tracked in
-> [status.md](status.md). As of 2026-08-13 the direct Linux 6.16 package line
-> also provides accelerated Plasma, Wi-Fi/Bluetooth, internal audio, USB-C/DP,
-> all four cameras, IPA/rmnet, NFC target detection, haptics and the active
-> SLPI sensor service. The older `r4` statement is historical.
+> [status.md](status.md). As of 2026-08-25 the package-complete Linux 6.16 line
+> also provides UFS ICE, reboot-mode selection, the physical SLPI sensors,
+> alert slider and Elliptic proximity. Bluetooth has since regressed and is
+> `Broken`; earlier Bluetooth success below is historical capability evidence.
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-25
 
 This document records the minimum set of changes that produced a real
 postmarketOS userspace under Linux 6.17 on the OnePlus 7T Pro HD1913.
@@ -245,7 +245,12 @@ Generated artifacts are intentionally not committed. See
 [artifacts.md](artifacts.md) for the expected local layout and verification
 rules.
 
-## Remaining technical debt
+## Remaining technical debt at this historical checkpoint
+
+The list below is preserved as the 6.17/K1 handoff state. Current direct 6.16
+has since closed Apps SMMU registration for DWC3/UFS, UFS ICE, full RAM,
+display, persistent direct boot, package-generated images and bootloader/
+recovery selection. Use [status.md](status.md) for what still remains.
 
 1. Repair Apps SMMU registration and restore all client IOMMU links.
 2. Restore UFS ICE with the correct clock and power dependencies.

@@ -1,6 +1,6 @@
 # Host setup
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-25
 
 The tooling was developed on Gentoo Linux, but most scripts use standard Linux
 utilities and can be adapted to other distributions.

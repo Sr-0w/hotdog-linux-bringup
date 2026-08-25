@@ -1,5 +1,8 @@
 # Where proximity is decided
 
+> This SEE-driver gate is not the phone's user-facing proximity path. The
+> later OxygenOS analysis identified Elliptic on the ADSP.
+
 Date: 2026-08-24
 
 Disassembly of `sns_tcs3701` in the running firmware, following the request path

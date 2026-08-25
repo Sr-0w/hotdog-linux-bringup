@@ -1,5 +1,7 @@
 # Artifact retention
 
+Last reviewed: 2026-08-25
+
 The bring-up workspace retains artifacts that are required to reproduce the
 current port, diagnose unresolved hardware issues, or recover the test device.
 
@@ -7,8 +9,9 @@ current port, diagnose unresolved hardware issues, or recover the test device.
 
 - The public pmaports packages, helper scripts, documentation, and source
   checkouts under this repository.
-- Mainline boot images for the known-good IMX586 baseline (`r100`) and the
-  latest autofocus experiments (`r105` through `r107`).
+- The current package-complete Alpha 5 assets (`r181`/`3-r32`), one known-good
+  rollback image and only the unique older camera/autofocus artifacts still
+  needed to reproduce their evidence.
 - A compact copy of the downstream 4.14 R6 rescue boot image and its manifest.
 - The OxygenOS 10.0.13 vendor extraction used to identify firmware, camera
   modules, calibration data, and hardware topology.
@@ -43,7 +46,7 @@ duplicate RAM captures, disposable build worktrees and webcam recordings.
 Stale chroot bind mounts were unmounted before their directories were removed.
 
 The cleanup retained the OxygenOS hardware reference, source checkouts, public
-repository, R6 rescue image, current `r105` through `r108` development line,
+repository, R6 rescue image, then-current `r105` through `r108` development line,
 the exact R107 symbols and its single complete RAM capture. This is the model
 for later cleanups: retain reproducible source plus a small rolling build
 window, one known-good rescue artifact and unique diagnostic evidence.

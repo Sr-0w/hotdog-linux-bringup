@@ -1,5 +1,8 @@
 # The Elliptic ultrasonic proximity protocol, read out of OxygenOS
 
+> The missing microphone-index and suspend writes identified below were added
+> and produced the validated near/far path.
+
 Date: 2026-08-25
 
 The port reaches a running engine that answers version, branch, tag and

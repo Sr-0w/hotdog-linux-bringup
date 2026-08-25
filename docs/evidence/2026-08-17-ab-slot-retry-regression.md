@@ -1,5 +1,9 @@
 # A/B retry marking regressed out of the complete images
 
+> Superseded for the current package line: automatic success marking and
+> repeated reboot now work. Retry exhaustion is still not a rescue mechanism;
+> see [current status](../status.md).
+
 Date: 2026-08-17
 
 ## Status
