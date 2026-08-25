@@ -597,6 +597,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-nas.c hotdog-qmi-nas.h; do
 		[ -f "$source_dir/$source" ] || die "missing NAS snapshot source: $source"
 	done
+	for source in hotdog-qmi-wds.c hotdog-qmi-wds.h; do
+		[ -f "$source_dir/$source" ] || die "missing WDS data-plane adapter: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
