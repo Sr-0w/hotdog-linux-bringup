@@ -344,6 +344,11 @@ each subscription 0..2. Unknown, missing or duplicate keys fail closed. The
 manifest must match the current boot and installed runtime manifest, and its
 subscription population/IDs must match the freshly computed plan. It contains
 no PIN or subscriber identity.
+The installed package manifest is parsed separately by `hotdog-mcfg-runtime`;
+its exact schema, source/MPSS/catalog hashes and three nonzero file counts are
+required, with the same symlink and permission restrictions. This prevents an
+approval from validating against documentation while the runtime package
+metadata is missing or malformed.
 
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
