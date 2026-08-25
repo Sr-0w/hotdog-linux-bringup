@@ -77,6 +77,30 @@ class HotdogPdcTests(unittest.TestCase):
         self.assertIn("plan-result=0 operations=0", result.stdout)
         self.assertIn("verified=1", result.stdout)
 
+    def test_unloaded_profile_is_loaded_and_deleted_on_empty_state_rollback(self) -> None:
+        result = self.replay(
+            "CONFIG_UNLOADED carrier 1 IIN 123456\n"
+            "SUB 0 1234560000000000000 0 0 -\nPLAN\nROLLBACK\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("plan-result=0 operations=6", result.stdout)
+        self.assertIn("op1=load-config,sub0,expected0,id=carrier", result.stdout)
+        self.assertIn("op2=set-selected,sub0,expected0,id=carrier", result.stdout)
+        self.assertIn("rollback-result=0 operations=2", result.stdout)
+        self.assertIn("op0=deactivate,sub0,expected1,id=carrier", result.stdout)
+        self.assertIn("op1=delete-config,sub0,expected0,id=carrier", result.stdout)
+
+    def test_shared_unloaded_profile_is_loaded_and_deleted_once(self) -> None:
+        result = self.replay(
+            "CONFIG_UNLOADED shared 1 WILDCARD\n"
+            "SUB 0 1111110000000000000 0 0 old-a\n"
+            "SUB 1 2222220000000000000 0 0 old-b\n"
+            "PLAN\nROLLBACK\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("=load-config,"), 1)
+        self.assertEqual(result.stdout.count("=delete-config,"), 1)
+
     def test_unmatched_card_fails_before_mutation(self) -> None:
         result = self.replay(
             "CONFIG carrier 1 IIN 123456\n"

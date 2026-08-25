@@ -62,7 +62,8 @@ static void print_plan(const char *label, int result, const struct hotdog_pdc_pl
 	}
 }
 
-static int add_config(struct hotdog_pdc_catalog *catalog, char **fields, size_t count)
+static int add_config(struct hotdog_pdc_catalog *catalog, char **fields, size_t count,
+		      bool loaded)
 {
 	struct hotdog_pdc_config *config;
 	unsigned long version, first, second;
@@ -75,6 +76,7 @@ static int add_config(struct hotdog_pdc_catalog *catalog, char **fields, size_t 
 	if (set_id(&config->id, fields[1]))
 		return -EINVAL;
 	config->version = (uint32_t)version;
+	config->loaded = loaded;
 	snprintf(config->metadata.carrier, sizeof(config->metadata.carrier), "%s", fields[1]);
 	if (!strcmp(fields[3], "LONG") && count == 5) {
 		if (strlen(fields[4]) >= sizeof(config->metadata.long_iins))
@@ -146,8 +148,8 @@ int main(void)
 			fields[count++] = token;
 		if (!count)
 			continue;
-		if (!strcmp(fields[0], "CONFIG")) {
-			if (add_config(&catalog, fields, count))
+		if (!strcmp(fields[0], "CONFIG") || !strcmp(fields[0], "CONFIG_UNLOADED")) {
+			if (add_config(&catalog, fields, count, !strcmp(fields[0], "CONFIG")))
 				goto malformed;
 			continue;
 		}

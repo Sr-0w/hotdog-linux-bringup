@@ -23,6 +23,7 @@ struct hotdog_pdc_config {
 	struct hotdog_pdc_id id;
 	struct hotdog_mbn_metadata metadata;
 	uint32_t version;
+	bool loaded;
 	char path[HOTDOG_PDC_PATH_SIZE];
 };
 
@@ -39,16 +40,20 @@ struct hotdog_pdc_subscription {
 	struct hotdog_pdc_id active;
 	struct hotdog_pdc_id previous;
 	struct hotdog_pdc_id selected;
+	bool changed;
+	bool selected_loaded_by_us;
 };
 
 enum hotdog_pdc_operation_type {
 	HOTDOG_PDC_SAVE_ACTIVE,
+	HOTDOG_PDC_LOAD_CONFIG,
 	HOTDOG_PDC_SET_SELECTED,
 	HOTDOG_PDC_ACTIVATE,
 	HOTDOG_PDC_SWITCH_MODEM,
 	HOTDOG_PDC_VERIFY_ACTIVE,
 	HOTDOG_PDC_DEACTIVATE,
 	HOTDOG_PDC_RESTORE_SELECTED,
+	HOTDOG_PDC_DELETE_CONFIG,
 };
 
 struct hotdog_pdc_operation {
