@@ -162,6 +162,21 @@ int hotdog_pdc_controller_reconnected(struct hotdog_pdc_controller *controller)
 	return 0;
 }
 
+int hotdog_pdc_controller_reconnect_failed(struct hotdog_pdc_controller *controller,
+					   int result)
+{
+	if (!controller || !controller->transport_down || result >= 0 ||
+	    controller->finished)
+		return -EINVAL;
+	controller->transport_down = false;
+	controller->waiting_switch = false;
+	controller->switch_observed = false;
+	controller->executor.rollback_failure = result;
+	controller->executor.phase = HOTDOG_PDC_EXECUTOR_BLOCKED;
+	controller_finish(controller);
+	return result;
+}
+
 int hotdog_pdc_controller_switch_complete(struct hotdog_pdc_controller *controller,
 					  int result)
 {

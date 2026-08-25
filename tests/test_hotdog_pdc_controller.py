@@ -43,6 +43,7 @@ class HotdogPdcControllerTests(unittest.TestCase):
         self.assertIn("controller->finished || controller->waiting_switch || controller->transport_down", source)
         self.assertIn("hotdog_pdc_controller_reconnected", source)
         self.assertIn("controller->switch_observed = true", source)
+        self.assertIn("hotdog_pdc_controller_reconnect_failed", source)
 
     def test_observed_switch_is_consumed_once(self) -> None:
         source = (SOURCE / "hotdog-pdc-controller.c").read_text()

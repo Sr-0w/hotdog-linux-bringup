@@ -40,6 +40,8 @@ int hotdog_pdc_controller_init(
 int hotdog_pdc_controller_start(struct hotdog_pdc_controller *controller);
 void hotdog_pdc_controller_transport_lost(struct hotdog_pdc_controller *controller);
 int hotdog_pdc_controller_reconnected(struct hotdog_pdc_controller *controller);
+int hotdog_pdc_controller_reconnect_failed(struct hotdog_pdc_controller *controller,
+					   int result);
 int hotdog_pdc_controller_switch_complete(struct hotdog_pdc_controller *controller,
 					  int result);
 void hotdog_pdc_controller_cancel(struct hotdog_pdc_controller *controller);

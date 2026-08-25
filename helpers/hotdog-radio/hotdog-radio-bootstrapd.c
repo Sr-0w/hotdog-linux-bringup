@@ -4,8 +4,11 @@
 #include "hotdog-qmi-nas.h"
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 #include "hotdog-mcfg.h"
+#include "hotdog-pdc-controller.h"
 #include "hotdog-qmi-pdc.h"
+#include "hotdog-qmi-pdc-backend.h"
 #include "hotdog-qmi-pdc-list.h"
+#include "hotdog-radio-gate.h"
 #endif
 
 #include <gio/gio.h>
@@ -13,6 +16,11 @@
 #include <libqrtr-glib.h>
 #include <errno.h>
 #include <stdio.h>
+
+#define HOTDOG_MCFG_RUNTIME_MANIFEST "/usr/share/hotdog-radio/mcfg/MANIFEST"
+#define HOTDOG_MCFG_CANONICAL_ROOT "/usr/share/hotdog-radio/mcfg/mcfg_sw"
+#define HOTDOG_MODEM_CANONICAL_PATH "/usr/lib/firmware/qcom/sm8150/oneplus/hotdog/modem.mbn"
+#define HOTDOG_BOOT_ID_PATH "/proc/sys/kernel/random/boot_id"
 
 struct bootstrap {
 	GMainLoop *loop;
@@ -28,6 +36,14 @@ struct bootstrap {
 	struct hotdog_pdc_catalog *catalog;
 	struct hotdog_pdc_loaded_catalog loaded_catalog;
 	struct hotdog_pdc_subscription pdc_subscriptions[HOTDOG_PDC_MAX_SUBSCRIPTIONS];
+	struct hotdog_pdc_plan activation_plan;
+	struct hotdog_pdc_plan cleanup_plan;
+	struct hotdog_mcfg_report mcfg_report;
+	struct hotdog_mcfg_runtime runtime;
+	struct hotdog_qmi_pdc_backend pdc_backend;
+	struct hotdog_pdc_controller pdc_controller;
+	bool pdc_backend_initialized;
+	bool pdc_controller_initialized;
 	uint32_t pdc_token;
 	uint32_t pdc_expected_token;
 	size_t pdc_query_index;
@@ -37,16 +53,24 @@ struct bootstrap {
 	guint pdc_timeout_id;
 	guint pdc_list_timeout_id;
 	uint32_t pdc_list_token;
+	QmiDevice *switch_device;
+	QrtrNode *switch_node;
+	gulong switch_service_handler;
+	guint switch_timeout_id;
+	bool switch_reconnect_started;
 #endif
 	unsigned int node;
 	int pdc_probe_subscription;
 	char *mcfg_root;
+	char *apply_pdc;
 	gboolean plan_pdc;
 	gboolean probe_dms;
 	gboolean probe_pdc_catalog;
 	gboolean probe_nas;
 	int result;
 	bool finished;
+	gulong bus_node_added_handler;
+	gulong bus_node_removed_handler;
 };
 
 struct release_wait {
@@ -205,6 +229,11 @@ static void start_nas_probe(struct bootstrap *bootstrap)
 				   (GAsyncReadyCallback)nas_client_ready, bootstrap);
 }
 
+static bool pdc_planning(const struct bootstrap *bootstrap)
+{
+	return bootstrap->plan_pdc || bootstrap->apply_pdc != NULL;
+}
+
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 static void pdc_query_next(struct bootstrap *bootstrap);
 static void pdc_selected_indication(QmiClientPdc *client,
@@ -236,15 +265,14 @@ static const struct hotdog_pdc_config *find_config(
 	return NULL;
 }
 
-static int pdc_plan_dry_run(struct bootstrap *bootstrap)
+static int pdc_build_plans(struct bootstrap *bootstrap)
 {
-	struct hotdog_mcfg_report report;
-	struct hotdog_pdc_plan cleanup, activation;
-	size_t index, unmatched = 0;
+	size_t unmatched = 0;
 	int result;
 
 	bootstrap->catalog = g_new0(struct hotdog_pdc_catalog, 1);
-	result = hotdog_mcfg_catalog_load(bootstrap->mcfg_root, bootstrap->catalog, &report);
+	result = hotdog_mcfg_catalog_load(
+		bootstrap->mcfg_root, bootstrap->catalog, &bootstrap->mcfg_report);
 	if (result) {
 		g_printerr("MCFG catalog rejected: %d\n", result);
 		return result;
@@ -252,18 +280,26 @@ static int pdc_plan_dry_run(struct bootstrap *bootstrap)
 	result = hotdog_pdc_plan_cleanup(
 		bootstrap->catalog, bootstrap->loaded_catalog.ids,
 		bootstrap->loaded_catalog.count, bootstrap->pdc_subscriptions,
-		HOTDOG_PDC_MAX_SUBSCRIPTIONS, &cleanup, &unmatched);
+		HOTDOG_PDC_MAX_SUBSCRIPTIONS, &bootstrap->cleanup_plan, &unmatched);
 	if (result)
 		return result;
 	result = hotdog_pdc_plan_activation(bootstrap->catalog,
-		bootstrap->pdc_subscriptions, HOTDOG_PDC_MAX_SUBSCRIPTIONS, &activation);
+		bootstrap->pdc_subscriptions, HOTDOG_PDC_MAX_SUBSCRIPTIONS,
+		&bootstrap->activation_plan);
+	return result;
+}
+
+static void pdc_print_plans(struct bootstrap *bootstrap)
+{
+	size_t index;
+	size_t unmatched = bootstrap->cleanup_plan.count;
+
 	printf("pdc-plan=result:%d catalog:%zu listed:%zu listed-missing:%zu operations:%zu\n",
-	       result, bootstrap->catalog->count, report.listed, report.listed_missing,
-	       result ? 0 : activation.count);
-	if (result)
-		return result;
-	for (index = 0; index < activation.count; index++) {
-		const struct hotdog_pdc_operation *operation = &activation.operations[index];
+	       0, bootstrap->catalog->count, bootstrap->mcfg_report.listed,
+	       bootstrap->mcfg_report.listed_missing, bootstrap->activation_plan.count);
+	for (index = 0; index < bootstrap->activation_plan.count; index++) {
+		const struct hotdog_pdc_operation *operation =
+			&bootstrap->activation_plan.operations[index];
 		const struct hotdog_pdc_config *config = find_config(bootstrap->catalog,
 								    &operation->id);
 
@@ -275,20 +311,237 @@ static int pdc_plan_dry_run(struct bootstrap *bootstrap)
 		       config ? config->metadata.carrier : "-");
 	}
 	printf("pdc-deferred-cleanup-plan=result:0 resident:%zu unmatched:%zu operations:%zu\n",
-	       bootstrap->loaded_catalog.count, unmatched, cleanup.count);
-	for (index = 0; index < cleanup.count; index++) {
+	       bootstrap->loaded_catalog.count, unmatched, bootstrap->cleanup_plan.count);
+	for (index = 0; index < bootstrap->cleanup_plan.count; index++) {
 		printf("pdc-deferred-cleanup%zu=%s id:", index,
-		       hotdog_pdc_operation_name(cleanup.operations[index].type));
-		print_pdc_id(&cleanup.operations[index].id);
+		       hotdog_pdc_operation_name(bootstrap->cleanup_plan.operations[index].type));
+		print_pdc_id(&bootstrap->cleanup_plan.operations[index].id);
 		printf("\n");
 	}
-	return 0;
+}
+
+static void pdc_controller_done(struct hotdog_pdc_controller *controller,
+				int result,
+				enum hotdog_pdc_executor_phase phase,
+				void *user_data)
+{
+	struct bootstrap *bootstrap = user_data;
+
+	(void)controller;
+	printf("pdc-transaction=phase:%s result:%d\n",
+	       hotdog_pdc_executor_phase_name(phase), result);
+	finish(bootstrap, result ? 1 : 0);
+}
+
+static gboolean pdc_switch_timeout(gpointer user_data)
+{
+	struct bootstrap *bootstrap = user_data;
+
+	bootstrap->switch_timeout_id = 0;
+	if (bootstrap->pdc_controller.transport_down)
+		hotdog_pdc_controller_reconnect_failed(
+			&bootstrap->pdc_controller, -ETIMEDOUT);
+	else
+		hotdog_pdc_controller_switch_complete(
+			&bootstrap->pdc_controller, -ETIMEDOUT);
+	return G_SOURCE_REMOVE;
+}
+
+static void pdc_switch_required(struct hotdog_pdc_controller *controller,
+				void *user_data)
+{
+	struct bootstrap *bootstrap = user_data;
+
+	(void)controller;
+	printf("pdc-switch=waiting-for-qrtr-restart\n");
+	if (!bootstrap->switch_timeout_id)
+		bootstrap->switch_timeout_id = g_timeout_add_seconds(
+			45, pdc_switch_timeout, bootstrap);
+}
+
+static void pdc_reconnect_fail(struct bootstrap *bootstrap, int result)
+{
+	if (bootstrap->switch_timeout_id) {
+		g_source_remove(bootstrap->switch_timeout_id);
+		bootstrap->switch_timeout_id = 0;
+	}
+	hotdog_pdc_controller_reconnect_failed(&bootstrap->pdc_controller, result);
+}
+
+static void pdc_switch_client_ready(QmiDevice *device, GAsyncResult *res,
+				    struct bootstrap *bootstrap)
+{
+	QmiClient *client;
+	GError *error = NULL;
+	int result;
+
+	client = qmi_device_allocate_client_finish(device, res, &error);
+	if (!client) {
+		g_printerr("PDC reconnect client failed: %s\n", error->message);
+		g_clear_error(&error);
+		pdc_reconnect_fail(bootstrap, -EIO);
+		return;
+	}
+	g_clear_object(&bootstrap->pdc);
+	bootstrap->pdc = QMI_CLIENT_PDC(client);
+	result = hotdog_qmi_pdc_backend_rebind(
+		&bootstrap->pdc_backend, bootstrap->pdc, bootstrap->cancellable);
+	if (result) {
+		pdc_reconnect_fail(bootstrap, result);
+		return;
+	}
+	g_clear_object(&bootstrap->device);
+	bootstrap->device = g_object_ref(device);
+	if (bootstrap->switch_node && bootstrap->switch_service_handler) {
+		g_signal_handler_disconnect(bootstrap->switch_node,
+					    bootstrap->switch_service_handler);
+		bootstrap->switch_service_handler = 0;
+	}
+	g_clear_object(&bootstrap->switch_node);
+	g_clear_object(&bootstrap->switch_device);
+	if (bootstrap->switch_timeout_id) {
+		g_source_remove(bootstrap->switch_timeout_id);
+		bootstrap->switch_timeout_id = 0;
+	}
+	bootstrap->switch_reconnect_started = false;
+	printf("pdc-switch=qrtr-pdc-reconnected\n");
+	hotdog_pdc_controller_reconnected(&bootstrap->pdc_controller);
+}
+
+static void pdc_switch_open_ready(QmiDevice *device, GAsyncResult *res,
+				  struct bootstrap *bootstrap)
+{
+	GError *error = NULL;
+
+	if (!qmi_device_open_finish(device, res, &error)) {
+		g_printerr("PDC reconnect device open failed: %s\n", error->message);
+		g_clear_error(&error);
+		pdc_reconnect_fail(bootstrap, -EIO);
+		return;
+	}
+	qmi_device_allocate_client(device, QMI_SERVICE_PDC, QMI_CID_NONE, 15,
+				   bootstrap->cancellable,
+				   (GAsyncReadyCallback)pdc_switch_client_ready, bootstrap);
+}
+
+static void pdc_switch_device_ready(GObject *source, GAsyncResult *res,
+				    struct bootstrap *bootstrap)
+{
+	GError *error = NULL;
+
+	(void)source;
+	g_clear_object(&bootstrap->switch_device);
+	bootstrap->switch_device = qmi_device_new_finish(res, &error);
+	if (!bootstrap->switch_device) {
+		g_printerr("PDC reconnect device creation failed: %s\n", error->message);
+		g_clear_error(&error);
+		pdc_reconnect_fail(bootstrap, -EIO);
+		return;
+	}
+	qmi_device_open(bootstrap->switch_device,
+			QMI_DEVICE_OPEN_FLAGS_EXPECT_INDICATIONS, 15,
+			bootstrap->cancellable,
+			(GAsyncReadyCallback)pdc_switch_open_ready, bootstrap);
+}
+
+static void pdc_start_reconnect(struct bootstrap *bootstrap, QrtrNode *node)
+{
+	if (bootstrap->switch_reconnect_started)
+		return;
+	bootstrap->switch_reconnect_started = true;
+	qmi_device_new_from_node(node, bootstrap->cancellable,
+				 (GAsyncReadyCallback)pdc_switch_device_ready, bootstrap);
+}
+
+static void pdc_switch_service_added(QrtrNode *node, guint service,
+				     struct bootstrap *bootstrap)
+{
+	if (service == QMI_SERVICE_PDC)
+		pdc_start_reconnect(bootstrap, node);
+}
+
+static void qrtr_node_removed(QrtrBus *bus, guint node_id,
+			      struct bootstrap *bootstrap)
+{
+	(void)bus;
+	if (!bootstrap->pdc_controller_initialized || node_id != bootstrap->node)
+		return;
+	printf("pdc-switch=qrtr-node-removed\n");
+	hotdog_pdc_controller_transport_lost(&bootstrap->pdc_controller);
+	g_clear_object(&bootstrap->uim);
+	g_clear_object(&bootstrap->dms);
+	g_clear_object(&bootstrap->nas);
+	g_clear_object(&bootstrap->pdc);
+	g_clear_object(&bootstrap->device);
+	bootstrap->pdc_indication_id = 0;
+	bootstrap->pdc_list_indication_id = 0;
+	bootstrap->switch_reconnect_started = false;
+	if (!bootstrap->switch_timeout_id)
+		bootstrap->switch_timeout_id = g_timeout_add_seconds(
+			45, pdc_switch_timeout, bootstrap);
+}
+
+static void qrtr_node_added(QrtrBus *bus, guint node_id,
+			    struct bootstrap *bootstrap)
+{
+	QrtrNode *node;
+
+	if (!bootstrap->pdc_controller_initialized || node_id != bootstrap->node ||
+	    !bootstrap->pdc_controller.transport_down)
+		return;
+	node = qrtr_bus_peek_node(bus, node_id);
+	if (!node)
+		return;
+	g_clear_object(&bootstrap->switch_node);
+	bootstrap->switch_node = g_object_ref(node);
+	bootstrap->switch_service_handler = g_signal_connect(
+		node, QRTR_NODE_SIGNAL_SERVICE_ADDED,
+		G_CALLBACK(pdc_switch_service_added), bootstrap);
+	if (qrtr_node_lookup_port(node, QMI_SERVICE_PDC) >= 0)
+		pdc_start_reconnect(bootstrap, node);
+}
+
+static int pdc_apply_start(struct bootstrap *bootstrap)
+{
+	const struct hotdog_radio_gate_paths paths = {
+		.approval = bootstrap->apply_pdc,
+		.runtime_manifest = HOTDOG_MCFG_RUNTIME_MANIFEST,
+		.boot_id = HOTDOG_BOOT_ID_PATH,
+		.modem = HOTDOG_MODEM_CANONICAL_PATH,
+		.mcfg_root = HOTDOG_MCFG_CANONICAL_ROOT,
+	};
+	int result;
+
+	result = hotdog_radio_gate_validate(
+		&paths, bootstrap->catalog, bootstrap->pdc_subscriptions,
+		HOTDOG_PDC_MAX_SUBSCRIPTIONS, &bootstrap->runtime);
+	if (result) {
+		g_printerr("PDC execution gate rejected: %d\n", result);
+		return result;
+	}
+	result = hotdog_qmi_pdc_backend_init(
+		&bootstrap->pdc_backend, bootstrap->pdc, bootstrap->cancellable,
+		&bootstrap->pdc_token);
+	if (result)
+		return result;
+	bootstrap->pdc_backend_initialized = true;
+	result = hotdog_pdc_controller_init(
+		&bootstrap->pdc_controller, &bootstrap->pdc_backend,
+		&bootstrap->activation_plan, bootstrap->pdc_subscriptions,
+		HOTDOG_PDC_MAX_SUBSCRIPTIONS, bootstrap->catalog,
+		bootstrap->mcfg_root, pdc_controller_done, pdc_switch_required,
+		bootstrap);
+	if (result)
+		return result;
+	bootstrap->pdc_controller_initialized = true;
+	printf("pdc-execution-gate=passed\n");
+	return hotdog_pdc_controller_start(&bootstrap->pdc_controller);
 }
 
 static gboolean pdc_query_timeout(gpointer user_data)
 {
 	struct bootstrap *bootstrap = user_data;
-	unsigned int subscription = bootstrap->plan_pdc ?
+	unsigned int subscription = pdc_planning(bootstrap) ?
 		(unsigned int)bootstrap->pdc_query_index :
 		bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index].subscription;
 
@@ -305,7 +558,7 @@ static gboolean pdc_list_timeout(gpointer user_data)
 
 	bootstrap->pdc_list_timeout_id = 0;
 	printf("pdc-loaded-count=0 result=timeout-empty\n");
-	if (bootstrap->plan_pdc) {
+	if (pdc_planning(bootstrap)) {
 		bootstrap->pdc_query_index = 0;
 		bootstrap->pdc_query_count = HOTDOG_PDC_MAX_SUBSCRIPTIONS;
 		bootstrap->pdc_indication_id = g_signal_connect(
@@ -347,7 +600,7 @@ static void pdc_list_indication(QmiClientPdc *client,
 		print_pdc_id(&bootstrap->loaded_catalog.ids[index]);
 		printf("\n");
 	}
-	if (bootstrap->plan_pdc) {
+	if (pdc_planning(bootstrap)) {
 		bootstrap->pdc_query_index = 0;
 		bootstrap->pdc_query_count = HOTDOG_PDC_MAX_SUBSCRIPTIONS;
 		bootstrap->pdc_indication_id = g_signal_connect(
@@ -430,7 +683,7 @@ static void pdc_selected_indication(QmiClientPdc *client,
 		g_source_remove(bootstrap->pdc_timeout_id);
 		bootstrap->pdc_timeout_id = 0;
 	}
-	subscription = bootstrap->plan_pdc ? (unsigned int)bootstrap->pdc_query_index :
+	subscription = pdc_planning(bootstrap) ? (unsigned int)bootstrap->pdc_query_index :
 		bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index].subscription;
 	bootstrap->pdc_subscriptions[subscription].active = active;
 	bootstrap->pdc_subscriptions[subscription].pending = pending;
@@ -494,9 +747,17 @@ static void pdc_query_next(struct bootstrap *bootstrap)
 	int result;
 
 	if (bootstrap->pdc_query_index >= bootstrap->pdc_query_count) {
-		result = bootstrap->plan_pdc ? pdc_plan_dry_run(bootstrap) : 0;
+		result = pdc_planning(bootstrap) ? pdc_build_plans(bootstrap) : 0;
 		if (result) {
 			finish(bootstrap, 1);
+			return;
+		}
+		if (pdc_planning(bootstrap))
+			pdc_print_plans(bootstrap);
+		if (bootstrap->apply_pdc) {
+			result = pdc_apply_start(bootstrap);
+			if (result)
+				finish(bootstrap, 1);
 			return;
 		}
 		if (bootstrap->probe_dms)
@@ -505,7 +766,7 @@ static void pdc_query_next(struct bootstrap *bootstrap)
 			finish(bootstrap, 0);
 		return;
 	}
-	subscription = bootstrap->plan_pdc ? (unsigned int)bootstrap->pdc_query_index :
+	subscription = pdc_planning(bootstrap) ? (unsigned int)bootstrap->pdc_query_index :
 		bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index].subscription;
 	bootstrap->pdc_expected_token = ++bootstrap->pdc_token;
 	result = hotdog_qmi_pdc_get_selected_input(subscription,
@@ -537,7 +798,7 @@ static void pdc_client_ready(QmiDevice *device, GAsyncResult *res,
 		return;
 	}
 	bootstrap->pdc = QMI_CLIENT_PDC(client);
-	if (bootstrap->probe_pdc_catalog || bootstrap->plan_pdc) {
+	if (bootstrap->probe_pdc_catalog || pdc_planning(bootstrap)) {
 		pdc_list_start(bootstrap);
 		return;
 	}
@@ -598,7 +859,7 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 	}
 	print_inventory(&bootstrap->inventory);
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
-	if (bootstrap->plan_pdc) {
+	if (pdc_planning(bootstrap)) {
 		size_t index;
 
 		if (!bootstrap->inventory.gw_count) {
@@ -670,7 +931,7 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	}
 	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
 	qmi_message_uim_get_card_status_output_unref(output);
-	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc ||
+	if (result && !((bootstrap->pdc_probe_subscription >= 0 || pdc_planning(bootstrap) ||
 			bootstrap->probe_dms || bootstrap->probe_nas ||
 			bootstrap->probe_pdc_catalog) &&
 			(result == -EIO || result == -ENODEV))) {
@@ -752,6 +1013,16 @@ static void bus_ready(GObject *source, GAsyncResult *res,
 		finish(bootstrap, 1);
 		return;
 	}
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap->apply_pdc) {
+		bootstrap->bus_node_added_handler = g_signal_connect(
+			bootstrap->bus, QRTR_BUS_SIGNAL_NODE_ADDED,
+			G_CALLBACK(qrtr_node_added), bootstrap);
+		bootstrap->bus_node_removed_handler = g_signal_connect(
+			bootstrap->bus, QRTR_BUS_SIGNAL_NODE_REMOVED,
+			G_CALLBACK(qrtr_node_removed), bootstrap);
+	}
+#endif
 	node = qrtr_bus_peek_node(bootstrap->bus, bootstrap->node);
 	if (!node) {
 		g_printerr("QRTR node %u is unavailable\n", bootstrap->node);
@@ -776,6 +1047,8 @@ int main(int argc, char **argv)
 		  "MCFG software profile root for dry-run planning", "DIR" },
 		{ "plan-pdc", 0, 0, G_OPTION_ARG_NONE, &bootstrap.plan_pdc,
 		  "Build and print a PDC transaction without executing it", NULL },
+		{ "apply-pdc", 0, 0, G_OPTION_ARG_STRING, &bootstrap.apply_pdc,
+		  "Execute the freshly rebuilt PDC plan using an approval manifest", "FILE" },
 		{ "probe-dms", 0, 0, G_OPTION_ARG_NONE, &bootstrap.probe_dms,
 		  "Read and print the DMS operating mode", NULL },
 		{ "probe-pdc-catalog", 0, 0, G_OPTION_ARG_NONE,
@@ -800,38 +1073,66 @@ int main(int argc, char **argv)
 		g_printerr("PDC subscription must be between 0 and 2\n");
 		return 2;
 	}
-	if (bootstrap.plan_pdc != (bootstrap.mcfg_root != NULL)) {
-		g_printerr("PDC planning requires both --plan-pdc and --mcfg-root\n");
+	if ((bootstrap.plan_pdc || bootstrap.apply_pdc) && !bootstrap.mcfg_root) {
+		g_printerr("PDC planning or execution requires --mcfg-root\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
-	if (bootstrap.plan_pdc && bootstrap.pdc_probe_subscription >= 0) {
-		g_printerr("PDC planning requires a real populated UIM session\n");
+	if (bootstrap.mcfg_root && !bootstrap.plan_pdc && !bootstrap.apply_pdc) {
+		g_printerr("--mcfg-root requires --plan-pdc or --apply-pdc\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
-	if (bootstrap.plan_pdc && (bootstrap.probe_dms || bootstrap.probe_nas)) {
-		g_printerr("Combine DMS probing with a later verified PDC plan, not this dry-run\n");
+	if (bootstrap.plan_pdc && bootstrap.apply_pdc) {
+		g_printerr("--plan-pdc and --apply-pdc are mutually exclusive\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
+		return 2;
+	}
+	if ((bootstrap.plan_pdc || bootstrap.apply_pdc) &&
+	    bootstrap.pdc_probe_subscription >= 0) {
+		g_printerr("PDC planning/execution requires a real populated UIM session\n");
+		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
+		return 2;
+	}
+	if ((bootstrap.plan_pdc || bootstrap.apply_pdc) &&
+	    (bootstrap.probe_dms || bootstrap.probe_nas)) {
+		g_printerr("PDC planning/execution cannot be combined with standalone probes\n");
+		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
+		return 2;
+	}
+	if (bootstrap.apply_pdc && strcmp(bootstrap.mcfg_root, HOTDOG_MCFG_CANONICAL_ROOT)) {
+		g_printerr("PDC execution requires the canonical packaged MCFG root\n");
+		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
 	if (bootstrap.probe_pdc_catalog &&
-	    (bootstrap.plan_pdc || bootstrap.probe_dms || bootstrap.probe_nas ||
+	    (bootstrap.plan_pdc || bootstrap.apply_pdc || bootstrap.probe_dms ||
+	     bootstrap.probe_nas ||
 	     bootstrap.pdc_probe_subscription >= 0)) {
 		g_printerr("PDC catalog probing must run as a separate read-only operation\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
 	if (bootstrap.probe_dms && bootstrap.probe_nas) {
 		g_printerr("DMS and NAS probes must run as separate read-only operations\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
 #ifndef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	if (bootstrap.pdc_probe_subscription >= 0 || bootstrap.plan_pdc ||
+	    bootstrap.apply_pdc ||
 	    bootstrap.probe_pdc_catalog) {
 		g_printerr("PDC probing and planning require the patched libqmi build\n");
 		g_free(bootstrap.mcfg_root);
+		g_free(bootstrap.apply_pdc);
 		return 2;
 	}
 #endif
@@ -841,6 +1142,8 @@ int main(int argc, char **argv)
 		     (GAsyncReadyCallback)bus_ready, &bootstrap);
 	g_main_loop_run(bootstrap.loop);
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap.switch_timeout_id)
+		g_source_remove(bootstrap.switch_timeout_id);
 	if (bootstrap.pdc_timeout_id)
 		g_source_remove(bootstrap.pdc_timeout_id);
 	if (bootstrap.pdc_list_timeout_id)
@@ -849,8 +1152,17 @@ int main(int argc, char **argv)
 		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_indication_id);
 	if (bootstrap.pdc && bootstrap.pdc_list_indication_id)
 		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_list_indication_id);
+	if (bootstrap.switch_node && bootstrap.switch_service_handler)
+		g_signal_handler_disconnect(bootstrap.switch_node,
+					    bootstrap.switch_service_handler);
+	if (bootstrap.pdc_controller_initialized && !bootstrap.pdc_controller.finished)
+		hotdog_pdc_controller_cancel(&bootstrap.pdc_controller);
+	if (bootstrap.pdc_backend_initialized)
+		hotdog_qmi_pdc_backend_clear(&bootstrap.pdc_backend);
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.pdc));
 	g_clear_object(&bootstrap.pdc);
+	g_clear_object(&bootstrap.switch_device);
+	g_clear_object(&bootstrap.switch_node);
 #endif
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.uim));
 	g_clear_object(&bootstrap.uim);
@@ -859,6 +1171,12 @@ int main(int argc, char **argv)
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.nas));
 	g_clear_object(&bootstrap.nas);
 	g_clear_object(&bootstrap.device);
+	if (bootstrap.bus && bootstrap.bus_node_added_handler)
+		g_signal_handler_disconnect(bootstrap.bus,
+					    bootstrap.bus_node_added_handler);
+	if (bootstrap.bus && bootstrap.bus_node_removed_handler)
+		g_signal_handler_disconnect(bootstrap.bus,
+					    bootstrap.bus_node_removed_handler);
 	g_clear_object(&bootstrap.bus);
 	g_clear_object(&bootstrap.cancellable);
 	g_main_loop_unref(bootstrap.loop);
@@ -866,5 +1184,6 @@ int main(int argc, char **argv)
 	g_free(bootstrap.catalog);
 #endif
 	g_free(bootstrap.mcfg_root);
+	g_free(bootstrap.apply_pdc);
 	return bootstrap.result;
 }

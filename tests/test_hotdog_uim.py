@@ -99,6 +99,7 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
             self.assertIn("--node=ID", help_output.stdout)
             self.assertIn("--pdc-subscription=0-2", help_output.stdout)
             self.assertIn("--plan-pdc", help_output.stdout)
+            self.assertIn("--apply-pdc=FILE", help_output.stdout)
             self.assertIn("--mcfg-root=DIR", help_output.stdout)
             self.assertIn("--probe-dms", help_output.stdout)
             self.assertIn("--probe-pdc-catalog", help_output.stdout)
@@ -112,7 +113,20 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
                 [str(binary), "--plan-pdc"], capture_output=True, text=True,
             )
             self.assertEqual(missing_root.returncode, 2)
-            self.assertIn("requires both --plan-pdc and --mcfg-root", missing_root.stderr)
+            self.assertIn("requires --mcfg-root", missing_root.stderr)
+            wrong_root = subprocess.run(
+                [str(binary), "--apply-pdc=/tmp/approval", "--mcfg-root=/tmp/mcfg"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(wrong_root.returncode, 2)
+            self.assertIn("canonical packaged MCFG root", wrong_root.stderr)
+            unsupported_apply = subprocess.run(
+                [str(binary), "--apply-pdc=/tmp/approval",
+                 "--mcfg-root=/usr/share/hotdog-radio/mcfg/mcfg_sw"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(unsupported_apply.returncode, 2)
+            self.assertIn("patched libqmi build", unsupported_apply.stderr)
 
 
 if __name__ == "__main__":

@@ -357,7 +357,18 @@ metadata is missing or malformed.
 128 MiB bound and no final symlink, recounts the MCFG tree without following
 any symlink, checks those values and the parsed catalog against package
 metadata, reads the current boot ID and finally validates the approval against
-fresh subscription selections. This is the single pre-QRTR mutation gate.
+fresh subscription selections. This is the single pre-mutation gate; the QRTR
+reads used to rebuild the plan happen before it, but no mutating request does.
+
+The daemon exposes execution only as
+`--apply-pdc=APPROVAL --mcfg-root=/usr/share/hotdog-radio/mcfg/mcfg_sw`.
+It is mutually exclusive with dry-run and all standalone probes, requires real
+UIM identity, inventories resident configs and all three selected states again,
+prints the rebuilt plan, passes the combined gate and then starts the
+transaction controller. Bus node removal/addition and PDC service return drive
+the reconnect/rebind path. A committed transaction stops before DMS Online and
+before deferred stale cleanup; those are separate post-verification phases and
+no readiness file is published yet.
 
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
