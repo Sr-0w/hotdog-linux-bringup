@@ -64,6 +64,7 @@ Recent evidence and current regression records:
 - [All four cameras and pop-up lifecycle](evidence/2026-08-10-mainline616-camera-imx471-popup.md)
 - [GNSS QMI engine](evidence/2026-08-10-gnss-qmi-loc.md)
 - [Read-only UIM and subscription-scoped PDC](evidence/2026-08-25-radio-pdc-readonly.md)
+- [Read-only UIM physical-slot identity](evidence/2026-08-25-radio-uim-slot-identity.md)
 - [OxygenOS MCFG catalog reconstruction](evidence/2026-08-25-oxygenos-mcfg-catalog.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)
