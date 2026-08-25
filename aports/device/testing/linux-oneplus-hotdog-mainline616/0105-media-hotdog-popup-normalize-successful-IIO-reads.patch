@@ -1,5 +1,5 @@
 From 5a9ab3d1ce75b6e62f783c112109e944dcfe2e44 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 14:08:21 +0200
 Subject: [PATCH] media: hotdog-popup: normalize successful IIO reads
 

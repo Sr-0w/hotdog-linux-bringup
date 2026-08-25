@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 13:35:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: drop the invented camera rail parents
 
@@ -14,7 +14,7 @@ the slot fed by ldo2 comes up cleanly. Since the parents were an inference with
 nothing behind it, describe the rails the way every other board does and leave
 them out.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../boot/dts/qcom/sm8150-oneplus-common.dtsi | 3 ---
  1 file changed, 3 deletions(-)

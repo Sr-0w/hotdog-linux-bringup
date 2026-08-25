@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 01:15:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: describe the telephoto camera
 
@@ -15,7 +15,7 @@ The identification aid is dropped from this slot: a real sensor node replaces
 it. The other three slots keep theirs until their sensors are confirmed the
 same way.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../boot/dts/qcom/sm8150-oneplus-hotdog.dts | 80 +++++++++++++----
  1 file changed, 62 insertions(+), 18 deletions(-)

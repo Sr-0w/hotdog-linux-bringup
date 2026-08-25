@@ -1,5 +1,5 @@
 From 9fd6f2f7e76b91f58e3cf1f333f79a4e73d226c8 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 00:34:00 +0200
 Subject: [PATCH] power: supply: qcom_smbx: define SMB5 ICL status bits
 
@@ -7,7 +7,7 @@ The AICL rerun and USB3 SDP selection paths use two documented SMB5 bits that
 the older ClearStaff qcom_smbx register table does not define. Add the missing
 definitions beside their registers.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/power/supply/qcom_smbx.c | 2 ++
  1 file changed, 2 insertions(+)

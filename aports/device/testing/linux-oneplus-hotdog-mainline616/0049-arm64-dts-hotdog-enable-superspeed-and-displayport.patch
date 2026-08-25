@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 19:15:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: enable SuperSpeed and DisplayPort
 
@@ -23,7 +23,7 @@ port@1 is the SuperSpeed and DisplayPort mux on the combo PHY, and port@2 is
 the SBU mux. The FSA4480 moves from port@1 to port@2 accordingly, which is
 where it belongs once a SuperSpeed mux exists.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 38 ++++++++++++++----
  1 file changed, 30 insertions(+), 8 deletions(-)

@@ -1,9 +1,9 @@
 From e986b73d66b572fe51f487399186d24361c2b11d Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 08:52:55 +0200
 Subject: [PATCH] voice: expose IP call dial attributes
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  data/qmi-service-voice.json | 18 +++++++++++++++++-
  1 file changed, 17 insertions(+), 1 deletion(-)

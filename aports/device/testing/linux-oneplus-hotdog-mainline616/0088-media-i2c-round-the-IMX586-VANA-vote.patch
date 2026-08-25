@@ -1,5 +1,5 @@
 From 7b3b19f28b92de213c35978b5698087c0920a3de Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 17:15:00 +0200
 Subject: [PATCH] media: i2c: round the IMX586 VANA vote
 
@@ -12,7 +12,7 @@ Keep 3.3 V as the minimum and permit the next hardware step, 3.32 V, as
 the maximum.  The regulator core will select 3.32 V, which is the closest
 supported value that satisfies the downstream minimum.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/hotdog-cam-scan.c | 7 ++++---
  1 file changed, 4 insertions(+), 3 deletions(-)

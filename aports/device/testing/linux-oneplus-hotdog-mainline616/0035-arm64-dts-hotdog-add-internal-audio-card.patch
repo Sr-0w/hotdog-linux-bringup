@@ -1,5 +1,5 @@
 From 77703d4a2238eff2767745e0aef89a8d365390bd Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 17:20:00 +0200
 Subject: [PATCH] arm64: dts: hotdog: add the internal audio card
 
@@ -16,7 +16,7 @@ The SM8150 machine driver already matches qcom,sm8150-sndcard. Add that
 compatible to the existing Qualcomm sound-card schema so the new node can be
 checked with dtbs_check.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../bindings/sound/qcom,sm8250.yaml            |  1 +
  .../boot/dts/qcom/sm8150-oneplus-hotdog.dts    | 56 ++++++++++++++++++

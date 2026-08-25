@@ -1,5 +1,5 @@
 From 802724e9fa8ad3fcf458f3b7c38051f87b2ccf7b Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 18:14:21 +0200
 Subject: [PATCH] media: qcom: hotdog-popup: stage LPG period changes
 

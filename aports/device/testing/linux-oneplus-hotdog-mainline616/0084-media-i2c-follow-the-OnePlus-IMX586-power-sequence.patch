@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 15:20:00 +0200
 Subject: [PATCH] media: i2c: follow the OnePlus IMX586 power sequence
 
@@ -14,7 +14,7 @@ CUSTOM_GPIO1, VDIG, CUSTOM_GPIO2, VIO, 19.2 MHz MCLK, then reset. Do not
 enable the unused BOB/VANA path or TLMM GPIO 11. Retain a stage boundary
 after every operation and unwind in the vendor power-down order.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
 --- a/drivers/media/i2c/hotdog-cam-scan.c
 +++ b/drivers/media/i2c/hotdog-cam-scan.c

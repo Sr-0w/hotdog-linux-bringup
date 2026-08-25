@@ -1,4 +1,4 @@
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 18:00:00 +0200
 Subject: [PATCH] media: i2c: supply the IMX586 shared VANA rail
 
@@ -12,7 +12,7 @@ probe sequence.  Release both the GPIO and voltage request during teardown so
 the diagnostic remains bounded and does not alter unrelated BOB consumers
 after it exits.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 10 ++++++
  drivers/media/i2c/hotdog-cam-scan.c                | 47 ++++++++++++++++++++++

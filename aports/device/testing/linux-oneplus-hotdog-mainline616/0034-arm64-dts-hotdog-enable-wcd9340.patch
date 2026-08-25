@@ -1,5 +1,5 @@
 From 66c2f8aa9d3e166055fd7b3f6c33da5a6d87dd75 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 17:00:00 +0200
 Subject: [PATCH] arm64: dts: hotdog: enable WCD9340 transport
 
@@ -12,7 +12,7 @@ The common topology already carries the stock-derived GPIO 123 interrupt,
 the machine sound card and external TFA98xx amplifiers absent so this step
 validates only transport and internal codec enumeration.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 10 ++++++++++
  arch/arm64/boot/dts/qcom/sm8150-wcd9340.dtsi       |  3 +--

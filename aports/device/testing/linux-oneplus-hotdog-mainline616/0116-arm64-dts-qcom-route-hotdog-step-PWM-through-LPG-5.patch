@@ -1,5 +1,5 @@
 From bfbd6496021637d180908a092a929bc67ee48ce5 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 17:15:14 +0200
 Subject: [PATCH] arm64: dts: qcom: route hotdog step PWM through LPG 5
 

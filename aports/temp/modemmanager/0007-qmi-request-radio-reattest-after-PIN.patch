@@ -1,9 +1,9 @@
 From 2419243deeca2c58a20011ba43e335dbd5f9f0fc Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 10:49:29 +0200
 Subject: [PATCH] qmi: request guarded radio re-attestation after PIN
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  src/mm-sim-qmi.c | 94 ++++++++++++++++++++++++++++++++++++++++++++++--
  1 file changed, 91 insertions(+), 3 deletions(-)

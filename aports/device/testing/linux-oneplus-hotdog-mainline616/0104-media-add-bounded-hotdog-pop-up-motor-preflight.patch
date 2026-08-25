@@ -1,5 +1,5 @@
 From 5828047d6d129e85d62cf1fdf36bedb6a06fb544 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 13:08:25 +0200
 Subject: [PATCH] media: add bounded hotdog pop-up motor preflight
 
@@ -51,7 +51,7 @@ index 000000000..196bc562c
 +title: OnePlus hotdog pop-up camera stepper motor
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +description: |
 +  The OnePlus 7T Pro uses a DRV8834 stepper controller and two Hall effect
@@ -500,7 +500,7 @@ index 000000000..eb8c5e6c3
 +};
 +module_platform_driver(hotdog_popup_driver);
 +
-+MODULE_AUTHOR("Sr-0w");
++MODULE_AUTHOR("Robin Snyders");
 +MODULE_DESCRIPTION("OnePlus hotdog pop-up camera motor bring-up driver");
 +MODULE_LICENSE("GPL");
 -- 

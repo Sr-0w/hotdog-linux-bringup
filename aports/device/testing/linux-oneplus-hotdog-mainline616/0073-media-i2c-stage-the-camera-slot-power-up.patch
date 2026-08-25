@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 13:45:00 +0200
 Subject: [PATCH] media: i2c: stage the camera slot power-up
 
@@ -12,7 +12,7 @@ Add a stage parameter that stops after the supplies, after the analogue enable
 GPIOs, after MCLK, or runs the whole thing, logging each step as it passes.
 Whichever stage the handset survives to bounds the fault to one operation.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/hotdog-cam-scan.c | 34 +++++++++++++++++++++++++---
  1 file changed, 31 insertions(+), 3 deletions(-)

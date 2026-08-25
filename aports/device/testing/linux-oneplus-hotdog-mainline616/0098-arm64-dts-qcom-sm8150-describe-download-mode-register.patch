@@ -1,5 +1,5 @@
 From 680e3585bb626737bdd91d063025146cc283f9b7 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 00:53:49 +0200
 Subject: [PATCH] arm64: dts: qcom: sm8150: describe download mode register
 

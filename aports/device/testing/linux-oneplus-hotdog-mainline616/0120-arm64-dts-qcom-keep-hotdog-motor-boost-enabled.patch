@@ -1,5 +1,5 @@
 From 019eca0e1dd361a3c03051142ae5d219a6e99155 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 18:04:53 +0200
 Subject: [PATCH] arm64: dts: qcom: keep hotdog motor boost enabled
 

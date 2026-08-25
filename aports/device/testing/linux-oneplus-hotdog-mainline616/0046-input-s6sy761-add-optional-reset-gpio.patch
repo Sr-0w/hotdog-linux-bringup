@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 16:58:00 +0200
 Subject: [PATCH] Input: s6sy761 - restart the controller reliably on resume
 
@@ -27,7 +27,7 @@ with a bounded timeout, and retry the restart a few times before giving up.
 Boards without a reset line keep the previous power-cycle behaviour and gain
 the more tolerant wait.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/input/touchscreen/s6sy761.c | 97 ++++++++++++++++++++++++-----
  1 file changed, 83 insertions(+), 14 deletions(-)

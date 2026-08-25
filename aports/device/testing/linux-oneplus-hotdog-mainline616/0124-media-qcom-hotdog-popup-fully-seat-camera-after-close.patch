@@ -1,5 +1,5 @@
 From acbdf5e4de16ed8272feb86686fec7687acfebfe Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 21:41:37 +0200
 Subject: [PATCH] media: qcom: hotdog-popup: fully seat camera after close
 

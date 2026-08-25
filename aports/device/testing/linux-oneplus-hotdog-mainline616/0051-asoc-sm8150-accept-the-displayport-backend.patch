@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 19:41:00 +0200
 Subject: [PATCH] ASoC: sm8150: accept the DisplayPort back end
 
@@ -12,7 +12,7 @@ misleading.
 The DisplayPort controller configures its own audio path, so there is
 nothing for the machine driver to do beyond not complaining.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  sound/soc/qcom/sm8150.c | 6 ++++++
  1 file changed, 6 insertions(+)

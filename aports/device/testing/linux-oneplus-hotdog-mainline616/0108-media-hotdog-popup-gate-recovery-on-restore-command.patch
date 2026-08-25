@@ -1,5 +1,5 @@
 From 2979adee24213d6fbe0fbe8ffecbb73306bbb585 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 14:28:07 +0200
 Subject: [PATCH] media: hotdog-popup: gate recovery on restore command
 

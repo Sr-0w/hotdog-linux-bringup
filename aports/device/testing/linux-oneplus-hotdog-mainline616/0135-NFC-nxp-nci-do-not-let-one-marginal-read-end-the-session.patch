@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 12 Aug 2026 08:45:00 +0200
 Subject: [PATCH] NFC: nxp-nci: do not let one marginal read end the session
 
@@ -18,7 +18,7 @@ later interrupt.
 Drop the early frame instead of faulting, and clear the latch on any mode
 change, since a mode change restarts the transport.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/nfc/nxp-nci/i2c.c | 18 ++++++++++++++----
  1 file changed, 14 insertions(+), 4 deletions(-)

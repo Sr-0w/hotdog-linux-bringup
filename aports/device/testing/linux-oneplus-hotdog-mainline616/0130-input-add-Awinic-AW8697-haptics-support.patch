@@ -1,5 +1,5 @@
 From 39ae96350d30647de89bc2099a439ff746d7e14b Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 11 Aug 2026 07:44:58 +0200
 Subject: [PATCH 2/2] input: add Awinic AW8697 haptics support
 
@@ -486,7 +486,7 @@ index 000000000..2ec6e0b70
 +};
 +module_i2c_driver(aw8697_driver);
 +
-+MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
 +MODULE_DESCRIPTION("Awinic AW8697 LRA haptics driver");
 +MODULE_LICENSE("GPL");
 -- 

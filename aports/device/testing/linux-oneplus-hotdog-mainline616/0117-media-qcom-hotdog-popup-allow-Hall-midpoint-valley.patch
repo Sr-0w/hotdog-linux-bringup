@@ -1,5 +1,5 @@
 From 61ee0fcf93241dbdf1ddf16341fd843e312b41d7 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 17:31:48 +0200
 Subject: [PATCH] media: qcom: hotdog-popup: allow Hall midpoint valley
 

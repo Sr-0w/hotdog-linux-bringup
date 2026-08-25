@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 00:20:00 +0200
 Subject: [PATCH] media: i2c: add the Samsung S5K3M5 sensor driver
 
@@ -14,7 +14,7 @@ fixed-rate clock from a clock-frequency property when no clock phandle is
 present. On this board the sensor clock comes from the camera clock
 controller and is described, so plain devm_clk_get() has the same effect.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/Kconfig  |   10 +
  drivers/media/i2c/Makefile |    1 +

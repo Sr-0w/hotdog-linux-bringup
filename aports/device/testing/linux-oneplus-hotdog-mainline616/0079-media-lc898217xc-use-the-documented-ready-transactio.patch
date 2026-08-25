@@ -1,5 +1,5 @@
 From d14864af2acd76c5dd37e0f8ab8fcd89ebe95a31 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 12:00:06 +0200
 Subject: [PATCH] media: lc898217xc: use the documented ready transaction
 

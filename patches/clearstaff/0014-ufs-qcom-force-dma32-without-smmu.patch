@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000014 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 3 Aug 2026 18:25:00 +0200
 Subject: [PATCH] ufs: qcom: constrain SM8150 bypass DMA to 32 bits
 

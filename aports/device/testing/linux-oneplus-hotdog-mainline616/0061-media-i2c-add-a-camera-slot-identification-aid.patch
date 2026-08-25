@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 01:10:00 +0200
 Subject: [PATCH] media: i2c: add a camera slot identification aid for hotdog
 
@@ -21,7 +21,7 @@ It is a diagnostic and deliberately fails probe afterwards, so it never holds
 an address a real sensor node will want. It should be removed once the four
 sensors are described.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/Kconfig           |  10 ++
  drivers/media/i2c/Makefile          |   1 +

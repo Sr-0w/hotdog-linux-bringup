@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 16:45:00 +0200
 Subject: [PATCH] media: i2c: sequence hotdog camera rails explicitly
 
@@ -15,7 +15,7 @@ prepare VIO and the analogue source, gate VANA onto the module, then enable
 VDIG, MCLK and reset. Keep each boundary independently testable and unwind in
 the exact reverse order.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/hotdog-cam-scan.c | 79 +++++++++++++++++++----------
  1 file changed, 53 insertions(+), 26 deletions(-)

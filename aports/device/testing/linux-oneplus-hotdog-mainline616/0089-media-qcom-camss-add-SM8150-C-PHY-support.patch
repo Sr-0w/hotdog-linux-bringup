@@ -1,9 +1,9 @@
 From 94b4a91d46eaf78d841f0abbb078b7b57741870b Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 17:36:47 +0200
 Subject: [PATCH] media: qcom: camss: add SM8150 C-PHY support
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../platform/qcom/camss/camss-csid-gen2.c     |   1 +
  .../media/platform/qcom/camss/camss-csid.c    |   2 +

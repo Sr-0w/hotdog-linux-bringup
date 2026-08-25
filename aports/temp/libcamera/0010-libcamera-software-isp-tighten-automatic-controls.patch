@@ -1,5 +1,5 @@
 From 207f48cb1feb7fdbe4ca6b8f660cd08abe271aed Mon Sep 17 00:00:00 2001
-From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 20:29:39 +0200
 Subject: [PATCH] software ISP: tighten automatic-control convergence
 

@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 12:55:00 +0200
 Subject: [PATCH] media: i2c: scan one camera slot at a time
 
@@ -8,7 +8,7 @@ reaches the log, while the Samsung slot scans cleanly. Taking them one at a time
 is what tells them apart, so name the slot by its I2C bus number rather than
 turning them all on with a single boolean.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/i2c/hotdog-cam-scan.c | 16 +++++++++++-----
  1 file changed, 11 insertions(+), 5 deletions(-)

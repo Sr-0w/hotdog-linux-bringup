@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 15:35:00 +0200
 Subject: [PATCH] ASoC: sm8150: map the ports of every SLIMbus link
 
@@ -22,7 +22,7 @@ Map the ports of every SLIMbus link instead. The flag now guards only
 the jack registration, which really is a per-component operation and
 must not be repeated.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  sound/soc/qcom/sm8150.c | 7 +++++--
  1 file changed, 5 insertions(+), 2 deletions(-)

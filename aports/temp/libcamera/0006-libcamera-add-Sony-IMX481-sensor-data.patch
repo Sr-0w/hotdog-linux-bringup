@@ -1,5 +1,5 @@
 From 5f4d84c4bce019cc409873fbcc86d88ed90b83e8 Mon Sep 17 00:00:00 2001
-From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 11:06:00 +0200
 Subject: [PATCH] libcamera: add Sony IMX481 sensor data
 

@@ -1,4 +1,4 @@
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Subject: hotdog: integrate the hardware-validated runtime fixes
 
 Carry the complete net kernel delta used by the validated 2026-08-25 image,
@@ -16,7 +16,7 @@ alert-slider states, sensor userspace and ultrasonic proximity were all tested
 on the HD1913. Current rootfs encryption and proximity blanking during a real
 call are not claimed.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
 diff --git a/Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml b/Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml
 new file mode 100644

@@ -1,9 +1,9 @@
 From f5300e010e5b17110da0245fc3e7464334b2079a Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 08:55:22 +0200
 Subject: [PATCH] qmi: select IP voice calls from IMS state
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  src/mm-call-qmi.c   |  7 ++++
  src/mm-hotdog-ims.c | 80 +++++++++++++++++++++++++++++++++++----------

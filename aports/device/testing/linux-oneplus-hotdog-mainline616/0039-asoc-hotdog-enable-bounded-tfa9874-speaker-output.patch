@@ -1,5 +1,5 @@
 From 76a4cfb55749d0c14fdc49865b0cce471b4420d5 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 20:39:21 +0200
 Subject: [PATCH] ASoC: hotdog: enable bounded TFA9874 speaker output
 
@@ -640,7 +640,7 @@ index d525a4e6b16d..90ffdb3b90ab 100644
  
 -MODULE_DESCRIPTION("Read-only NXP TFA9874 amplifier identification driver");
 +MODULE_DESCRIPTION("NXP TFA9874 amplifier codec driver");
- MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
+ MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
  MODULE_LICENSE("GPL");
 diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
 index 8ad61345bb73..7451713b86fa 100644

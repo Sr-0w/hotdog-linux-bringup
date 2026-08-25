@@ -1,5 +1,5 @@
 From 8b591ddfcdb977fb589676bb8310a7033f32a55b Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 17:56:12 +0200
 Subject: [PATCH] media: qcom: hotdog-popup: keep motor boost enabled
 

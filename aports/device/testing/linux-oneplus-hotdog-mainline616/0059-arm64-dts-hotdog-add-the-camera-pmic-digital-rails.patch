@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 00:45:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: add the camera PMIC digital rails
 
@@ -10,7 +10,7 @@ The stock device tree drives the sensors' digital supply from ldo1, ldo3 and
 ldo4, at 1.104 V for the slot on CSIPHY1 and 1.056 V for the other three.
 Describe them so a sensor node has something to reference.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-common.dtsi | 22 ++++++++++
  1 file changed, 22 insertions(+)

@@ -1,5 +1,5 @@
 From f15e31b2e2de7662675578f6043fc749386b14d2 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 23:26:04 +0200
 Subject: [PATCH] arm64: dts: qcom: request stock VAF voltage on hotdog
 

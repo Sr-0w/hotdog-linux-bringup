@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 22:30:00 +0200
 Subject: [PATCH] media: camss: add SM8150 support
 
@@ -16,7 +16,7 @@ Reuse the CAMSS_845 version, as SDM670 already does, because the hardware
 behaviours selected by it in the CSIPHY and VFE code are the ones this SoC
 needs.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/platform/qcom/camss/camss.c | 175 ++++++++++++++++++++++
  1 file changed, 175 insertions(+)

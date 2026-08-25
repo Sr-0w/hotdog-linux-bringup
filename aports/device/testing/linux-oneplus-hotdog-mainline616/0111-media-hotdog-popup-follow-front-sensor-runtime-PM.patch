@@ -1,5 +1,5 @@
 From cec1c3d624666739d015f6cd9fdc76e1df629ef8 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 15:41:38 +0200
 Subject: [PATCH] media: hotdog-popup: follow front sensor runtime PM
 

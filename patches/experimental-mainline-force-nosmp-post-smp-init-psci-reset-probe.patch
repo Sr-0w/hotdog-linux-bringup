@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 13 Jul 2026 00:00:00 +0000
 Subject: [PATCH] init: hotdog: force no-SMP then reset after smp_init
 

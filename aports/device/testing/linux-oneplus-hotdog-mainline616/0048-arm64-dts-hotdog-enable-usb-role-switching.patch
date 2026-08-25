@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 17:10:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: enable USB role switching
 
@@ -22,7 +22,7 @@ This stays USB 2.0 only. The QMP PHY remains disabled and the controller
 keeps maximum-speed = "high-speed", so SuperSpeed and DisplayPort alternate
 mode are unaffected by this change.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 71 ++++++++++++++++++++--
  1 file changed, 68 insertions(+), 3 deletions(-)

@@ -1,5 +1,5 @@
 From c5b312b51527f4773df2801e7f565c315bda3d03 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 3 Aug 2026 17:24:13 +0200
 Subject: [PATCH 2/2] drm: msm: enable the native OnePlus hotdog DSC panel
 

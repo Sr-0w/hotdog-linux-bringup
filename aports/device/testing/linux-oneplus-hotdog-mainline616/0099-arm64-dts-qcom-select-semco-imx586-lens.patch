@@ -1,5 +1,5 @@
 From 42ce853af92e8cae55bf93275409d31e41dd43f0 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 15:04:00 +0200
 Subject: [PATCH] arm64: dts: qcom: select Semco IMX586 lens on hotdog
 

@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 12:30:00 +0200
 Subject: [PATCH] media: camss: vote camera NoC bandwidth on sm8150
 
@@ -16,7 +16,7 @@ route to memory behaves exactly that way.
 
 Add the three paths SM8250 uses, with the SM8150 interconnect identifiers.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150.dtsi      |  7 +++++++
  drivers/media/platform/qcom/camss/camss.c | 19 +++++++++++++++++++

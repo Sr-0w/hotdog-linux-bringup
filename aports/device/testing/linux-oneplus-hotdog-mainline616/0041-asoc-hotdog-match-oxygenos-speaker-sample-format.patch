@@ -1,5 +1,5 @@
 From 7772c54695a875787da4171f11b617ec558fc77a Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 21:27:16 +0200
 Subject: [PATCH] ASoC: hotdog: match OxygenOS speaker sample format
 

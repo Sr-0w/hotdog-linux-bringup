@@ -5,7 +5,7 @@ pkgdesc="Firmware for OnePlus 7T Pro (hotdog)"
 url="https://github.com/sm8150-linux-mainline/firmware-oneplus-hotdog"
 arch="aarch64"
 license="proprietary"
-maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
+maintainer="Robin Snyders <robin@snyders.xyz>"
 options="!check !strip !archcheck !tracedeps pmb:cross-native"
 
 subpackages="

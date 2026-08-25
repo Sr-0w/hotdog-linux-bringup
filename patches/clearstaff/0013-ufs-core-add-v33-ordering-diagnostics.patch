@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000013 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 3 Aug 2026 18:24:00 +0200
 Subject: [PATCH] ufs: core: add SM8150 bring-up ordering diagnostics
 

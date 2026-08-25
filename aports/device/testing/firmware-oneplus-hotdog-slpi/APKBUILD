@@ -5,7 +5,7 @@ pkgdesc="Sensor DSP firmware for OnePlus 7T Pro"
 url="https://www.oneplus.com/global/support/softwareupgrade"
 arch="aarch64"
 license="proprietary"
-maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
+maintainer="Robin Snyders <robin@snyders.xyz>"
 options="!check !strip !archcheck !tracedeps"
 
 source="

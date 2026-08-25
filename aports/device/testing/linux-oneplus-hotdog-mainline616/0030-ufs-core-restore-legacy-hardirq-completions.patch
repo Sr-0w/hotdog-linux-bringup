@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000030 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 11:15:00 +0200
 Subject: [PATCH] ufs: core: restore legacy hardirq completion handling
 

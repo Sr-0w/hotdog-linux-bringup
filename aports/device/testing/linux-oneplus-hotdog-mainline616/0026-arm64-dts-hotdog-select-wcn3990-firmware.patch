@@ -1,4 +1,4 @@
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 4 Aug 2026 19:18:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: select WCN3990 firmware
 

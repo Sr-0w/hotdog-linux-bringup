@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 23:10:00 +0200
 Subject: [PATCH] arm64: dts: qcom: sm8150: add the camera control interfaces
 
@@ -16,7 +16,7 @@ compatible falls back to it.
 Both are left disabled, since they are only useful on a board that describes
 sensors on them.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150.dtsi | 134 +++++++++++++++++++++++++++
  1 file changed, 134 insertions(+)

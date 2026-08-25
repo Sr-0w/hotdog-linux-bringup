@@ -1,5 +1,5 @@
 From 41973bb5c009c263fbd22d7ee623641e0c94c192 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 12:34:00 +0200
 Subject: [PATCH] media: s5k3m5 report camera geometry and orientation
 

@@ -1,4 +1,4 @@
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 07:31:00 +0200
 Subject: [PATCH] qmi: preserve numberless calls and filter control sessions
 
@@ -10,7 +10,7 @@ OTASP and supplementary-control transactions.
 This keeps restricted and temporarily numberless calls visible without
 publishing a withheld number or creating phantom calls from control sessions.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
 --- a/src/mm-broadband-modem-qmi.c
 +++ b/src/mm-broadband-modem-qmi.c

@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 20:20:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: put volume down on its real pin
 
@@ -22,7 +22,7 @@ Describe volume down the same way as volume up, and stop enabling RESIN,
 because an input device that claims a key it can never report is worse than
 not offering it.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 34 +++++++++++++-----
  1 file changed, 25 insertions(+), 9 deletions(-)

@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 19:55:00 +0200
 Subject: [PATCH] ASoC: q6afe-dai: make DISPLAY_PORT_RX a playback widget
 
@@ -24,7 +24,7 @@ Declare it as an input like every other receive port. While here, pass NULL
 for the stream name rather than the string "NULL", matching the neighbouring
 receive ports.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  sound/soc/qcom/qdsp6/q6afe-dai.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

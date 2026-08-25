@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 19:00:00 +0200
 Subject: [PATCH] media: camss: program the sm8150 CAMNOC quality of service
 
@@ -16,7 +16,7 @@ did not reproduce with a coherent kernel, module tree and test state. Keep the
 minimal programming as a bounded diagnostic while the remaining CAMNOC path is
 isolated. The values come from cpastop_v175_101.h for this SoC revision.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../media/platform/qcom/camss/camss-vfe-17x.c | 50 +++++++++++++++++++
  1 file changed, 50 insertions(+)

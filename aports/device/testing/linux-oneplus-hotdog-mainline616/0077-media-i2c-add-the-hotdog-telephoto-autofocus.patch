@@ -1,5 +1,5 @@
 From b0cafaabe3adbc8d902d01222158ce219305954f Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 11:18:36 +0200
 Subject: [PATCH] media: i2c: add the hotdog telephoto autofocus
 

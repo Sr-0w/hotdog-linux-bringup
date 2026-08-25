@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 13:05:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: fix the camera PMIC enable polarity
 
@@ -17,7 +17,7 @@ drives the pin low:
 They were described here as active high, so they were being asserted the wrong
 way round.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)

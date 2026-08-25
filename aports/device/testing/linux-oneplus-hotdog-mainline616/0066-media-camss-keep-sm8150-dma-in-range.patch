@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 12:10:00 +0200
 Subject: [PATCH] media: camss: keep sm8150 DMA inside the addressable range
 
@@ -15,7 +15,7 @@ handed over every frame.
 Narrow the mask so allocations stay inside the range the hardware is described
 as addressing.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/platform/qcom/camss/camss.c | 13 ++++++++++++-
  1 file changed, 12 insertions(+), 1 deletion(-)

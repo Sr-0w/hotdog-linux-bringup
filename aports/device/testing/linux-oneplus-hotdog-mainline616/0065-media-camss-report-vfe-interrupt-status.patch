@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 02:10:00 +0200
 Subject: [PATCH] media: camss: report VFE interrupt status during bring-up
 
@@ -16,7 +16,7 @@ master fed from the same CSID blocks entirely, which makes that reading unsafe.
 Print the interrupt and bus status for the first few interrupts of a session so
 the two can be told apart. Temporary, to be dropped once frames arrive.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/platform/qcom/camss/camss-vfe-17x.c | 32 ++++++++++++
  1 file changed, 32 insertions(+)

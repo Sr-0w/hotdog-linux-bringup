@@ -1,5 +1,5 @@
 From 3d4ce923b662aeedbd84799106d0c436c66f6179 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 16:50:28 +0200
 Subject: [PATCH 113/114] media: qcom: hotdog-popup: match stock motor cadence
 

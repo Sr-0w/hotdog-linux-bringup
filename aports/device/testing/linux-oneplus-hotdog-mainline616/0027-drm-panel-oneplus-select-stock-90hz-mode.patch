@@ -1,5 +1,5 @@
 From 18fbc0e8b86d1fb40f0fc7261386f378d04bde16 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 4 Aug 2026 20:42:00 +0200
 Subject: [PATCH] drm: panel: oneplus-dsc: select the stock 90 Hz mode
 
@@ -14,7 +14,7 @@ hardware-validation revision.  Dynamic switching is deliberately left for
 a follow-up so userspace cannot select a 60 Hz mode without the matching
 panel command sequence.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c | 16 ++++++++--------
  1 file changed, 8 insertions(+), 8 deletions(-)

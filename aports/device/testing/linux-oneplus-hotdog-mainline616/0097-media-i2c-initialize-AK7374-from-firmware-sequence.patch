@@ -1,5 +1,5 @@
 From 7e6a84e31c6b8948b2341c698374553065daef81 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 00:00:09 +0200
 Subject: [PATCH] media: i2c: initialize AK7374 from firmware sequence
 

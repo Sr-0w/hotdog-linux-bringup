@@ -1,5 +1,5 @@
 From 51d04ed60efee0d9747430747f8c5be79b01a525 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 13:00:00 +0200
 Subject: [PATCH] arm64: dts: hotdog: enable the audio DSP
 
@@ -13,7 +13,7 @@ Keep SLIMbus, WCD9340 and the machine sound card disabled for now. Those
 pieces require their own hardware contracts and should not obscure an
 ADSP boot failure.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 5 +++++
  1 file changed, 5 insertions(+)

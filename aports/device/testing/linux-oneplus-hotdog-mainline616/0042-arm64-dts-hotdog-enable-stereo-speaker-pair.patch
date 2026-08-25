@@ -1,5 +1,5 @@
 From d3bd28f643e33f399adba442c20f5d7d836127e0 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 21:45:29 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: enable both internal speakers
 

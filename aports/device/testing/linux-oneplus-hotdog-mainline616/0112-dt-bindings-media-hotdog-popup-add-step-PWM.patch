@@ -1,5 +1,5 @@
 From 97ec3db317f116ef98202cb8549c80d3ab20e831 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 16:50:18 +0200
 Subject: [PATCH 112/114] dt-bindings: media: hotdog-popup: add step PWM
 

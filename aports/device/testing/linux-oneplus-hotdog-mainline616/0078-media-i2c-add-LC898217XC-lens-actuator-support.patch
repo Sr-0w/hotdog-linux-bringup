@@ -1,5 +1,5 @@
 From dd5b85ddc5bf4cee43c7aace5b5820bac1fa17c6 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 11:45:36 +0200
 Subject: [PATCH] media: i2c: add LC898217XC lens actuator support
 
@@ -29,7 +29,7 @@ index 000000000000..ffe148b11022
 +title: ON Semiconductor LC898217XC voice coil lens actuator
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +description:
 +  The LC898217XC is a 10-bit voice coil motor camera lens actuator
@@ -463,7 +463,7 @@ index 000000000000..12643f634d7e
 +};
 +module_i2c_driver(lc898217xc_i2c_driver);
 +
-+MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
 +MODULE_DESCRIPTION("ON Semiconductor LC898217XC VCM driver");
 +MODULE_LICENSE("GPL");
 -- 

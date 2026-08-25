@@ -1,5 +1,5 @@
 From 2c5e01fef6a39f67b634e0f24a50ae8ebde60415 Mon Sep 17 00:00:00 2001
-From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 18:14:13 +0200
 Subject: [PATCH] libcamera: add Sony IMX586 sensor data
 

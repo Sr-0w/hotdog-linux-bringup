@@ -1,5 +1,5 @@
 From f68739b4928b84a71ee5a70359cbdd7a3bf3055a Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 12:37:35 +0200
 Subject: [PATCH] iio: magnetometer: add hotdog MXM1120 Hall sensors
 
@@ -29,7 +29,7 @@ index 000000000..18e78087b
 +title: MagnaChip MXM1120 Hall effect magnetic position sensor
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +properties:
 +  compatible:
@@ -355,7 +355,7 @@ index 000000000..641e5bf9d
 +};
 +module_i2c_driver(mxm1120_driver);
 +
-+MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
 +MODULE_DESCRIPTION("MagnaChip MXM1120 Hall effect sensor driver");
 +MODULE_LICENSE("GPL");
 -- 

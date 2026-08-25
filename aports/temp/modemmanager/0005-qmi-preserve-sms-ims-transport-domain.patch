@@ -1,9 +1,9 @@
 From eaaf0be5b05f2b8430092bf9d1f8818b90119b37 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 08:22:28 +0200
 Subject: [PATCH] qmi: preserve SMS IMS transport domain
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  src/meson.build              |   1 +
  src/mm-broadband-modem-qmi.c |   7 +

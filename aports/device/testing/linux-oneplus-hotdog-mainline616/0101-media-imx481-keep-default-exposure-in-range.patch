@@ -1,5 +1,5 @@
 From dbfb13bbe87ea935e6741ac5506afba0469cb841 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 11:08:12 +0200
 Subject: [PATCH] media: imx481 keep default exposure in range
 

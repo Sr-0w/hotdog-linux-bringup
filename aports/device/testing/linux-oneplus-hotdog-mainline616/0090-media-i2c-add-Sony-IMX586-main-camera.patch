@@ -1,5 +1,5 @@
 From 6986f11ebf856a146b1766087e7a8870a5f9cb61 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sun, 9 Aug 2026 17:54:41 +0200
 Subject: [PATCH] media: i2c: add Sony IMX586 main camera
 

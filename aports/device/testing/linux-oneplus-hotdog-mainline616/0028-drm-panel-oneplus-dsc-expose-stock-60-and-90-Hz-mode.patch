@@ -1,5 +1,5 @@
 From 68b8b8fcab0fad1b5f9946556b94d09360d7b34f Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 4 Aug 2026 21:10:16 +0200
 Subject: [PATCH] drm: panel: oneplus-dsc: expose stock 60 and 90 Hz modes
 
@@ -12,7 +12,7 @@ CRTC mode during prepare, so every full modeset initializes the panel with
 the command matching its transport timing. Unknown early modes retain the
 validated 90 Hz fallback.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  .../gpu/drm/panel/panel-samsung-oneplus-dsc.c | 83 ++++++++++++++++++-
  1 file changed, 80 insertions(+), 3 deletions(-)

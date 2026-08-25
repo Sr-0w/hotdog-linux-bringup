@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Fri, 7 Aug 2026 20:45:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: describe the fuel gauge
 
@@ -31,7 +31,7 @@ the cell it ships with, and the driver can push devicetree values into a
 gauge's data memory, which is not something a description should do to a
 working battery.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 13 +++++++++++++
  1 file changed, 13 insertions(+)

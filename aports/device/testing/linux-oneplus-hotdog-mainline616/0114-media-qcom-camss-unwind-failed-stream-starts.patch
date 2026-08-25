@@ -1,5 +1,5 @@
 From 00944c86ea266594b3bca55ea3e2c9ed5da77f56 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 16:50:40 +0200
 Subject: [PATCH 114/114] media: qcom: camss: unwind failed stream starts
 

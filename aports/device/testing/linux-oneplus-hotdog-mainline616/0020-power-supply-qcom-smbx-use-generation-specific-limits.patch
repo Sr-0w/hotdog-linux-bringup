@@ -1,5 +1,5 @@
 From efadf674d41432f72b5d5cf580bbf2a32e62072f Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 4 Aug 2026 12:22:30 +0200
 Subject: [PATCH] power: supply: qcom_smbx: use generation-specific limits
 
@@ -13,7 +13,7 @@ suspended until conservative battery limits have been programmed, then
 restore input as the final probe action. Also make the overvoltage helper
 inspect the register value it read.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/power/supply/qcom_smbx.c | 207 ++++++++++++++++++++++++-------
  1 file changed, 161 insertions(+), 46 deletions(-)

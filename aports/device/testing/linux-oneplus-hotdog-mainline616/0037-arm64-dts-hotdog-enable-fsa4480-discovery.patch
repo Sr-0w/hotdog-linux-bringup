@@ -1,5 +1,5 @@
 From 66ec785cf39803a7cd209017de5ca5df9654aede Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 18:07:07 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: enable FSA4480 discovery
 
@@ -17,7 +17,7 @@ The two TFA9894 speaker amplifiers sharing this bus remain undescribed
 until their unsupported mainline driver and safe calibration path are
 resolved.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 35 ++++++++++++++++++++++
  1 file changed, 35 insertions(+)

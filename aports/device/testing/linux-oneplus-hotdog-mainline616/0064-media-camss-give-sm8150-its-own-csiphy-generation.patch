@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Sat, 8 Aug 2026 01:45:00 +0200
 Subject: [PATCH] media: camss: give sm8150 its own CSIPHY generation
 
@@ -21,7 +21,7 @@ Symptom this fixes: the sensor transmits and the CSID is correctly configured
 for four lanes over D-PHY, but latches receive errors and never interrupts,
 because the physical layer was set up for the wrong generation.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  drivers/media/platform/qcom/camss/camss-csiphy-3ph-1-0.c | 14 ++++++++
  drivers/media/platform/qcom/camss/camss-vfe.c            |  2 +

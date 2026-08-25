@@ -1,5 +1,5 @@
 From 0dbe05a37e9bbdc08985f4645848f3232327fcdd Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 5 Aug 2026 17:42:00 +0200
 Subject: [PATCH] arm64: dts: hotdog: use the headphone SLIMbus route
 
@@ -12,7 +12,7 @@ is used by existing upstream Qualcomm WCD sound cards.
 Select that hardware-backed playback pair while leaving capture and the
 external speaker amplifiers unchanged.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)

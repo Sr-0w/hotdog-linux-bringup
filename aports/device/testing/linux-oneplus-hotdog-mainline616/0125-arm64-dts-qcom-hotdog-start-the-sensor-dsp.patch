@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 23:30:00 +0200
 Subject: [PATCH] arm64: dts: qcom: hotdog: start the sensor DSP
 
@@ -13,7 +13,7 @@ The image comes from the handset's own modem partition, where the vendor ships
 it as slpi.mdt plus twenty-two segments, squashed into a single slpi.mbn the way
 the other remote processors here are packaged.
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
  arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 5 +++++
  1 file changed, 5 insertions(+)

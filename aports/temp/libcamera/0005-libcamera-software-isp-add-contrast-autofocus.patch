@@ -1,5 +1,5 @@
 From 8550d4a3ccfcba8607238b3c8604faef3a2c15ba Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 03:50:35 +0200
 Subject: [PATCH] libcamera: software_isp: add contrast autofocus
 

@@ -1,5 +1,5 @@
 From 4c2adc8444678c6cdb245042392e5dc61b7530b8 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 11 Aug 2026 07:44:38 +0200
 Subject: [PATCH 1/2] dt-bindings: input: add Awinic AW8697 haptics
 
@@ -23,7 +23,7 @@ index 000000000..ea70e9ab1
 +title: Awinic AW8697 LRA haptics controller
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +properties:
 +  compatible:

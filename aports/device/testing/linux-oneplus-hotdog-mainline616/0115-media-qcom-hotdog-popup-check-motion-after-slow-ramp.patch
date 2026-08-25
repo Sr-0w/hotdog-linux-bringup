@@ -1,5 +1,5 @@
 From 040c4cb448ebc299b79f1f54f7496976625e0923 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Mon, 10 Aug 2026 17:06:20 +0200
 Subject: [PATCH] media: qcom: hotdog-popup: check motion after slow ramp
 
