@@ -94,6 +94,30 @@ int main(int argc, char **argv) {
                hotdog_bearer_state_name(network.bearers[0].state));
         return 0;
     }
+    if (!strcmp(argv[1], "runtime")) {
+        struct hotdog_bearer_runtime runtime = { .mtu = 1428 };
+        hotdog_network_init(&network);
+        hotdog_network_set_subscription(&network, 0, true);
+        hotdog_network_nas_update(&network, 0, HOTDOG_NAS_HOME, 206, 1,
+                                  HOTDOG_RAT_LTE, true, true);
+        hotdog_network_bearer_start_purpose(&network, 0, 7, 5,
+                    HOTDOG_IP_V4V6, HOTDOG_AUTH_NONE, HOTDOG_BEARER_IMS,
+                    "ims", &bearer);
+        hotdog_network_bearer_leg_started(&network, bearer, HOTDOG_IP_V4, 100);
+        hotdog_network_bearer_leg_started(&network, bearer, HOTDOG_IP_V6, 200);
+        strcpy(runtime.ipv4, "10.0.0.2");
+        strcpy(runtime.ipv6, "2001:db8::2");
+        strcpy(runtime.dns1, "1.1.1.1");
+        strcpy(runtime.dns2, "2606:4700:4700::1111");
+        result = hotdog_network_bearer_connected(&network, bearer, &runtime);
+        printf("missing=%d ", result);
+        strcpy(runtime.pcscf_domains[0], "pcscf.example.test");
+        runtime.pcscf_domain_count = 1;
+        result = hotdog_network_bearer_connected(&network, bearer, &runtime);
+        printf("present=%d state=%s\n", result,
+               hotdog_bearer_state_name(network.bearers[0].state));
+        return 0;
+    }
     return 2;
 }
 '''
@@ -147,6 +171,12 @@ class HotdogImsBearerTests(unittest.TestCase):
         self.assertEqual(
             self.run_mode("network"),
             "ims=0 bearer=1 purpose=ims dds=0 state=starting",
+        )
+
+    def test_ims_runtime_requires_pcscf_routing_evidence(self) -> None:
+        self.assertEqual(
+            self.run_mode("runtime"),
+            f"missing={-errno.EINVAL} present=0 state=connected",
         )
 
 

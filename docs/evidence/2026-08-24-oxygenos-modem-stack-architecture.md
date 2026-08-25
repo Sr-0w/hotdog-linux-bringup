@@ -135,6 +135,20 @@ fail with `EBUSY`; force never orphans a session. SSR is the only path that may
 discard handles without Stop Network, because their QMI generation has ceased,
 and records `ENETRESET`. APN length, every address string, gateways, per-family
 and generic DNS, MTU and IPv6 prefix are validated before publication.
+For an IMS bearer, address and DNS validity are not sufficient: Current
+Settings explicitly requests the P-CSCF address and domain lists, and the
+connected transition requires at least one syntactically valid P-CSCF address
+or DNS name. Duplicate entries are collapsed and oversized or malformed lists
+fail closed.
+
+The OxygenOS 10 `msmnile` data configuration supplies the kernel-facing side:
+physical device `rmnet_ipa0`, single QMUX channel `rmnet0`, MAPv4 aggregation
+and eleven forward handles named `rmnet_data0` through `rmnet_data10` in both
+`dsi_config.xml` and `netmgr_config.xml`. `imsdatadaemon` delegates allocation
+to DSI rather than fixing an IMS mux in its own binary. The mainline executor
+must therefore ask rmnet for an available mux dynamically and retain the
+returned ID; hard-coding a guessed IMS mux would not reproduce OxygenOS and
+could collide with ModemManager.
 
 ### SMS and cell broadcast
 

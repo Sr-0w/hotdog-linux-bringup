@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
+#define _POSIX_C_SOURCE 200809L
 #include "hotdog-qmi-wds.h"
 
 #include <arpa/inet.h>
@@ -169,6 +170,34 @@ int hotdog_qmi_wds_stop_input(uint32_t packet_handle,
 	return 0;
 }
 
+int hotdog_qmi_wds_current_settings_input(
+	QmiMessageWdsGetCurrentSettingsInput **input)
+{
+	QmiWdsRequestedSettings requested =
+		QMI_WDS_REQUESTED_SETTINGS_DNS_ADDRESS |
+		QMI_WDS_REQUESTED_SETTINGS_IP_ADDRESS |
+		QMI_WDS_REQUESTED_SETTINGS_GATEWAY_INFO |
+		QMI_WDS_REQUESTED_SETTINGS_PCSCF_ADDRESS |
+		QMI_WDS_REQUESTED_SETTINGS_PCSCF_SERVER_ADDRESS_LIST |
+		QMI_WDS_REQUESTED_SETTINGS_PCSCF_DOMAIN_NAME_LIST |
+		QMI_WDS_REQUESTED_SETTINGS_MTU |
+		QMI_WDS_REQUESTED_SETTINGS_DOMAIN_NAME_LIST |
+		QMI_WDS_REQUESTED_SETTINGS_IP_FAMILY;
+	GError *error = NULL;
+
+	if (!input)
+		return -EINVAL;
+	*input = qmi_message_wds_get_current_settings_input_new();
+	if (!qmi_message_wds_get_current_settings_input_set_requested_settings(
+		    *input, requested, &error)) {
+		g_clear_error(&error);
+		qmi_message_wds_get_current_settings_input_unref(*input);
+		*input = NULL;
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int ipv4_string(guint32 address, char *target, size_t size)
 {
 	struct in_addr value = { .s_addr = GUINT32_TO_BE(address) };
@@ -189,6 +218,72 @@ static int ipv6_string(GArray *array, char *target, size_t size)
 		memcpy(&value.s6_addr[index * sizeof(word)], &word, sizeof(word));
 	}
 	return inet_ntop(AF_INET6, &value, target, (socklen_t)size) ? 0 : -EINVAL;
+}
+
+static bool contains_domain(char values[][HOTDOG_NETWORK_DOMAIN_SIZE],
+			    size_t count, const char *candidate)
+{
+	size_t index;
+
+	for (index = 0; index < count; index++)
+		if (!strcmp(values[index], candidate))
+			return true;
+	return false;
+}
+
+static int decode_pcscf(QmiMessageWdsGetCurrentSettingsOutput *output,
+			struct hotdog_bearer_runtime *runtime)
+{
+	GArray *array = NULL;
+	size_t index;
+
+	if (qmi_message_wds_get_current_settings_output_get_pcscf_server_address_list(
+		    output, &array, NULL) && array) {
+		if (array->len > HOTDOG_NETWORK_MAX_PCSCF)
+			return -EOVERFLOW;
+		for (index = 0; index < array->len; index++) {
+			char address[HOTDOG_NETWORK_ADDRESS_SIZE];
+			guint32 value = g_array_index(array, guint32, index);
+			size_t previous;
+			int result = ipv4_string(value, address, sizeof(address));
+
+			if (result)
+				return result;
+			for (previous = 0; previous < runtime->pcscf_address_count; previous++)
+				if (!strcmp(runtime->pcscf_addresses[previous], address))
+					break;
+			if (previous < runtime->pcscf_address_count)
+				continue;
+			if (runtime->pcscf_address_count == HOTDOG_NETWORK_MAX_PCSCF)
+				return -EOVERFLOW;
+			memcpy(runtime->pcscf_addresses[runtime->pcscf_address_count++],
+			       address, strlen(address) + 1);
+		}
+	}
+	array = NULL;
+	if (qmi_message_wds_get_current_settings_output_get_pcscf_domain_name_list(
+		    output, &array, NULL) && array) {
+		if (array->len > HOTDOG_NETWORK_MAX_PCSCF)
+			return -EOVERFLOW;
+		for (index = 0; index < array->len; index++) {
+			const char *domain = g_array_index(array, gchar *, index);
+			size_t length;
+
+			if (!domain)
+				return -EPROTO;
+			length = strnlen(domain, HOTDOG_NETWORK_DOMAIN_SIZE);
+			if (!length || length >= HOTDOG_NETWORK_DOMAIN_SIZE)
+				return -EPROTO;
+			if (contains_domain(runtime->pcscf_domains,
+					    runtime->pcscf_domain_count, domain))
+				continue;
+			if (runtime->pcscf_domain_count == HOTDOG_NETWORK_MAX_PCSCF)
+				return -EOVERFLOW;
+			memcpy(runtime->pcscf_domains[runtime->pcscf_domain_count++],
+			       domain, length + 1);
+		}
+	}
+	return 0;
 }
 
 int hotdog_qmi_wds_decode_current_settings(
@@ -216,6 +311,9 @@ int hotdog_qmi_wds_decode_current_settings(
 			return -EPROTO;
 		runtime->mtu = mtu;
 	}
+	result = decode_pcscf(output, runtime);
+	if (result)
+		return result;
 	if (family == QMI_WDS_IP_FAMILY_IPV4) {
 		if (!qmi_message_wds_get_current_settings_output_get_ipv4_address(
 			    output, &address, NULL))

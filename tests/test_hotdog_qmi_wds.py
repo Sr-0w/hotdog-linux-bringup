@@ -18,6 +18,8 @@ int main(void) {
         .auth=HOTDOG_AUTH_PAP_CHAP,.state=HOTDOG_BEARER_STARTING };
     struct hotdog_wds_credentials c = { "user", "pass" };
     struct hotdog_qmi_wds_plan p;
+    QmiMessageWdsGetCurrentSettingsInput *settings = NULL;
+    QmiWdsRequestedSettings requested = QMI_WDS_REQUESTED_SETTINGS_NONE;
     size_t i; strcpy(b.apn,"internet");
     if (hotdog_qmi_wds_plan_build(&b,&c,QMI_DATA_ENDPOINT_TYPE_EMBEDDED,4,
                                   QMI_WDS_CLIENT_TYPE_TETHERED,&p)) return 1;
@@ -35,6 +37,11 @@ int main(void) {
         printf("leg%zu=family:%u ep:%u iface:%u mux:%u profile:%u apn:%s auth:%u creds:%s/%s\n",
                i,f,ep,iface,mux,profile,apn,auth,user,pass);
     }
+    if (hotdog_qmi_wds_current_settings_input(&settings)) return 5;
+    if (!qmi_message_wds_get_current_settings_input_get_requested_settings(
+            settings, &requested, NULL)) return 6;
+    printf("settings=%x\n", requested);
+    qmi_message_wds_get_current_settings_input_unref(settings);
     hotdog_qmi_wds_plan_clear(&p); return 0;
 }
 '''
@@ -96,6 +103,11 @@ int main(void) { QmiMessageWdsStopNetworkInput *i=NULL; guint32 h=0;
             output = subprocess.run([str(binary)], check=True,
                                     capture_output=True, text=True).stdout.strip()
             self.assertEqual(output, "handle=12345678")
+
+    def test_current_settings_request_includes_ims_routing_evidence(self) -> None:
+        output = subprocess.run([str(self.binary)], check=True,
+                                capture_output=True, text=True).stdout
+        self.assertIn("settings=ff10", output)
 
 
 if __name__ == "__main__":

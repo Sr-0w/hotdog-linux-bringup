@@ -10,6 +10,8 @@
 #define HOTDOG_NETWORK_MAX_BEARERS 8
 #define HOTDOG_NETWORK_APN_SIZE 101
 #define HOTDOG_NETWORK_ADDRESS_SIZE 48
+#define HOTDOG_NETWORK_DOMAIN_SIZE 254
+#define HOTDOG_NETWORK_MAX_PCSCF 8
 
 enum hotdog_nas_registration {
 	HOTDOG_NAS_NONE,
@@ -80,6 +82,10 @@ struct hotdog_bearer_runtime {
 	unsigned int ipv6_prefix;
 	char dns1[HOTDOG_NETWORK_ADDRESS_SIZE];
 	char dns2[HOTDOG_NETWORK_ADDRESS_SIZE];
+	char pcscf_addresses[HOTDOG_NETWORK_MAX_PCSCF][HOTDOG_NETWORK_ADDRESS_SIZE];
+	char pcscf_domains[HOTDOG_NETWORK_MAX_PCSCF][HOTDOG_NETWORK_DOMAIN_SIZE];
+	size_t pcscf_address_count;
+	size_t pcscf_domain_count;
 	unsigned int mtu;
 };
 

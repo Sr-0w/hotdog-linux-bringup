@@ -198,6 +198,35 @@ static bool valid_dns(const char *address)
 	       valid_address(address, AF_INET6, false);
 }
 
+static bool valid_domain(const char *domain)
+{
+	size_t index, label = 0, length;
+
+	if (!domain)
+		return false;
+	length = strnlen(domain, HOTDOG_NETWORK_DOMAIN_SIZE);
+	if (!length || length >= HOTDOG_NETWORK_DOMAIN_SIZE || domain[0] == '.' ||
+	    domain[length - 1] == '.')
+		return false;
+	for (index = 0; index < length; index++) {
+		char character = domain[index];
+
+		if (character == '.') {
+			if (!label || label > 63 || domain[index - 1] == '-')
+				return false;
+			label = 0;
+			continue;
+		}
+		if (!((character >= 'a' && character <= 'z') ||
+		      (character >= 'A' && character <= 'Z') ||
+		      (character >= '0' && character <= '9') ||
+		      (character == '-' && label)))
+			return false;
+		label++;
+	}
+	return label && label <= 63 && domain[length - 1] != '-';
+}
+
 static bool valid_runtime(const struct hotdog_bearer *bearer,
 			  const struct hotdog_bearer_runtime *runtime)
 {
@@ -205,6 +234,20 @@ static bool valid_runtime(const struct hotdog_bearer *bearer,
 		bearer->family == HOTDOG_IP_V4V6;
 	bool need_v6 = bearer->family == HOTDOG_IP_V6 ||
 		bearer->family == HOTDOG_IP_V4V6;
+	size_t index;
+
+	if (runtime->pcscf_address_count > HOTDOG_NETWORK_MAX_PCSCF ||
+	    runtime->pcscf_domain_count > HOTDOG_NETWORK_MAX_PCSCF ||
+	    (bearer->purpose == HOTDOG_BEARER_IMS &&
+	     !runtime->pcscf_address_count && !runtime->pcscf_domain_count))
+		return false;
+	for (index = 0; index < runtime->pcscf_address_count; index++)
+		if (!valid_address(runtime->pcscf_addresses[index], AF_INET, false) &&
+		    !valid_address(runtime->pcscf_addresses[index], AF_INET6, false))
+			return false;
+	for (index = 0; index < runtime->pcscf_domain_count; index++)
+		if (!valid_domain(runtime->pcscf_domains[index]))
+			return false;
 
 	return runtime->mtu >= 576 && runtime->mtu <= 65535 &&
 	       runtime->ipv6_prefix <= 128 &&

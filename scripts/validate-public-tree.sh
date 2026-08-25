@@ -719,6 +719,11 @@ validate_hotdog_radio_state_contract() {
 		die "IMS bearer model does not identify IMS profiles by APN type"
 	grep -q 'purpose != HOTDOG_BEARER_DEFAULT' "$source_dir/hotdog-network.c" ||
 		die "dedicated IMS bearers are incorrectly tied to DDS switching"
+	grep -q 'QMI_WDS_REQUESTED_SETTINGS_PCSCF_SERVER_ADDRESS_LIST' \
+		"$source_dir/hotdog-qmi-wds.c" ||
+		die "WDS Current Settings do not request P-CSCF routing evidence"
+	grep -q 'purpose == HOTDOG_BEARER_IMS' "$source_dir/hotdog-network.c" ||
+		die "IMS connected state does not require P-CSCF routing evidence"
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done
