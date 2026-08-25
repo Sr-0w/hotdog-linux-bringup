@@ -117,6 +117,27 @@ which source `iio-sensor-proxy` prefers. The first is not a free action: `.prox`
 and `.als` are declared in the same `tcs3701` configuration, and the ambient
 light sensor on that chip works and is calibrated. Neither has been done.
 
+## Why a binary channel read far forever
+
+With the IIO device registered and the udev level set, the engine produced
+thirty clean transitions over 123 seconds while `ProximityNear` never moved
+once. The chain broke on arithmetic, in `iio-poll-proximity`:
+
+```c
+near_level *= (last_level > near_level) ? 0.9 : 1.1;
+is_near = (prox > near_level);
+```
+
+The hysteresis is multiplicative, applied either side of the near level. With
+a channel reporting 1 for near and `PROXIMITY_NEAR_LEVEL=1`, the threshold is
+1.1 and `1 > 1.1` is never true. The sensor reads far for the life of the
+process, and nothing in any log says why.
+
+A proximity channel is a magnitude, not a boolean, and it needs headroom on
+both sides of its threshold. The driver now reports 2 for near and 0 for far,
+which is the smallest pair that clears the upper mark and stays under the lower
+one, so the hysteresis works as designed in both directions.
+
 `Ultrasound ML`, the 432-byte control, is bidirectional on stock and the audio
 HAL references it. This port neither reads nor writes it, and which direction
 OxygenOS uses has not been determined.
