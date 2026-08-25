@@ -298,6 +298,14 @@ Delete Config cleanup before selection can continue. Synthetic replay covers
 multi-chunk completion and every cleanup transition; no hardware mutation is
 enabled by this model alone.
 
+`hotdog-qmi-pdc-list` inventories the modem-EFS software configs before that
+plan. The request is global and read-only; the indication must carry the
+expected token, software type, unique nonempty IDs and no remote error. The
+decoded IDs are compared byte-for-byte with local MBN SHA-1 IDs. Matching
+entries are marked loaded so the plan never uploads them twice, while resident
+IDs from an older firmware catalog remain visible as unmatched state instead
+of being mistaken for the current profile.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;

@@ -191,6 +191,31 @@ bool hotdog_pdc_plan_verified(const struct hotdog_pdc_subscription *subscription
 	return true;
 }
 
+size_t hotdog_pdc_mark_loaded(struct hotdog_pdc_catalog *catalog,
+			      const struct hotdog_pdc_id *ids, size_t id_count)
+{
+	size_t config, id, unmatched = 0;
+
+	if (!catalog || (!ids && id_count))
+		return id_count;
+	for (config = 0; config < catalog->count; config++)
+		catalog->configs[config].loaded = false;
+	for (id = 0; id < id_count; id++) {
+		bool found = false;
+
+		for (config = 0; config < catalog->count; config++) {
+			if (!hotdog_pdc_id_equal(&catalog->configs[config].id, &ids[id]))
+				continue;
+			catalog->configs[config].loaded = true;
+			found = true;
+			break;
+		}
+		if (!found)
+			unmatched++;
+	}
+	return unmatched;
+}
+
 const char *hotdog_pdc_operation_name(enum hotdog_pdc_operation_type type)
 {
 	switch (type) {

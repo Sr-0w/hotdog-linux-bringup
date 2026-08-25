@@ -546,6 +546,9 @@ validate_hotdog_radio_state_contract() {
 		      hotdog-qmi-pdc-load.c hotdog-qmi-pdc-load.h; do
 		[ -f "$source_dir/$source" ] || die "missing PDC load source: $source"
 	done
+	for source in hotdog-qmi-pdc-list.c hotdog-qmi-pdc-list.h; do
+		[ -f "$source_dir/$source" ] || die "missing PDC catalog transport source: $source"
+	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
 	done

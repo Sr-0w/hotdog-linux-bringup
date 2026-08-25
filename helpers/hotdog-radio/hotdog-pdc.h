@@ -81,6 +81,8 @@ int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions
 			     struct hotdog_pdc_plan *plan);
 bool hotdog_pdc_plan_verified(const struct hotdog_pdc_subscription *subscriptions,
 			      size_t subscription_count);
+size_t hotdog_pdc_mark_loaded(struct hotdog_pdc_catalog *catalog,
+			      const struct hotdog_pdc_id *ids, size_t id_count);
 bool hotdog_pdc_id_equal(const struct hotdog_pdc_id *left, const struct hotdog_pdc_id *right);
 const char *hotdog_pdc_operation_name(enum hotdog_pdc_operation_type type);
 

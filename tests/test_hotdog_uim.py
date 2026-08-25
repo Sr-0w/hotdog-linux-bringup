@@ -100,6 +100,7 @@ class HotdogQmiUimBuildTests(unittest.TestCase):
             self.assertIn("--plan-pdc", help_output.stdout)
             self.assertIn("--mcfg-root=DIR", help_output.stdout)
             self.assertIn("--probe-dms", help_output.stdout)
+            self.assertIn("--probe-pdc-catalog", help_output.stdout)
             unsupported = subprocess.run(
                 [str(binary), "--pdc-subscription=0"], capture_output=True, text=True,
             )

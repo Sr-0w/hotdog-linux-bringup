@@ -4,6 +4,7 @@
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 #include "hotdog-mcfg.h"
 #include "hotdog-qmi-pdc.h"
+#include "hotdog-qmi-pdc-list.h"
 #endif
 
 #include <gio/gio.h>
@@ -23,18 +24,23 @@ struct bootstrap {
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	QmiClientPdc *pdc;
 	struct hotdog_pdc_catalog *catalog;
+	struct hotdog_pdc_loaded_catalog loaded_catalog;
 	struct hotdog_pdc_subscription pdc_subscriptions[HOTDOG_PDC_MAX_SUBSCRIPTIONS];
 	uint32_t pdc_token;
 	uint32_t pdc_expected_token;
 	size_t pdc_query_index;
 	gulong pdc_indication_id;
+	gulong pdc_list_indication_id;
 	guint pdc_timeout_id;
+	guint pdc_list_timeout_id;
+	uint32_t pdc_list_token;
 #endif
 	unsigned int node;
 	int pdc_probe_subscription;
 	char *mcfg_root;
 	gboolean plan_pdc;
 	gboolean probe_dms;
+	gboolean probe_pdc_catalog;
 	int result;
 	bool finished;
 };
@@ -219,6 +225,91 @@ static gboolean pdc_query_timeout(gpointer user_data)
 	return G_SOURCE_REMOVE;
 }
 
+static gboolean pdc_list_timeout(gpointer user_data)
+{
+	struct bootstrap *bootstrap = user_data;
+
+	bootstrap->pdc_list_timeout_id = 0;
+	printf("pdc-loaded-count=0 result=timeout-empty\n");
+	finish(bootstrap, 0);
+	return G_SOURCE_REMOVE;
+}
+
+static void pdc_list_indication(QmiClientPdc *client,
+				QmiIndicationPdcListConfigsOutput *output,
+				struct bootstrap *bootstrap)
+{
+	uint16_t remote_result = 0;
+	size_t index;
+	int result;
+
+	(void)client;
+	result = hotdog_qmi_pdc_decode_list(output, bootstrap->pdc_list_token,
+					    &bootstrap->loaded_catalog, &remote_result);
+	if (result == -ESTALE)
+		return;
+	if (bootstrap->pdc_list_timeout_id) {
+		g_source_remove(bootstrap->pdc_list_timeout_id);
+		bootstrap->pdc_list_timeout_id = 0;
+	}
+	if (result) {
+		g_printerr("PDC list indication rejected: %d remote=%u\n",
+			   result, remote_result);
+		finish(bootstrap, 1);
+		return;
+	}
+	printf("pdc-loaded-count=%zu\n", bootstrap->loaded_catalog.count);
+	for (index = 0; index < bootstrap->loaded_catalog.count; index++) {
+		printf("pdc-loaded%zu=", index);
+		print_pdc_id(&bootstrap->loaded_catalog.ids[index]);
+		printf("\n");
+	}
+	finish(bootstrap, 0);
+}
+
+static void pdc_list_ready(QmiClientPdc *client, GAsyncResult *res,
+			   struct bootstrap *bootstrap)
+{
+	QmiMessagePdcListConfigsOutput *output;
+	GError *error = NULL;
+
+	output = qmi_client_pdc_list_configs_finish(client, res, &error);
+	if (!output) {
+		g_printerr("PDC list request failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	if (!qmi_message_pdc_list_configs_output_get_result(output, &error)) {
+		g_printerr("PDC list response failed: %s\n", error->message);
+		g_clear_error(&error);
+		qmi_message_pdc_list_configs_output_unref(output);
+		finish(bootstrap, 1);
+		return;
+	}
+	qmi_message_pdc_list_configs_output_unref(output);
+}
+
+static void pdc_list_start(struct bootstrap *bootstrap)
+{
+	QmiMessagePdcListConfigsInput *input = NULL;
+	int result;
+
+	bootstrap->pdc_list_token = ++bootstrap->pdc_token;
+	result = hotdog_qmi_pdc_list_input(bootstrap->pdc_list_token, &input);
+	if (result) {
+		g_printerr("PDC list input rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	bootstrap->pdc_list_indication_id = g_signal_connect(
+		bootstrap->pdc, "list-configs", G_CALLBACK(pdc_list_indication), bootstrap);
+	bootstrap->pdc_list_timeout_id = g_timeout_add_seconds(6, pdc_list_timeout, bootstrap);
+	qmi_client_pdc_list_configs(bootstrap->pdc, input, 10, bootstrap->cancellable,
+				    (GAsyncReadyCallback)pdc_list_ready, bootstrap);
+	qmi_message_pdc_list_configs_input_unref(input);
+}
+
 static void pdc_selected_indication(QmiClientPdc *client,
 				    QmiIndicationPdcGetSelectedConfigOutput *output,
 				    struct bootstrap *bootstrap)
@@ -344,6 +435,10 @@ static void pdc_client_ready(QmiDevice *device, GAsyncResult *res,
 		return;
 	}
 	bootstrap->pdc = QMI_CLIENT_PDC(client);
+	if (bootstrap->probe_pdc_catalog) {
+		pdc_list_start(bootstrap);
+		return;
+	}
 	bootstrap->pdc_indication_id = g_signal_connect(
 		bootstrap->pdc, "get-selected-config",
 		G_CALLBACK(pdc_selected_indication), bootstrap);
@@ -429,7 +524,13 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 			(unsigned int)bootstrap->pdc_probe_subscription;
 	}
 	if (!bootstrap->inventory.gw_count) {
-		if (bootstrap->probe_dms)
+		if (bootstrap->probe_pdc_catalog)
+			qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_PDC,
+						   QMI_CID_NONE, 10,
+						   bootstrap->cancellable,
+						   (GAsyncReadyCallback)pdc_client_ready,
+						   bootstrap);
+		else if (bootstrap->probe_dms)
 			start_dms_probe(bootstrap);
 		else
 			finish(bootstrap, 0);
@@ -463,7 +564,7 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
 	qmi_message_uim_get_card_status_output_unref(output);
 	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc ||
-			bootstrap->probe_dms) &&
+			bootstrap->probe_dms || bootstrap->probe_pdc_catalog) &&
 			(result == -EIO || result == -ENODEV))) {
 		g_printerr("UIM inventory rejected: %d\n", result);
 		finish(bootstrap, 1);
@@ -569,6 +670,9 @@ int main(int argc, char **argv)
 		  "Build and print a PDC transaction without executing it", NULL },
 		{ "probe-dms", 0, 0, G_OPTION_ARG_NONE, &bootstrap.probe_dms,
 		  "Read and print the DMS operating mode", NULL },
+		{ "probe-pdc-catalog", 0, 0, G_OPTION_ARG_NONE,
+		  &bootstrap.probe_pdc_catalog,
+		  "Read and print resident software PDC config IDs", NULL },
 		{ NULL }
 	};
 
@@ -601,8 +705,16 @@ int main(int argc, char **argv)
 		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
+	if (bootstrap.probe_pdc_catalog &&
+	    (bootstrap.plan_pdc || bootstrap.probe_dms ||
+	     bootstrap.pdc_probe_subscription >= 0)) {
+		g_printerr("PDC catalog probing must run as a separate read-only operation\n");
+		g_free(bootstrap.mcfg_root);
+		return 2;
+	}
 #ifndef HOTDOG_QMI_PDC_SUBSCRIPTIONS
-	if (bootstrap.pdc_probe_subscription >= 0 || bootstrap.plan_pdc) {
+	if (bootstrap.pdc_probe_subscription >= 0 || bootstrap.plan_pdc ||
+	    bootstrap.probe_pdc_catalog) {
 		g_printerr("PDC probing and planning require the patched libqmi build\n");
 		g_free(bootstrap.mcfg_root);
 		return 2;
@@ -616,8 +728,12 @@ int main(int argc, char **argv)
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	if (bootstrap.pdc_timeout_id)
 		g_source_remove(bootstrap.pdc_timeout_id);
+	if (bootstrap.pdc_list_timeout_id)
+		g_source_remove(bootstrap.pdc_list_timeout_id);
 	if (bootstrap.pdc && bootstrap.pdc_indication_id)
 		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_indication_id);
+	if (bootstrap.pdc && bootstrap.pdc_list_indication_id)
+		g_signal_handler_disconnect(bootstrap.pdc, bootstrap.pdc_list_indication_id);
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.pdc));
 	g_clear_object(&bootstrap.pdc);
 #endif

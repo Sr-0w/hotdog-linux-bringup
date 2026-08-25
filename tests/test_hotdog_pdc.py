@@ -101,6 +101,14 @@ class HotdogPdcTests(unittest.TestCase):
         self.assertEqual(result.stdout.count("=load-config,"), 1)
         self.assertEqual(result.stdout.count("=delete-config,"), 1)
 
+    def test_loaded_catalog_avoids_duplicate_load(self) -> None:
+        result = self.replay(
+            "CONFIG carrier 1 IIN 123456\n"
+            "SUB 0 1234560000000000000 0 0 -\nPLAN\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("=load-config,", result.stdout)
+
     def test_unmatched_card_fails_before_mutation(self) -> None:
         result = self.replay(
             "CONFIG carrier 1 IIN 123456\n"
