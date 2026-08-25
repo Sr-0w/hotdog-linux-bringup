@@ -66,6 +66,7 @@ Recent evidence and current regression records:
 - [Read-only UIM and subscription-scoped PDC](evidence/2026-08-25-radio-pdc-readonly.md)
 - [Read-only UIM physical-slot identity](evidence/2026-08-25-radio-uim-slot-identity.md)
 - [OxygenOS MCFG catalog reconstruction](evidence/2026-08-25-oxygenos-mcfg-catalog.md)
+- [Installed MCFG catalog and no-SIM dry-run gate](evidence/2026-08-25-radio-mcfg-dry-plan.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)
 - [Sensor-PD clock state and island-mode control](evidence/2026-08-20-sensor-pd-clock-and-island-control.md)
