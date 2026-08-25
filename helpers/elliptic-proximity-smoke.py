@@ -33,6 +33,11 @@ STATE_FILE = pathlib.Path("/run/hotdog-proximity")
 
 MICROPHONE_INDEX_MAX = 7
 
+# The engine confirms near quickly and far over a longer stable window, so a
+# symmetric 15 s gate failed the uncover half of every guided cycle while the
+# events themselves were arriving correctly.
+GESTURE_TIMEOUT = 30.0
+
 SND_PCM_STREAM_PLAYBACK = 0
 SND_PCM_STREAM_CAPTURE = 1
 SND_PCM_FORMAT_S16_LE = 2
@@ -215,7 +220,7 @@ def wait_for_state(event_file, expected, timeout, output):
 
 
 def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
-          operation_mode=699, microphone_index=0):
+          operation_mode=699, microphone_index=0, record=None):
     if os.geteuid() != 0:
         raise SmokeError("run this smoke test as root")
 
@@ -299,7 +304,8 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
                     print("\nCycle %d/3" % cycle, flush=True)
                     input("COUVRE maintenant le haut de l'ecran, puis appuie "
                           "sur Entree... ")
-                    if not wait_for_state(event_file, "near", 15, output):
+                    if not wait_for_state(event_file, "near",
+                                          GESTURE_TIMEOUT, output):
                         raise SmokeError("no near event after cover gesture "
                                          "in cycle %d" % cycle)
                     events += 1
@@ -307,11 +313,33 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
 
                     input("DECOUVRE completement le haut de l'ecran, puis "
                           "appuie sur Entree... ")
-                    if not wait_for_state(event_file, "far", 15, output):
+                    if not wait_for_state(event_file, "far",
+                                          GESTURE_TIMEOUT, output):
                         raise SmokeError("no far event after uncover gesture "
                                          "in cycle %d" % cycle)
                     events += 1
                     print("Far recu.", flush=True)
+            elif record:
+                # Measure rather than gate. Every transition is timestamped
+                # against the moment the engine was armed, so near and far
+                # latency can be read off the log instead of guessed at.
+                log_line(output, "record: %.0fs" % record)
+                started = time.monotonic()
+                deadline = started + record
+                remaining = -1
+                while time.monotonic() < deadline:
+                    state = read_proximity_event(event_file, 0.5, output)
+                    if state:
+                        events += 1
+                        log_line(output, "t=%7.2f %s"
+                                 % (time.monotonic() - started, state))
+                    left = int(deadline - time.monotonic()) + 1
+                    if left != remaining:
+                        print("\r  %3ds  %d transitions   "
+                              % (left, events), end="", flush=True)
+                        remaining = left
+                print()
+                log_line(output, "record-total: %d transitions" % events)
             elif electronic_probe:
                 log_line(output, "electronic-probe: covered warmup")
                 deadline = time.monotonic() + 10
@@ -433,6 +461,10 @@ def main(argv=None):
     mode.add_argument("--interactive", action="store_true", dest="interactive")
     mode.add_argument("--monitor", action="store_false", dest="interactive")
     mode.add_argument("--electronic-probe", action="store_true")
+    mode.add_argument("--record", type=float, metavar="SECONDS",
+                      help="arm the engine and timestamp every transition for "
+                           "this long. Cover and uncover at your own pace; "
+                           "nothing has to line up with a prompt.")
     parser.set_defaults(interactive=True)
     args = parser.parse_args(argv)
     if args.duration <= 0 or args.duration > 300:
@@ -451,10 +483,16 @@ def main(argv=None):
         args.interactive = False
     if args.electronic_probe:
         args.interactive = False
-    if (args.interactive or args.sweep_microphone) and args.log is None:
+    if args.record is not None:
+        if not 0 < args.record <= 300:
+            parser.error("--record must be in ]0, 300] seconds")
+        args.interactive = False
+    if (args.interactive or args.sweep_microphone
+            or args.record is not None) and args.log is None:
         args.log = pathlib.Path("/home/user/proximity-test-%s.log"
                                 % time.strftime("%Y%m%d-%H%M%S"))
-    if (args.interactive or args.sweep_microphone) and os.geteuid() != 0:
+    if (args.interactive or args.sweep_microphone
+            or args.record is not None) and os.geteuid() != 0:
         # This image ships sudo and no doas. Try both rather than failing on
         # the one that happens to be absent.
         elevate = next((tool for tool in ("doas", "sudo")
@@ -472,9 +510,11 @@ def main(argv=None):
     try:
         result = smoke(args.duration, args.log, args.interactive,
                        args.electronic_probe, args.operation_mode,
-                       args.microphone_index)
+                       args.microphone_index, args.record)
         if args.interactive:
             print("\nPASS: trois cycles near/far recus.")
+            print("Journal: %s" % args.log)
+        elif args.record is not None:
             print("Journal: %s" % args.log)
         return result
     except (OSError, SmokeError, subprocess.CalledProcessError) as error:
