@@ -154,8 +154,9 @@ static int map_pdp_type(QmiWdsPdpType source, enum hotdog_profile_pdp_type *targ
 	case QMI_WDS_PDP_TYPE_IPV4_OR_IPV6:
 		*target = HOTDOG_PROFILE_PDP_IPV4V6;
 		return 0;
+	default:
+		return -EPROTO;
 	}
-	return -EPROTO;
 }
 
 int hotdog_qmi_wds_decode_profile_settings(

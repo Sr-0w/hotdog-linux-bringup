@@ -118,6 +118,12 @@ modem profile to request P-CSCF discovery through PCO. Zero and duplicate
 profile indexes, oversized inventories and incomplete settings fail closed.
 The adapter deliberately never requests profile usernames or passwords, so
 profile selection cannot leak APN credentials into logs or public state.
+`hotdog-wds-profile-probe` exercises this path without a SIM or readiness
+record: it allocates a separate WDS CID for each requested subscription, binds
+that CID, reads the profile list and settings, reports the selected IMS profile
+or a bounded reason for no selection, then releases every CID. It has no UIM,
+Start/Stop Network, rmnet-link or credential API, so it is suitable for a
+no-SIM transport smoke test but cannot be mistaken for a data-call test.
 
 The model now retains the exact IPv4 and IPv6 packet handles. A bearer cannot
 become connected until every family it requested has both a handle and valid

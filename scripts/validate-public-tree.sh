@@ -688,6 +688,8 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wds-profile.c hotdog-qmi-wds-profile.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS profile transport: $source"
 	done
+	[ -f "$source_dir/hotdog-wds-profile-probe.c" ] ||
+		die "missing read-only WDS profile probe"
 	grep -q 'qmi_message_wds_bind_subscription_input_set_subscription_id' \
 		"$source_dir/hotdog-qmi-wds-profile.c" ||
 		die "WDS profile transport does not bind a modem subscription"
@@ -698,6 +700,10 @@ validate_hotdog_radio_state_contract() {
 	done
 	if grep -Eq 'get_(username|password)' "$source_dir/hotdog-qmi-wds-profile.c"; then
 		die "WDS profile discovery must not read APN credentials"
+	fi
+	if grep -Eqi 'start_network|stop_network|QMI_SERVICE_UIM|add_link' \
+		"$source_dir/hotdog-wds-profile-probe.c"; then
+		die "read-only WDS profile probe contains a mutating modem operation"
 	fi
 	for source in hotdog-network.c hotdog-network.h \
 		hotdog-ims-bearer.c hotdog-ims-bearer.h; do
