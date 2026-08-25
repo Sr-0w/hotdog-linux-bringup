@@ -13,12 +13,12 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **207 Markdown files**.
+Total: **208 Markdown files**.
 
 | Role | Count |
 |---|---:|
 | Audit register | 1 |
-| Current documentation | 28 |
+| Current documentation | 29 |
 | Disabled helper | 1 |
 | Evidence | 160 |
 | Evidence policy | 1 |
@@ -237,6 +237,7 @@ Total: **207 Markdown files**.
 | `docs/status.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/upstream-submissions.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `helpers/r6-ufs-regdump/README.md` | Disabled helper | Fail-closed safety status verified |
+| `kernel-checkpoints/clearstaff-403b56c-r181/README.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `upstream/2026-08-12/README.md` | Mail archive | Immutable upstream submission context |
 | `work/ipa-v4.1/README.md` | Work note | Historical/experimental scope stated |
 | `work/scc-sm8150/README.md` | Work note | Historical/experimental scope stated |
