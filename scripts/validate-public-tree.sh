@@ -685,6 +685,13 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-wds.c hotdog-qmi-wds.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS data-plane adapter: $source"
 	done
+	for source in hotdog-qmi-rmnet.c hotdog-qmi-rmnet.h; do
+		[ -f "$source_dir/$source" ] || die "missing QMI rmnet topology adapter: $source"
+	done
+	grep -q 'QMI_DATA_ENDPOINT_TYPE_EMBEDDED' "$source_dir/hotdog-qmi-rmnet.c" ||
+		die "IPA rmnet topology lacks its embedded QMI endpoint"
+	grep -q 'QMI_DEVICE_MUX_ID_MAX' "$source_dir/hotdog-qmi-rmnet.c" ||
+		die "rmnet link validation does not bound dynamic mux IDs"
 	for source in hotdog-qmi-wds-profile.c hotdog-qmi-wds-profile.h; do
 		[ -f "$source_dir/$source" ] || die "missing WDS profile transport: $source"
 	done
