@@ -229,6 +229,15 @@ capability, then selected that carrier by IIN. Runtime code therefore discovers
 the profile from card and MBN metadata instead of carrying device-owner or
 operator-specific constants.
 
+The `hotdog-mcfg` runtime catalog now scans the packaged profile tree without
+following symlinks, parses every MBN, sorts relative paths deterministically
+and rejects duplicate configuration IDs. The ID is the SHA-1 digest of the
+complete MBN, matching both libqmi's PDC Load Config implementation and the
+20-byte QCRIL/PDC contract. The matching OOS10 list has 69 entries; one stale
+`sm8150.g` list path corresponds to the real `sm8150.p` default profile, so the
+scanner reports list drift but never hides a valid parsed profile. See
+[the OxygenOS catalog reconstruction](2026-08-25-oxygenos-mcfg-catalog.md).
+
 The transport-independent `hotdog-pdc` model now turns that selection into an
 auditable multi-subscription transaction. It saves each previous active ID,
 sets each populated subscription independently, issues one bounded global

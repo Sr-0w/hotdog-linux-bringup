@@ -8,9 +8,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define HOTDOG_PDC_MAX_CONFIGS 128
+#define HOTDOG_PDC_MAX_CONFIGS 256
 #define HOTDOG_PDC_MAX_SUBSCRIPTIONS 3
 #define HOTDOG_PDC_ID_SIZE 20
+#define HOTDOG_PDC_PATH_SIZE 512
 #define HOTDOG_PDC_MAX_OPERATIONS 32
 
 struct hotdog_pdc_id {
@@ -22,6 +23,7 @@ struct hotdog_pdc_config {
 	struct hotdog_pdc_id id;
 	struct hotdog_mbn_metadata metadata;
 	uint32_t version;
+	char path[HOTDOG_PDC_PATH_SIZE];
 };
 
 struct hotdog_pdc_catalog {
