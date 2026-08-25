@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
 usage() {
 	cat <<'USAGE'
 Usage: package-public-release.sh --version VERSION --boot IMAGE --dtbo IMAGE \
@@ -165,25 +167,12 @@ if [ "$(stat -c '%s' "$root_archive")" -gt "$max_asset_size" ]; then
 	split_rootfs=1
 fi
 
-{
-	for file in "$boot_asset" "$dtbo_asset" "$apk_asset" "$install_asset"; do
-		[ -e "$file" ] || continue
-		(cd "$outdir" && sha256sum "$(basename "$file")")
-	done
-	if [ "$split_rootfs" -eq 1 ]; then
-		for file in "$root_archive".part*; do
-			(cd "$outdir" && sha256sum "$(basename "$file")")
-		done
-	else
-		(cd "$outdir" && sha256sum "$(basename "$root_archive")")
-	fi
-} > "$outdir/SHA256SUMS"
-
 boot_kernel_sha="$(sha256sum "$unpack_dir/kernel" | awk '{print $1}')"
 boot_dtb_sha="$(sha256sum "$unpack_dir/dtb" | awk '{print $1}')"
 boot_sha="$(sha256sum "$boot_asset" | awk '{print $1}')"
 dtbo_sha="$(sha256sum "$dtbo_asset" | awk '{print $1}')"
 root_sha="$(sha256sum "$rootfs" | awk '{print $1}')"
+source_commit="$(git -C "$script_dir/.." rev-parse HEAD)"
 cat > "$outdir/MANIFEST.md" <<EOF
 # ${version} release manifest
 
@@ -193,6 +182,7 @@ set and must not be mixed with another release.
 
 | Property | Value |
 |---|---|
+| Source commit | \`${source_commit}\` |
 | Kernel APK | \`${apk_version}\` |
 | Boot image SHA-256 | \`${boot_sha}\` |
 | Filtered DTBO SHA-256 | \`${dtbo_sha}\` |
@@ -208,5 +198,19 @@ Run \`sha256sum -c SHA256SUMS\` before flashing. If the rootfs archive is split,
 reassemble the parts in numeric order before decompressing it. Read the
 attached \`INSTALL.md\` before writing any phone partition.
 EOF
+
+{
+	for file in "$boot_asset" "$dtbo_asset" "$apk_asset" "$install_asset" \
+		"$outdir/MANIFEST.md"; do
+		(cd "$outdir" && sha256sum "$(basename "$file")")
+	done
+	if [ "$split_rootfs" -eq 1 ]; then
+		for file in "$root_archive".part*; do
+			(cd "$outdir" && sha256sum "$(basename "$file")")
+		done
+	else
+		(cd "$outdir" && sha256sum "$(basename "$root_archive")")
+	fi
+} > "$outdir/SHA256SUMS"
 
 note "release assets prepared in $outdir"

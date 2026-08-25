@@ -29,10 +29,10 @@ Public releases use SemVer pre-release tags:
 - Internal experiment identifiers such as `R108`, `D39`, or `V43` remain
   evidence references. They are not public release versions.
 
-The first public image set is planned as `v0.1.0-alpha.1`. Every release must
-provide a source tag, `SHA256SUMS`, a manifest, an AVB-verified boot image, and
-a rootfs image whose filesystem UUIDs match that boot image. A release is
-replaced, not silently edited, when any asset changes.
+Every release provides a source tag, `SHA256SUMS`, a manifest, an AVB-verified
+boot image, a verified filtered DTBO and a rootfs image whose filesystem UUIDs
+match that boot image. A release is replaced, not silently edited, when any
+asset changes.
 
 ## Before flashing
 
@@ -59,13 +59,17 @@ Do not use `fastboot getvar all` in a public log: it prints the device serial.
 
 ## Back up slot B before changing it
 
-This release intentionally uses slot B and leaves slot A untouched. Before
-flashing, make complete local backups of the current `boot_b` and `dtbo_b` and
-record their hashes. Recent Android Platform Tools can read a physical
-partition with `fastboot fetch`:
+This release intentionally uses slot B and leaves `boot_a` and `dtbo_a`
+untouched. The `super` partition is shared and will still be replaced, so slot
+A is not an intact Android installation. Before flashing, enter fastbootd,
+make complete local backups of the current `boot_b` and `dtbo_b`, and record
+their hashes. Recent Android Platform Tools can read a physical partition with
+`fastboot fetch`:
 
 ```bash
 mkdir hotdog-slot-b-backup
+fastboot reboot fastboot
+fastboot getvar is-userspace  # must report: yes
 fastboot fetch boot_b hotdog-slot-b-backup/boot_b.img
 fastboot fetch dtbo_b hotdog-slot-b-backup/dtbo_b.img
 sha256sum hotdog-slot-b-backup/boot_b.img \
@@ -78,7 +82,7 @@ test "$(stat -c %s hotdog-slot-b-backup/dtbo_b.img)" -eq 25165824
 On macOS, use `shasum -a 256` and `stat -f %z` for the equivalent checks. If
 the installed `fastboot` does not support `fetch`, stop and back up both
 partitions from a trusted recovery shell before continuing. Do not flash first
-and plan the rollback later.
+and plan the rollback later. Stay in fastbootd after making the backups.
 
 ## Verify and expand the download
 
@@ -90,6 +94,7 @@ sha256sum -c SHA256SUMS
 ```
 
 On macOS, the equivalent command is `shasum -a 256 -c SHA256SUMS`.
+Use `stat -f %z` instead of `stat -c %s` for the two size checks below.
 
 For split rootfs assets, reconstruct the archive in numeric order, verify it,
 then expand it. The expanded file is a raw 4096-byte-sector GPT image containing
@@ -101,24 +106,25 @@ cat oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst.part* \
 zstd -d --keep oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst
 # Compare this digest with the "Rootfs raw SHA-256" in MANIFEST.md.
 sha256sum oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
+test "$(stat -c %s oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-boot.img)" -eq 100663296
+test "$(stat -c %s oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-dtbo.img)" -eq 25165824
 ```
 
 ## Flash the matching set
 
 The rootfs is written to physical `super`. The filtered DTBO and mainline boot
-image are written to `dtbo_b` and `boot_b`, leaving slot A untouched as an
-additional recovery option. Flashing `super` replaces the Android system
-layout and is destructive. Confirm that the backups above are readable before
-continuing.
+image are written to `dtbo_b` and `boot_b`. Flashing `super` replaces the
+Android system layout and is destructive. Confirm that the backups above are
+readable before continuing.
 
 Use userspace fastboot (`fastbootd`) for `super`. The HD1913 bootloader accepted
 the first large sparse segment during release validation but stopped responding
 on the next transfer. Fastbootd completed the same image as 30 bounded segments.
 
 ```bash
-# Start in bootloader fastboot, then enter the recovery-provided fastbootd.
-fastboot reboot fastboot
+# The backup section leaves the phone in recovery-provided fastbootd.
 fastboot getvar is-userspace  # must report: yes
+fastboot getvar partition-size:super
 
 # Keep sparse transfers small enough for the tested HD1913 USB path.
 fastboot -S 128M flash super \
@@ -135,8 +141,8 @@ fastboot reboot
 If `fastboot reboot fastboot` cannot start fastbootd, the active slot does not
 contain a compatible recovery. Restore or select a known-good HD1913 recovery
 slot before continuing. Do not substitute a direct bootloader `super` flash.
-In this project's slot layout, `boot_a` is deliberately preserved for that
-recovery path and postmarketOS is installed to `boot_b`.
+`boot_a` is deliberately preserved for that recovery path, but its Android
+system partitions are not preserved because `super` is shared.
 
 The first boot can take longer than normal while the root partition is checked
 and expanded. A healthy boot reaches Plasma Mobile and exposes USB networking
@@ -182,8 +188,10 @@ flash a boot or DTBO image from another release against this rootfs.
 
 ## Current Alpha limitations
 
-This is not a daily-driver image. Suspend/resume, DisplayPort audio, UFS ICE,
-telephony, front and ultra-wide cameras, sensors, NFC, fingerprint, and several
-audio paths remain incomplete or untested. Main and telephoto capture work, but
-autofocus and production colour calibration remain incomplete. Refer to
+This is not a daily-driver image. UFS ICE, Bluetooth lifecycle, DisplayPort and
+call audio, ultrasonic proximity, complete telephony/data, fingerprint, Warp
+charging and several audio routes remain incomplete. All four cameras capture,
+but application flash synchronization and production 3A/colour remain open.
+The radio bootstrap is intentionally fail-closed and does not expose
+ModemManager until SIM/PDC/DMS readiness is verified. Refer to
 [status.md](status.md) for the evidence-backed matrix.

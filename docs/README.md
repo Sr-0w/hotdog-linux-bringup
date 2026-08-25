@@ -1,6 +1,6 @@
 # Documentation
 
-Last reviewed: 2026-08-20
+Last reviewed: 2026-08-25
 
 The active path is direct boot from the OnePlus A/B bootloader into the
 mainline-oriented Linux 6.16 reference kernel and a normal postmarketOS
@@ -61,6 +61,7 @@ Recent evidence and current regression records:
 - [Alpha 1 validation](evidence/2026-08-10-v0.1.0-alpha.1.md)
 - [Alpha 2 validation and corrected DTBO contract](evidence/2026-08-25-v0.1.0-alpha.2.md)
 - [Alpha 3 source-complete replacement](evidence/2026-08-25-v0.1.0-alpha.3.md)
+- [Alpha 4 clean current-state rebuild](release-notes-v0.1.0-alpha.4.md)
 - [All four cameras and pop-up lifecycle](evidence/2026-08-10-mainline616-camera-imx471-popup.md)
 - [GNSS QMI engine](evidence/2026-08-10-gnss-qmi-loc.md)
 - [Read-only UIM and subscription-scoped PDC](evidence/2026-08-25-radio-pdc-readonly.md)

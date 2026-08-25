@@ -47,15 +47,27 @@ git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null 2>&1 &&
 (cd "$assets" && sha256sum -c SHA256SUMS)
 
 shopt -s nullglob
-asset_files=("$assets"/SHA256SUMS "$assets"/MANIFEST.md "$assets"/*-boot.img \
-	"$assets"/*-kernel-*.apk)
+boot_files=("$assets"/*-boot.img)
+dtbo_files=("$assets"/*-dtbo.img)
+kernel_files=("$assets"/*-kernel-*.apk)
+install_files=("$assets"/INSTALL.md)
+rootfs_archives=("$assets"/*-rootfs.img.zst)
 rootfs_parts=("$assets"/*-rootfs.img.zst.part*)
+
+[ "${#boot_files[@]}" -eq 1 ] || die "release must contain exactly one boot image"
+[ "${#dtbo_files[@]}" -eq 1 ] || die "release must contain exactly one DTBO image"
+[ "${#kernel_files[@]}" -eq 1 ] || die "release must contain exactly one kernel APK"
+[ -s "${install_files[0]}" ] || die "release must contain INSTALL.md"
+asset_files=("$assets"/SHA256SUMS "$assets"/MANIFEST.md \
+	"${install_files[@]}" "${boot_files[@]}" "${dtbo_files[@]}" \
+	"${kernel_files[@]}")
 if [ "${#rootfs_parts[@]}" -gt 0 ]; then
+	[ "${#rootfs_archives[@]}" -le 1 ] || die "multiple rootfs archives found"
 	asset_files+=("${rootfs_parts[@]}")
 else
-	asset_files+=("$assets"/*-rootfs.img.zst)
+	[ "${#rootfs_archives[@]}" -eq 1 ] || die "release must contain one rootfs archive"
+	asset_files+=("${rootfs_archives[@]}")
 fi
-[ "${#asset_files[@]}" -ge 5 ] || die "prepared asset set is incomplete"
 printf 'Prepared command:\n'
 printf 'gh release create %q --repo Sr-0w/hotdog-linux-bringup --target main --title %q --notes-file %q --prerelease' \
 	"$version" "$version" "$notes"
