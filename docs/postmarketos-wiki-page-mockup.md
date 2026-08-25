@@ -117,7 +117,7 @@ For each feature:
 | status_light       = Y
 | status_proximity   = Y
 | status_hall        = Y
-| status_haptics     = P
+| status_haptics     = Y
 | status_barometer   = -
 | status_powersensor = -
 
@@ -472,9 +472,7 @@ Clean down/up recovery, broader tag coverage, host card emulation and secure-ele
 
 == Haptics ==
 
-The AW8697 is driven by the Linux force-feedback interface and physical vibration has been confirmed.
-
-Strength calibration, repeated lifecycle testing, mobile userspace integration and suspend coverage remain incomplete.
+The AW8697 is driven by the Linux force-feedback interface. Physical vibration is confirmed from 10 to 100 percent strength, across twenty repeated stop/start pulses, the normal <code>feedbackd</code> path and a real suspend/resume cycle.
 
 == Suspend and power management ==
 
@@ -502,7 +500,6 @@ Charging termination, low-battery behaviour, JEITA/thermal policy, off-mode char
 * Camera image processing and colour calibration are not production-ready.
 * Camera flash synchronization with capture frames remains incomplete.
 * The earpiece, headset path and several microphone/audio routes are not yet supported.
-* The three-position alert slider is not yet exposed.
 * Fingerprint authentication is not supported.
 * OnePlus Warp fast charging is not supported.
 * Full-disk encryption has not been revalidated with the current mainline port.

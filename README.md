@@ -53,8 +53,8 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r180` |
-| Device package | `device-oneplus-hotdog` `3-r29` |
+| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r181` |
+| Device package | `device-oneplus-hotdog` `3-r32` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
@@ -73,14 +73,16 @@ or a kexec bridge.
   Freedreno/Turnip, including Plasma Mobile. Display remains an aggregate
   `Partial` state: the 2026-08-20 r2 scanout corruption recovered immediately
   after lock/unlock, but DSI/DSC FIFO/timeout instability needs follow-up.
-- Hardware validation of touch, physical keys, Wi-Fi, Bluetooth HID, both
-  speakers and the handset microphone.
+- Hardware validation of touch, physical keys, Wi-Fi, both speakers and the
+  handset microphone. Bluetooth HID worked on an earlier checkpoint, but the
+  current controller lifecycle is regressed and tracked under `Broken`.
 - USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
   mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60.
 - Capture from all four cameras through libcamera, rear autofocus and automatic
   Hall-bounded extension/retraction of the IMX471 pop-up camera.
-- Both PM8150L flash channels register and pass electrical torch/strobe tests
-  without a reported fault; visible output and camera synchronization remain.
+- Both PM8150L flash channels register and pass electrical plus visible
+  torch/strobe tests. Plasma's flashlight control works; camera synchronization
+  remains.
 - SM8150 IPA v4.1 creates `rmnet_ipa0`; modem QMI services answer without a SIM
   and QMI LOC can start and stop GNSS engine sessions.
 - PN553 reader mode detects, activates and types a real ISO 14443-4 document
@@ -94,10 +96,10 @@ or a kexec bridge.
   a 900 mA input limit, with rising battery voltage and health `Good`.
 - SLPI boot, FastRPC, writable Hexagon service, registry regeneration, QRTR,
   SSC requests and ULog forensics work end to end.
-- Seven of the eight sensors stream, and Plasma Mobile auto-rotates from the
-  accelerometer. The blocker was never the configuration: `modem_b` carries an
-  OTA-updated SLPI build while the registry pairs with the OxygenOS 10.0.13
-  firmware, and swapping that one file took hardware sensors from 1 to 7.
+- The physical SLPI sensors stream, Plasma Mobile auto-rotates, and the real
+  OxygenOS-compatible proximity path works through the ADSP Elliptic engine.
+  The sensor-compatible OxygenOS 10.0.13 SLPI firmware took the hardware path
+  from one sensor to the full measured set.
 
 Support claims are evidence-based: an offline build, prepared DT change or
 successful probe alone is never marked as hardware support.
@@ -117,7 +119,9 @@ function under **Working** and a broader integration or stability item under
 | Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`; no downstream kernel or kexec bridge executes. |
 | Boot | Persistent postmarketOS rootfs / OpenRC / SSH | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
 | Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
+| Boot | Bootloader and recovery selection | `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot; `RESTART2("recovery")` reaches the existing authorized root-ADB recovery. Both return to postmarketOS. |
 | Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
+| Storage | UFS ICE / blk-crypto | `qcom-ice` binds, UFS mounts the rootfs and blk-crypto exposes the complete AES-256-XTS profile. This proves ICE operation, not encryption of the current rootfs. |
 | Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
 | Display | Internal panel 1440×3120 at 60 Hz | Function-level KMS scanout is validated; the aggregate display state remains `Partial` because of the transient DSI/DSC regression. See [display regression 01](docs/evidence/2026-08-20-display-regression-01.md). |
 | GPU | Adreno 640 / GMU / Turnip | Vulkan workloads, `kmscube`, Weston and Plasma Mobile use accelerated rendering without observed GPU/GMU/IOMMU faults. |
@@ -138,12 +142,12 @@ function under **Working** and a broader integration or stability item under
 | Audio | Handset microphone | AMIC4 with MIC BIAS1 is acoustically validated from the packaged profile and confirmed by listening. |
 | Wi-Fi | WCN3990 association and IPv4 connectivity | Both bands scan, NetworkManager associates and basic external IPv4 reachability is validated. |
 | Power | System suspend / s2idle | Thirty real cycles across two fresh boots with no modem crash and no Wi-Fi loss. Two power domains were being withdrawn from parts that still needed them: `sdhc_2` sat in the modem's domain, and the PAS proxy votes were dropped at handover. |
-| Bluetooth | HID connectivity | BlueZ scans and connects to a real HID device. |
 | Cameras | Four-sensor capture | S5K3M5 telephoto, IMX586 main, IMX481 ultra-wide and IMX471 front sensors capture through libcamera. |
 | Cameras | Rear autofocus | The main and telephoto actuators expose calibrated focus control and produce distinct focus planes; experimental continuous autofocus completes. |
 | Cameras | IMX471 pop-up lifecycle | Hall-bounded automatic extension, capture and retraction work at the expected cadence. |
 | IPA | SM8150 IPA v4.1 / `rmnet_ipa0` | The AP loads `ipa_fws`, IPA starts and creates `rmnet_ipa0`; this remains a local validation until the generic changes are accepted upstream. |
 | Modem | MPSS remote processor / QRTR services | MPSS, RMTFS, QRTR, PD mapper and QMI services run; ModemManager enumerates the modem and both physical SIM slots. |
+| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable registry, QRTR, SSC events and userspace sensor discovery work end to end. The private-source firmware and per-device calibration inputs are hash/size gated rather than embedded in Git. |
 | GNSS | QMI LOC engine sessions | The LOC service reports capabilities and accepts start/stop session requests. |
 | NFC | PN553 reader and ISO-DEP exchange | A real ISO 14443-4 document is detected, activated, typed and exchanges bidirectional ISO 7816-4 APDUs. The ePassport BAC/PACE refusal is expected. |
 | Haptics | AW8697 linear resonant actuator | Physical vibration is confirmed across 10-100 percent strength, twenty stop/start pulses, feedbackd and a real suspend/resume cycle. |
@@ -157,18 +161,16 @@ function under **Working** and a broader integration or stability item under
 | Sensors | Motion, orientation, tilt | `amd`, `rmd`, `device_orient` and `tilt` answer under event ids 772, 776 and 774. Tilt fires rarely and needs a window of at least fifteen seconds to be seen. |
 | Sensors | Screen auto-rotation | Plasma Mobile rotates from the accelerometer. `iio-sensor-proxy` speaks QMI to SEE directly through `libssc`, so no IIO or input device is involved; [a boot gate](helpers/hotdog-sensor-proxy-gate.sh) makes the daemon enumerate before KWin claims, and `ACCEL_MOUNT_MATRIX` corrects a half-turn offset. |
 | Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
-| Proximity | Near/far detection | The ultrasonic Elliptic engine on the audio DSP, which is what OxygenOS uses; the TCS3701 sub-sensor it publishes is never requested by anyone. Measured end to end: 30 engine transitions, 29 of 29 reaching `net.hadess.SensorProxy`, median latency 0.72 s. The audio path arms itself while the channel is being read. It is a classifier for a head against the earpiece and ignores a flat object on purpose. The driver and its arming service are **not packaged yet**, and blanking during a real call is unverified for want of a SIM. |
+| Proximity | Near/far detection | The ultrasonic Elliptic engine on the audio DSP, which is what OxygenOS uses. Measured end to end: 30 engine transitions, 29 of 29 reaching `net.hadess.SensorProxy`, median latency 0.72 s. The packaged audio path arms while the channel is read; the per-device 448-byte calibration is restored from `persist` and is never published. It classifies a head against the earpiece and ignores a flat object on purpose. Blanking during a real call remains unverified without a SIM. |
 
 ### 🟡 Partial
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| Boot | Reboot modes / recovery integration | Clean normal reboot and A/B marking work; direct recovery selection, all reboot modes and the final installer rollback flow remain incomplete. |
 | Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
-| Bluetooth | Full profile and lifecycle support | Scanning and HID work; repeated reconnect, BLE, A2DP/HFP, coexistence and suspend remain. |
 | Audio | Complete handset routing | Speakers and handset microphone work; earpiece, remaining microphones, headset/USB-C detection, Bluetooth/call/DP audio and protection telemetry remain. |
 | Power | SMB5 charging | The exact v4 candidate passes guarded charging and all tested dock role transitions; the complete Plasma image also charges at a validated 900 mA SuperSpeed limit. Termination, low battery, JEITA/thermal, off-mode, fast charge and suspend remain. |
 | Cameras | S5K3M5 telephoto | 4208×3120 RAW10 capture, userspace processing and experimental autofocus work; production 3A/color and broader modes remain. |
@@ -176,18 +178,17 @@ function under **Working** and a broader integration or stability item under
 | Cameras | Sony IMX481 ultra-wide | 4656×3496 RAW10 and processed 30 fps runs work; production color and additional modes remain. |
 | Cameras | Sony IMX471 front | Automatic pop-up capture works; production 3A/color and broader application/recovery testing remain. |
 | Camera flash | Dual PM8150L flash | Both channels pass electrical and visible torch/strobe tests, and Plasma's flashlight control works. Plasma Camera exposes no flash control, so capture synchronization remains. |
-| Mobile data | IPA / rmnet / RF integration | The modem scans operators and camps without a SIM; SIM registration, LTE data and upstream IPA acceptance remain. |
-| Telephony | Registration, data, SMS, calls and IMS | Slot 2 selection and PIN routing work. The OOS12 MPSS then watchdoged in RFLM/QLINK; the matching OOS10 MPSS is installed and stable without a SIM, with the guarded registration retry pending. |
+| Mobile data | IPA / rmnet / RF integration | IPA v4.1 and `rmnet_ipa0` work. The guarded owner now selects and transactionally establishes per-subscription WDS/IMS bearers with rollback, but no live bearer has been validated without a SIM; upstream IPA acceptance also remains. |
+| Telephony | Registration, data, SMS, calls and IMS | Both physical slots and slot-scoped PIN routing are implemented. The matching OOS10 MPSS/MCFG catalog and fail-closed pre-online owner are packaged; registration, LTE data, SMS and calls still require a guarded live-SIM validation. |
 | GNSS | Standard location stack | Engine sessions work; standard service bridging, real coordinates, A-GPS, application permissions and suspend policy remain. |
-| SLPI | Sensor-DSP infrastructure | Firmware boot, FastRPC, writable Hexagon service, registry regeneration, QRTR, SSC requests, event subscriptions and ULog forensics work, and the board identity is provisioned from `/proc/cmdline`. Diag has no transport on this port, which is what now bounds the remaining sensor work. |
 
 ### 🔴 Broken
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
+| Bluetooth | Controller lifecycle | The current controller no longer completes firmware initialization, and the QCA suspend/unload paths can time out or crash. The older HID success remains historical evidence, not a current support claim. |
 
 ### ⚪ Not yet supported
 
@@ -199,6 +200,7 @@ function under **Working** and a broader integration or stability item under
 | Range sensor | STMVL53L1 laser rangefinder | Wiring, calibration, driver and standard proximity/range integration remain. |
 | Fingerprint | In-display fingerprint reader | Transport, firmware/TEE dependency, UDFPS illumination and fprintd integration remain. |
 | Fast charging | OnePlus Warp charge | Vendor-dependent path; no mainline hardware support is validated. |
+| Boot | Native postmarketOS recovery | Recovery selection works, but the validated target is the existing Android/Lineage userdebug recovery. A purpose-built postmarketOS rescue image with verified install/readback/rollback is not supplied yet. |
 | Ubuntu Touch / Lomiri | Native no-Halium system | Architecture agreement, rootfs boot, packaging, recovery/OTA, Mir/Lomiri and all hardware services remain roadmap phases. |
 
 ### ⚫ Impossible
@@ -226,17 +228,15 @@ flowchart LR
 
 The active engineering frontier is:
 
-1. package `q6elliptic` and the proximity arming service, which currently
-   exist only on the running device and are lost by a reflash. The SLPI diag
-   transport that used to sit here is no longer needed: proximity was never the
-   `sns_tcs3701` sub-sensor, and reading what that driver decides answers
-   nothing;
-2. bridge GNSS and mobile data into standard services and test SIM, SMS, calls
-   and data;
-3. close display wake, UFS ICE, remaining audio, dock, charging and
+1. rebuild and boot the package-complete sensor/proximity image, including the
+   per-device calibration provisioned from `persist`, then validate call
+   blanking when a SIM is available;
+2. finish the guarded modem readiness handoff and test registration, LTE data,
+   SMS and calls with a SIM;
+3. close display wake, remaining audio, dock, charging and
    camera-quality gaps, and measure what holding `cx`/`mss` for the life of the
    modem costs in power now that suspend itself is clean;
-4. replace temporary DT transforms, SMMU/ICE bypasses and laboratory deployment
+4. replace temporary DT transforms, remaining SMMU bypasses and laboratory deployment
    assumptions with clean source integration;
 5. revise the Linux patch tracks through maintainer review, migrate the port to
    the shared SM8150 kernel, then implement the native Ubuntu Touch/Lomiri path.
@@ -267,8 +267,8 @@ bridge boundary.
 > dedicated test handset and read [device safety](docs/device-safety.md) before
 > any hardware operation.
 
-The current public image set is `v0.1.0-alpha.3`, pairing postmarketOS Plasma
-Mobile with kernel `r180`, the matching AVB boot image and the required
+The current public image set is `v0.1.0-alpha.5`, pairing postmarketOS Plasma
+Mobile with kernel `r181`, the matching AVB boot image and the required
 filtered DTBO. The boot, DTBO and rootfs form one atomic set and must not be
 mixed across releases. Follow the [release installation guide](docs/release-install.md).
 

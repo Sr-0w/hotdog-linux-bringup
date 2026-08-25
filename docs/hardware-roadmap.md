@@ -1,10 +1,10 @@
 # Hardware enablement roadmap
 
-Last updated: 2026-08-20
+Last updated: 2026-08-25
 
 This roadmap follows the
 [direct-boot completion criteria](direct-boot.md#completion-criteria). The
-accepted 6.16 package line (currently `6.16.0-r177`) starts directly from the OnePlus
+accepted 6.16 package line (currently `6.16.0-r181`) starts directly from the OnePlus
 bootloader without the downstream kexec bridge, mounts the postmarketOS root
 read-write, and retains USB NCM, USB ACM, SSH, the S6SY761 touchscreen, and the
 Adreno 640 render path. It also registers Power, Volume Down, and Volume Up as
@@ -26,10 +26,10 @@ relevant regression controls.
 | Display | Native DPU/DSI/DSC scanout and 60/90 Hz operation are validated at the function level. The 2026-08-20 r2 episode recovered immediately after lock/unlock; DSI FIFO/timeout errors and panel reinitialization remain. | Reproduce and isolate the DSI/DSC transport regression without changing DRM/DSI/panel configuration; retain `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`. |
 | IPA / modem / GNSS | IPA v4.1 creates `rmnet_ipa0`; modem QMI and LOC sessions answer without a SIM. | Standard location/mobile-data services, SIM/data/SMS/calls and upstream IPA acceptance. |
 | NFC | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. | Clean down/up lifecycle, HCE and secure-element scope. |
-| Haptics | AW8697 driver builds and physical vibration is confirmed. | Range/repetition, feedbackd, suspend and upstream driver review. |
-| Sensors | SLPI, FastRPC, writable registry, SSC requests and ULog forensics run. Both firmware sets expose only infrastructure SUIDs and reject QUP1/QUP2-to-EBI1 ICB routes. | Run the downstream 4.14 plus stock-DTBO control, correct the isolated platform/DSP fault, then expose standard IIO devices/events. |
+| Haptics | AW8697 vibration works from 10-100 percent, across repeated stop/start, feedbackd and suspend/resume. | Upstream driver review and longer lifecycle coverage. |
+| Sensors | SLPI/SEE publishes the physical sensor set, Plasma auto-rotates and Elliptic ultrasonic proximity reaches SensorProxy. Kernel and userspace are package-owned; per-device calibration is provisioned from `persist`. | Boot the complete package-built image, validate proximity blanking during a real call, and complete range-sensor support. |
 | Charging | Fuel gauge and guarded SMB5 v3 charge/VBUS transitions pass. | Termination, JEITA/thermal, low battery, fast charge and suspend. |
-| System stability | Direct boot, RAM/UFS pressure, A/B marking and clean reboot work. | Touch/display suspend, UFS ICE, full SMMU cleanup and long-duration tests. |
+| System stability | Direct boot, RAM/UFS pressure, A/B marking, UFS ICE and system/bootloader/recovery selection work. | Display/BT lifecycle, full SMMU cleanup, native pmOS recovery and long-duration tests. |
 
 The complete closure order, including Ubuntu Touch/Lomiri, is maintained in
 [roadmap.md](roadmap.md).
@@ -110,30 +110,24 @@ translation fault, or loss of storage or USB.
 
 ## 3. UFS inline crypto
 
-**Proven current state.** UFS works and exposes the Android partitions only
-after the `qcom,ice` dependency is removed. With the dependency present,
-`gcc_ufs_phy_ice_core_clk` remains off and `qcom-ice@1d90000` fails to probe.
-The exact workaround is recorded in
-[mainline bring-up](mainline-bringup.md#4-ufs-ice-dependency). The K1 config
-already has `CONFIG_QCOM_INLINE_CRYPTO_ENGINE=y` and
-`CONFIG_SCSI_UFS_QCOM=y`.
+**Proven current state.** The old ICE failure belonged to the historical kexec
+path and its stale board override. Direct mainline already binds
+`1d90000.crypto`, runs `gcc_ufs_phy_ice_core_clk` at 300 MHz and needs only the
+upstream `qcom,ice = <&ice>` link that the Hotdog DTS deleted. With that link
+restored, a fresh hardware boot mounts the rootfs and
+`/sys/block/sda/queue/crypto` exposes keyslots, DUN width, raw-key support and
+AES-256-XTS mask `0x1fe00`. Normal reboot plus a bootloader round trip preserve
+the same state. See [UFS ICE and reboot-mode validation](evidence/2026-08-25-ufs-ice-reboot-mode.md).
 
-**Hypothesis.** Direct boot may preserve an ICE clock and power state that the
-kexec transition loses. If it does not, the next fix belongs in the GCC/UFS
-clock ownership and probe-ordering path rather than in storage discovery.
+**Package result.** Revision `r181` restores the source-DTS phandle and makes
+the final-DTB validator require the exact ICE phandle. The public package no
+longer depends on the old no-ICE transform.
 
-**Single-variable experiment.** On the accepted direct-boot DTB with Apps SMMU
-still bypassed for UFS, restore only the UFS `qcom,ice` phandle. Change no
-clock, regulator, UFS frequency, or SMMU property.
-
-**Success criteria.** The ICE device probes without a stuck-clock or busy
-error, UFS reaches its normal link state, every expected partition remains
-visible, and the postmarketOS root mounts read-write across repeated boots.
-
-**Risks and fallback.** A failed ICE dependency can defer UFS indefinitely and
-remove both rootfs and USB userspace recovery. Restore the no-ICE DTB after the
-first conclusive failure. If the direct result matches K1, investigate
-`GCC_UFS_PHY_ICE_CORE_CLK` as a separate kernel experiment.
+**Remaining validation.** ICE operation does not prove that the current rootfs
+is encrypted. Provision a separate test volume through blk-crypto/dm-crypt,
+verify ciphertext by readback, repeat storage stress and reboot, then define the
+normal encrypted installation policy without weakening the known recovery
+path.
 
 ## 4. DRM, DSI, and panel
 

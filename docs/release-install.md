@@ -166,9 +166,10 @@ With a host configured at `172.16.42.2/24`, SSH is available as:
 ssh user@172.16.42.1
 ```
 
-Normal software reboot is validated. Reboot-to-bootloader/recovery from the
-running Alpha is not; enter those modes with the physical key sequence when
-maintenance is required.
+Normal software reboot and direct bootloader/recovery selection are validated.
+The recovery target is the existing Android/Lineage userdebug recovery with
+authorized root ADB, not a native postmarketOS recovery image. Keep the physical
+key sequence available as an independent fallback.
 
 If the phone enumerates as Qualcomm `05c6:900e` or `05c6:9008`, inspect it
 read-only only. Never issue a protocol reset, reboot or flash command in that
@@ -188,10 +189,14 @@ flash a boot or DTBO image from another release against this rootfs.
 
 ## Current Alpha limitations
 
-This is not a daily-driver image. UFS ICE, Bluetooth lifecycle, DisplayPort and
-call audio, ultrasonic proximity, complete telephony/data, fingerprint, Warp
-charging and several audio routes remain incomplete. All four cameras capture,
-but application flash synchronization and production 3A/colour remain open.
+This is not a daily-driver image. Bluetooth lifecycle is currently broken;
+DisplayPort and call audio, complete telephony/data, fingerprint, Warp charging
+and several audio routes remain incomplete. UFS ICE and ultrasonic proximity
+work, but the current rootfs is not claimed encrypted and call-time proximity
+blanking is untested without a SIM. Elliptic calibration is per-device and is
+restored from <code>persist</code>; the service fails closed if a matching
+calibration has not been provisioned. All four cameras capture, but application
+flash synchronization and production 3A/colour remain open.
 The radio bootstrap is intentionally fail-closed and does not expose
 ModemManager until SIM/PDC/DMS readiness is verified. Refer to
 [status.md](status.md) for the evidence-backed matrix.

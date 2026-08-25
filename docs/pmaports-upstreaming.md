@@ -1,21 +1,21 @@
 # pmaports upstreaming plan
 
-Last updated: 2026-08-13
+Last updated: 2026-08-25
 
 ## Current submission snapshot
 
 The normal package flow now produces a hardware-booted direct Linux image,
 writable rootfs, accelerated Plasma session, automatic AVB envelope and A/B
 success marking. The development snapshots are currently
-`linux-oneplus-hotdog-mainline616` `6.16.0-r177`,
-`device-oneplus-hotdog` `3-r23` and
-`firmware-oneplus-hotdog` `20241212-r5`.
+`linux-oneplus-hotdog-mainline616` `6.16.0-r181`,
+`device-oneplus-hotdog` `3-r32` and
+`firmware-oneplus-hotdog` `20241212-r7`.
 
 The port is still not submission-ready. Current blockers are:
 
 - migrate accepted Hotdog support from the device-specific 6.16 reference
   package into a current shared `linux-postmarketos-qcom-sm8150` kernel;
-- express every binary DT transform, SMMU/ICE bypass and laboratory workaround
+- express every remaining binary DT transform, SMMU bypass and laboratory workaround
   as reviewable source integration or remove it;
 - replace the nested-GPT `super` deployment with a normal supported install,
   upgrade, rollback and recovery path;
@@ -308,9 +308,9 @@ requires all criteria in *Device Categorization*, section "Community", including
 - an active maintainer with regular access to the device.
 
 The project promotion gate additionally requires the staged validation in the
-[hardware roadmap](hardware-roadmap.md): full RAM, Apps SMMU, UFS ICE,
-DRM/DSI/panel, touchscreen suspend/resume, then Wi-Fi and USB host. Basic touch
-and multitouch input plus basic Adreno rendering are complete. Any remaining
+[hardware roadmap](hardware-roadmap.md): full RAM, Apps SMMU, storage
+encryption, DRM/DSI/panel, complete suspend/resume, then Wi-Fi and USB host.
+UFS ICE, basic touch/multitouch and Adreno rendering are complete. Any remaining
 limitation must be
 measured, documented in the [status matrix](status.md), and explicitly acceptable
 under the current pmaports community policy before promotion is requested.

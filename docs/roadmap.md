@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-08-20
+Last updated: 2026-08-25
 
 ## Final objective
 
@@ -138,15 +138,17 @@ timeline
     section Current frontier
       2026-08-12 : IPA v4.1 and rmnet_ipa0, NFC APDU exchange and physical haptics
                  : Modem responds without SIM and SLPI sensor service is published
-      2026-08-13 : YOU ARE HERE — SMB5 v3 validated
-                 : SLPI QUP-to-EBI1 route failure isolated; downstream control is next
-                 : Mainline review follow-up and partial/broken closure remain active
+      2026-08-13 : SMB5 v3 validated
+                 : Initial SLPI host/DSP boundary isolated
       2026-08-20 : Display regression `e566d5d4-r2` recovered by lock/unlock
                  : DSI/DSC FIFO-timeout follow-up remains; no causal source/config delta proven
+      2026-08-25 : Physical sensors, auto-rotation and ultrasonic proximity validated
+                 : UFS ICE and direct bootloader/recovery selection validated
+                 : YOU ARE HERE — package the exact working runtime and finish modem validation
     section Remaining hardware and upstream
-      Next : Finish sensors, GNSS integration, NFC lifecycle and haptics userspace
-      Then : Telephony, audio endpoints, suspend, charging, dock and camera quality
-      Then : Fingerprint, security, UFS ICE and complete SoC/SMMU cleanup
+      Next : Boot the package-complete sensor image; finish GNSS and live-SIM validation
+      Then : Telephony, audio endpoints, Bluetooth, charging, dock and camera quality
+      Then : Fingerprint, security, storage encryption and complete SoC/SMMU cleanup
       Then : Upstream Linux acceptance and clean pmaports release
     section Native Ubuntu Touch
       After shared kernel : Agree mainline-native UBports architecture
@@ -169,21 +171,21 @@ timeline
 | 2026-08-10 | Clean software reboot passes six cycles, slot success is marked correctly, GNSS QMI sessions work at engine level and the first public Alpha pair boots on the HD1913. | [Reboot](evidence/2026-08-10-mainline616-software-reboot.md), [A/B](evidence/2026-08-10-ab-slot-success.md), [GNSS](evidence/2026-08-10-gnss-qmi-loc.md), [Alpha 1](evidence/2026-08-10-v0.1.0-alpha.1.md) |
 | 2026-08-11 to 2026-08-12 | Initial upstream series are published and audited; IPA v4.1 creates `rmnet_ipa0`; NFC detects, activates and types a real ISO 14443-4 document and exchanges bidirectional APDUs; AW8697 vibrates on hardware; modem services answer without a SIM; SLPI publishes the Snapdragon Sensor Core service. | [Upstream follow-up](evidence/2026-08-12-upstream-follow-up.md), [IPA scope](evidence/2026-08-12-ipa-v41-scope.md), [NFC](evidence/2026-08-10-nfc-nxp-nci.md), [haptics](evidence/2026-08-11-haptics-aw8697.md), [SLPI](evidence/2026-08-10-slpi-sensor-dsp.md) |
 | 2026-08-13 | The upstream-oriented SMB5 v3 candidate passes guarded charge and VBUS transition tests; writable Hexagon file service and sensor-registry work advance the active SLPI bring-up. | [SMB5 v3](evidence/2026-08-13-smb5-v3-hardware-validation.md), [Hexagon writes](evidence/2026-08-13-hexagonrpcd-write.md) |
+| 2026-08-23 to 2026-08-25 | The matching SLPI firmware publishes the physical sensors, Plasma auto-rotates, ultrasonic Elliptic proximity reaches SensorProxy, UFS ICE exposes its blk-crypto profile, and direct bootloader/recovery selection returns safely to postmarketOS. | [Sensor firmware](evidence/2026-08-23-the-firmware-version-was-the-cause.md), [proximity](evidence/2026-08-25-proximity-reports-near-and-far.md), [ICE/reboot modes](evidence/2026-08-25-ufs-ice-reboot-mode.md) |
 
 ### Current checkpoint
 
 The project is past basic boot and broad peripheral discovery. A useful
 mainline postmarketOS/Plasma system exists, but it is not yet a complete or
-upstream-clean phone. The active engineering frontier on 2026-08-20 is:
+upstream-clean phone. The active engineering frontier on 2026-08-25 is:
 
-- running the downstream 4.14 plus stock-DTBO control for the isolated SLPI
-  QUP1/QUP2-to-EBI1 route rejection, then exposing real sensor data through
-  standard Linux interfaces;
-- turning the new IPA/rmnet foundation into normal GNSS and mobile-data
-  services, then validating the modem with a SIM;
-- closing every incomplete baseline item in phase 0, especially suspend,
-  UFS ICE, display resume/DSI transport stability, remaining audio endpoints
-  and dock behavior;
+- rebuilding and booting an image whose packages own the exact tested kernel,
+  SLPI gate, sensor proxy fixes, per-device calibration import and Elliptic
+  proximity arming instead of relying on manual files;
+- completing the fail-closed modem readiness handoff, then validating
+  registration, data, SMS and calls when a SIM is available;
+- closing display/DSI stability, Bluetooth, remaining audio endpoints, dock,
+  charging, camera quality and native postmarketOS recovery;
 - revising and submitting the Linux patch tracks until maintainer acceptance.
 
 Ubuntu Touch/Lomiri without Halium is an explicit final objective, but no
@@ -199,7 +201,10 @@ starts OpenRC, exposes USB networking and SSH, and runs Plasma Mobile.
 
 The following are currently working or hardware-validated:
 
-- direct boot, persistent storage, clean software reboot, and recovery paths;
+- direct boot, persistent storage, clean software reboot, protocol-valid
+  bootloader selection and the existing root-ADB recovery path;
+- UFS ICE and the complete AES-256-XTS blk-crypto profile, without yet claiming
+  that the current rootfs is encrypted;
 - native 1440×3120 display at stable 60 Hz, with 90 Hz mode selection working
   but wake reliability still incomplete;
 - Adreno 640 acceleration through Freedreno/Turnip;
@@ -216,10 +221,10 @@ The following are currently working or hardware-validated:
 - GNSS engine sessions over QMI, whose complete standard location path remains
   unfinished, plus working NFC reader/APDU exchange with lifecycle, HCE and
   secure-element scope still open;
-- physical AW8697 vibration and the guarded SMB5 v3 charge/VBUS candidate;
-- SLPI boot, FastRPC attachment, writable sensor-registry service, SSC requests
-  and ULog forensics; physical sensors remain broken at the identified
-  QUP1/QUP2-to-EBI1 ICB route rejection.
+- physical AW8697 vibration and the guarded SMB5 v4 charge/VBUS candidate;
+- SLPI boot, FastRPC attachment, writable sensor registry, the physical sensor
+  streams, Plasma auto-rotation and Elliptic ultrasonic proximity through
+  SensorProxy.
 
 The remaining support gaps are tracked explicitly in
 the [hardware status matrix](status.md). Camera capture is working, but AF/AE/AWB
@@ -239,15 +244,14 @@ note.
 | Current incomplete area | Gate to `Working` |
 |---|---|
 | K1/shared kernel package | Hardware-test reproducible current-mainline builds, then retire K1 in favor of the shared SM8150 package. |
-| Device tree | Replace SMMU, ICE, DMA, reserved-memory and overlay workarounds with source DTS accepted by schema and hardware regression tests. |
-| USB ACM | Complete interactive bidirectional serial sessions across reboot and recovery, not enumeration alone. |
+| Device tree | Replace remaining SMMU, DMA, reserved-memory and overlay workarounds with source DTS accepted by schema and hardware regression tests. |
 | DRM/panel | Follow up the `e566d5d4-r2` transient scanout corruption, then fix 90 Hz blank/unblank and resume; make repeated atomic 60/90 transitions reliable while retaining `Partial` / `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP` until evidence supports a stronger state. |
 | GPU | Pass sustained mixed graphics/video load, repeated cold boot and suspend/resume without GMU, IOMMU or scanout faults. |
 | Apps SMMU | Attach and validate every applicable client independently, with translated domains and no global or device-specific bypass. |
-| UFS ICE (`Not working`) | Fix clocks, power, probe order and SMMU integration; validate encrypted and unencrypted storage plus repeated read-write root boots. |
 | Kernel modules | Install the module tree built with the running kernel package and prove ABI/artifact identity; eliminate the r25/r26 split. |
-| Suspend (`Broken at devices`) | Fix S6SY761 reset/resume, then pass every `pm_test` level and repeated real `s2idle` with all enabled peripherals. |
-| Reboot modes | Validate direct bootloader, recovery, system reboot and poweroff paths with pstore and A/B recovery prepared. |
+| Storage encryption | Provision and validate an encrypted test volume and normal installation policy; ICE operation alone does not prove encrypted rootfs data. |
+| Suspend completeness | Preserve the validated touch/Wi-Fi/modem cycles while fixing the current Bluetooth/QCA lifecycle blocker and all enabled peripherals. |
+| Recovery/installer | Build a native postmarketOS rescue image and validate first install, full readback, rollback and failed-update recovery. |
 | Touch and keys | Validate all contact slots, wake behavior, power/volume keys and alert slider across blanking and suspend. |
 | Firmware | Resolve source, licence, redistribution, checksums and ownership for every shipped payload; runtime-test each payload's consumer. |
 | Wi-Fi | Recover the factory MAC, pass sustained dual-band traffic, rfkill, AP/roaming where supported and suspend/resume. |
@@ -289,14 +293,13 @@ location stack after boot and resume.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Sensors | Motion / rotation / proximity | SLPI boots and the host/DSP plumbing works end to end, but only infrastructure SUIDs appear. Both current and OxygenOS 10 firmware reject QUP1/QUP2-to-EBI1 with `ICBARB_ERROR_NO_ROUTE_TO_SLAVE`; physical sensors are broken. |
+| Sensors | Motion / rotation / proximity | The matching SLPI image exposes the physical sensors; accelerometer, gyroscope, magnetometer, temperature, light, SAR, motion/orientation/tilt, auto-rotation and Elliptic ultrasonic proximity are hardware-validated. |
 
-Run the current firmware and sensor userspace on the known downstream 4.14
-kernel with stock DTBO. Success isolates a host-kernel/platform difference;
-the same rejection moves the fault into DSP configuration. Correct that
-boundary, enumerate the LSM6DSM, MMC5603x and TCS3701 SUIDs and attributes,
-add the smallest maintainable bridge to standard IIO interfaces, and integrate
-orientation, proximity, light and motion without an Android sensor HAL.
+The immediate gate is reproducibility: boot the package-built kernel and
+device image whose owned files now replace the manual rootfs state, then repeat
+the sensor and proximity checks. Validate display blanking during a real call
+when a SIM is available, keep calibration per-device, finish the STMVL53L1
+range sensor and test suspend/resume with every consumer active.
 
 Exit criterion: accelerometer, gyroscope, magnetometer, light, proximity, and
 the relevant motion events work through standard Linux interfaces and survive
@@ -306,11 +309,10 @@ repeated boots.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| NFC | NFC / secure-element path | PN553 reader mode detects, activates and types a real ISO 14443-4 document and exchanges bidirectional ISO 7816-4 APDUs. The document's unauthenticated BAC/PACE refusal is expected; clean lifecycle, HCE and secure-element scope remain open. |
+| NFC | NFC / secure-element path | PN553 reader mode detects, activates and types a real ISO 14443-4 document, exchanges bidirectional ISO 7816-4 APDUs and recovers over three rfkill down/up cycles. The unauthenticated BAC/PACE refusal is expected; broader tags, HCE and secure-element scope remain open. |
 
-Fix explicit down/up recovery without reboot, validate common tag types,
-package only redistributable configuration, and document HCE, secure-element
-and payment limitations separately.
+Validate common tag types, package only redistributable configuration, and
+document HCE, secure-element and payment limitations separately.
 
 Exit criterion: NFC tag detection and reader operation work in userspace, with
 any secure-element limitation explicitly documented.
@@ -319,15 +321,13 @@ any secure-element limitation explicitly documented.
 
 | Subsystem | Function | Current state |
 |---|---|---|
-| Haptics | AW8697 | Controller identity, wiring, source-built `FF_RUMBLE` driver and physical vibration are hardware-confirmed; feedbackd and full behavior validation remain open. |
+| Haptics | AW8697 | Controller identity, wiring and source-built `FF_RUMBLE` driver are hardware-confirmed. Strength 10-100 percent, twenty stop/start pulses, feedbackd and suspend/resume pass. |
 
 The controller answers at `0x5a` with chip ID `0x97`; the stock tree identifies
 GPIO 116 as reset, GPIO 24 as interrupt, and the HD1913 as the 170 Hz actuator
-profile. The initial driver uses continuous mode and the normal OxygenOS drive
-limit without requiring proprietary effect firmware. Physical vibration now
-passes; next validate low-strength and full-strength pulses, repeated
-stop/start behavior and input force feedback, then connect it to feedbackd
-without making vibration dependent on a vendor Android service.
+profile. The driver uses continuous mode and the normal OxygenOS drive limit
+without proprietary effect firmware. Remaining work is longer lifecycle and
+thermal coverage plus upstream review, not basic userspace integration.
 
 Exit criterion: notification and user-interface haptics work repeatedly through
 the normal postmarketOS feedback stack.
@@ -362,18 +362,21 @@ proven and documented rather than hidden behind an Android HAL.
 
 ### 7. Telephony and mobile data
 
-MPSS, QRTR/RMTFS, IPA v4.1 and `rmnet_ipa0` are present. The modem reports its
-revision and signal state through QMI on hardware, but the tested phone has no
-SIM inserted, so registration, data, SMS and calls are not yet validated.
+MPSS, QRTR/RMTFS, IPA v4.1 and `rmnet_ipa0` are present. Both physical SIM
+slots and slot-scoped PIN routing are implemented. The matching OOS10
+MPSS/MCFG catalog, fail-closed pre-online owner and transactional WDS/IMS bearer
+executor are packaged and unit-tested, but the phone currently has no SIM, so
+registration, data, SMS and calls remain unvalidated.
 
 Complete the modem path in this order:
 
-1. modem enumeration and firmware lifecycle;
-2. SIM detection and PIN handling;
-3. LTE data through ModemManager and NetworkManager;
+1. approved MCFG selection and readback before exposing ModemManager;
+2. readiness handoff without a second owner racing QMI;
+3. registration and LTE data through ModemManager/NetworkManager;
 4. SMS send and receive;
 5. voice calls and in-call audio;
-6. VoLTE/IMS only if the hardware and upstream userspace make it practical.
+6. the already implemented IMS bearer path only after the base registration
+   and data path are stable.
 
 Exit criterion: SIM, data, SMS, and calls work through normal postmarketOS
 services without losing USB recovery or breaking suspend.
@@ -438,12 +441,14 @@ the normal USB recovery path or requiring a laboratory DTB.
 After the peripheral queue is complete, remove the remaining core bring-up
 limitations:
 
-- restore and validate UFS ICE;
+- validate an encrypted test volume and define the normal rootfs encryption
+  policy on top of the now-working ICE path;
 - complete Apps SMMU client attachment for UFS, QUP, DWC3, and other supported
   clients;
 - replace temporary DMA, SMMU, reserved-memory, and firmware workarounds with
   correct device-tree descriptions;
-- validate reboot to system, bootloader, and recovery from the direct image;
+- build and validate a native postmarketOS recovery and installer rollback
+  path; system, bootloader and the existing recovery targets already work;
 - repeat storage stress, graphics workloads, radios, audio, and suspend from a
   clean package-generated image.
 

@@ -1,6 +1,6 @@
 # Generated artifacts
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-25
 
 Large or device-specific artifacts are deliberately excluded from Git. A fresh
 clone contains the source, scripts, package snapshots, and documentation needed
@@ -26,7 +26,7 @@ These paths are ignored and must not be added with `git add -f`.
 The active direct-boot package flow produces and validates:
 
 1. the Linux 6.16 arm64 `Image` from
-   `linux-oneplus-hotdog-mainline616` (currently `6.16.0-r177`);
+   `linux-oneplus-hotdog-mainline616` (currently `6.16.0-r181`);
 2. the source-built Hotdog DTB from the same package revision;
 3. matching modules and `firmware-oneplus-hotdog` payloads;
 4. the standard postmarketOS initramfs and split boot/root filesystems;

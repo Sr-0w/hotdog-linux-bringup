@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -14,8 +14,8 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Device | OnePlus 7T Pro, rear label HD1913; recovery reports HD1911 |
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
-| Active kernel line | Mainline-oriented Linux 6.16 reference package, currently `linux-oneplus-hotdog-mainline616` `6.16.0-r180` |
-| Device package | `device-oneplus-hotdog` `3-r30` |
+| Active kernel line | Mainline-oriented Linux 6.16 reference package, currently `linux-oneplus-hotdog-mainline616` `6.16.0-r181` |
+| Device package | `device-oneplus-hotdog` `3-r32` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
 | Boot path | OnePlus ABL -> Linux 6.16 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |
@@ -74,7 +74,7 @@ State meanings:
 | Tilt detector | Working | Answers under event id **774** with an empty payload — the event is the signal, there is no value to carry. It fires rarely: a six-second window saw nothing and a fifteen-second one caught two, which is what made it look silent. Streaming mode returns error 130, correct for an on-change-only sensor. |
 | Device orientation | Working | `device_orient` answers under event id **776**, reporting `4.0`. |
 | Sensors in userspace | Working | Plasma Mobile auto-rotates. No bridge had to be written: postmarketOS ships `iio-sensor-proxy` 3.9 built against `libssc`, which speaks QMI to SEE directly and needs neither an IIO nor an input device. Two faults kept it dark. KWin never claimed the accelerometer because `autoRotation` was `InTabletMode` on a phone with no tablet-mode switch. And a claim landing before the driver registers is accepted and lost, since the daemon takes its D-Bus name before enumerating SEE — so [a boot gate](../helpers/hotdog-sensor-proxy-gate.sh) brings the chain up and only returns once `HasAccelerometer` is true. The reported orientation was half a turn out, corrected through `ACCEL_MOUNT_MATRIX` rather than the SEE registry, which every other consumer shares. See [userspace has a sensor path now](evidence/2026-08-23-userspace-has-a-sensor-path-now.md). |
-| Proximity | Working | The passive TCS3701 channel heuristic was disproved by an uncovered dark-state false `near`; OxygenOS instead uses the ADSP Elliptic ultrasonic path, and so does this port. Sending the microphone index and suspend values OxygenOS writes before enabling the engine produced sensorhub parameter-id 16, which had never arrived. Measured end to end: 30 engine transitions, 29 of 29 reaching `net.hadess.SensorProxy`, median latency 0.72 s against the driver's 700 ms poll. The channel reports 2 rather than 1 because `iio-poll-proximity` scales its near level by 1.1 and a binary channel can never exceed its own threshold. `hotdog-proximity-arm` raises the audio path while the channel is being read and drops it 5 s after. It is a classifier for a head against the earpiece and ignores a flat object on purpose. Caveats: `q6elliptic` and the arming service are not in any package yet, so a reflash loses them, and blanking during a real call is unverified for want of a SIM. See [near and far](evidence/2026-08-25-proximity-reports-near-and-far.md) and [the protocol](evidence/2026-08-25-elliptic-protocol-from-oxygenos.md). |
+| Proximity | Working | The passive TCS3701 channel heuristic was disproved by an uncovered dark-state false `near`; OxygenOS instead uses the ADSP Elliptic ultrasonic path, and so does this port. Sending the microphone index and suspend values OxygenOS writes before enabling the engine produced sensorhub parameter-id 16, which had never arrived. Measured end to end: 30 engine transitions, 29 of 29 reaching `net.hadess.SensorProxy`, median latency 0.72 s against the driver's 700 ms poll. The channel reports 2 rather than 1 because `iio-poll-proximity` scales its near level by 1.1 and a binary channel can never exceed its own threshold. Kernel, udev, SLPI gate and `hotdog-proximity-arm` are now package-owned; the private 448-byte calibration is restored from `persist` rather than published. It is a classifier for a head against the earpiece and ignores a flat object on purpose. Blanking during a real call remains unverified without a SIM. See [near and far](evidence/2026-08-25-proximity-reports-near-and-far.md) and [the protocol](evidence/2026-08-25-elliptic-protocol-from-oxygenos.md). |
 | Range sensor | Not yet supported | STMVL53L1 wiring, calibration, driver and standard proximity/range integration remain. |
 | Fingerprint | Not yet supported | Goodix `G_OPTICAL_18865_G3` in-display optical sensor, wired on tlmm 101 (supply), 131 (reset), 118 (interrupt) and 90 (vendor id), all currently unclaimed. There is no SPI node: the bus belongs to a Qualcomm TrustZone applet, and the stock HAL `libgf_ud_hal.so` reaches it through `libQSEEComAPI.so`, so no image ever reaches Linux. Blocked on a mainline QSEECom equivalent rather than on a missing driver. See [the fingerprint assessment](evidence/2026-08-19-fingerprint-goodix-udfps.md). |
 | Ubuntu Touch / Lomiri | Not yet supported | The no-Halium architecture, rootfs boot, packaging, OTA/recovery and Lomiri session remain future roadmap phases. |

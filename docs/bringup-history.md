@@ -7,7 +7,7 @@ recovery experiments, and validated mainline fixes that were previously kept in
 the repository root `README.md`. The root README intentionally stays focused on
 the current support state and navigation.
 
-## Current checkpoint — 2026-08-13
+## Historical checkpoint — 2026-08-13
 
 The July boot investigation is complete: the active reference now direct-boots
 Linux 6.16 from ABL into a writable postmarketOS/Plasma system. Since the

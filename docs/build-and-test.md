@@ -1,6 +1,6 @@
 # Build and test workflow
 
-Last updated: 2026-08-13
+Last updated: 2026-08-25
 
 This is the active source-to-hardware workflow. K1, D-series and kexec commands
 are historical reproductions and are not the default release path.
@@ -37,9 +37,9 @@ a separate pmaports checkout:
 
 The tracked development packages are currently:
 
-- `linux-oneplus-hotdog-mainline616` `6.16.0-r177`
-- `device-oneplus-hotdog` `3-r23`
-- `firmware-oneplus-hotdog` `20241212-r5`
+- `linux-oneplus-hotdog-mainline616` `6.16.0-r181`
+- `device-oneplus-hotdog` `3-r32`
+- `firmware-oneplus-hotdog` `20241212-r7`
 
 These revisions move as experiments are accepted. The source tree and built
 package metadata, not this list alone, are authoritative.
