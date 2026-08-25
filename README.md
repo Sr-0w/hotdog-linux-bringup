@@ -157,6 +157,7 @@ function under **Working** and a broader integration or stability item under
 | Sensors | Motion, orientation, tilt | `amd`, `rmd`, `device_orient` and `tilt` answer under event ids 772, 776 and 774. Tilt fires rarely and needs a window of at least fifteen seconds to be seen. |
 | Sensors | Screen auto-rotation | Plasma Mobile rotates from the accelerometer. `iio-sensor-proxy` speaks QMI to SEE directly through `libssc`, so no IIO or input device is involved; [a boot gate](helpers/hotdog-sensor-proxy-gate.sh) makes the daemon enumerate before KWin claims, and `ACCEL_MOUNT_MATRIX` corrects a half-turn offset. |
 | Power | Fuel gauge | The bq27421-compatible gauge reports coherent charge, voltage, temperature, current and capacity. |
+| Proximity | Near/far detection | The ultrasonic Elliptic engine on the audio DSP, which is what OxygenOS uses; the TCS3701 sub-sensor it publishes is never requested by anyone. Measured end to end: 30 engine transitions, 29 of 29 reaching `net.hadess.SensorProxy`, median latency 0.72 s. The audio path arms itself while the channel is being read. It is a classifier for a head against the earpiece and ignores a flat object on purpose. The driver and its arming service are **not packaged yet**, and blanking during a real call is unverified for want of a SIM. |
 
 ### 🟡 Partial
 
@@ -187,7 +188,6 @@ function under **Working** and a broader integration or stability item under
 | Storage | UFS ICE | ICE probe fails; the working UFS path currently runs without ICE. |
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
-| Proximity | Near/far detection | `sns_tcs3701` publishes the sensor, accepts every request and emits nothing — no sample, no configuration event, no error. The driver runs and stores a failed calibration, and the chip sees a finger: covering it roughly triples the ALS channels on the same die. What remains is inside the driver, and its messages for that path go to diag, which this port cannot drain. |
 
 ### ⚪ Not yet supported
 
@@ -226,11 +226,11 @@ flowchart LR
 
 The active engineering frontier is:
 
-1. recover a diag transport for the SLPI, which is the only remaining way to
-   read what `sns_tcs3701` decides between accepting a proximity request and
-   emitting nothing. The paired mainline/downstream comparison that used to sit
-   here is no longer needed: the fault was the SLPI firmware version, and the
-   platform was never the difference;
+1. package `q6elliptic` and the proximity arming service, which currently
+   exist only on the running device and are lost by a reflash. The SLPI diag
+   transport that used to sit here is no longer needed: proximity was never the
+   `sns_tcs3701` sub-sensor, and reading what that driver decides answers
+   nothing;
 2. bridge GNSS and mobile data into standard services and test SIM, SMS, calls
    and data;
 3. close display wake, UFS ICE, remaining audio, dock, charging and
