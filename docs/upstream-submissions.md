@@ -75,6 +75,25 @@ the patch is right, `hotdog-sensor-gate` no longer needs to exist for the
 accelerometer either. It goes to the project as a merge request, not to a
 mailing list.
 
+The gate is currently blocked by a second, unrelated defect. The local aport
+carries an SSC driver series written against libssc 0.1.6, and the repositories
+now ship 0.4.4. Two things changed: the pkg-config module was renamed from
+`libssc-glib` to `libssc`, which is a one-word fix, and something behind the
+same headers no longer behaves as the series expects. A package rebuilt against
+0.4.4 segfaults during SSC discovery:
+
+```
+GLib-GObject-CRITICAL: invalid (NULL) pointer instance
+GLib-GObject-CRITICAL: g_signal_handler_disconnect: assertion 'G_TYPE_CHECK_INSTANCE (instance)' failed
+Segmentation fault
+```
+
+A control build of the same aport **without** the ordering patch crashes
+identically, so the crash is the libssc gap and not the patch under test. The
+running phone stays on the distribution's 3.9-r2, which predates the libssc
+bump. Repairing the SSC series against current libssc is the prerequisite for
+verifying anything else in this aport.
+
 ```
 15:09:20.410  Handling driver refcounting method 'ClaimAccelerometer'
 15:09:20.419  Found SSC proximity
