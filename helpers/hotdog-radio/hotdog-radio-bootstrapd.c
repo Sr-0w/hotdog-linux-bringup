@@ -391,7 +391,7 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	}
 	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
 	qmi_message_uim_get_card_status_output_unref(output);
-	if (result && !(bootstrap->pdc_probe_subscription >= 0 &&
+	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc) &&
 			(result == -EIO || result == -ENODEV))) {
 		g_printerr("UIM inventory rejected: %d\n", result);
 		finish(bootstrap, 1);
