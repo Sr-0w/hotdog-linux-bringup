@@ -50,7 +50,7 @@ static void controller_drive(struct hotdog_pdc_controller *controller)
 	const struct hotdog_pdc_operation *operation;
 	int result;
 
-	if (controller->finished || controller->waiting_switch)
+	if (controller->finished || controller->waiting_switch || controller->transport_down)
 		return;
 	result = hotdog_pdc_executor_next(&controller->executor, &operation);
 	if (!result) {
@@ -71,6 +71,16 @@ static void controller_drive(struct hotdog_pdc_controller *controller)
 		controller_drive(controller);
 		return;
 	}
+	if (controller->request.type == HOTDOG_QMI_PDC_REQUEST_SWITCH &&
+	    controller->switch_observed) {
+		controller->switch_observed = false;
+		hotdog_pdc_executor_complete(&controller->executor, 0);
+		hotdog_qmi_pdc_request_clear(&controller->request);
+		controller_drive(controller);
+		return;
+	}
+	if (controller->switch_observed)
+		controller->switch_observed = false;
 	result = hotdog_qmi_pdc_backend_start(
 		controller->backend, &controller->request, backend_done, controller);
 	if (result == -EINPROGRESS &&
@@ -125,9 +135,31 @@ int hotdog_pdc_controller_start(struct hotdog_pdc_controller *controller)
 
 void hotdog_pdc_controller_transport_lost(struct hotdog_pdc_controller *controller)
 {
-	if (!controller || controller->finished || controller->waiting_switch)
+	if (!controller || controller->finished || controller->transport_down)
 		return;
+	controller->transport_down = true;
 	hotdog_qmi_pdc_backend_transport_lost(controller->backend);
+}
+
+int hotdog_pdc_controller_reconnected(struct hotdog_pdc_controller *controller)
+{
+	bool waiting_switch;
+
+	if (!controller || !controller->transport_down || controller->finished)
+		return -EINVAL;
+	waiting_switch = controller->waiting_switch;
+	controller->transport_down = false;
+	controller->waiting_switch = false;
+	if (waiting_switch && controller->executor.awaiting &&
+	    controller->request.type == HOTDOG_QMI_PDC_REQUEST_SWITCH) {
+		hotdog_pdc_executor_complete(&controller->executor, 0);
+		hotdog_qmi_pdc_request_clear(&controller->request);
+		controller_drive(controller);
+		return 0;
+	}
+	controller->switch_observed = true;
+	controller_drive(controller);
+	return 0;
 }
 
 int hotdog_pdc_controller_switch_complete(struct hotdog_pdc_controller *controller,
@@ -136,6 +168,7 @@ int hotdog_pdc_controller_switch_complete(struct hotdog_pdc_controller *controll
 	if (!controller || !controller->waiting_switch || result > 0)
 		return -EINVAL;
 	controller->waiting_switch = false;
+	controller->switch_observed = false;
 	hotdog_pdc_executor_complete(&controller->executor, result);
 	hotdog_qmi_pdc_request_clear(&controller->request);
 	controller_drive(controller);
@@ -152,6 +185,8 @@ void hotdog_pdc_controller_cancel(struct hotdog_pdc_controller *controller)
 		hotdog_pdc_executor_complete(&controller->executor, -ECANCELED);
 		hotdog_qmi_pdc_request_clear(&controller->request);
 		controller->waiting_switch = false;
+		controller->transport_down = false;
+		controller->switch_observed = false;
 		controller_drive(controller);
 	}
 }

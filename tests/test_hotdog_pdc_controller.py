@@ -37,6 +37,18 @@ class HotdogPdcControllerTests(unittest.TestCase):
         self.assertIn("hotdog_pdc_controller_switch_complete", source)
         self.assertIn("hotdog_qmi_pdc_request_clear", source)
 
+    def test_transport_loss_pauses_recovery_until_rebind(self) -> None:
+        source = (SOURCE / "hotdog-pdc-controller.c").read_text()
+        self.assertIn("controller->transport_down = true", source)
+        self.assertIn("controller->finished || controller->waiting_switch || controller->transport_down", source)
+        self.assertIn("hotdog_pdc_controller_reconnected", source)
+        self.assertIn("controller->switch_observed = true", source)
+
+    def test_observed_switch_is_consumed_once(self) -> None:
+        source = (SOURCE / "hotdog-pdc-controller.c").read_text()
+        self.assertIn("request.type == HOTDOG_QMI_PDC_REQUEST_SWITCH", source)
+        self.assertGreaterEqual(source.count("controller->switch_observed = false"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

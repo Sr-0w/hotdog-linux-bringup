@@ -336,6 +336,10 @@ loss during any other request is `ENETRESET` and enters recovery. The following
 Switch operation pauses the controller until the outer lifecycle has observed
 service loss/reappearance, allocated a new PDC client and rebound the backend.
 Only an explicit switch completion can advance to selected-ID verification.
+An unexpected loss also pauses the generated recovery until a new client is
+rebound; no rollback request is sent through a dead transport. A loss already
+observed during Activate satisfies exactly the following Switch operation once,
+whereas a later recovery activation must observe its own new loss/reconnect.
 
 Execution also requires a root-owned approval manifest that is neither a
 symlink nor group/world writable. `hotdog-radio-approval` accepts only schema,
