@@ -330,6 +330,27 @@ void hotdog_qmi_pdc_backend_cancel(struct hotdog_qmi_pdc_backend *backend)
 		backend_finish(backend, -ECANCELED, 0);
 }
 
+void hotdog_qmi_pdc_backend_transport_lost(struct hotdog_qmi_pdc_backend *backend)
+{
+	if (!backend || !backend->active)
+		return;
+	if (backend->request &&
+	    backend->request->type == HOTDOG_QMI_PDC_REQUEST_ACTIVATE)
+		backend_finish(backend, 0, 0);
+	else
+		backend_finish(backend, -ENETRESET, 0);
+}
+
+int hotdog_qmi_pdc_backend_rebind(struct hotdog_qmi_pdc_backend *backend,
+				  QmiClientPdc *client, GCancellable *cancellable)
+{
+	if (!backend || !client || !cancellable || backend->active)
+		return -EINVAL;
+	g_set_object(&backend->client, client);
+	g_set_object(&backend->cancellable, cancellable);
+	return 0;
+}
+
 void hotdog_qmi_pdc_backend_clear(struct hotdog_qmi_pdc_backend *backend)
 {
 	if (!backend)

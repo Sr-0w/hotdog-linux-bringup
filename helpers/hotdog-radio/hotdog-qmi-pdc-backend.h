@@ -35,6 +35,9 @@ int hotdog_qmi_pdc_backend_start(struct hotdog_qmi_pdc_backend *backend,
 				 hotdog_qmi_pdc_backend_done done,
 				 void *user_data);
 void hotdog_qmi_pdc_backend_cancel(struct hotdog_qmi_pdc_backend *backend);
+void hotdog_qmi_pdc_backend_transport_lost(struct hotdog_qmi_pdc_backend *backend);
+int hotdog_qmi_pdc_backend_rebind(struct hotdog_qmi_pdc_backend *backend,
+				  QmiClientPdc *client, GCancellable *cancellable);
 void hotdog_qmi_pdc_backend_clear(struct hotdog_qmi_pdc_backend *backend);
 
 #endif
