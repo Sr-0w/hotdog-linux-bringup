@@ -1,6 +1,6 @@
 pkgname=hotdog-radio-bootstrap
 pkgver=0.15
-pkgrel=0
+pkgrel=1
 pkgdesc="Verified UIM, PDC and DMS bootstrap for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
 arch="aarch64"
@@ -54,6 +54,8 @@ package() {
 }
 
 openrc() {
+	depends="$pkgname=$pkgver-r$pkgrel modemmanager-openrc"
+	install="$subpkgname.post-install"
 	install -Dm755 "$srcdir/hotdog-radio-bootstrap.initd" \
 		"$subpkgdir/etc/init.d/hotdog-radio-bootstrap"
 }

@@ -441,6 +441,15 @@ validate_hotdog_wifi_package_contract() {
 	grep -q '^rc-update add hotdog-radio-bootstrap boot$' \
 		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
 		die "device firmware package does not enable the guarded radio bootstrap"
+	grep -q 'depends="\$pkgname=\$pkgver-r\$pkgrel modemmanager-openrc"' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "radio bootstrap OpenRC package does not order after ModemManager"
+	grep -q '^rc-update del modemmanager default' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap-openrc.post-install" ||
+		die "radio bootstrap OpenRC policy leaves ModemManager in the default runlevel"
+	grep -q '^rc-update add hotdog-radio-bootstrap boot$' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap-openrc.post-install" ||
+		die "radio bootstrap OpenRC policy does not enable its guarded service"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||

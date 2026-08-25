@@ -138,6 +138,7 @@ allowed_snapshot_file() {
 		device/testing/firmware-oneplus-hotdog:*.jsn | \
 		device/testing/hotdog-radio-bootstrap:APKBUILD | \
 		device/testing/hotdog-radio-bootstrap:*.initd | \
+		device/testing/hotdog-radio-bootstrap:*.post-install | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:config-sm8150.aarch64 | \
 		device/testing/linux-postmarketos-sm8150-staging:0001-arm64-dts-qcom-add-oneplus-hotdog.patch | \
