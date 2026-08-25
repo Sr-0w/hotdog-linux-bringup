@@ -3,13 +3,12 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=30
+pkgrel=31
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
 arch="aarch64"
 options="!check !archcheck"
-install="$pkgname-nonfree-firmware.post-install"
 depends="
 	alsa-ucm-conf
 	android-tools-avbtool
@@ -151,6 +150,7 @@ mainline_firmware() {
 
 nonfree_firmware() {
 	pkgdesc="Firmware for GPU, Touchscreen, Audio, Bluetooth, WiFi, etc."
+	install="$subpkgname.post-install"
 	depends="
 		firmware-oneplus-hotdog-adreno
 		firmware-oneplus-hotdog-adsp

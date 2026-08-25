@@ -436,6 +436,11 @@ validate_hotdog_wifi_package_contract() {
 		die "device firmware package lacks the radio bootstrap"
 	grep -q '^[[:space:]]*hotdog-radio-bootstrap-openrc$' "$device_apkbuild" ||
 		die "device firmware package lacks the radio bootstrap service"
+	grep -q '^[[:space:]]*install="\$subpkgname.post-install"$' "$device_apkbuild" ||
+		die "device firmware post-install is not attached to the firmware subpackage"
+	grep -q '^rc-update add hotdog-radio-bootstrap boot$' \
+		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
+		die "device firmware package does not enable the guarded radio bootstrap"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||
