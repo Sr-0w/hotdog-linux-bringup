@@ -182,10 +182,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The read-only slice is packaged as `hotdog-radio-bootstrap-0.8-r0` plus an
+The read-only slice is packaged as `hotdog-radio-bootstrap-0.9-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
-`5e01e5dc11558458204c61a6514b9f432347266b24a803cb9437440cf3e75663`
-and `b372bbd662a6b25fd20bdc676f0afa7268ab48f501e90d261df32635a9b1a3ab`.
+`6a65cab8cf982464b76fad8c38acdb270f02090325207aa7e2aba826d671834a`
+and `2683348eb4bc47af9bae80cefdaf0a1ac1a70783a98377880ca5d71786a2dcb3`.
 The binary links to the four subscription setters from libqmi `r2`. The service
 writes boot ID, kernel identity, UIM and PDC output atomically under `/run`, but
 is deliberately not auto-enabled before a no-SIM target validation.
@@ -314,6 +314,11 @@ exposes only `--probe-dms`. The read-only probe runs after the same UIM identity
 checks and reports whether MPSS is online, offline or in a low-power mode.
 Set Operating Mode is not wired to runtime until the PDC active-ID verification
 and readiness record are complete.
+The no-SIM hardware probe reports stable `shutting-down` while remoteproc and
+all MPSS QRTR services remain alive. This is the intended pre-online state, not
+a remoteproc failure. Earlier Set Online evidence crashed the modem when no
+MCFG was active, so the daemon must preserve this mode through PDC verification;
+see [the DMS shutdown gate](2026-08-25-radio-dms-shutdown-gate.md).
 
 ## Parity gates
 
