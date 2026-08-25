@@ -256,6 +256,17 @@ result and oversized IDs fail closed before they can advance the radio state.
 Its compile-check uses the public libqmi API plus exactly the four generated
 subscription setters carried by the local libqmi patch.
 
+The load phase is modeled separately by `hotdog-pdc-load` and
+`hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
+sent in chunks no larger than `0x400` bytes, matching upstream qmicli and the
+stock QCRIL `pdc_load_config_segment` path. Every chunk has a fresh token and
+must report the exact remaining byte count before the next chunk is built.
+Stale tokens do not advance state. A remote error, frame reset, malformed
+progress or local abort after transmission marks the ID for an explicit PDC
+Delete Config cleanup before selection can continue. Synthetic replay covers
+multi-chunk completion and every cleanup transition; no hardware mutation is
+enabled by this model alone.
+
 ### Radio and SSR
 
 - DMS state transitions are explicit and validated;

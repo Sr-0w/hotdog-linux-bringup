@@ -518,6 +518,7 @@ validate_oxygenos_modem_inventory_contract() {
 validate_hotdog_radio_state_contract() {
 	local source_dir="helpers/hotdog-radio"
 	local glib_flags=""
+	local qmi_flags=""
 	local output=""
 	local result=""
 
@@ -530,6 +531,10 @@ validate_hotdog_radio_state_contract() {
 	done
 	for source in hotdog-mcfg.c hotdog-mcfg.h hotdog-mcfg-inspect.c; do
 		[ -f "$source_dir/$source" ] || die "missing MCFG catalog source: $source"
+	done
+	for source in hotdog-pdc-load.c hotdog-pdc-load.h hotdog-pdc-load-replay.c \
+		      hotdog-qmi-pdc-load.c hotdog-qmi-pdc-load.h; do
+		[ -f "$source_dir/$source" ] || die "missing PDC load source: $source"
 	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
@@ -561,6 +566,13 @@ validate_hotdog_radio_state_contract() {
 		"$source_dir/hotdog-mbn.c" "$source_dir/hotdog-pdc.c" \
 		"$source_dir/hotdog-mcfg.c" "$source_dir/hotdog-mcfg-inspect.c" \
 		$glib_flags -o "$output"
+	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
+		"$source_dir/hotdog-pdc-load.c" "$source_dir/hotdog-pdc-load-replay.c" \
+		-o "$output"
+	qmi_flags="$(pkg-config --cflags qmi-glib glib-2.0)"
+	# shellcheck disable=SC2086
+	cc -std=c11 -Wall -Wextra -Werror -O2 -fsyntax-only -I "$source_dir" \
+		"$source_dir/hotdog-qmi-pdc-load.c" $qmi_flags
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \
 		"$source_dir/hotdog-uim.c" "$source_dir/hotdog-uim-replay.c" \
 		-o "$output"
