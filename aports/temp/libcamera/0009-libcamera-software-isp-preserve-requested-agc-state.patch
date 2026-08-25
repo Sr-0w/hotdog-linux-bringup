@@ -1,0 +1,66 @@
+diff --git a/src/ipa/simple/algorithms/agc.cpp b/src/ipa/simple/algorithms/agc.cpp
+index 45e066133f3240a583a1e2c9c6ba4ee82dfec872..31fa0b98715a04ffb8c40b88fe1c5a22e0710bde 100644
+--- a/src/ipa/simple/algorithms/agc.cpp
++++ b/src/ipa/simple/algorithms/agc.cpp
+@@ -71,15 +71,15 @@ Agc::Agc()
+ bool Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext,
+ 			 double exposureMSV)
+ {
+-	int32_t &exposure = frameContext.sensor.exposure;
+-	double &again = frameContext.sensor.gain;
+ 	/*
+-	 * Compare consecutive requested values, not the delayed sensor values in
+-	 * this frame context. At a control limit the latter can trail the active
+-	 * request and would keep resetting AE stability indefinitely.
++	 * Advance from the last requested values. The values reported in this frame
++	 * can lag by several frames; using them as the next starting point can keep
++	 * requesting the same quantized gain forever on integer-gain sensors.
+ 	 */
+-	const int32_t oldExposure = context.activeState.agc.exposure;
+-	const double oldAgain = context.activeState.agc.again;
++	int32_t exposure = context.activeState.agc.exposure;
++	double again = context.activeState.agc.again;
++	const int32_t oldExposure = exposure;
++	const double oldAgain = again;
+ 
+ 	double error = kExposureOptimal - exposureMSV;
+ 
+@@ -128,6 +128,8 @@ bool Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext,
+ 
+ 	context.activeState.agc.exposure = exposure;
+ 	context.activeState.agc.again = again;
++	frameContext.sensor.exposure = exposure;
++	frameContext.sensor.gain = again;
+ 
+ 	LOG(IPASoftExposure, Debug)
+ 		<< "exposureMSV " << exposureMSV
+diff --git a/src/ipa/simple/soft_simple.cpp b/src/ipa/simple/soft_simple.cpp
+index 0c2169339ccc68ebdefe52ebecb37603cd972693..5281ddd2e23659ce720c44b091bf8fac1ae92e44 100644
+--- a/src/ipa/simple/soft_simple.cpp
++++ b/src/ipa/simple/soft_simple.cpp
+@@ -6,6 +6,7 @@
+  */
+ 
+ #include <chrono>
++#include <cmath>
+ #include <stdint.h>
+ #include <sys/mman.h>
+ 
+@@ -230,10 +231,16 @@ int IPASoftSimple::configure(const IPAConfigInfo &configInfo)
+ 		context_.configuration.agc.againMin = camHelper_->gain(againMin);
+ 		context_.configuration.agc.againMax = camHelper_->gain(againMax);
+ 		context_.configuration.agc.again10 = std::max(context_.configuration.agc.againMin, 1.0);
+-		context_.configuration.agc.againMinStep =
++		const double nominalStep =
+ 			(context_.configuration.agc.againMax -
+ 			 context_.configuration.agc.againMin) /
+ 			100.0;
++		const double sensorStep = againMin < againMax
++			? std::abs(camHelper_->gain(againMin + 1) -
++				   context_.configuration.agc.againMin)
++			: 0.0;
++		context_.configuration.agc.againMinStep =
++			std::max(nominalStep, sensorStep);
+ 		if (camHelper_->blackLevel().has_value()) {
+ 			/*
+ 			 * The black level from camHelper_ is a 16 bit value, software ISP

@@ -3,7 +3,7 @@ maintainer="Robert Mader <robert.mader@collabora.com>"
 pkgname=libcamera
 _pkgver=0.7.2
 pkgver=9999$_pkgver
-pkgrel=9
+pkgrel=12
 pkgdesc="Linux camera framework"
 url="https://libcamera.org/"
 arch="all"
@@ -68,6 +68,9 @@ source="https://gitlab.freedesktop.org/camera/libcamera/-/archive/v$_pkgver/libc
 	0005-libcamera-software-isp-add-contrast-autofocus.patch
 	0006-libcamera-add-Sony-IMX481-sensor-data.patch
 	0007-libcamera-add-Sony-IMX471-sensor-data.patch
+	0008-libcamera-software-isp-responsive-3a-and-af-windows.patch
+	0009-libcamera-software-isp-preserve-requested-agc-state.patch
+	0010-libcamera-software-isp-tighten-automatic-controls.patch
 	qcam.desktop
 	$_tuning_files
 	"
@@ -188,6 +191,9 @@ eef5e38efc874f2049d17f08b04d9f21c3e4616f66873358cd2c446e651f78d6952ae25ee13a6ef9
 fb325d2b6b4c11d2235134e88b8cfcf3ad34e31e71f5700a13e89ec5b80e6032f5d50cf007e0b8bad1bd436978d27719133ab5eb54af2ae105847a46e7f78193  0005-libcamera-software-isp-add-contrast-autofocus.patch
 adc5043c00e560e16cf51429a11a13bc594a2bb11435ede75b1b4f61a893c0f385ba1ed4a2162b0f2f5b7947e53b8ad6b18ccb67ca853bd94e8c0dc157b3b106  0006-libcamera-add-Sony-IMX481-sensor-data.patch
 4e980e6389624a2acea564410898949b22ed858e40d4771fdc13c080f2e5ace226ea0d8f9fa5e0462ff29e24fcd9e0b2efa36ee96bbd9870424f227d55097682  0007-libcamera-add-Sony-IMX471-sensor-data.patch
+1f8b92c20d49274118f8658d17b126c9fabc3fa130ef2a3008749e692bb402d21226d755d46118ba1d702174040df67bea967795fee527c77aa5112c82223dbd  0008-libcamera-software-isp-responsive-3a-and-af-windows.patch
+9ac3ff1edbbb7de39f49551b0a3ff8650a969df20e4d7f30add9723bfffe3b2112d7fc7a0544c5b207c6bd869035cd8a8dfac3371b06990f1cdaef5aa6afef61  0009-libcamera-software-isp-preserve-requested-agc-state.patch
+63ed42b420795d734e23e41630c86a8b65e49964f1a92785ed2e8ec0922364d48d3c2d2bb4a81a179e12f76075020f8f7b1f2aa54e041a09ecce0833dc258663  0010-libcamera-software-isp-tighten-automatic-controls.patch
 22167a4eceb6d1b40b0b7c45fdf116c71684f5340de7f767535cb8e160ad9d2ae0f00cb3d461f73a344520a48a4641cf46226841d78bee06bfbfd2a91337f754  qcam.desktop
 2ee566653b17d565d2c0de67cbe6ebad25df5aac6051cad78e6bae52016fa2ca0247e964d735ac776b3e0bd447ead9c4fcb26cd7629228cdba3ceb91b46f378f  hi846.yaml
 55dab9dcb9b1982143b9d63e4e51138c5bffd7c8f4a8e4e122750b3ad9d475446956bc297d9f564819ade4be75a575d06633a064e14f8ba3ef77986783c5f067  imx355.yaml

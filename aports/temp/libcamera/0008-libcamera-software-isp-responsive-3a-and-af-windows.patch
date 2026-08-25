@@ -1,0 +1,556 @@
+diff --git a/include/libcamera/internal/software_isp/swisp_stats.h b/include/libcamera/internal/software_isp/swisp_stats.h
+index b0b937720b5c79682019b891d3eabca588b68fc9..e0213ed3ed1800a0817e0b65521096fd23e8449d 100644
+--- a/include/libcamera/internal/software_isp/swisp_stats.h
++++ b/include/libcamera/internal/software_isp/swisp_stats.h
+@@ -43,10 +43,25 @@ struct SwIspStats {
+ 	 * \brief A histogram of luminance values of all the sampled pixels
+ 	 */
+ 	Histogram yHistogram;
++	/**
++	 * \brief Dimensions of the autofocus statistics grid
++	 */
++	static constexpr unsigned int kAfGridWidth = 5;
++	static constexpr unsigned int kAfGridHeight = 5;
++	static constexpr unsigned int kAfGridSize =
++		kAfGridWidth * kAfGridHeight;
+ 	/**
+ 	 * \brief Exposure-normalized horizontal green-channel edge energy
+ 	 */
+ 	uint64_t sharpness;
++	/**
++	 * \brief Exposure-normalized edge energy for autofocus regions
++	 */
++	std::array<uint64_t, kAfGridSize> afSharpness;
++	/**
++	 * \brief Green-channel sums used to normalize autofocus regions
++	 */
++	std::array<uint64_t, kAfGridSize> afGreen;
+ };
+ 
+ } /* namespace libcamera */
+diff --git a/include/libcamera/internal/software_isp/swstats_cpu.h b/include/libcamera/internal/software_isp/swstats_cpu.h
+index 5518709218620830a0e39b8806ace177829f3015..1f07f316ab3484b84b895529bfd7fdb31ea139a7 100644
+--- a/include/libcamera/internal/software_isp/swstats_cpu.h
++++ b/include/libcamera/internal/software_isp/swstats_cpu.h
+@@ -39,12 +39,10 @@ public:
+ 	~SwStatsCpu() = default;
+ 
+ 	/*
+-	 * The combination of pipeline + sensor delays means that
+-	 * exposure changes can take up to 3 frames to get applied,
+-	 * Run stats once every 4 frames to ensure any previous
+-	 * exposure changes have been applied.
++	 * AWB and contrast AF need per-frame feedback. Algorithms that drive
++	 * delayed sensor controls, such as AGC, throttle their own updates.
+ 	 */
+-	static constexpr uint32_t kStatPerNumFrames = 4;
++	static constexpr uint32_t kStatPerNumFrames = 1;
+ 
+ 	bool isValid() const { return sharedStats_.fd().isValid(); }
+ 
+@@ -67,7 +65,7 @@ public:
+ 		    y >= (window_.y + window_.height))
+ 			return;
+ 
+-		(this->*stats0_)(src, stats_[statsBufferIndex]);
++		(this->*stats0_)(y, src, stats_[statsBufferIndex]);
+ 	}
+ 
+ 	void processLine2(uint32_t frame, unsigned int y, const uint8_t *src[], unsigned int statsBufferIndex = 0)
+@@ -79,28 +77,29 @@ public:
+ 		    y >= (window_.y + window_.height))
+ 			return;
+ 
+-		(this->*stats2_)(src, stats_[statsBufferIndex]);
++		(this->*stats2_)(y, src, stats_[statsBufferIndex]);
+ 	}
+ 
+ 	Signal<uint32_t, uint32_t> statsReady;
+ 
+ private:
+-	using statsProcessFn = void (SwStatsCpu::*)(const uint8_t *src[], SwIspStats &stats);
++	using statsProcessFn = void (SwStatsCpu::*)(unsigned int y,
++					     const uint8_t *src[], SwIspStats &stats);
+ 	using processFrameFn = void (SwStatsCpu::*)(MappedFrameBuffer &in);
+ 
+ 	int setupStandardBayerOrder(BayerFormat::Order order);
+ 	/* Bayer 8 bpp unpacked */
+-	void statsBGGR8Line0(const uint8_t *src[], SwIspStats &stats);
++	void statsBGGR8Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
+ 	/* Bayer 10 bpp unpacked */
+-	void statsBGGR10Line0(const uint8_t *src[], SwIspStats &stats);
++	void statsBGGR10Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
+ 	/* Bayer 12 bpp unpacked */
+-	void statsBGGR12Line0(const uint8_t *src[], SwIspStats &stats);
++	void statsBGGR12Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
+ 	/* Bayer 10 bpp packed */
+-	void statsBGGR10PLine0(const uint8_t *src[], SwIspStats &stats);
+-	void statsGBRG10PLine0(const uint8_t *src[], SwIspStats &stats);
++	void statsBGGR10PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
++	void statsGBRG10PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
+ 	/* Bayer 12 bpp packed */
+-	void statsBGGR12PLine0(const uint8_t *src[], SwIspStats &stats);
+-	void statsGBRG12PLine0(const uint8_t *src[], SwIspStats &stats);
++	void statsBGGR12PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
++	void statsGBRG12PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats);
+ 
+ 	void processBayerFrame2(MappedFrameBuffer &in);
+ 
+diff --git a/src/ipa/simple/algorithms/af.cpp b/src/ipa/simple/algorithms/af.cpp
+index 222dd89633e0fff83209db3dff02c2b31f662f79..e8a90bb88771476878484d392a0954d810277306 100644
+--- a/src/ipa/simple/algorithms/af.cpp
++++ b/src/ipa/simple/algorithms/af.cpp
+@@ -21,7 +21,7 @@ LOG_DEFINE_CATEGORY(IPASoftAf)
+ 
+ namespace ipa::soft::algorithms {
+ 
+-static constexpr unsigned int kAeStableSamples = 3;
++static constexpr unsigned int kAeValidSamples = 1;
+ 
+ int Af::init(IPAContext &context,
+ 	     [[maybe_unused]] const ValueNode &tuningData)
+@@ -30,6 +30,11 @@ int Af::init(IPAContext &context,
+ 		ControlInfo(controls::AfModeValues, controls::AfModeContinuous);
+ 	context.ctrlMap[&controls::AfTrigger] =
+ 		ControlInfo(controls::AfTriggerValues);
++	context.ctrlMap[&controls::AfMetering] =
++		ControlInfo(controls::AfMeteringValues, controls::AfMeteringAuto);
++	context.ctrlMap[&controls::AfWindows] =
++		ControlInfo(Rectangle{}, Rectangle(65535, 65535, 65535, 65535),
++			    Span<const Rectangle, 1>{ { Rectangle{} } });
+ 	/*
+ 	 * The actuator has no calibrated DAC-to-dioptre curve yet. Expose a
+ 	 * normalized manual range until that calibration is available.
+@@ -55,13 +60,15 @@ int Af::configure(IPAContext &context, const IPAConfigInfo &configInfo)
+ 
+ 	const int32_t range = std::max(1, context.configuration.focus.max -
+ 						  context.configuration.focus.min);
+-	context.configuration.focus.coarseStep = std::max(1, range / 8);
+-	context.configuration.focus.fineStep = std::max(1, range / 40);
++	context.configuration.focus.coarseStep = std::max(1, range / 4);
++	context.configuration.focus.fineStep = std::max(1, range / 20);
+ 
+ 	auto &af = context.activeState.af;
+ 	af.mode = controls::AfModeContinuous;
+ 	af.state = controls::AfStateScanning;
+ 	af.position = lens->second.def().get<int32_t>();
++	af.metering = controls::AfMeteringAuto;
++	af.windowValid = false;
+ 	af.scanning = false;
+ 	af.pendingScan = true;
+ 
+@@ -105,6 +112,39 @@ void Af::queueRequest([[maybe_unused]] typename Module::Context &context,
+ 		return;
+ 
+ 	auto &af = context.activeState.af;
++	if (const auto metering = requestControls.get(controls::AfMetering)) {
++		if (*metering != af.metering) {
++			af.metering = *metering;
++			af.pendingScan = true;
++			af.scanning = false;
++			af.state = controls::AfStateScanning;
++		}
++	}
++
++	if (const auto windows = requestControls.get(controls::AfWindows)) {
++		Rectangle crop = context.sensorInfo.analogCrop;
++		if (!crop.width || !crop.height)
++			crop = Rectangle(context.sensorInfo.activeAreaSize);
++
++		Rectangle selected;
++		bool valid = false;
++		for (const Rectangle &window : *windows) {
++			Rectangle bounded = window.boundedTo(crop);
++			if (!bounded.width || !bounded.height)
++				continue;
++			selected = bounded;
++			valid = true;
++			break;
++		}
++
++		if (valid != af.windowValid || (valid && selected != af.window)) {
++			af.window = selected;
++			af.windowValid = valid;
++			af.pendingScan = true;
++			af.scanning = false;
++			af.state = controls::AfStateScanning;
++		}
++	}
+ 
+ 	if (const auto mode = requestControls.get(controls::AfMode)) {
+ 		if (*mode != af.mode) {
+@@ -202,6 +242,52 @@ void Af::processScan(IPAContext &context, uint64_t sharpness)
+ 		<< " (sharpness " << af.bestSharpness << ")";
+ }
+ 
++uint64_t Af::windowSharpness(const IPAContext &context,
++			     const SwIspStats *stats) const
++{
++	const auto &af = context.activeState.af;
++	Rectangle crop = context.sensorInfo.analogCrop;
++	if (!crop.width || !crop.height)
++		crop = Rectangle(context.sensorInfo.outputSize);
++
++	Rectangle window;
++	if (af.metering == controls::AfMeteringWindows && af.windowValid) {
++		window = af.window.boundedTo(crop);
++	} else {
++		window = Rectangle(crop.x + crop.width / 4,
++				   crop.y + crop.height / 4,
++				   crop.width / 2, crop.height / 2);
++	}
++
++	uint64_t weightedSharpness = 0;
++	uint64_t totalWeight = 0;
++	for (unsigned int y = 0; y < SwIspStats::kAfGridHeight; ++y) {
++		for (unsigned int x = 0; x < SwIspStats::kAfGridWidth; ++x) {
++			const int x0 = crop.x + crop.width * x /
++						SwIspStats::kAfGridWidth;
++			const int x1 = crop.x + crop.width * (x + 1) /
++						SwIspStats::kAfGridWidth;
++			const int y0 = crop.y + crop.height * y /
++						SwIspStats::kAfGridHeight;
++			const int y1 = crop.y + crop.height * (y + 1) /
++						SwIspStats::kAfGridHeight;
++			const Rectangle overlap =
++				Rectangle(x0, y0, x1 - x0, y1 - y0).boundedTo(window);
++			const uint64_t weight =
++				static_cast<uint64_t>(overlap.width) * overlap.height;
++			if (!weight)
++				continue;
++
++			const unsigned int index =
++				y * SwIspStats::kAfGridWidth + x;
++			weightedSharpness += stats->afSharpness[index] * weight;
++			totalWeight += weight;
++		}
++	}
++
++	return totalWeight ? weightedSharpness / totalWeight : stats->sharpness;
++}
++
+ float Af::normalizedPosition(const IPAContext &context) const
+ {
+ 	const auto &focus = context.configuration.focus;
+@@ -223,15 +309,17 @@ void Af::process(IPAContext &context,
+ 
+ 	if (context.configuration.focus.available && stats->valid) {
+ 		if (af.pendingScan &&
+-		    context.activeState.agc.stableSamples >= kAeStableSamples)
++		    context.activeState.agc.validSamples >= kAeValidSamples)
+ 			startScan(context);
+ 
++		const uint64_t sharpness = windowSharpness(context, stats);
++
+ 		if (af.scanning) {
+-			processScan(context, stats->sharpness);
++			processScan(context, sharpness);
+ 		} else if (af.mode == controls::AfModeContinuous &&
+ 			   af.state == controls::AfStateFocused &&
+ 			   !af.settleSamples && af.lockedSharpness &&
+-			   stats->sharpness * 100 < af.lockedSharpness * 65) {
++			   sharpness * 100 < af.lockedSharpness * 65) {
+ 			if (++af.lowSharpnessSamples >= 3) {
+ 				af.pendingScan = true;
+ 				af.state = controls::AfStateScanning;
+@@ -246,6 +334,7 @@ void Af::process(IPAContext &context,
+ 
+ 	frameContext.lens.position = af.position;
+ 	metadata.set(controls::AfMode, af.mode);
++	metadata.set(controls::AfMetering, af.metering);
+ 	metadata.set(controls::AfState, af.state);
+ 	metadata.set(controls::LensPosition, normalizedPosition(context));
+ }
+diff --git a/src/ipa/simple/algorithms/af.h b/src/ipa/simple/algorithms/af.h
+index 0e0b7d60b23db418028235f2ac9b0fa3e7408ecc..82111b1732205c6cea15662c25272a10e652a014 100644
+--- a/src/ipa/simple/algorithms/af.h
++++ b/src/ipa/simple/algorithms/af.h
+@@ -28,6 +28,8 @@ public:
+ private:
+ 	void startScan(IPAContext &context);
+ 	void processScan(IPAContext &context, uint64_t sharpness);
++	uint64_t windowSharpness(const IPAContext &context,
++				 const SwIspStats *stats) const;
+ 	float normalizedPosition(const IPAContext &context) const;
+ };
+ 
+diff --git a/src/ipa/simple/algorithms/agc.cpp b/src/ipa/simple/algorithms/agc.cpp
+index 4cba0ba078b16d26cdea5018f942e7ff2a1a9ecb..45e066133f3240a583a1e2c9c6ba4ee82dfec872 100644
+--- a/src/ipa/simple/algorithms/agc.cpp
++++ b/src/ipa/simple/algorithms/agc.cpp
+@@ -45,21 +45,24 @@ static constexpr float kExposureSatisfactory = 0.2;
+  *
+  *   factor = 1.0 + kExpProportionalGain * error
+  *
+- * With kExpProportionalGain = 0.04:
+- *   - max error ~2.5 -> factor 1.10 (~10% step, same as before)
+- *   - error 1.0      -> factor 1.04 (~4% step)
+- *   - error 0.3      -> factor 1.012 (~1.2% step)
++ * With kExpProportionalGain = 0.20:
++ *   - max error ~2.5 -> bounded factor 1.40
++ *   - error 1.0      -> factor 1.20
++ *   - error 0.3      -> factor 1.06
+  *
+  * This replaces the fixed 10% bang-bang step with a proportional correction
+  * that converges smoothly and avoids overshooting near the target.
+  */
+-static constexpr float kExpProportionalGain = 0.04;
++static constexpr float kExpProportionalGain = 0.20;
+ 
+ /*
+- * Maximum multiplicative step per frame, to bound the correction when the
+- * scene changes dramatically.
++ * Maximum multiplicative step per AGC update, to bound the correction when
++ * the scene changes dramatically.
+  */
+-static constexpr float kExpMaxStep = 0.15;
++static constexpr float kExpMaxStep = 0.40;
++
++/* Sensor exposure and gain controls can take up to three frames to apply. */
++static constexpr unsigned int kAgcUpdateInterval = 4;
+ 
+ Agc::Agc()
+ {
+@@ -135,7 +138,7 @@ bool Agc::updateExposure(IPAContext &context, IPAFrameContext &frameContext,
+ }
+ 
+ void Agc::process(IPAContext &context,
+-		  [[maybe_unused]] const uint32_t frame,
++		  const uint32_t frame,
+ 		  IPAFrameContext &frameContext,
+ 		  const SwIspStats *stats,
+ 		  ControlList &metadata)
+@@ -153,6 +156,7 @@ void Agc::process(IPAContext &context,
+ 		context.activeState.agc.exposure = frameContext.sensor.exposure;
+ 		context.activeState.agc.again = frameContext.sensor.gain;
+ 		context.activeState.agc.stableSamples = 0;
++		context.activeState.agc.validSamples = 0;
+ 		context.activeState.agc.valid = true;
+ 	}
+ 
+@@ -166,6 +170,17 @@ void Agc::process(IPAContext &context,
+ 		return;
+ 	}
+ 
++	/*
++	 * Keep publishing fresh statistics for AWB and AF every frame, while
++	 * avoiding a second AGC request before the previous sensor controls have
++	 * traversed the delayed-control pipeline.
++	 */
++	if (frame % kAgcUpdateInterval) {
++		frameContext.sensor.exposure = context.activeState.agc.exposure;
++		frameContext.sensor.gain = context.activeState.agc.again;
++		return;
++	}
++
+ 	/*
+ 	 * Calculate Mean Sample Value (MSV) according to formula from:
+ 	 * https://www.araa.asn.au/acra/acra2007/papers/paper84final.pdf
+@@ -200,6 +215,8 @@ void Agc::process(IPAContext &context,
+ 	}
+ 
+ 	float exposureMSV = (denom == 0 ? 0 : static_cast<float>(num) / denom);
++	context.activeState.agc.validSamples = std::min(
++		context.activeState.agc.validSamples + 1, 100U);
+ 	const bool adjusted = updateExposure(context, frameContext, exposureMSV);
+ 	if (adjusted)
+ 		context.activeState.agc.stableSamples = 0;
+diff --git a/src/ipa/simple/ipa_context.h b/src/ipa/simple/ipa_context.h
+index a29215bbf039c825fe9ca467d638843b86199001..7956dbaa97eafdd4950fd47b3ce1812adb601147 100644
+--- a/src/ipa/simple/ipa_context.h
++++ b/src/ipa/simple/ipa_context.h
+@@ -47,6 +47,7 @@ struct IPAActiveState {
+ 		int32_t exposure;
+ 		double again;
+ 		unsigned int stableSamples;
++		unsigned int validSamples;
+ 		bool valid;
+ 	} agc;
+ 
+@@ -82,6 +83,9 @@ struct IPAActiveState {
+ 		uint64_t lockedSharpness;
+ 		unsigned int settleSamples;
+ 		unsigned int lowSharpnessSamples;
++		int32_t metering;
++		Rectangle window;
++		bool windowValid;
+ 		bool scanning;
+ 		bool fineScan;
+ 		bool pendingScan;
+diff --git a/src/libcamera/pipeline/simple/simple.cpp b/src/libcamera/pipeline/simple/simple.cpp
+index 7c1b2bd85bacd2e42aa02e7a27740b44ce111446..d28d0941e30e1003a3a113a68ee1cc0a08e4555b 100644
+--- a/src/libcamera/pipeline/simple/simple.cpp
++++ b/src/libcamera/pipeline/simple/simple.cpp
+@@ -30,6 +30,7 @@
+ #include <libcamera/control_ids.h>
+ #include <libcamera/geometry.h>
+ #include <libcamera/pixel_format.h>
++#include <libcamera/property_ids.h>
+ #include <libcamera/stream.h>
+ 
+ #include "libcamera/internal/camera.h"
+@@ -665,6 +666,8 @@ int SimpleCameraData::init()
+ 	}
+ 
+ 	properties_ = sensor_->properties();
++	properties_.set(properties::ScalerCropMaximum,
++			Rectangle(sensor_->resolution()));
+ 
+ 	/* Find the first subdev that can generate a frame start signal, if any. */
+ 	frameStartEmitter_ = nullptr;
+diff --git a/src/libcamera/software_isp/swstats_cpu.cpp b/src/libcamera/software_isp/swstats_cpu.cpp
+index 15171bbf5facb0ddf2a559ee724a4611b6836567..a0a22986d0cd34715379a3b874ed9b063ef641e6 100644
+--- a/src/libcamera/software_isp/swstats_cpu.cpp
++++ b/src/libcamera/software_isp/swstats_cpu.cpp
+@@ -180,7 +180,13 @@ static constexpr unsigned int kBlueYMul = 29; /* 0.114 * 256 */
+ 	uint64_t sumB = 0;                \
+ 	uint64_t sharpness = 0;           \
+ 	pixel_t previousG = 0;            \
+-	bool havePreviousG = false;
++	bool havePreviousG = false;       \
++	unsigned int previousTile = SwIspStats::kAfGridSize; \
++	unsigned int sample = 0;          \
++	const unsigned int samplesPerLine = std::max(1U, window_.width / 4); \
++	const unsigned int tileY = std::min(SwIspStats::kAfGridHeight - 1, \
++		static_cast<unsigned int>(y - window_.y) * SwIspStats::kAfGridHeight / \
++		std::max(1U, window_.height));
+ 
+ #define SWSTATS_ACCUMULATE_LINE_STATS(div)                                            \
+ 	sumR += r;                                                                    \
+@@ -191,12 +197,21 @@ static constexpr unsigned int kBlueYMul = 29; /* 0.114 * 256 */
+ 	yVal += g * kGreenYMul;                                                       \
+ 	yVal += b * kBlueYMul;                                                        \
+ 	stats.yHistogram[yVal * SwIspStats::kYHistogramSize / (256 * 256 * (div))]++; \
++	const unsigned int tileX = std::min(SwIspStats::kAfGridWidth - 1,             \
++		sample * SwIspStats::kAfGridWidth / samplesPerLine);                    \
++	const unsigned int tile = tileY * SwIspStats::kAfGridWidth + tileX;           \
++	stats.afGreen[tile] += g;                                                      \
+ 	if (havePreviousG) {                                                          \
+ 		const int64_t delta = static_cast<int64_t>(g) - previousG;            \
+-		sharpness += static_cast<uint64_t>(delta * delta);                    \
++		const uint64_t energy = static_cast<uint64_t>(delta * delta);         \
++		sharpness += energy;                                                   \
++		if (tile == previousTile)                                             \
++			stats.afSharpness[tile] += energy;                              \
+ 	}                                                                             \
+ 	previousG = g;                                                                \
+-	havePreviousG = true;
++	previousTile = tile;                                                          \
++	havePreviousG = true;                                                         \
++	++sample;
+ 
+ #define SWSTATS_FINISH_LINE_STATS() \
+ 	stats.sum_.r() += sumR;     \
+@@ -204,7 +219,7 @@ static constexpr unsigned int kBlueYMul = 29; /* 0.114 * 256 */
+ 	stats.sum_.b() += sumB;     \
+ 	stats.sharpness += sharpness;
+ 
+-void SwStatsCpu::statsBGGR8Line0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsBGGR8Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint8_t *src0 = src[1] + window_.x;
+ 	const uint8_t *src1 = src[2] + window_.x;
+@@ -229,7 +244,7 @@ void SwStatsCpu::statsBGGR8Line0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsBGGR10Line0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsBGGR10Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint16_t *src0 = (const uint16_t *)src[1] + window_.x;
+ 	const uint16_t *src1 = (const uint16_t *)src[2] + window_.x;
+@@ -255,7 +270,7 @@ void SwStatsCpu::statsBGGR10Line0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsBGGR12Line0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsBGGR12Line0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint16_t *src0 = (const uint16_t *)src[1] + window_.x;
+ 	const uint16_t *src1 = (const uint16_t *)src[2] + window_.x;
+@@ -281,7 +296,7 @@ void SwStatsCpu::statsBGGR12Line0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsBGGR10PLine0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsBGGR10PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint8_t *src0 = src[1] + window_.x * 5 / 4;
+ 	const uint8_t *src1 = src[2] + window_.x * 5 / 4;
+@@ -307,7 +322,7 @@ void SwStatsCpu::statsBGGR10PLine0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsGBRG10PLine0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsGBRG10PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint8_t *src0 = src[1] + window_.x * 5 / 4;
+ 	const uint8_t *src1 = src[2] + window_.x * 5 / 4;
+@@ -333,7 +348,7 @@ void SwStatsCpu::statsGBRG10PLine0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsBGGR12PLine0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsBGGR12PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint8_t *src0 = src[1] + window_.x * 3 / 2;
+ 	const uint8_t *src1 = src[2] + window_.x * 3 / 2;
+@@ -359,7 +374,7 @@ void SwStatsCpu::statsBGGR12PLine0(const uint8_t *src[], SwIspStats &stats)
+ 	SWSTATS_FINISH_LINE_STATS()
+ }
+ 
+-void SwStatsCpu::statsGBRG12PLine0(const uint8_t *src[], SwIspStats &stats)
++void SwStatsCpu::statsGBRG12PLine0(unsigned int y, const uint8_t *src[], SwIspStats &stats)
+ {
+ 	const uint8_t *src0 = src[1] + window_.x * 3 / 2;
+ 	const uint8_t *src1 = src[2] + window_.x * 3 / 2;
+@@ -403,6 +418,8 @@ void SwStatsCpu::startFrame(uint32_t frame)
+ 		s.sum_ = RGB<uint64_t>({ 0, 0, 0 });
+ 		s.yHistogram.fill(0);
+ 		s.sharpness = 0;
++		s.afSharpness.fill(0);
++		s.afGreen.fill(0);
+ 	}
+ }
+ 
+@@ -420,10 +437,16 @@ void SwStatsCpu::finishFrame(uint32_t frame, uint32_t bufferId)
+ 	if (valid) {
+ 		sharedStats_->sum_ = RGB<uint64_t>({ 0, 0, 0 });
+ 		sharedStats_->yHistogram.fill(0);
++		sharedStats_->afSharpness.fill(0);
++		sharedStats_->afGreen.fill(0);
+ 		uint64_t sharpness = 0;
+ 		for (const auto &s : stats_) {
+ 			sharedStats_->sum_ += s.sum_;
+ 			sharpness += s.sharpness;
++			for (unsigned int j = 0; j < SwIspStats::kAfGridSize; ++j) {
++				sharedStats_->afSharpness[j] += s.afSharpness[j];
++				sharedStats_->afGreen[j] += s.afGreen[j];
++			}
+ 			for (unsigned int j = 0; j < SwIspStats::kYHistogramSize; j++)
+ 				sharedStats_->yHistogram[j] += s.yHistogram[j];
+ 		}
+@@ -435,6 +458,14 @@ void SwStatsCpu::finishFrame(uint32_t frame, uint32_t bufferId)
+ 			? (sharpness / green) * scale +
+ 				(sharpness % green) * scale / green
+ 			: 0;
++		for (unsigned int j = 0; j < SwIspStats::kAfGridSize; ++j) {
++			const uint64_t tileGreen = sharedStats_->afGreen[j];
++			const uint64_t tileSharpness = sharedStats_->afSharpness[j];
++			sharedStats_->afSharpness[j] = tileGreen
++				? (tileSharpness / tileGreen) * scale +
++					(tileSharpness % tileGreen) * scale / tileGreen
++				: 0;
++		}
+ 	}
+ 
+ 	sharedStats_->valid = valid;
+@@ -608,7 +639,7 @@ void SwStatsCpu::processBayerFrame2(MappedFrameBuffer &in)
+ 		/* linePointers[0] is not used by any stats0_ functions */
+ 		linePointers[1] = src;
+ 		linePointers[2] = src + stride_;
+-		(this->*stats0_)(linePointers, stats_[0]);
++		(this->*stats0_)(window_.y + y, linePointers, stats_[0]);
+ 		src += stride_ * 2;
+ 	}
+ }

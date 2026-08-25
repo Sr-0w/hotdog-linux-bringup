@@ -1,0 +1,79 @@
+From 207f48cb1feb7fdbe4ca6b8f660cd08abe271aed Mon Sep 17 00:00:00 2001
+From: Sr-0w <139899120+Sr-0w@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 20:29:39 +0200
+Subject: [PATCH] software ISP: tighten automatic-control convergence
+
+---
+ src/ipa/simple/algorithms/af.cpp  | 3 ++-
+ src/ipa/simple/algorithms/agc.cpp | 2 +-
+ src/ipa/simple/algorithms/awb.cpp | 9 ++++++++-
+ 3 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/ipa/simple/algorithms/af.cpp b/src/ipa/simple/algorithms/af.cpp
+index e8a90bb..50d0cf0 100644
+--- a/src/ipa/simple/algorithms/af.cpp
++++ b/src/ipa/simple/algorithms/af.cpp
+@@ -22,6 +22,7 @@ LOG_DEFINE_CATEGORY(IPASoftAf)
+ namespace ipa::soft::algorithms {
+ 
+ static constexpr unsigned int kAeValidSamples = 1;
++static constexpr unsigned int kContinuousMonitorDelaySamples = 15;
+ 
+ int Af::init(IPAContext &context,
+ 	     [[maybe_unused]] const ValueNode &tuningData)
+@@ -235,7 +236,7 @@ void Af::processScan(IPAContext &context, uint64_t sharpness)
+ 	af.lockedSharpness = af.bestSharpness;
+ 	af.state = af.bestSharpness ? controls::AfStateFocused
+ 				    : controls::AfStateFailed;
+-	af.settleSamples = 1;
++	af.settleSamples = kContinuousMonitorDelaySamples;
+ 
+ 	LOG(IPASoftAf, Info)
+ 		<< "Autofocus completed at " << af.position
+diff --git a/src/ipa/simple/algorithms/agc.cpp b/src/ipa/simple/algorithms/agc.cpp
+index 31fa0b9..1ccbbe8 100644
+--- a/src/ipa/simple/algorithms/agc.cpp
++++ b/src/ipa/simple/algorithms/agc.cpp
+@@ -62,7 +62,7 @@ static constexpr float kExpProportionalGain = 0.20;
+ static constexpr float kExpMaxStep = 0.40;
+ 
+ /* Sensor exposure and gain controls can take up to three frames to apply. */
+-static constexpr unsigned int kAgcUpdateInterval = 4;
++static constexpr unsigned int kAgcUpdateInterval = 2;
+ 
+ Agc::Agc()
+ {
+diff --git a/src/ipa/simple/algorithms/awb.cpp b/src/ipa/simple/algorithms/awb.cpp
+index 05155c8..5f13c13 100644
+--- a/src/ipa/simple/algorithms/awb.cpp
++++ b/src/ipa/simple/algorithms/awb.cpp
+@@ -23,6 +23,8 @@ LOG_DEFINE_CATEGORY(IPASoftAwb)
+ 
+ namespace ipa::soft::algorithms {
+ 
++static constexpr float kAwbUpdateSpeed = 0.25f;
++
+ int Awb::configure(IPAContext &context,
+ 		   [[maybe_unused]] const IPAConfigInfo &configInfo)
+ {
+@@ -78,11 +80,16 @@ void Awb::process(IPAContext &context,
+ 	 * Clamp max gain at 4.0, this also avoids 0 division.
+ 	 */
+ 	auto &gains = context.activeState.awb.gains;
+-	gains = { {
++	const RGB<float> target = { {
+ 		sum.r() <= sum.g() / 4 ? 4.0f : static_cast<float>(sum.g()) / sum.r(),
+ 		1.0,
+ 		sum.b() <= sum.g() / 4 ? 4.0f : static_cast<float>(sum.g()) / sum.b(),
+ 	} };
++	gains = { {
++		gains.r() + (target.r() - gains.r()) * kAwbUpdateSpeed,
++		1.0,
++		gains.b() + (target.b() - gains.b()) * kAwbUpdateSpeed,
++	} };
+ 
+ 	RGB<double> rgbGains{ { 1 / gains.r(), 1 / gains.g(), 1 / gains.b() } };
+ 	context.activeState.awb.temperatureK = estimateCCT(rgbGains);
+-- 
+2.54.0
+
