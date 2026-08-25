@@ -441,7 +441,7 @@ validate_hotdog_wifi_package_contract() {
 	grep -q '^rc-update add hotdog-radio-bootstrap boot$' \
 		"aports/device/testing/device-oneplus-hotdog/device-oneplus-hotdog-nonfree-firmware.post-install" ||
 		die "device firmware package does not enable the guarded radio bootstrap"
-	grep -q 'depends="\$pkgname=\$pkgver-r\$pkgrel modemmanager-openrc postmarketos-ui-plasma-mobile-openrc"' \
+	grep -q 'depends="\$pkgname=\$pkgver-r\$pkgrel modemmanager-openrc postmarketos-ui-plasma-mobile postmarketos-ui-plasma-mobile-openrc"' \
 		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
 		die "radio bootstrap OpenRC package does not order after the Plasma modem service"
 	grep -q '^rc-update del modemmanager default' \

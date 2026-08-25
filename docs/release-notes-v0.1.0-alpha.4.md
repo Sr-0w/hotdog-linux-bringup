@@ -19,7 +19,7 @@ tree and packages the complete matching set:
 
 - Fresh rootfs composition with `device-oneplus-hotdog 3-r30`, the current
   hardware integration and the complete libcamera patch set.
-- `hotdog-radio-bootstrap 0.15-r2` contains the guarded UIM/PDC/DMS bootstrap,
+- `hotdog-radio-bootstrap 0.15-r3` contains the guarded UIM/PDC/DMS bootstrap,
   transactional rollback, strict runtime identity checks and readiness handoff.
 - `firmware-oneplus-hotdog-modem-oos10 1.0.11.1.7-r3` installs the matching
   OxygenOS 10 MPSS plus the attested 69-profile MCFG catalog.
