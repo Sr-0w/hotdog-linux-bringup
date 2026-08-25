@@ -526,14 +526,19 @@ a remoteproc failure. Earlier Set Online evidence crashed the modem when no
 MCFG was active, so the daemon must preserve this mode through PDC verification;
 see [the DMS shutdown gate](2026-08-25-radio-dms-shutdown-gate.md).
 
-`hotdog-qmi-nas` decodes the serving-system baseline into bounded registration,
-CS/PS attach, selected-network, radio-interface and roaming state. The daemon
-exposes it only through a standalone read-only `--probe-nas` operation. It does
-not print PLMN/operator identity and does not request registration; active NAS
-registration remains downstream of verified PDC and DMS Online. The no-SIM
-hardware baseline is `not-registered-searching` with both CS and PS detached,
-network unknown and interface `none`, independently confirmed by qmicli.
-Searching is not readiness; see
+`hotdog-qmi-nas` decodes both Get Serving System and its asynchronous indication
+into bounded registration, CS/PS attach, selected-network, radio interfaces,
+roaming and internal PLMN state. Registered state requires explicit home/roam,
+a valid MCC/MNC and at least one known RAT; mixed interface lists use the
+NR5G/LTE/UMTS/GSM/CDMA priority without depending on enum numeric order.
+Applying a PS detach or registration loss atomically creates exact WDS stop
+plans for every bearer on that subscription while leaving the other SIM
+untouched. The daemon still exposes transport only through standalone
+read-only `--probe-nas`; long-lived indication ownership is the next service
+phase. It does not print PLMN/operator identity and does not request
+registration. The no-SIM hardware baseline is `not-registered-searching` with
+both CS and PS detached, network unknown and interface `none`, independently
+confirmed by qmicli. Searching is not readiness; see
 [the NAS pre-online baseline](2026-08-25-radio-nas-preonline.md).
 
 ## Parity gates

@@ -118,9 +118,13 @@ int main(void)
 		    !number(field[1], 2, &a) && !number(field[3], UINT16_MAX, &b) &&
 		    !number(field[4], UINT16_MAX, &c) && !number(field[6], 1, &d) &&
 		    !number(field[7], 1, &e)) {
-			result = hotdog_network_nas_update(&network, a, registration(field[2]),
-						    b, c, rat(field[5]), d, e);
-			printf("nas-result=%d\n", result);
+			struct hotdog_network_teardown teardown;
+
+			result = hotdog_network_nas_reconcile(
+				&network, a, registration(field[2]), b, c,
+				rat(field[5]), d, e, &teardown);
+			printf("nas-result=%d teardown=%zu\n", result,
+			       result ? 0 : teardown.count);
 			continue;
 		}
 		if (!strcmp(field[0], "DDS") && count == 3 &&

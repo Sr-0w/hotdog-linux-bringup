@@ -122,6 +122,22 @@ class HotdogNetworkTests(unittest.TestCase):
         self.assertIn("bearer1=stopping,sub0,mux1,ipv4v6,gen0,h4=100,h6=0,error5", result.stdout)
         self.assertIn("bearer1=failed,sub0,mux1,ipv4v6,gen0,h4=0,h6=0,error5", result.stdout)
 
+    def test_ps_detach_plans_teardown_without_touching_other_subscription(self) -> None:
+        result = self.replay(
+            "SUB 0 1\nSUB 1 1\nNAS 0 home 206 1 lte 1 1\n"
+            "NAS 1 home 206 1 lte 1 1\nDDS 0 0\n"
+            "START 0 1 1 ipv4v6 none internet\n"
+            "LEG_UP 1 ipv4 100\nLEG_UP 1 ipv6 200\n"
+            "UP 1 1500 10.0.0.2 2001:db8::2 1.1.1.1 2606:4700:4700::1111\n"
+            "NAS 0 searching 0 0 unknown 0 0\nSTATUS\n"
+            "LEG_DOWN 1 ipv4 100\nLEG_DOWN 1 ipv6 200\nSTATUS\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("nas-result=0 teardown=1", result.stdout)
+        self.assertIn("bearer1=stopping,sub0,mux1,ipv4v6,gen0,h4=100,h6=200,error100", result.stdout)
+        self.assertIn("bearer1=failed,sub0,mux1,ipv4v6,gen0,h4=0,h6=0,error100", result.stdout)
+        self.assertIn("sub1=home,lte,206-1,ps1,cs1", result.stdout)
+
     def test_malformed_input_fails_closed(self) -> None:
         result = self.replay("START 0 1 ipv4 none internet\n")
         self.assertEqual(result.returncode, 2)

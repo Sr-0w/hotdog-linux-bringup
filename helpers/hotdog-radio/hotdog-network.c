@@ -342,6 +342,51 @@ int hotdog_network_bearer_leg_stopped(struct hotdog_network *network,
 	return 0;
 }
 
+int hotdog_network_nas_reconcile(
+	struct hotdog_network *network, unsigned int subscription,
+	enum hotdog_nas_registration registration, uint16_t mcc, uint16_t mnc,
+	enum hotdog_nas_rat rat, bool ps_attached, bool cs_attached,
+	struct hotdog_network_teardown *teardown)
+{
+	struct hotdog_network candidate;
+	struct hotdog_network_teardown pending = { 0 };
+	size_t index;
+	int result;
+
+	if (!network || !teardown)
+		return -EINVAL;
+	candidate = *network;
+	result = hotdog_network_nas_update(&candidate, subscription, registration,
+					   mcc, mnc, rat, ps_attached, cs_attached);
+	if (result)
+		return result;
+	if (registered(&candidate.subscriptions[subscription]) && ps_attached) {
+		*network = candidate;
+		memset(teardown, 0, sizeof(*teardown));
+		return 0;
+	}
+	for (index = 0; index < HOTDOG_NETWORK_MAX_BEARERS; index++) {
+		struct hotdog_bearer *bearer = &candidate.bearers[index];
+		struct hotdog_network_teardown_item *item;
+
+		if (bearer->subscription != subscription ||
+		    (bearer->state != HOTDOG_BEARER_STARTING &&
+		     bearer->state != HOTDOG_BEARER_CONNECTED))
+			continue;
+		if (pending.count >= HOTDOG_NETWORK_MAX_BEARERS)
+			return -EOVERFLOW;
+		item = &pending.items[pending.count++];
+		item->bearer_id = bearer->id;
+		result = hotdog_network_bearer_fail(
+			&candidate, bearer->id, ENETDOWN, &item->plan);
+		if (result)
+			return result;
+	}
+	*network = candidate;
+	*teardown = pending;
+	return 0;
+}
+
 int hotdog_network_bearer_stop(struct hotdog_network *network, unsigned int bearer_id)
 {
 	struct hotdog_bearer *bearer;

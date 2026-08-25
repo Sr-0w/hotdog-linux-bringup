@@ -101,6 +101,16 @@ struct hotdog_bearer_stop_plan {
 	struct hotdog_bearer_stop_leg legs[2];
 };
 
+struct hotdog_network_teardown_item {
+	unsigned int bearer_id;
+	struct hotdog_bearer_stop_plan plan;
+};
+
+struct hotdog_network_teardown {
+	size_t count;
+	struct hotdog_network_teardown_item items[HOTDOG_NETWORK_MAX_BEARERS];
+};
+
 struct hotdog_network {
 	struct hotdog_nas_subscription subscriptions[HOTDOG_NETWORK_MAX_SUBSCRIPTIONS];
 	struct hotdog_bearer bearers[HOTDOG_NETWORK_MAX_BEARERS];
@@ -116,6 +126,11 @@ int hotdog_network_nas_update(struct hotdog_network *network, unsigned int subsc
 			      enum hotdog_nas_registration registration,
 			      uint16_t mcc, uint16_t mnc, enum hotdog_nas_rat rat,
 			      bool ps_attached, bool cs_attached);
+int hotdog_network_nas_reconcile(
+	struct hotdog_network *network, unsigned int subscription,
+	enum hotdog_nas_registration registration, uint16_t mcc, uint16_t mnc,
+	enum hotdog_nas_rat rat, bool ps_attached, bool cs_attached,
+	struct hotdog_network_teardown *teardown);
 int hotdog_network_set_default_data(struct hotdog_network *network,
 				    unsigned int subscription, bool force);
 int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int subscription,
