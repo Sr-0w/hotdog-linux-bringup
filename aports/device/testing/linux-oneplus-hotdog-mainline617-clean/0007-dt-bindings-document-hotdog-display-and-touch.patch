@@ -1,0 +1,181 @@
+From c1b8aff58c2ba5dc428c51e57dfe669a36a189c6 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 23:14:50 +0200
+Subject: [PATCH 7/7] dt-bindings: document hotdog display and touch
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+
+diff --git a/Documentation/devicetree/bindings/arm/qcom.yaml b/Documentation/devicetree/bindings/arm/qcom.yaml
+index ae43b3556580..35c096d9b6c8 100644
+--- a/Documentation/devicetree/bindings/arm/qcom.yaml
++++ b/Documentation/devicetree/bindings/arm/qcom.yaml
+@@ -1071,6 +1071,11 @@ properties:
+               - sony,griffin-generic
+           - const: qcom,sm8150
+ 
++      - items:
++          - const: oneplus,hotdog
++          - const: oneplus,oneplus7
++          - const: qcom,sm8150
++
+       - items:
+           - enum:
+               - qcom,qrb5165-rb5
+diff --git a/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml b/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
+new file mode 100644
+index 000000000000..6c4ac74e92ea
+--- /dev/null
++++ b/Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
+@@ -0,0 +1,68 @@
++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/display/panel/samsung,oneplus-dsc.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Samsung 1440x3120 DSC panel for the OnePlus 7T Pro
++
++maintainers:
++  - Sr-0w <Sr-0w@users.noreply.github.com>
++
++description:
++  Command-mode AMOLED panel used by the OnePlus 7T Pro. The panel carries two
++  720-pixel DSC slices in each DSI packet and supports 60 Hz and 90 Hz modes.
++
++allOf:
++  - $ref: panel-common.yaml#
++
++properties:
++  compatible:
++    const: samsung,oneplus-dsc
++
++  reg:
++    maxItems: 1
++
++  vddio-supply:
++    description: I/O voltage rail
++
++  avdd-supply:
++    description: Panel analogue voltage rail
++
++  reset-gpios: true
++  port: true
++
++required:
++  - compatible
++  - reg
++  - vddio-supply
++  - avdd-supply
++  - reset-gpios
++  - port
++
++additionalProperties: false
++
++examples:
++  - |
++    #include <dt-bindings/gpio/gpio.h>
++
++    dsi {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        panel@0 {
++            compatible = "samsung,oneplus-dsc";
++            reg = <0>;
++            vddio-supply = <&vreg_panel_io>;
++            avdd-supply = <&vreg_panel_ana>;
++            reset-gpios = <&tlmm 6 GPIO_ACTIVE_LOW>;
++
++            port {
++                panel_in: endpoint {
++                    remote-endpoint = <&dsi_out>;
++                };
++            };
++        };
++    };
++
++...
+diff --git a/Documentation/devicetree/bindings/input/touchscreen/samsung,s6sy761.yaml b/Documentation/devicetree/bindings/input/touchscreen/samsung,s6sy761.yaml
+index 1ffd17af3c53..00301f15d834 100644
+--- a/Documentation/devicetree/bindings/input/touchscreen/samsung,s6sy761.yaml
++++ b/Documentation/devicetree/bindings/input/touchscreen/samsung,s6sy761.yaml
+@@ -22,6 +22,10 @@ properties:
+   interrupts:
+     maxItems: 1
+ 
++  reset-gpios:
++    maxItems: 1
++    description: Active-low hardware reset line
++
+   avdd-supply: true
+   vdd-supply: true
+ 
+diff --git a/Documentation/devicetree/bindings/vendor-prefixes.yaml b/Documentation/devicetree/bindings/vendor-prefixes.yaml
+index 9ec8947dfcad..3708203d9a7c 100644
+--- a/Documentation/devicetree/bindings/vendor-prefixes.yaml
++++ b/Documentation/devicetree/bindings/vendor-prefixes.yaml
+@@ -1129,6 +1129,8 @@ patternProperties:
+     description: One Laptop Per Child
+   "^oneplus,.*":
+     description: OnePlus Technology (Shenzhen) Co., Ltd.
++  "^oplus,.*":
++    description: OPlus Mobile Telecommunications Corp., Ltd.
+   "^onie,.*":
+     description: Open Network Install Environment group
+   "^onion,.*":
+diff --git a/MAINTAINERS b/MAINTAINERS
+index dfe7806beeec..d47f9189948b 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -18844,6 +18844,13 @@ S:	Maintained
+ F:	Documentation/ABI/testing/sysfs-bus-platform-onboard-usb-dev
+ F:	drivers/usb/misc/onboard_usb_dev.c
+ 
++ONEPLUS 7T PRO (HOTDOG) SUPPORT
++M:	Sr-0w <Sr-0w@users.noreply.github.com>
++S:	Maintained
++F:	Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
++F:	arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++F:	drivers/gpu/drm/panel/panel-samsung-oneplus-dsc.c
++
+ ONENAND FLASH DRIVER
+ M:	Kyungmin Park <kyungmin.park@samsung.com>
+ L:	linux-mtd@lists.infradead.org
+@@ -27915,4 +27922,4 @@ L:	linux-kernel@vger.kernel.org
+ S:	Buried alive in reporters
+ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+ F:	*
+-F:	*/
+\ No newline at end of file
++F:	*/
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index a9f19820c3a7..f2975a4b05a2 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -15,6 +15,9 @@
+ #include "sm8150-oneplus-common.dtsi"
+ 
+ /delete-node/ &rmtfs_mem;
++/delete-node/ &tp_1v8_active;
++/delete-node/ &tp_irq_active;
++/delete-node/ &tp_rst_active;
+ 
+ / {
+ 	model = "OnePlus 7T Pro";
+diff --git a/drivers/gpu/drm/panel/Kconfig b/drivers/gpu/drm/panel/Kconfig
+index ac96d5bf7f9a..8a359c59d7ba 100644
+--- a/drivers/gpu/drm/panel/Kconfig
++++ b/drivers/gpu/drm/panel/Kconfig
+@@ -876,7 +876,8 @@ config DRM_PANEL_SAMSUNG_ONEPLUS_DSC
+ 	help
+ 	  Enable the 1440x3120 command-mode Samsung panel used by the
+ 	  OnePlus 7T Pro. The panel requires VESA DSC and two slices per
+-	  DSI packet.
++	  DSI packet. Both stock 60 Hz and 90 Hz timings are exposed, with
++	  90 Hz selected as the preferred mode.
+ 
+ config DRM_PANEL_SEIKO_43WVF1G
+ 	tristate "Seiko 43WVF1G panel"
+-- 
+2.54.0
+

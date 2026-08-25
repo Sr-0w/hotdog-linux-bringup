@@ -1,0 +1,182 @@
+From 400c9d970c9ff1d090e336ab42be41f3874b45bb Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 22:55:52 +0200
+Subject: [PATCH 3/7] Input: s6sy761: restore hotdog reset and resume
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+
+diff --git a/drivers/input/touchscreen/s6sy761.c b/drivers/input/touchscreen/s6sy761.c
+index e1518a75a51b..5b6c7beebd61 100644
+--- a/drivers/input/touchscreen/s6sy761.c
++++ b/drivers/input/touchscreen/s6sy761.c
+@@ -6,6 +6,7 @@
+ 
+ #include <linux/unaligned.h>
+ #include <linux/delay.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/input/mt.h>
+ #include <linux/input/touchscreen.h>
+@@ -101,6 +102,7 @@ enum s6sy761_regulators {
+ struct s6sy761_data {
+ 	struct i2c_client *client;
+ 	struct regulator_bulk_data regulators[2];
++	struct gpio_desc *reset_gpio;
+ 	struct input_dev *input;
+ 	struct touchscreen_properties prop;
+ 
+@@ -288,34 +290,80 @@ static struct attribute *s6sy761_sysfs_attrs[] = {
+ };
+ ATTRIBUTE_GROUPS(s6sy761_sysfs);
+ 
+-static int s6sy761_power_on(struct s6sy761_data *sdata)
++static void s6sy761_reset(struct s6sy761_data *sdata)
++{
++	if (!sdata->reset_gpio)
++		return;
++
++	gpiod_set_value_cansleep(sdata->reset_gpio, 1);
++	usleep_range(10000, 12000);
++	gpiod_set_value_cansleep(sdata->reset_gpio, 0);
++}
++
++static int s6sy761_wait_boot_complete(struct s6sy761_data *sdata)
+ {
++	unsigned long timeout = jiffies + msecs_to_jiffies(400);
+ 	u8 buffer[S6SY761_EVENT_SIZE];
+ 	u8 event;
+ 	int ret;
+ 
++	do {
++		ret = i2c_smbus_read_i2c_block_data(sdata->client,
++						    S6SY761_READ_ONE_EVENT,
++						    S6SY761_EVENT_SIZE,
++						    buffer);
++		if (ret < 0)
++			return ret;
++
++		event = (buffer[0] >> 2) & 0xf;
++
++		if ((event == S6SY761_EVENT_INFO ||
++		     event == S6SY761_EVENT_VENDOR_INFO) &&
++		    buffer[1] == S6SY761_INFO_BOOT_COMPLETE)
++			return 0;
++
++		msleep(20);
++	} while (time_before(jiffies, timeout));
++
++	return -ENODEV;
++}
++
++static int s6sy761_power_on(struct s6sy761_data *sdata)
++{
++	int attempt;
++	int ret;
++
+ 	ret = regulator_bulk_enable(ARRAY_SIZE(sdata->regulators),
+ 				    sdata->regulators);
+ 	if (ret)
+ 		return ret;
+ 
+-	msleep(140);
+-
+-	/* double check whether the touch is functional */
+-	ret = i2c_smbus_read_i2c_block_data(sdata->client,
+-					    S6SY761_READ_ONE_EVENT,
+-					    S6SY761_EVENT_SIZE,
+-					    buffer);
+-	if (ret < 0)
+-		return ret;
+-
+-	event = (buffer[0] >> 2) & 0xf;
++	/*
++	 * A completed boot is only announced after the controller has really
++	 * restarted, and dropping the supplies does not guarantee that: a
++	 * board may share one of them with another consumer that keeps it up.
++	 * Drive reset when the board describes the line.
++	 *
++	 * On resume the supplies may also take a while to actually come back,
++	 * because the regulator they belong to can itself still be resuming.
++	 * Until they do the controller answers reads with zeroes rather than
++	 * failing them, so retry the restart instead of giving up on the
++	 * first silent window.
++	 */
++	for (attempt = 0; attempt < 3; attempt++) {
++		msleep(20);
++		s6sy761_reset(sdata);
++		msleep(140);
++
++		ret = s6sy761_wait_boot_complete(sdata);
++		if (ret != -ENODEV)
++			break;
+ 
+-	if ((event != S6SY761_EVENT_INFO &&
+-	     event != S6SY761_EVENT_VENDOR_INFO) ||
+-	    buffer[1] != S6SY761_INFO_BOOT_COMPLETE) {
+-		return -ENODEV;
++		dev_dbg(&sdata->client->dev,
++			"no boot-complete on attempt %d, retrying\n", attempt);
+ 	}
++	if (ret)
++		return ret;
+ 
+ 	ret = i2c_smbus_read_byte_data(sdata->client, S6SY761_BOOT_STATUS);
+ 	if (ret < 0)
+@@ -382,6 +430,8 @@ static void s6sy761_power_off(void *data)
+ 	struct s6sy761_data *sdata = data;
+ 
+ 	disable_irq(sdata->client->irq);
++	if (sdata->reset_gpio)
++		gpiod_set_value_cansleep(sdata->reset_gpio, 1);
+ 	regulator_bulk_disable(ARRAY_SIZE(sdata->regulators),
+ 						sdata->regulators);
+ }
+@@ -412,6 +462,12 @@ static int s6sy761_probe(struct i2c_client *client)
+ 	if (err)
+ 		return err;
+ 
++	sdata->reset_gpio = devm_gpiod_get_optional(&client->dev, "reset",
++						    GPIOD_OUT_LOW);
++	if (IS_ERR(sdata->reset_gpio))
++		return dev_err_probe(&client->dev, PTR_ERR(sdata->reset_gpio),
++				     "failed to get reset gpio\n");
++
+ 	err = devm_add_action_or_reset(&client->dev, s6sy761_power_off, sdata);
+ 	if (err)
+ 		return err;
+@@ -500,10 +556,31 @@ static int s6sy761_suspend(struct device *dev)
+ static int s6sy761_resume(struct device *dev)
+ {
+ 	struct s6sy761_data *sdata = dev_get_drvdata(dev);
++	int err;
++
++	err = s6sy761_power_on(sdata);
++	if (err)
++		return err;
++
++	/*
++	 * Suspend powers the controller down, which clears its sensing
++	 * state. Userspace keeps the input device open across a system
++	 * sleep, so s6sy761_input_open() is not called again and sensing
++	 * would stay off: the controller then stops reporting contacts
++	 * even though the device probes and interrupts fine.
++	 */
++	scoped_guard(mutex, &sdata->input->mutex) {
++		if (input_device_enabled(sdata->input)) {
++			err = i2c_smbus_write_byte(sdata->client,
++						   S6SY761_SENSE_ON);
++			if (err)
++				return err;
++		}
++	}
+ 
+ 	enable_irq(sdata->client->irq);
+ 
+-	return s6sy761_power_on(sdata);
++	return 0;
+ }
+ 
+ static const struct dev_pm_ops s6sy761_pm_ops = {
+-- 
+2.54.0
+

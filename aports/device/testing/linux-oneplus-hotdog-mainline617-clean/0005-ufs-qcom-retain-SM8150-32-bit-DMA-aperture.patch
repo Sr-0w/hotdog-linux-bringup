@@ -1,0 +1,53 @@
+From 645436d1fef74ac88a129f83945909ac386e5218 Mon Sep 17 00:00:00 2001
+From: Sr-0w <Sr-0w@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 22:57:36 +0200
+Subject: [PATCH 5/7] ufs: qcom: retain SM8150 32-bit DMA aperture
+
+Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+index 9574fdc2bb0f..fa57afc33add 100644
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -8,6 +8,7 @@
+ #include <linux/cleanup.h>
+ #include <linux/delay.h>
+ #include <linux/devfreq.h>
++#include <linux/dma-mapping.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/interconnect.h>
+ #include <linux/module.h>
+@@ -2198,6 +2199,22 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
+ 	return min_t(u32, gear, hba->max_pwr_info.info.gear_rx);
+ }
+ 
++static int ufs_qcom_set_dma_mask(struct ufs_hba *hba)
++{
++	/*
++	 * SM8150 hardware testing showed that request-list allocations above
++	 * 4 GiB can remain unconsumed even behind a translated Apps SMMU domain.
++	 */
++	if (of_device_is_compatible(hba->dev->of_node, "qcom,sm8150-ufshc"))
++		return dma_set_mask_and_coherent(hba->dev, DMA_BIT_MASK(32));
++
++	if (hba->capabilities & MASK_64_ADDRESSING_SUPPORT &&
++	    !dma_set_mask_and_coherent(hba->dev, DMA_BIT_MASK(64)))
++		return 0;
++
++	return dma_set_mask_and_coherent(hba->dev, DMA_BIT_MASK(32));
++}
++
+ /*
+  * struct ufs_hba_qcom_vops - UFS QCOM specific variant operations
+  *
+@@ -2206,6 +2223,7 @@ static u32 ufs_qcom_freq_to_gear_speed(struct ufs_hba *hba, unsigned long freq)
+  */
+ static const struct ufs_hba_variant_ops ufs_hba_qcom_vops = {
+ 	.name                   = "qcom",
++	.set_dma_mask		= ufs_qcom_set_dma_mask,
+ 	.init                   = ufs_qcom_init,
+ 	.exit                   = ufs_qcom_exit,
+ 	.get_ufs_hci_version	= ufs_qcom_get_ufs_hci_version,
+-- 
+2.54.0
+
