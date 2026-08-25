@@ -1,0 +1,50 @@
+pkgname=hotdog-radio-bootstrap
+pkgver=0.1
+pkgrel=0
+pkgdesc="Read-only UIM and PDC bootstrap for OnePlus Hotdog"
+url="https://github.com/Sr-0w/hotdog-linux-bringup"
+arch="aarch64"
+license="GPL-2.0-only"
+maintainer="Sr-0w <Sr-0w@users.noreply.github.com>"
+options="!check"
+depends="libqmi libqrtr-glib"
+makedepends="glib-dev libqmi-dev libqrtr-glib-dev pkgconf"
+subpackages="$pkgname-openrc"
+
+_commit="897cf9e6e975ef7ebea3e3bbd3579aee596fc48e"
+source="
+	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
+	hotdog-radio-bootstrap.initd
+	"
+builddir="$srcdir/hotdog-linux-bringup-$_commit"
+
+build() {
+	local flags
+	flags="$(pkg-config --cflags --libs qmi-glib qrtr-glib gio-2.0 glib-2.0)"
+	# shellcheck disable=SC2086
+	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
+		-DHOTDOG_QMI_PDC_SUBSCRIPTIONS \
+		-Ihelpers/hotdog-radio \
+		helpers/hotdog-radio/hotdog-radio-bootstrapd.c \
+		helpers/hotdog-radio/hotdog-qmi-uim.c \
+		helpers/hotdog-radio/hotdog-uim.c \
+		helpers/hotdog-radio/hotdog-qmi-pdc.c \
+		helpers/hotdog-radio/hotdog-pdc.c \
+		helpers/hotdog-radio/hotdog-mbn.c \
+		$flags $LDFLAGS -o hotdog-radio-bootstrapd
+}
+
+package() {
+	install -Dm755 "$builddir/hotdog-radio-bootstrapd" \
+		"$pkgdir/usr/libexec/hotdog-radio-bootstrapd"
+}
+
+openrc() {
+	install -Dm755 "$srcdir/hotdog-radio-bootstrap.initd" \
+		"$subpkgdir/etc/init.d/hotdog-radio-bootstrap"
+}
+
+sha512sums="
+ff6fb2d41742ce616c5cdc208d45681ff673accd28a11411d259729dedfe598161009cb535c48558ceb5f627b465cb12d8022c5ea9394aff77aa458cf211dc8f  hotdog-radio-bootstrap-897cf9e6e975ef7ebea3e3bbd3579aee596fc48e.tar.gz
+a0f277aae8321f0a2e058d77f8d0b98a3b55b5e646c43dbc900f431a6f1c055693551bd05893b5904d74971049f90f05feec3c4fbc525123156c4460557faad8  hotdog-radio-bootstrap.initd
+"

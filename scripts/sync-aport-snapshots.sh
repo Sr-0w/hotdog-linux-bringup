@@ -40,14 +40,15 @@ snapshot_root="$HOTDOG_ROOT/aports"
 snapshot_rels=(
 	"device/testing/device-oneplus-hotdog"
 	"device/testing/firmware-oneplus-hotdog"
+	"device/testing/hotdog-radio-bootstrap"
 	"device/testing/linux-postmarketos-sm8150-staging"
 	"device/testing/linux-postmarketos-qcom-sm8150"
 	"device/testing/linux-oneplus-hotdog-lineage414"
 	"device/testing/linux-oneplus-hotdog-mainline616"
 	"device/testing/linux-oneplus-hotdog-mainline617-k1"
 	"main/hexagonrpcd"
-	"temp/iio-sensor-proxy"
 	"temp/libcamera"
+	"temp/libqmi"
 	"temp/modemmanager"
 )
 selected_rels=()
@@ -135,6 +136,8 @@ allowed_snapshot_file() {
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
 		device/testing/firmware-oneplus-hotdog:pn553-hotdog.nci | \
 		device/testing/firmware-oneplus-hotdog:*.jsn | \
+		device/testing/hotdog-radio-bootstrap:APKBUILD | \
+		device/testing/hotdog-radio-bootstrap:*.initd | \
 		device/testing/linux-postmarketos-sm8150-staging:APKBUILD | \
 		device/testing/linux-postmarketos-sm8150-staging:config-sm8150.aarch64 | \
 		device/testing/linux-postmarketos-sm8150-staging:0001-arm64-dts-qcom-add-oneplus-hotdog.patch | \
@@ -158,14 +161,13 @@ allowed_snapshot_file() {
 		device/testing/linux-oneplus-hotdog-mainline617-k1:transform-k1-dtb.sh | \
 		main/hexagonrpcd:APKBUILD | \
 		main/hexagonrpcd:*.patch | \
-		temp/iio-sensor-proxy:APKBUILD | \
-		temp/iio-sensor-proxy:*.patch | \
-		temp/iio-sensor-proxy:*.initd | \
 		temp/libcamera:APKBUILD | \
 		temp/libcamera:*.patch | \
 		temp/libcamera:*.yaml | \
 		temp/libcamera:*.desktop | \
 		temp/libcamera:*.rules | \
+		temp/libqmi:APKBUILD | \
+		temp/libqmi:*.patch | \
 		temp/modemmanager:APKBUILD | \
 		temp/modemmanager:*.patch | \
 		temp/modemmanager:*.initd | \
