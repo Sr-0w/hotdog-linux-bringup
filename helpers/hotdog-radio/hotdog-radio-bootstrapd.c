@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "hotdog-qmi-uim.h"
+#include "hotdog-qmi-dms.h"
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 #include "hotdog-mcfg.h"
 #include "hotdog-qmi-pdc.h"
@@ -17,6 +18,7 @@ struct bootstrap {
 	QrtrBus *bus;
 	QmiDevice *device;
 	QmiClientUim *uim;
+	QmiClientDms *dms;
 	struct hotdog_uim_inventory inventory;
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	QmiClientPdc *pdc;
@@ -32,6 +34,7 @@ struct bootstrap {
 	int pdc_probe_subscription;
 	char *mcfg_root;
 	gboolean plan_pdc;
+	gboolean probe_dms;
 	int result;
 	bool finished;
 };
@@ -72,6 +75,61 @@ static void finish(struct bootstrap *bootstrap, int result)
 	bootstrap->finished = true;
 	bootstrap->result = result;
 	g_main_loop_quit(bootstrap->loop);
+}
+
+static void start_dms_probe(struct bootstrap *bootstrap);
+
+static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
+			   struct bootstrap *bootstrap)
+{
+	QmiMessageDmsGetOperatingModeOutput *output;
+	QmiDmsOperatingMode mode;
+	GError *error = NULL;
+	int result;
+
+	output = qmi_client_dms_get_operating_mode_finish(client, res, &error);
+	if (!output) {
+		g_printerr("DMS operating mode request failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	result = hotdog_qmi_dms_decode_operating_mode(output, &mode);
+	qmi_message_dms_get_operating_mode_output_unref(output);
+	if (result) {
+		g_printerr("DMS operating mode rejected: %d\n", result);
+		finish(bootstrap, 1);
+		return;
+	}
+	printf("dms-operating-mode=%s\n", hotdog_qmi_dms_mode_name(mode));
+	finish(bootstrap, 0);
+}
+
+static void dms_client_ready(QmiDevice *device, GAsyncResult *res,
+			     struct bootstrap *bootstrap)
+{
+	QmiClient *client;
+	GError *error = NULL;
+
+	client = qmi_device_allocate_client_finish(device, res, &error);
+	if (!client) {
+		g_printerr("DMS client allocation failed: %s\n", error->message);
+		g_clear_error(&error);
+		finish(bootstrap, 1);
+		return;
+	}
+	bootstrap->dms = QMI_CLIENT_DMS(client);
+	qmi_client_dms_get_operating_mode(bootstrap->dms, NULL, 10,
+					  bootstrap->cancellable,
+					  (GAsyncReadyCallback)dms_mode_ready,
+					  bootstrap);
+}
+
+static void start_dms_probe(struct bootstrap *bootstrap)
+{
+	qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_DMS, QMI_CID_NONE, 10,
+				   bootstrap->cancellable,
+				   (GAsyncReadyCallback)dms_client_ready, bootstrap);
 }
 
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
@@ -245,7 +303,14 @@ static void pdc_query_next(struct bootstrap *bootstrap)
 
 	if (bootstrap->pdc_query_index >= bootstrap->inventory.gw_count) {
 		result = bootstrap->plan_pdc ? pdc_plan_dry_run(bootstrap) : 0;
-		finish(bootstrap, result ? 1 : 0);
+		if (result) {
+			finish(bootstrap, 1);
+			return;
+		}
+		if (bootstrap->probe_dms)
+			start_dms_probe(bootstrap);
+		else
+			finish(bootstrap, 0);
 		return;
 	}
 	session = &bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index];
@@ -364,14 +429,20 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 			(unsigned int)bootstrap->pdc_probe_subscription;
 	}
 	if (!bootstrap->inventory.gw_count) {
-		finish(bootstrap, 0);
+		if (bootstrap->probe_dms)
+			start_dms_probe(bootstrap);
+		else
+			finish(bootstrap, 0);
 		return;
 	}
 	qmi_device_allocate_client(bootstrap->device, QMI_SERVICE_PDC, QMI_CID_NONE, 10,
 				   bootstrap->cancellable,
 				   (GAsyncReadyCallback)pdc_client_ready, bootstrap);
 #else
-	finish(bootstrap, 0);
+	if (bootstrap->probe_dms)
+		start_dms_probe(bootstrap);
+	else
+		finish(bootstrap, 0);
 #endif
 }
 
@@ -391,7 +462,8 @@ static void card_status_ready(QmiClientUim *client, GAsyncResult *res,
 	}
 	result = hotdog_qmi_uim_decode(output, &bootstrap->inventory);
 	qmi_message_uim_get_card_status_output_unref(output);
-	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc) &&
+	if (result && !((bootstrap->pdc_probe_subscription >= 0 || bootstrap->plan_pdc ||
+			bootstrap->probe_dms) &&
 			(result == -EIO || result == -ENODEV))) {
 		g_printerr("UIM inventory rejected: %d\n", result);
 		finish(bootstrap, 1);
@@ -495,6 +567,8 @@ int main(int argc, char **argv)
 		  "MCFG software profile root for dry-run planning", "DIR" },
 		{ "plan-pdc", 0, 0, G_OPTION_ARG_NONE, &bootstrap.plan_pdc,
 		  "Build and print a PDC transaction without executing it", NULL },
+		{ "probe-dms", 0, 0, G_OPTION_ARG_NONE, &bootstrap.probe_dms,
+		  "Read and print the DMS operating mode", NULL },
 		{ NULL }
 	};
 
@@ -522,6 +596,11 @@ int main(int argc, char **argv)
 		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
+	if (bootstrap.plan_pdc && bootstrap.probe_dms) {
+		g_printerr("Combine DMS probing with a later verified PDC plan, not this dry-run\n");
+		g_free(bootstrap.mcfg_root);
+		return 2;
+	}
 #ifndef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	if (bootstrap.pdc_probe_subscription >= 0 || bootstrap.plan_pdc) {
 		g_printerr("PDC probing and planning require the patched libqmi build\n");
@@ -544,6 +623,8 @@ int main(int argc, char **argv)
 #endif
 	release_client(&bootstrap, QMI_CLIENT(bootstrap.uim));
 	g_clear_object(&bootstrap.uim);
+	release_client(&bootstrap, QMI_CLIENT(bootstrap.dms));
+	g_clear_object(&bootstrap.dms);
 	g_clear_object(&bootstrap.device);
 	g_clear_object(&bootstrap.bus);
 	g_clear_object(&bootstrap.cancellable);

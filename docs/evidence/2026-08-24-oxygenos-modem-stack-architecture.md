@@ -308,6 +308,13 @@ enabled by this model alone.
 - repeated modem failure remains stopped instead of inducing a phone reboot
   loop.
 
+`hotdog-qmi-dms` provides the next typed boundary. It decodes Get Operating
+Mode and constructs an Online request, but the packaged daemon currently
+exposes only `--probe-dms`. The read-only probe runs after the same UIM identity
+checks and reports whether MPSS is online, offline or in a low-power mode.
+Set Operating Mode is not wired to runtime until the PDC active-ID verification
+and readiness record are complete.
+
 ## Parity gates
 
 Offline replay must cover every request/response/indication family before a SIM
