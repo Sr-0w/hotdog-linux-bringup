@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "hotdog-qmi-uim.h"
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+#include "hotdog-mcfg.h"
 #include "hotdog-qmi-pdc.h"
 #endif
 
@@ -19,6 +20,8 @@ struct bootstrap {
 	struct hotdog_uim_inventory inventory;
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
 	QmiClientPdc *pdc;
+	struct hotdog_pdc_catalog *catalog;
+	struct hotdog_pdc_subscription pdc_subscriptions[HOTDOG_PDC_MAX_SUBSCRIPTIONS];
 	uint32_t pdc_token;
 	uint32_t pdc_expected_token;
 	size_t pdc_query_index;
@@ -27,6 +30,8 @@ struct bootstrap {
 #endif
 	unsigned int node;
 	int pdc_probe_subscription;
+	char *mcfg_root;
+	gboolean plan_pdc;
 	int result;
 	bool finished;
 };
@@ -74,11 +79,75 @@ static void pdc_query_next(struct bootstrap *bootstrap);
 
 static void print_pdc_id(const struct hotdog_pdc_id *id)
 {
+	size_t index;
+
 	if (!id->length) {
 		printf("-");
 		return;
 	}
-	printf("%.*s", (int)id->length, (const char *)id->value);
+	for (index = 0; index < id->length; index++)
+		printf("%02x", id->value[index]);
+}
+
+static const struct hotdog_pdc_config *find_config(
+	const struct hotdog_pdc_catalog *catalog, const struct hotdog_pdc_id *id)
+{
+	size_t index;
+
+	if (!id->length)
+		return NULL;
+	for (index = 0; index < catalog->count; index++)
+		if (hotdog_pdc_id_equal(&catalog->configs[index].id, id))
+			return &catalog->configs[index];
+	return NULL;
+}
+
+static int pdc_plan_dry_run(struct bootstrap *bootstrap)
+{
+	struct hotdog_mcfg_report report;
+	struct hotdog_pdc_plan plan;
+	size_t index, subscription;
+	int result;
+
+	bootstrap->catalog = g_new0(struct hotdog_pdc_catalog, 1);
+	result = hotdog_mcfg_catalog_load(bootstrap->mcfg_root, bootstrap->catalog, &report);
+	if (result) {
+		g_printerr("MCFG catalog rejected: %d\n", result);
+		return result;
+	}
+	for (index = 0; index < bootstrap->catalog->count; index++) {
+		for (subscription = 0; subscription < bootstrap->inventory.gw_count;
+		     subscription++) {
+			const struct hotdog_pdc_subscription *state =
+				&bootstrap->pdc_subscriptions[subscription];
+
+			if (hotdog_pdc_id_equal(&bootstrap->catalog->configs[index].id,
+						&state->active) ||
+			    hotdog_pdc_id_equal(&bootstrap->catalog->configs[index].id,
+						&state->pending))
+				bootstrap->catalog->configs[index].loaded = true;
+		}
+	}
+	result = hotdog_pdc_plan_activation(bootstrap->catalog,
+		bootstrap->pdc_subscriptions, bootstrap->inventory.gw_count, &plan);
+	printf("pdc-plan=result:%d catalog:%zu listed:%zu listed-missing:%zu operations:%zu\n",
+	       result, bootstrap->catalog->count, report.listed, report.listed_missing,
+	       result ? 0 : plan.count);
+	if (result)
+		return result;
+	for (index = 0; index < plan.count; index++) {
+		const struct hotdog_pdc_operation *operation = &plan.operations[index];
+		const struct hotdog_pdc_config *config = find_config(bootstrap->catalog,
+								    &operation->id);
+
+		printf("pdc-plan%zu=%s sub:%u expected:%u id:", index,
+		       hotdog_pdc_operation_name(operation->type), operation->subscription,
+		       operation->expected_indications);
+		print_pdc_id(&operation->id);
+		printf(" path:%s carrier:%s\n", config ? config->path : "-",
+		       config ? config->metadata.carrier : "-");
+	}
+	return 0;
 }
 
 static gboolean pdc_query_timeout(gpointer user_data)
@@ -119,6 +188,20 @@ static void pdc_selected_indication(QmiClientPdc *client,
 		bootstrap->pdc_timeout_id = 0;
 	}
 	session = &bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index];
+	bootstrap->pdc_subscriptions[bootstrap->pdc_query_index].active = active;
+	bootstrap->pdc_subscriptions[bootstrap->pdc_query_index].pending = pending;
+	if (session->physical_slot &&
+	    session->physical_slot <= bootstrap->inventory.slot_count) {
+		const struct hotdog_uim_slot *slot =
+			&bootstrap->inventory.slots[session->physical_slot - 1];
+
+		if (slot->iccid_length) {
+			bootstrap->pdc_subscriptions[bootstrap->pdc_query_index].populated = true;
+			g_strlcpy(bootstrap->pdc_subscriptions[bootstrap->pdc_query_index].iccid,
+				  slot->iccid,
+				  sizeof(bootstrap->pdc_subscriptions[bootstrap->pdc_query_index].iccid));
+		}
+	}
 	printf("pdc-sub%u=active:", session->subscription);
 	print_pdc_id(&active);
 	printf(" pending:");
@@ -161,7 +244,8 @@ static void pdc_query_next(struct bootstrap *bootstrap)
 	int result;
 
 	if (bootstrap->pdc_query_index >= bootstrap->inventory.gw_count) {
-		finish(bootstrap, 0);
+		result = bootstrap->plan_pdc ? pdc_plan_dry_run(bootstrap) : 0;
+		finish(bootstrap, result ? 1 : 0);
 		return;
 	}
 	session = &bootstrap->inventory.gw_sessions[bootstrap->pdc_query_index];
@@ -252,6 +336,28 @@ static void slot_status_ready(QmiClientUim *client, GAsyncResult *res,
 	}
 	print_inventory(&bootstrap->inventory);
 #ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	if (bootstrap->plan_pdc) {
+		size_t index;
+
+		if (!bootstrap->inventory.gw_count) {
+			g_printerr("PDC planning requires a populated GW application\n");
+			finish(bootstrap, 1);
+			return;
+		}
+		for (index = 0; index < bootstrap->inventory.gw_count; index++) {
+			const struct hotdog_uim_session *session =
+				&bootstrap->inventory.gw_sessions[index];
+			const struct hotdog_uim_slot *slot =
+				&bootstrap->inventory.slots[session->physical_slot - 1];
+
+			if (!slot->physical_present || !slot->iccid_length) {
+				g_printerr("PDC planning lacks card identity for subscription %u\n",
+					   session->subscription);
+				finish(bootstrap, 1);
+				return;
+			}
+		}
+	}
 	if (!bootstrap->inventory.gw_count && bootstrap->pdc_probe_subscription >= 0) {
 		bootstrap->inventory.gw_count = 1;
 		bootstrap->inventory.gw_sessions[0].subscription =
@@ -385,6 +491,10 @@ int main(int argc, char **argv)
 		{ "pdc-subscription", 0, 0, G_OPTION_ARG_INT,
 		  &bootstrap.pdc_probe_subscription,
 		  "Read one PDC subscription even without a card", "0-2" },
+		{ "mcfg-root", 0, 0, G_OPTION_ARG_STRING, &bootstrap.mcfg_root,
+		  "MCFG software profile root for dry-run planning", "DIR" },
+		{ "plan-pdc", 0, 0, G_OPTION_ARG_NONE, &bootstrap.plan_pdc,
+		  "Build and print a PDC transaction without executing it", NULL },
 		{ NULL }
 	};
 
@@ -402,9 +512,20 @@ int main(int argc, char **argv)
 		g_printerr("PDC subscription must be between 0 and 2\n");
 		return 2;
 	}
+	if (bootstrap.plan_pdc != (bootstrap.mcfg_root != NULL)) {
+		g_printerr("PDC planning requires both --plan-pdc and --mcfg-root\n");
+		g_free(bootstrap.mcfg_root);
+		return 2;
+	}
+	if (bootstrap.plan_pdc && bootstrap.pdc_probe_subscription >= 0) {
+		g_printerr("PDC planning requires a real populated UIM session\n");
+		g_free(bootstrap.mcfg_root);
+		return 2;
+	}
 #ifndef HOTDOG_QMI_PDC_SUBSCRIPTIONS
-	if (bootstrap.pdc_probe_subscription >= 0) {
-		g_printerr("PDC subscription probing requires the patched libqmi build\n");
+	if (bootstrap.pdc_probe_subscription >= 0 || bootstrap.plan_pdc) {
+		g_printerr("PDC probing and planning require the patched libqmi build\n");
+		g_free(bootstrap.mcfg_root);
 		return 2;
 	}
 #endif
@@ -427,5 +548,9 @@ int main(int argc, char **argv)
 	g_clear_object(&bootstrap.bus);
 	g_clear_object(&bootstrap.cancellable);
 	g_main_loop_unref(bootstrap.loop);
+#ifdef HOTDOG_QMI_PDC_SUBSCRIPTIONS
+	g_free(bootstrap.catalog);
+#endif
+	g_free(bootstrap.mcfg_root);
 	return bootstrap.result;
 }

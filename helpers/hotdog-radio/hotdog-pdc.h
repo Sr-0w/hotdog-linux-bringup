@@ -12,6 +12,7 @@
 #define HOTDOG_PDC_MAX_SUBSCRIPTIONS 3
 #define HOTDOG_PDC_ID_SIZE 20
 #define HOTDOG_PDC_PATH_SIZE 512
+#define HOTDOG_PDC_ICCID_SIZE 41
 #define HOTDOG_PDC_MAX_OPERATIONS 32
 
 struct hotdog_pdc_id {
@@ -34,10 +35,11 @@ struct hotdog_pdc_catalog {
 
 struct hotdog_pdc_subscription {
 	bool populated;
-	char iccid[24];
+	char iccid[HOTDOG_PDC_ICCID_SIZE];
 	uint16_t mcc;
 	uint16_t mnc;
 	struct hotdog_pdc_id active;
+	struct hotdog_pdc_id pending;
 	struct hotdog_pdc_id previous;
 	struct hotdog_pdc_id selected;
 	bool changed;

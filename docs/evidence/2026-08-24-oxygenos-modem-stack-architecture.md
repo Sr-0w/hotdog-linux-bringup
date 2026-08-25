@@ -251,6 +251,15 @@ complete MBN, matching both libqmi's PDC Load Config implementation and the
 scanner reports list drift but never hides a valid parsed profile. See
 [the OxygenOS catalog reconstruction](2026-08-25-oxygenos-mcfg-catalog.md).
 
+The bootstrap daemon exposes this join only as `--plan-pdc --mcfg-root=DIR`.
+Planning requires a real GW application, a physically present card and an
+ICCID on that same physical slot. It queries active and pending IDs for every
+subscription, marks matching catalog entries as already loaded, then prints the
+complete load/select/activate/verify transaction using only relative MCFG paths
+and carrier metadata. The option never sends Load, Set Selected, Activate,
+Delete or DMS requests; no-card and missing-identity states fail before a plan
+can be accepted.
+
 The transport-independent `hotdog-pdc` model now turns that selection into an
 auditable multi-subscription transaction. It saves each previous active ID,
 sets each populated subscription independently, issues one bounded global

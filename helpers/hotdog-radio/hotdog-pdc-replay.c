@@ -111,7 +111,8 @@ static int add_subscription(struct hotdog_pdc_subscription *subscriptions,
 
 	if (count != 6 || parse_uint(fields[1], HOTDOG_PDC_MAX_SUBSCRIPTIONS - 1, &index) ||
 	    parse_uint(fields[3], UINT16_MAX, &mcc) ||
-	    parse_uint(fields[4], UINT16_MAX, &mnc) || strlen(fields[2]) >= 24)
+	    parse_uint(fields[4], UINT16_MAX, &mnc) ||
+	    strlen(fields[2]) >= HOTDOG_PDC_ICCID_SIZE)
 		return -EINVAL;
 	subscription = &subscriptions[index];
 	memset(subscription, 0, sizeof(*subscription));
