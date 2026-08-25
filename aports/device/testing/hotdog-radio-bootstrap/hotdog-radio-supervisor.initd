@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+
+description="Supervise Hotdog radio readiness and ModemManager ownership"
+command="/usr/libexec/hotdog-radio-supervisord"
+command_background=true
+pidfile="/run/hotdog-radio-supervisord.pid"
+
+depend() {
+	need rmtfs
+	after pd-mapper hotdog-radio-bootstrap
+	before modemmanager
+}
+
+start_pre() {
+	checkpath --directory --mode 0755 /run/hotdog-radio
+	command_args="--node=${HOTDOG_QRTR_NODE:-0}"
+	if [ -n "${HOTDOG_PDC_APPROVAL:-}" ]; then
+		command_args="$command_args --approval=$HOTDOG_PDC_APPROVAL"
+	fi
+}
+
+stop_post() {
+	rm -f /run/hotdog-radio/readiness
+}

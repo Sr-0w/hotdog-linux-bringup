@@ -1,7 +1,7 @@
 pkgname=hotdog-radio-bootstrap
-pkgver=0.16
+pkgver=0.17
 pkgrel=0
-pkgdesc="Verified UIM, PDC and DMS bootstrap for OnePlus Hotdog"
+pkgdesc="Verified radio bootstrap and lifecycle supervisor for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
 arch="aarch64"
 license="GPL-2.0-only"
@@ -11,10 +11,11 @@ depends="libqmi libqrtr-glib"
 makedepends="glib-dev libqmi-dev libqrtr-glib-dev pkgconf"
 subpackages="$pkgname-openrc"
 
-_commit="31e3936bed5a3f255604c7d53c0cdad435b56c33"
+_commit="43210aef15237558d2fd19449ba638f5591cfd7e"
 source="
 	$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz
 	hotdog-radio-bootstrap.initd
+	hotdog-radio-supervisor.initd
 	"
 builddir="$srcdir/hotdog-linux-bringup-$_commit"
 
@@ -47,11 +48,24 @@ build() {
 		helpers/hotdog-radio/hotdog-radio-gate.c \
 		helpers/hotdog-radio/hotdog-radio-readiness.c \
 		$flags $LDFLAGS -o hotdog-radio-bootstrapd
+	# shellcheck disable=SC2086
+	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
+		-Ihelpers/hotdog-radio \
+		helpers/hotdog-radio/hotdog-radio-supervisord.c \
+		helpers/hotdog-radio/hotdog-radio-supervisor.c \
+		helpers/hotdog-radio/hotdog-radio-readiness.c \
+		helpers/hotdog-radio/hotdog-mcfg-runtime.c \
+		helpers/hotdog-radio/hotdog-pdc.c \
+		helpers/hotdog-radio/hotdog-uim.c \
+		helpers/hotdog-radio/hotdog-mbn.c \
+		$flags $LDFLAGS -o hotdog-radio-supervisord
 }
 
 package() {
 	install -Dm755 "$builddir/hotdog-radio-bootstrapd" \
 		"$pkgdir/usr/libexec/hotdog-radio-bootstrapd"
+	install -Dm755 "$builddir/hotdog-radio-supervisord" \
+		"$pkgdir/usr/libexec/hotdog-radio-supervisord"
 }
 
 openrc() {
@@ -59,9 +73,12 @@ openrc() {
 	install="$subpkgname.post-install"
 	install -Dm755 "$srcdir/hotdog-radio-bootstrap.initd" \
 		"$subpkgdir/etc/init.d/hotdog-radio-bootstrap"
+	install -Dm755 "$srcdir/hotdog-radio-supervisor.initd" \
+		"$subpkgdir/etc/init.d/hotdog-radio-supervisor"
 }
 
 sha512sums="
-1e62362089c683a1ddadc575aef020dc3e37feea8d9ccc35050a94cc8b818e7dec11e0ae3627a31b60032f80f81122e484d76bb039bd656926a942248e868716  hotdog-radio-bootstrap-31e3936bed5a3f255604c7d53c0cdad435b56c33.tar.gz
+12b6d712997a6bb5eacc120202d2c4938cfc65a3487b4decb1e20d7881a4e47ee3d388c4ec5642a66ccb6661d661834cd270eebd01f7c5d7c43df36b467ba3c6  hotdog-radio-bootstrap-43210aef15237558d2fd19449ba638f5591cfd7e.tar.gz
 4daa5a5aad64e5b804de6d08c2ed4224dfda36f45edca3af7cfe0bc47820f5407f9e6ecdf5f02fe3e2fe67f9f483009b7656b9a051c796e2b90ba9d54cfb21a0  hotdog-radio-bootstrap.initd
+5bc713a246425e9748689aad0a95b30e184cc1322c6b0e9c1080f2f9b7a5724a866b2c01d66305b25abee39c265fac27df280e172967202d96980f9a9c3b96b8  hotdog-radio-supervisor.initd
 "

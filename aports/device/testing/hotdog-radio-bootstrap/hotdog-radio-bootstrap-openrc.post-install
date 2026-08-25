@@ -3,3 +3,4 @@
 rc-update del modemmanager default 2>/dev/null || true
 rc-update del modemmanager boot 2>/dev/null || true
 rc-update add hotdog-radio-bootstrap boot
+rc-update add hotdog-radio-supervisor boot

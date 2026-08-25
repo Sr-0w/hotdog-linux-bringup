@@ -29,7 +29,7 @@ dependencies, removing the circular dependency that otherwise made every new
 `device-oneplus-hotdog-nonfree-firmware-3-r31` SHA256
 `950e6553e0567bdbc8ca393e93dd726f50fba15f6259a8e19659e35e111deb8f`
 depends on the radio bootstrap packages and removes ModemManager from both boot
-and default runlevels. `hotdog-radio-bootstrap-openrc-0.16-r0` repeats that
+and default runlevels. `hotdog-radio-bootstrap-openrc-0.17-r0` repeats that
 policy after Plasma's generic post-install and enables only the read-only
 bootstrap at boot. The clean Alpha 4 rootfs confirms that final ordering.
 

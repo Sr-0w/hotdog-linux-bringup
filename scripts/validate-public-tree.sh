@@ -450,6 +450,18 @@ validate_hotdog_wifi_package_contract() {
 	grep -q '^rc-update add hotdog-radio-bootstrap boot$' \
 		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap-openrc.post-install" ||
 		die "radio bootstrap OpenRC policy does not enable its guarded service"
+	grep -q '^rc-update add hotdog-radio-supervisor boot$' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap-openrc.post-install" ||
+		die "radio bootstrap OpenRC policy does not enable its lifecycle supervisor"
+	grep -q 'hotdog-radio-supervisord' \
+		"aports/device/testing/hotdog-radio-bootstrap/APKBUILD" ||
+		die "radio bootstrap package does not build the lifecycle supervisor"
+	grep -q '^command="/usr/libexec/hotdog-radio-supervisord"$' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-supervisor.initd" ||
+		die "radio supervisor OpenRC service has the wrong executable"
+	grep -q 'HOTDOG_PDC_APPROVAL' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-supervisor.initd" ||
+		die "radio supervisor service has no explicit approval input"
 	grep -q '"$builddir"/board-2.bin' "$firmware_apkbuild" ||
 		die "WLAN package does not install board-2.bin"
 	grep -q '"$builddir"/firmware-5.bin' "$firmware_apkbuild" ||
