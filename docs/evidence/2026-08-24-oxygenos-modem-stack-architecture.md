@@ -153,7 +153,13 @@ transport parity queue rather than being collapsed into call state.
 Voice service: Dial preserves the validated number, response yields a nonzero
 modem call ID, and Answer, End and continuous DTMF require that ID. IMS and
 video calls are explicitly rejected at this boundary rather than silently sent
-as CS; they belong to the separate IMS transport/media implementation.
+as CS; they belong to the separate IMS transport/media implementation. The All
+Call Status decoder preserves QMI call ID, subscription, mode, CS/IMS domain,
+direction, emergency flag and every user-visible state. Waiting is an incoming
+call, not a held local leg. Restricted/unavailable presentation never exposes a
+number, while duplicate IDs, unknown directions/states/types and oversized
+numbers fail closed. OTAPA and supplementary control transactions are filtered
+instead of appearing as calls in Plasma.
 
 ### IMS, VoLTE and RCS
 

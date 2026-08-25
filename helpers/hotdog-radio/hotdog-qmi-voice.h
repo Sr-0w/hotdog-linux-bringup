@@ -6,6 +6,18 @@
 
 #include <libqmi-glib.h>
 
+struct hotdog_qmi_voice_call {
+	uint8_t qmi_call_id;
+	QmiVoiceCallMode mode;
+	bool number_present;
+	struct hotdog_call call;
+};
+
+struct hotdog_qmi_voice_snapshot {
+	size_t count;
+	struct hotdog_qmi_voice_call calls[HOTDOG_TELEPHONY_MAX_CALLS];
+};
+
 int hotdog_qmi_voice_dial_input(const struct hotdog_call *call,
 				QmiMessageVoiceDialCallInput **input);
 int hotdog_qmi_voice_decode_dial(QmiMessageVoiceDialCallOutput *output,
@@ -18,5 +30,11 @@ int hotdog_qmi_voice_start_dtmf_input(uint8_t qmi_call_id, char digit,
 				      QmiMessageVoiceStartContinuousDtmfInput **input);
 int hotdog_qmi_voice_stop_dtmf_input(uint8_t qmi_call_id,
 				     QmiMessageVoiceStopContinuousDtmfInput **input);
+int hotdog_qmi_voice_map_call(
+	const QmiIndicationVoiceAllCallStatusOutputCallInformationCall *source,
+	unsigned int subscription, struct hotdog_qmi_voice_call *call);
+int hotdog_qmi_voice_decode_all_calls(
+	QmiIndicationVoiceAllCallStatusOutput *output, unsigned int subscription,
+	struct hotdog_qmi_voice_snapshot *snapshot);
 
 #endif
