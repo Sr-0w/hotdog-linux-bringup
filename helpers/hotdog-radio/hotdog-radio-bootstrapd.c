@@ -187,17 +187,8 @@ static int pdc_plan_dry_run(struct bootstrap *bootstrap)
 		bootstrap->catalog, bootstrap->loaded_catalog.ids,
 		bootstrap->loaded_catalog.count, bootstrap->pdc_subscriptions,
 		HOTDOG_PDC_MAX_SUBSCRIPTIONS, &cleanup, &unmatched);
-	printf("pdc-cleanup-plan=result:%d resident:%zu unmatched:%zu operations:%zu\n",
-	       result, bootstrap->loaded_catalog.count, unmatched,
-	       result ? 0 : cleanup.count);
 	if (result)
 		return result;
-	for (index = 0; index < cleanup.count; index++) {
-		printf("pdc-cleanup%zu=%s id:", index,
-		       hotdog_pdc_operation_name(cleanup.operations[index].type));
-		print_pdc_id(&cleanup.operations[index].id);
-		printf("\n");
-	}
 	result = hotdog_pdc_plan_activation(bootstrap->catalog,
 		bootstrap->pdc_subscriptions, HOTDOG_PDC_MAX_SUBSCRIPTIONS, &activation);
 	printf("pdc-plan=result:%d catalog:%zu listed:%zu listed-missing:%zu operations:%zu\n",
@@ -216,6 +207,14 @@ static int pdc_plan_dry_run(struct bootstrap *bootstrap)
 		print_pdc_id(&operation->id);
 		printf(" path:%s carrier:%s\n", config ? config->path : "-",
 		       config ? config->metadata.carrier : "-");
+	}
+	printf("pdc-deferred-cleanup-plan=result:0 resident:%zu unmatched:%zu operations:%zu\n",
+	       bootstrap->loaded_catalog.count, unmatched, cleanup.count);
+	for (index = 0; index < cleanup.count; index++) {
+		printf("pdc-deferred-cleanup%zu=%s id:", index,
+		       hotdog_pdc_operation_name(cleanup.operations[index].type));
+		print_pdc_id(&cleanup.operations[index].id);
+		printf("\n");
 	}
 	return 0;
 }

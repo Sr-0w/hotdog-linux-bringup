@@ -44,7 +44,7 @@ Temporary APKs were removed, ModemManager remained absent and MPSS remained
 
 The final transaction cannot treat resident PDC entries as proof that the
 matching profile is already loaded. It must preserve any active or pending ID,
-delete only unmatched inactive residents, load the selected OOS10 MBN by its
-exact SHA-1, then set/activate/verify it on the same subscription. The cleanup
-plan remains offline-only until those safety conditions and rollback are
-covered by replay.
+load the selected OOS10 MBN by its exact SHA-1, then set/activate/verify it on
+the same subscription. Only after that commit may it delete unmatched inactive
+residents. The cleanup plan remains offline-only until those safety conditions
+and rollback are covered by replay.

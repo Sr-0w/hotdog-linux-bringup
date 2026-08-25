@@ -322,14 +322,17 @@ matches as loaded, rejects duplicate or malformed resident IDs, and scans the
 active and pending state of every supplied subscription. Any unmatched active
 or pending ID returns `EBUSY` with zero operations. Only unmatched inactive
 residents become Delete Config operations; the current profile is never
-deleted and will not be loaded again. The hardware executor must supply all
-three APSS subscription readbacks before this offline plan can be authorized.
+deleted and will not be loaded again. Cleanup is deliberately deferred until
+the selected current profile is active, verified and committed; deleting stale
+profiles before a successful load would create an unnecessary non-restorable
+failure mode. The hardware executor must supply all three APSS subscription
+readbacks before this offline plan can be authorized.
 The daemon dry-run now obtains those inputs in one ordered read-only session:
 List Configs first, then Get Selected for subscription 0, 1 and 2, then local
-catalog parsing, stale cleanup planning and finally load/select/activate/verify
-planning for populated subscriptions. It prints the cleanup and activation
-transactions separately and still has no call site for any mutating PDC
-request.
+catalog parsing, load/select/activate/verify planning for populated
+subscriptions and finally deferred stale cleanup planning. It prints the
+activation and post-commit cleanup transactions separately and still has no
+call site for any mutating PDC request.
 
 ### Radio and SSR
 
