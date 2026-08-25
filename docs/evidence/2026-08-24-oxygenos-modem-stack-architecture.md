@@ -315,6 +315,14 @@ the original error. Any recovery failure ends as `blocked` with a separate
 rollback error and no further operation, making residue impossible to report as
 success.
 
+`hotdog-qmi-pdc-dispatch` is the concrete request boundary consumed by that
+executor. It maps local save, secure chunked load, subscription-scoped
+set/restore, activate/deactivate, delete, selected-ID verification and modem
+switch wait into one owned request object. Load keeps the securely reopened
+profile alive across chunks and refuses a next chunk until the previous
+indication has advanced the load state. Clearing a request unreferences every
+typed libqmi object and profile buffer deterministically.
+
 Execution also requires a root-owned approval manifest that is neither a
 symlink nor group/world writable. `hotdog-radio-approval` accepts only schema,
 boot ID, modem SHA-256, MCFG archive SHA-256 and one selected ID (or `-`) for

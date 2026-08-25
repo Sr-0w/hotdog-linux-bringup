@@ -6,6 +6,18 @@
 
 #include <libqmi-glib.h>
 
+/* These generated setters are carried by the local libqmi patch. Repeating
+ * their declarations keeps host-side syntax/unit builds usable with stock
+ * libqmi headers; the packaged binary still requires the patched symbols. */
+gboolean qmi_message_pdc_get_selected_config_input_set_subscription_id(
+	QmiMessagePdcGetSelectedConfigInput *input, guint32 value, GError **error);
+gboolean qmi_message_pdc_set_selected_config_input_set_subscription_id(
+	QmiMessagePdcSetSelectedConfigInput *input, guint32 value, GError **error);
+gboolean qmi_message_pdc_activate_config_input_set_subscription_id(
+	QmiMessagePdcActivateConfigInput *input, guint32 value, GError **error);
+gboolean qmi_message_pdc_deactivate_config_input_set_subscription_id(
+	QmiMessagePdcDeactivateConfigInput *input, guint32 value, GError **error);
+
 int hotdog_qmi_pdc_get_selected_input(unsigned int subscription, uint32_t token,
 				      QmiMessagePdcGetSelectedConfigInput **input);
 int hotdog_qmi_pdc_set_selected_input(unsigned int subscription, uint32_t token,

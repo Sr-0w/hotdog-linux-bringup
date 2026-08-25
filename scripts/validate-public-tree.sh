@@ -555,6 +555,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-pdc-list.c hotdog-qmi-pdc-list.h; do
 		[ -f "$source_dir/$source" ] || die "missing PDC catalog transport source: $source"
 	done
+	for source in hotdog-qmi-pdc-dispatch.c hotdog-qmi-pdc-dispatch.h; do
+		[ -f "$source_dir/$source" ] || die "missing PDC dispatcher source: $source"
+	done
 	for source in hotdog-pdc-executor.c hotdog-pdc-executor.h; do
 		[ -f "$source_dir/$source" ] || die "missing PDC executor source: $source"
 	done
