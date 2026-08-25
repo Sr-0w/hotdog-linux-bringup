@@ -310,6 +310,14 @@ the original error. Any recovery failure ends as `blocked` with a separate
 rollback error and no further operation, making residue impossible to report as
 success.
 
+Execution also requires a root-owned approval manifest that is neither a
+symlink nor group/world writable. `hotdog-radio-approval` accepts only schema,
+boot ID, modem SHA-256, MCFG archive SHA-256 and one selected ID (or `-`) for
+each subscription 0..2. Unknown, missing or duplicate keys fail closed. The
+manifest must match the current boot and installed runtime manifest, and its
+subscription population/IDs must match the freshly computed plan. It contains
+no PIN or subscriber identity.
+
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
 sent in chunks no larger than `0x400` bytes, matching upstream qmicli and the

@@ -558,6 +558,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-pdc-executor.c hotdog-pdc-executor.h; do
 		[ -f "$source_dir/$source" ] || die "missing PDC executor source: $source"
 	done
+	for source in hotdog-radio-approval.c hotdog-radio-approval.h; do
+		[ -f "$source_dir/$source" ] || die "missing radio approval source: $source"
+	done
 	for source in hotdog-uim.c hotdog-uim.h hotdog-uim-replay.c; do
 		[ -f "$source_dir/$source" ] || die "missing UIM model source: $source"
 	done
