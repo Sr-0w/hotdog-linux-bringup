@@ -8,7 +8,7 @@ static void controller_drive(struct hotdog_pdc_controller *controller);
 
 static void controller_finish(struct hotdog_pdc_controller *controller)
 {
-	int result;
+	int result = -EINVAL;
 
 	if (controller->finished)
 		return;
