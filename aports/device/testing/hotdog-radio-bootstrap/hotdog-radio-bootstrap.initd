@@ -1,10 +1,10 @@
 #!/sbin/openrc-run
 # shellcheck shell=sh disable=SC2034,SC3043
 
-description="Attest Hotdog UIM and subscription-scoped PDC state"
+description="Observe Hotdog UIM and subscription-scoped PDC state"
 command="/usr/libexec/hotdog-radio-bootstrapd"
 command_args="--node ${HOTDOG_QRTR_NODE:-0}"
-readiness="/run/hotdog-radio/readiness"
+observation="/run/hotdog-radio/observation"
 
 depend() {
 	need rmtfs
@@ -13,10 +13,10 @@ depend() {
 }
 
 start() {
-	local temporary="${readiness}.new"
+	local temporary="${observation}.new"
 
 	ebegin "Reading Hotdog UIM and PDC state"
-	checkpath --directory --mode 0755 "${readiness%/*}"
+	checkpath --directory --mode 0755 "${observation%/*}"
 	if {
 		printf 'schema=1\n'
 		printf 'boot-id='
@@ -27,7 +27,7 @@ start() {
 		$command $command_args
 	} >"$temporary"; then
 		chmod 0644 "$temporary"
-		mv "$temporary" "$readiness"
+		mv "$temporary" "$observation"
 		eend 0
 		return 0
 	fi
@@ -36,5 +36,5 @@ start() {
 }
 
 stop() {
-	rm -f "$readiness" "${readiness}.new"
+	rm -f "$observation" "${observation}.new"
 }

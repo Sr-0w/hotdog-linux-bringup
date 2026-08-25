@@ -1,6 +1,6 @@
 pkgname=hotdog-radio-bootstrap
 pkgver=0.10
-pkgrel=0
+pkgrel=1
 pkgdesc="Read-only UIM and PDC bootstrap for OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
 arch="aarch64"
@@ -49,5 +49,5 @@ openrc() {
 
 sha512sums="
 80c8e134e804ad617a7873f4c684bbde98ace7ff69ea46e9fef31f6e1281cea12c190d3200e9c23d199027f7d0c203aed9573848de3d216506352d1bad703822  hotdog-radio-bootstrap-f4dab72bbfa304406b8ba855b5ae4a35d638e82b.tar.gz
-a0f277aae8321f0a2e058d77f8d0b98a3b55b5e646c43dbc900f431a6f1c055693551bd05893b5904d74971049f90f05feec3c4fbc525123156c4460557faad8  hotdog-radio-bootstrap.initd
+4daa5a5aad64e5b804de6d08c2ed4224dfda36f45edca3af7cfe0bc47820f5407f9e6ecdf5f02fe3e2fe67f9f483009b7656b9a051c796e2b90ba9d54cfb21a0  hotdog-radio-bootstrap.initd
 "

@@ -561,6 +561,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-uim.c hotdog-qmi-uim.h hotdog-radio-bootstrapd.c; do
 		[ -f "$source_dir/$source" ] || die "missing QRTR/UIM transport source: $source"
 	done
+	grep -q 'observation="/run/hotdog-radio/observation"' \
+		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap.initd" ||
+		die "radio observation service publishes a false readiness record"
 	for source in hotdog-qmi-dms.c hotdog-qmi-dms.h; do
 		[ -f "$source_dir/$source" ] || die "missing DMS gate source: $source"
 	done

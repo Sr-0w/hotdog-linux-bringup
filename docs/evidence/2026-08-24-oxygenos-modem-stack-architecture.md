@@ -186,9 +186,11 @@ The read-only slice is packaged as `hotdog-radio-bootstrap-0.10-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
 `70278134224172bf23a1e748aa20e8fd647750c4e828f99e42fb4b945b1acbe0`
 and `d01e39094ab031443014df07a0b6acaad4fcf38392455f95148eb96239926de0`.
-The binary links to the four subscription setters from libqmi `r2`. The service
-writes boot ID, kernel identity, UIM and PDC output atomically under `/run`, but
-is deliberately not auto-enabled before a no-SIM target validation.
+The binary links to the four subscription setters from libqmi `r2`. The
+disabled service writes boot ID, kernel identity, UIM and PDC output atomically
+to `/run/hotdog-radio/observation`. It deliberately does not create the future
+`readiness` record: that name is reserved for a completed active-ID and DMS
+verification, not a read-only snapshot.
 For that validation, `--pdc-subscription=0..2` performs one explicit read-only
 Get Selected even when no UIM application is populated. A build without the
 patched API rejects the option before opening QRTR.
