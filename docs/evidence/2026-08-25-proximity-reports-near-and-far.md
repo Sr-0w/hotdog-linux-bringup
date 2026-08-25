@@ -155,18 +155,55 @@ The one unmatched engine event is its baseline `far` at t=0.20, emitted before
 the claim was taken. The median latency sits just under the driver's 700 ms
 polling interval, which is what a polled sensor should cost and no more.
 
-## What remains
+## Arming on demand
 
-The engine only speaks while the ultrasound audio path is armed, and arming it
-is a userspace action: two hostless PCMs and the mixer route. Nothing does that
-on its own yet, so in ordinary use the screen still will not blank during a
-call. A service that arms the path while proximity is claimed, and drops it
-after, is the remaining piece — which is how OxygenOS works too, its sensor HAL
-asking the audio HAL to bring the path up.
+The engine only speaks while the ultrasound audio path is up, and bringing it
+up means opening two hostless PCMs and setting a mixer route — userspace work.
+Nothing did that outside a test run, so the sensor worked and stayed silent.
 
-Whether the ordering fix lets `hotdog-sensor-gate` be retired is a separate
-question and is **not** answered here: the gate still runs, so it masks the
-race the fix targets. Testing that needs the gate disabled.
+The driver now reports the demand itself. A consumer that claims proximity
+starts polling `in_proximity_raw`; `iio-sensor-proxy` does so every 700 ms. The
+read is recorded even when there is nothing to report, because a consumer
+polling an unarmed sensor is exactly the signal that it should be armed, and
+`demand` stays set for three seconds after the last read.
+`hotdog-proximity-armd` watches that and raises and drops the path. It is the
+same shape as OxygenOS, whose sensor HAL asks the audio HAL to raise the path
+rather than raising it itself.
+
+Measured with a claim held and no gesture: `demand=1 enable=1 raw=0` within
+three seconds, armed at 18:22:44 and released at 18:23:20, a 30 s claim plus
+the 5 s grace.
+
+## The gate: half of it can go, half cannot
+
+The ordering fix works, and the daemon's own trace proves it. Restarting it
+under a live KWin session now gives:
+
+```
+18:24:25.714  Found device .../iio:device5 of type proximity
+18:24:25.722  Found device .../fastrpc-adsp of type ambient light sensor
+18:24:25.728  Found device .../fastrpc-adsp of type accelerometer
+18:24:25.733  Found device .../fastrpc-adsp of type compass
+18:24:25.743  Handling driver refcounting method 'ClaimAccelerometer'
+```
+
+Every device is open before the claim arrives, and the
+`driver_set_polling: assertion 'sensor_device' failed` that used to follow it
+is gone.
+
+That retires the reason `hotdog-sensor-gate` orders itself before the session,
+but not the service. The gate does four other things nothing else does: it
+waits for the SLPI to reach `running`, starts `pd-mapper` before any FastRPC
+attach, imports this unit's factory calibration, and starts `hexagonrpcd`.
+Remove it wholesale and sensors do not come up at all. What can go is its
+barrier role — the `before display-manager` ordering and the
+`HasAccelerometer` wait — not its bring-up role.
+
+`iio-sensor-proxy` still segfaults on `SIGTERM`, in `drv-ssc-light.c` and
+`drv-ssc-accel.c`, a shutdown path patch 0009 of the local aport series added.
+Every stop and restart crashes. That is unrelated to either fix here and is not
+repaired.
+
 
 `Ultrasound ML`, the 432-byte control, is bidirectional on stock and the audio
 HAL references it. This port neither reads nor writes it, and which direction
