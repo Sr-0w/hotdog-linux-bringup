@@ -70,6 +70,12 @@ struct hotdog_pdc_plan {
 	size_t count;
 };
 
+struct hotdog_pdc_progress {
+	bool load_attempted[HOTDOG_PDC_MAX_SUBSCRIPTIONS];
+	bool selection_attempted[HOTDOG_PDC_MAX_SUBSCRIPTIONS];
+	bool activation_attempted;
+};
+
 int hotdog_pdc_choose(const struct hotdog_pdc_catalog *catalog, const char *iccid,
 		      uint16_t mcc, uint16_t mnc, size_t *selected);
 int hotdog_pdc_plan_activation(const struct hotdog_pdc_catalog *catalog,
@@ -78,6 +84,10 @@ int hotdog_pdc_plan_activation(const struct hotdog_pdc_catalog *catalog,
 			       struct hotdog_pdc_plan *plan);
 int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions,
 			     size_t subscription_count,
+			     struct hotdog_pdc_plan *plan);
+int hotdog_pdc_plan_recovery(const struct hotdog_pdc_subscription *subscriptions,
+			     size_t subscription_count,
+			     const struct hotdog_pdc_progress *progress,
 			     struct hotdog_pdc_plan *plan);
 int hotdog_pdc_plan_cleanup(struct hotdog_pdc_catalog *catalog,
 			    const struct hotdog_pdc_id *resident_ids,

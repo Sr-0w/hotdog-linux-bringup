@@ -142,6 +142,38 @@ class HotdogPdcTests(unittest.TestCase):
         )
         self.assertIn("cleanup-result=-17 operations=0", result.stdout)
 
+    def test_recovery_after_load_attempt_only_deletes_partial_id(self) -> None:
+        result = self.replay(
+            "CONFIG_UNLOADED current 1 WILDCARD\n"
+            "SUB 0 1111110000000000000 0 0 old\nPLAN\n"
+            "PROGRESS 0 1 0\nRECOVER\n"
+        )
+        self.assertIn("recovery-result=0 operations=1", result.stdout)
+        self.assertIn("op0=delete-config,sub0,expected0,id=current", result.stdout)
+
+    def test_recovery_after_selection_restores_without_activation(self) -> None:
+        result = self.replay(
+            "CONFIG_UNLOADED current 1 WILDCARD\n"
+            "SUB 0 1111110000000000000 0 0 old\nPLAN\n"
+            "PROGRESS 0 1 1\nRECOVER\n"
+        )
+        self.assertIn("recovery-result=0 operations=3", result.stdout)
+        self.assertIn("op0=deactivate,sub0,expected1,id=current", result.stdout)
+        self.assertIn("op1=restore-selected,sub0,expected0,id=old", result.stdout)
+        self.assertIn("op2=delete-config,sub0,expected0,id=current", result.stdout)
+        self.assertNotIn("=activate,", result.stdout.split("recovery-result", 1)[1])
+
+    def test_recovery_after_activation_restores_and_reactivates_previous(self) -> None:
+        result = self.replay(
+            "CONFIG_UNLOADED current 1 WILDCARD\n"
+            "SUB 0 1111110000000000000 0 0 old\nPLAN\n"
+            "PROGRESS 0 1 1\nACTIVATION_ATTEMPTED 1\nRECOVER\n"
+        )
+        self.assertIn("recovery-result=0 operations=5", result.stdout)
+        self.assertIn("op2=activate,sub0,expected1,id=-", result.stdout)
+        self.assertIn("op3=switch-modem,sub0,expected0,id=-", result.stdout)
+        self.assertIn("op4=delete-config,sub0,expected0,id=current", result.stdout)
+
     def test_unmatched_card_fails_before_mutation(self) -> None:
         result = self.replay(
             "CONFIG carrier 1 IIN 123456\n"

@@ -293,6 +293,14 @@ plus the Delete response. Every mutation confirmation requires its exact token
 and a zero remote result; stale tokens, missing fields and protocol errors are
 preserved as failures rather than being collapsed into generic success.
 
+Rollback is generated from acknowledged progress, not merely from the original
+plan. A failed or interrupted Load schedules only Delete Config for the partial
+SHA-1. A selection-stage failure deactivates the pending current ID, restores
+the previous selection and deletes the newly loaded profile without a needless
+activation. Once activation has been attempted, recovery additionally
+reactivates every previous ID, waits for the modem switch, then deletes only
+profiles loaded by this transaction. Shared profiles are deleted once.
+
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
 sent in chunks no larger than `0x400` bytes, matching upstream qmicli and the

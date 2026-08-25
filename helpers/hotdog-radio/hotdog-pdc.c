@@ -132,8 +132,9 @@ int hotdog_pdc_plan_activation(const struct hotdog_pdc_catalog *catalog,
 	return 0;
 }
 
-int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions,
+int hotdog_pdc_plan_recovery(const struct hotdog_pdc_subscription *subscriptions,
 			     size_t subscription_count,
+			     const struct hotdog_pdc_progress *progress,
 			     struct hotdog_pdc_plan *plan)
 {
 	struct hotdog_pdc_id delete_ids[HOTDOG_PDC_MAX_SUBSCRIPTIONS] = { 0 };
@@ -141,23 +142,28 @@ int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions
 	unsigned int pending = 0, last_pending = 0;
 	size_t i;
 
-	if (!subscriptions || !plan || subscription_count > HOTDOG_PDC_MAX_SUBSCRIPTIONS)
+	if (!subscriptions || !progress || !plan ||
+	    subscription_count > HOTDOG_PDC_MAX_SUBSCRIPTIONS)
 		return -EINVAL;
 	memset(plan, 0, sizeof(*plan));
 	for (i = 0; i < subscription_count; i++) {
 		if (!subscriptions[i].populated || !subscriptions[i].changed)
 			continue;
-		if (append_operation(plan, HOTDOG_PDC_DEACTIVATE, (unsigned int)i,
-				     &subscriptions[i].selected, 1))
-			return -ENOSPC;
-		if (subscriptions[i].previous.length) {
+		if (progress->selection_attempted[i]) {
+			if (append_operation(plan, HOTDOG_PDC_DEACTIVATE, (unsigned int)i,
+					     &subscriptions[i].selected, 1))
+				return -ENOSPC;
+		}
+		if (progress->selection_attempted[i] && subscriptions[i].previous.length) {
 			if (append_operation(plan, HOTDOG_PDC_RESTORE_SELECTED, (unsigned int)i,
 					     &subscriptions[i].previous, 0))
 				return -ENOSPC;
-			pending++;
-			last_pending = (unsigned int)i;
+			if (progress->activation_attempted) {
+				pending++;
+				last_pending = (unsigned int)i;
+			}
 		}
-		if (subscriptions[i].selected_loaded_by_us) {
+		if (progress->load_attempted[i] && subscriptions[i].selected_loaded_by_us) {
 			size_t index;
 			bool duplicate = false;
 
@@ -176,6 +182,22 @@ int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions
 		if (append_operation(plan, HOTDOG_PDC_DELETE_CONFIG, 0, &delete_ids[i], 0))
 			return -ENOSPC;
 	return 0;
+}
+
+int hotdog_pdc_plan_rollback(const struct hotdog_pdc_subscription *subscriptions,
+			     size_t subscription_count,
+			     struct hotdog_pdc_plan *plan)
+{
+	struct hotdog_pdc_progress progress = { .activation_attempted = true };
+	size_t index;
+
+	if (!subscriptions || subscription_count > HOTDOG_PDC_MAX_SUBSCRIPTIONS)
+		return -EINVAL;
+	for (index = 0; index < subscription_count; index++) {
+		progress.load_attempted[index] = subscriptions[index].selected_loaded_by_us;
+		progress.selection_attempted[index] = subscriptions[index].changed;
+	}
+	return hotdog_pdc_plan_recovery(subscriptions, subscription_count, &progress, plan);
 }
 
 bool hotdog_pdc_plan_verified(const struct hotdog_pdc_subscription *subscriptions,

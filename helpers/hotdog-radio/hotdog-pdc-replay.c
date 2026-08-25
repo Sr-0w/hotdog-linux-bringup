@@ -133,6 +133,7 @@ int main(void)
 	struct hotdog_pdc_subscription subscriptions[HOTDOG_PDC_MAX_SUBSCRIPTIONS] = { 0 };
 	struct hotdog_pdc_id resident_ids[HOTDOG_PDC_MAX_CONFIGS] = { 0 };
 	struct hotdog_pdc_plan plan;
+	struct hotdog_pdc_progress progress = { 0 };
 	size_t subscription_count = 0;
 	size_t resident_count = 0;
 	char line[1024];
@@ -211,6 +212,30 @@ int main(void)
 			int result = hotdog_pdc_plan_rollback(subscriptions, subscription_count,
 						       &plan);
 			print_plan("rollback", result, &plan);
+			continue;
+		}
+		if (!strcmp(fields[0], "PROGRESS") && count == 4) {
+			unsigned long index, loaded, selected;
+
+			if (parse_uint(fields[1], HOTDOG_PDC_MAX_SUBSCRIPTIONS - 1, &index) ||
+			    parse_uint(fields[2], 1, &loaded) || parse_uint(fields[3], 1, &selected))
+				goto malformed;
+			progress.load_attempted[index] = loaded != 0;
+			progress.selection_attempted[index] = selected != 0;
+			continue;
+		}
+		if (!strcmp(fields[0], "ACTIVATION_ATTEMPTED") && count == 2) {
+			unsigned long attempted;
+
+			if (parse_uint(fields[1], 1, &attempted))
+				goto malformed;
+			progress.activation_attempted = attempted != 0;
+			continue;
+		}
+		if (!strcmp(fields[0], "RECOVER") && count == 1) {
+			int result = hotdog_pdc_plan_recovery(subscriptions, subscription_count,
+						       &progress, &plan);
+			print_plan("recovery", result, &plan);
 			continue;
 		}
 malformed:
