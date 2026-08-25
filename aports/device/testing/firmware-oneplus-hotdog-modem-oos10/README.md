@@ -20,6 +20,11 @@ The proprietary source and squashed image are excluded from Git. Run
 `/usr/share/hotdog-radio/mcfg/mcfg_sw`; it does not select, load or activate a
 profile by itself.
 
+The package also installs `/usr/share/hotdog-radio/mcfg/MANIFEST`. This public
+metadata binds the runtime tree to the exact NON-HLOS source, squashed MPSS,
+deterministic MCFG archive and expected profile/signature/file counts. A future
+mutating transaction must attest this manifest before using the catalog.
+
 This catalog is part of the modem boot contract. OxygenOS reads `mbn_sw.txt`,
 loads the selected MBN through PDC, then sets and activates it per subscription
 before putting DMS online. Shipping only the squashed MPSS image leaves PDC in

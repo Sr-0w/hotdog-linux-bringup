@@ -150,6 +150,7 @@ if [ -d "$pmaports_root/device/testing" ]; then
 	canonical_dir="$pmaports_root/$package_rel"
 	install -Dm644 "$package_dir/APKBUILD" "$canonical_dir/APKBUILD"
 	install -Dm644 "$package_dir/README.md" "$canonical_dir/README.md"
+	install -Dm644 "$package_dir/mcfg-manifest.txt" "$canonical_dir/mcfg-manifest.txt"
 	install -Dm644 "$destination" "$canonical_dir/modem-oos10.0.13.mbn"
 	install -Dm644 "$mcfg_destination" "$canonical_dir/mcfg-oos10.0.13.tar.gz"
 	printf 'Staged local pmaports package %s\n' "$canonical_dir"

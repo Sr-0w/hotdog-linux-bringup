@@ -77,11 +77,17 @@ archive:
 - SHA256:
   `a81d9d110cd2aa9ecc906ec69c1698aaf4518142f890fa6f6d8e656e498ff1fa`.
 
-`firmware-oneplus-hotdog-modem-oos10-1.0.11.1.7-r2` installs the catalog under
+`firmware-oneplus-hotdog-modem-oos10-1.0.11.1.7-r3` installs the catalog under
 `/usr/share/hotdog-radio/mcfg/mcfg_sw`. The APK SHA256 from the local package
-build is `45ec366a2a850f41be10d3a447dbf175726e57e568a62ceebaacbab035a5cf9e`.
+build is `23ba29c85c5f7494e05b1dfdb8641cd870eadfc0d6728fdc4b631c99fc468329`.
 Installing this package alone does not mutate PDC. Load, selection, activation,
 verification and rollback remain explicit gated daemon phases.
+
+The package also owns `/usr/share/hotdog-radio/mcfg/MANIFEST`, schema 1. It
+binds the installed tree to the exact source, MPSS and deterministic catalog
+hashes above plus counts of 69 profiles, 69 signatures and 143 total catalog
+files. Execution approval can now attest a runtime file instead of trusting
+build documentation.
 
 ## Verdict
 

@@ -623,6 +623,7 @@ validate_hotdog_oos10_modem_contract() {
 	log "Hotdog OxygenOS 10 modem firmware contract"
 	[ -f "$firmware_apkbuild" ] || die "missing OOS10 modem firmware APKBUILD"
 	[ -f "$firmware_dir/README.md" ] || die "missing OOS10 modem firmware provenance"
+	[ -f "$firmware_dir/mcfg-manifest.txt" ] || die "missing OOS10 MCFG runtime manifest"
 	[ -x "$stage_helper" ] || die "missing executable OOS10 modem stage helper"
 	[ -x "$sim_helper" ] || die "missing executable guarded SIM slot 2 helper"
 	grep -q '^[[:space:]]*firmware-oneplus-hotdog-modem-oos10$' "$device_apkbuild" ||
@@ -638,6 +639,12 @@ validate_hotdog_oos10_modem_contract() {
 		die "OOS10 modem stage helper lacks the MCFG hash gate"
 	grep -q '/usr/share/hotdog-radio/mcfg/mcfg_sw/' "$firmware_apkbuild" ||
 		die "OOS10 modem package does not install the MCFG catalog"
+	grep -q '/usr/share/hotdog-radio/mcfg/MANIFEST' "$firmware_apkbuild" ||
+		die "OOS10 modem package does not install the MCFG manifest"
+	grep -q '^profile-count=69$' "$firmware_dir/mcfg-manifest.txt" ||
+		die "OOS10 MCFG manifest has the wrong profile count"
+	grep -q '^catalog-file-count=143$' "$firmware_dir/mcfg-manifest.txt" ||
+		die "OOS10 MCFG manifest has the wrong file count"
 	grep -q 'expected_modem_sha=559a517c' "$sim_helper" ||
 		die "SIM helper does not attest the OOS10 modem firmware"
 	grep -q 'PIN1 retries are' "$sim_helper" ||
