@@ -71,6 +71,13 @@ class HotdogUimTests(unittest.TestCase):
         result = self.replay("IDENTITY 1 0 1 0 9823\n")
         self.assertIn("identity=-22 slot:1", result.stdout)
 
+    def test_modemmanager_handoff_follows_readiness_publication(self) -> None:
+        source = (SOURCE / "hotdog-radio-bootstrapd.c").read_text()
+        readiness = source.index("result = publish_readiness(bootstrap);")
+        handoff = source.index("result = start_modemmanager_handoff();")
+        self.assertLess(readiness, handoff)
+        self.assertIn('"/sbin/rc-service", "modemmanager", "start"', source)
+
 
 class HotdogQmiUimBuildTests(unittest.TestCase):
     def test_qrtr_uim_bootstrap_builds(self) -> None:

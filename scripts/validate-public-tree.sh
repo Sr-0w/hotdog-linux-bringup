@@ -588,6 +588,9 @@ validate_hotdog_radio_state_contract() {
 	grep -q 'observation="/run/hotdog-radio/observation"' \
 		"aports/device/testing/hotdog-radio-bootstrap/hotdog-radio-bootstrap.initd" ||
 		die "radio observation service publishes a false readiness record"
+	grep -q '"/sbin/rc-service", "modemmanager", "start"' \
+		"$source_dir/hotdog-radio-bootstrapd.c" ||
+		die "verified radio readiness has no explicit ModemManager handoff"
 	for source in hotdog-qmi-dms.c hotdog-qmi-dms.h; do
 		[ -f "$source_dir/$source" ] || die "missing DMS gate source: $source"
 	done

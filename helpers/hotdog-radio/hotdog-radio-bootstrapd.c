@@ -184,6 +184,27 @@ static int publish_readiness(struct bootstrap *bootstrap)
 	return hotdog_radio_readiness_write(HOTDOG_READINESS_PATH, &readiness);
 }
 
+static int start_modemmanager_handoff(void)
+{
+	char *arguments[] = { "/sbin/rc-service", "modemmanager", "start", NULL };
+	GError *error = NULL;
+	gint wait_status = 0;
+
+	if (!g_spawn_sync(NULL, arguments, NULL, G_SPAWN_STDOUT_TO_DEV_NULL,
+			  NULL, NULL, NULL, NULL, &wait_status, &error)) {
+		g_printerr("ModemManager handoff spawn failed: %s\n", error->message);
+		g_clear_error(&error);
+		return -EIO;
+	}
+	if (!g_spawn_check_wait_status(wait_status, &error)) {
+		g_printerr("ModemManager handoff failed: %s\n", error->message);
+		g_clear_error(&error);
+		return -EIO;
+	}
+	printf("modemmanager-handoff=started\n");
+	return 0;
+}
+
 static void dms_set_online_ready(QmiClientDms *client, GAsyncResult *res,
 				 struct bootstrap *bootstrap)
 {
@@ -242,8 +263,10 @@ static void dms_mode_ready(QmiClientDms *client, GAsyncResult *res,
 			result = publish_readiness(bootstrap);
 			if (result)
 				g_printerr("Radio readiness publication failed: %d\n", result);
-			else
+			else {
 				printf("radio-readiness=published phase-safe\n");
+				result = start_modemmanager_handoff();
+			}
 			finish(bootstrap, result ? 1 : 0);
 			return;
 		}

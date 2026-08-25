@@ -373,6 +373,11 @@ confirmed Online, every populated active ID equals selected and every pending
 ID is empty. The record contains physical slot, application lock state and retry
 counts but no ICCID or PIN. Deferred stale cleanup remains a later maintenance
 phase.
+Immediately after the atomic readiness write, the same process explicitly
+starts the OpenRC ModemManager service. This preserves the live verification
+window: no separate process trusts a stale record, and D-Bus activation remains
+disabled. A failed handoff is reported as transaction failure while the valid
+radio-state record remains available for diagnosis or retry.
 The target no-SIM apply probe fails at the populated-GW gate before reading a
 deliberately absent approval and leaves resident PDC count, DMS and MPSS
 unchanged; see [the apply fail-closed validation](2026-08-25-radio-pdc-apply-nosim.md).
