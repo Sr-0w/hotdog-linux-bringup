@@ -7,6 +7,7 @@ import os
 import pathlib
 import re
 import select
+import shutil
 import struct
 import subprocess
 import sys
@@ -454,7 +455,16 @@ def main(argv=None):
         args.log = pathlib.Path("/home/user/proximity-test-%s.log"
                                 % time.strftime("%Y%m%d-%H%M%S"))
     if (args.interactive or args.sweep_microphone) and os.geteuid() != 0:
-        command = ["doas", sys.executable, str(pathlib.Path(__file__).resolve())]
+        # This image ships sudo and no doas. Try both rather than failing on
+        # the one that happens to be absent.
+        elevate = next((tool for tool in ("doas", "sudo")
+                        if shutil.which(tool)), None)
+        if elevate is None:
+            print("ERROR: run this as root; neither doas nor sudo is present",
+                  file=sys.stderr)
+            return 1
+        command = [elevate, sys.executable,
+                   str(pathlib.Path(__file__).resolve())]
         command.extend(sys.argv[1:])
         os.execvp(command[0], command)
     if args.sweep_microphone:
