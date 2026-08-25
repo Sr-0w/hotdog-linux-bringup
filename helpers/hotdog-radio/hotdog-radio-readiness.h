@@ -39,6 +39,8 @@ struct hotdog_radio_readiness {
 int hotdog_radio_readiness_validate(const struct hotdog_radio_readiness *readiness);
 int hotdog_radio_readiness_write(const char *path,
 				  const struct hotdog_radio_readiness *readiness);
+int hotdog_radio_readiness_read(const char *path,
+				 struct hotdog_radio_readiness *readiness);
 const char *hotdog_readiness_phase_name(enum hotdog_readiness_phase phase);
 
 #endif

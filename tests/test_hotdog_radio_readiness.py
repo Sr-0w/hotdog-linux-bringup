@@ -27,7 +27,13 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[2],"pending")) id(&r.subscriptions[0].pending);
     if (!strcmp(argv[2],"offline")) r.dms_online=false;
     if (!strcmp(argv[2],"wrong-phase")) r.phase=HOTDOG_READINESS_READY;
-    result=hotdog_radio_readiness_write(argv[1],&r); printf("result=%d\n",result); return 0;
+    result=hotdog_radio_readiness_write(argv[1],&r); printf("result=%d\n",result);
+    if(!result && argc > 3) { struct hotdog_radio_readiness parsed;
+        result=hotdog_radio_readiness_read(argv[1],&parsed);
+        printf("read=%d phase=%s slot=%u pin=%u\n",result,
+               hotdog_readiness_phase_name(parsed.phase),parsed.subscriptions[0].physical_slot,
+               parsed.subscriptions[0].retries.pin1); }
+    return 0;
 }
 '''
 
@@ -70,6 +76,31 @@ class HotdogRadioReadinessTests(unittest.TestCase):
             result, content = self.run_case(case)
             self.assertNotEqual(result, "result=0")
             self.assertEqual(content, "")
+
+    def test_written_record_round_trips_through_strict_parser(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "readiness"
+            output = subprocess.run([str(self.binary), str(path), "valid", "read"],
+                                    check=True, capture_output=True, text=True).stdout
+            self.assertIn("result=0", output)
+            self.assertIn("read=0 phase=locked slot=1 pin=3", output)
+
+    def test_unknown_key_is_rejected_by_reader(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "readiness"
+            subprocess.run([str(self.binary), str(path), "valid"], check=True)
+            path.write_text(path.read_text() + "unknown=x\n")
+            source = Path(directory) / "reader.c"
+            reader = Path(directory) / "reader"
+            source.write_text('#include "hotdog-radio-readiness.h"\n#include <stdio.h>\nint main(int c,char**v){struct hotdog_radio_readiness r;(void)c;printf("%d\\n",hotdog_radio_readiness_read(v[1],&r));}\n')
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                            "-I", str(SOURCE), str(SOURCE / "hotdog-mbn.c"),
+                            str(SOURCE / "hotdog-pdc.c"), str(SOURCE / "hotdog-uim.c"),
+                            str(SOURCE / "hotdog-radio-readiness.c"), str(source),
+                            "-o", str(reader)], check=True)
+            output = subprocess.run([str(reader), str(path)], check=True,
+                                    capture_output=True, text=True).stdout.strip()
+            self.assertEqual(output, "-22")
 
 
 if __name__ == "__main__":
