@@ -606,6 +606,9 @@ validate_hotdog_radio_state_contract() {
 	for source in hotdog-qmi-voice.c hotdog-qmi-voice.h; do
 		[ -f "$source_dir/$source" ] || die "missing QMI Voice adapter: $source"
 	done
+	for source in hotdog-qmi-imsa.c hotdog-qmi-imsa.h; do
+		[ -f "$source_dir/$source" ] || die "missing IMSA registration adapter: $source"
+	done
 	output="$(mktemp)"
 	trap 'rm -f "$output"' RETURN
 	cc -std=c11 -Wall -Wextra -Werror -O2 -I "$source_dir" \

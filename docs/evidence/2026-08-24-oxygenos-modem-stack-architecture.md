@@ -170,6 +170,12 @@ call domain selection consumes that state. SSR clears registration and
 capabilities, fails in-flight SMS with `ENETRESET`, ends calls, drops audio and
 advances the generation so stale indications cannot complete new operations.
 
+`hotdog-qmi-imsa` now binds a dedicated client to subscription 0..2, registers
+for registration/service indications and decodes registration, WWAN/WLAN RAT,
+SIP error plus independently available voice, video and SMS capabilities into
+the model. It deliberately does not infer UT or RCS from base IMSA status;
+those remain owned by their separate service transports.
+
 ## Mainline ownership model
 
 The implementation deliberately keeps proven generic components and replaces
