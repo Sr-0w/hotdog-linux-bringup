@@ -68,7 +68,7 @@ The proximity work measured the window directly: the device is found, and the
 claim arrives 15 ms later, before anything has been opened. The patch moves
 discovery and opening ahead of the object registration, so no method is
 callable until the devices behind it exist. It is
-[`0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch`](../src/postmarketos/pmaports-sm8150/temp/iio-sensor-proxy/0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch)
+[`0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch`](../upstream/2026-08-25/0010-Open-the-sensors-before-exporting-the-D-Bus-interfac.patch)
 in the local aport series and builds clean, but is **not verified on the
 device**. That verification is its gate, and it decides more than proximity: if
 the patch is right, `hotdog-sensor-gate` no longer needs to exist for the
