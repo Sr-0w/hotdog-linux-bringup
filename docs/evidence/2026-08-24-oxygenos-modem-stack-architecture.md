@@ -301,6 +301,15 @@ activation. Once activation has been attempted, recovery additionally
 reactivates every previous ID, waits for the modem switch, then deletes only
 profiles loaded by this transaction. Shared profiles are deleted once.
 
+`hotdog-pdc-executor` consumes that activation plan one operation at a time.
+Calling `next` marks a mutation as potentially dispatched; a second operation
+cannot be obtained until the first is explicitly completed. Full confirmation
+reaches `committed`. The first apply failure switches to the progress-derived
+recovery plan, and a successful recovery ends as `rolled-back` while preserving
+the original error. Any recovery failure ends as `blocked` with a separate
+rollback error and no further operation, making residue impossible to report as
+success.
+
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and
 sent in chunks no larger than `0x400` bytes, matching upstream qmicli and the
