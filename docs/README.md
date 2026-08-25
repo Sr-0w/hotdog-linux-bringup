@@ -69,6 +69,7 @@ Recent evidence and current regression records:
 - [Installed MCFG catalog and no-SIM dry-run gate](evidence/2026-08-25-radio-mcfg-dry-plan.md)
 - [ModemManager pre-online activation gate](evidence/2026-08-25-modemmanager-preonline-gate.md)
 - [Read-only DMS shutdown gate](evidence/2026-08-25-radio-dms-shutdown-gate.md)
+- [Read-only resident PDC catalog](evidence/2026-08-25-radio-pdc-resident-catalog.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)
 - [Sensor-PD clock state and island-mode control](evidence/2026-08-20-sensor-pd-clock-and-island-control.md)

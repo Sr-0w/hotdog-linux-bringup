@@ -182,10 +182,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The read-only slice is packaged as `hotdog-radio-bootstrap-0.9-r0` plus an
+The read-only slice is packaged as `hotdog-radio-bootstrap-0.10-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
-`6a65cab8cf982464b76fad8c38acdb270f02090325207aa7e2aba826d671834a`
-and `2683348eb4bc47af9bae80cefdaf0a1ac1a70783a98377880ca5d71786a2dcb3`.
+`70278134224172bf23a1e748aa20e8fd647750c4e828f99e42fb4b945b1acbe0`
+and `d01e39094ab031443014df07a0b6acaad4fcf38392455f95148eb96239926de0`.
 The binary links to the four subscription setters from libqmi `r2`. The service
 writes boot ID, kernel identity, UIM and PDC output atomically under `/run`, but
 is deliberately not auto-enabled before a no-SIM target validation.
@@ -305,6 +305,11 @@ decoded IDs are compared byte-for-byte with local MBN SHA-1 IDs. Matching
 entries are marked loaded so the plan never uploads them twice, while resident
 IDs from an older firmware catalog remain visible as unmatched state instead
 of being mistaken for the current profile.
+The no-SIM hardware inventory found 25 unique inactive residents and zero ID
+matches against either the 69-profile matching OOS10 tree or the 242-profile
+OOS12 F.22 cross-check. They are persistent stale state and must be handled by
+the guarded cleanup transaction; see
+[the resident PDC inventory](2026-08-25-radio-pdc-resident-catalog.md).
 
 ### Radio and SSR
 
