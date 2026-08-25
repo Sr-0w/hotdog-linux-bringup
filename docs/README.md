@@ -63,6 +63,7 @@ Recent evidence and current regression records:
 - [Alpha 3 source-complete replacement](evidence/2026-08-25-v0.1.0-alpha.3.md)
 - [All four cameras and pop-up lifecycle](evidence/2026-08-10-mainline616-camera-imx471-popup.md)
 - [GNSS QMI engine](evidence/2026-08-10-gnss-qmi-loc.md)
+- [Read-only UIM and subscription-scoped PDC](evidence/2026-08-25-radio-pdc-readonly.md)
 - [NFC reader and bidirectional APDU exchange](evidence/2026-08-10-nfc-nxp-nci.md)
 - [SLPI/SSC and isolated QUP-to-EBI1 route failure](evidence/2026-08-10-slpi-sensor-dsp.md)
 - [Sensor-PD clock state and island-mode control](evidence/2026-08-20-sensor-pd-clock-and-island-control.md)
