@@ -77,10 +77,11 @@ static void status(const struct hotdog_network *network)
 
 		if (bearer->state == HOTDOG_BEARER_IDLE)
 			continue;
-		printf("bearer%u=%s,sub%u,mux%u,%s,gen%u,mtu%u,v4=%s,v6=%s\n",
+		printf("bearer%u=%s,sub%u,mux%u,%s,gen%u,h4=%u,h6=%u,error%u,mtu%u,v4=%s,v6=%s\n",
 		       bearer->id, hotdog_bearer_state_name(bearer->state),
 		       bearer->subscription, bearer->mux_id,
 		       hotdog_ip_family_name(bearer->family), bearer->generation,
+		       bearer->packet_handle_v4, bearer->packet_handle_v6, bearer->error,
 		       bearer->runtime.mtu, bearer->runtime.ipv4[0] ? bearer->runtime.ipv4 : "-",
 		       bearer->runtime.ipv6[0] ? bearer->runtime.ipv6 : "-");
 	}
@@ -147,6 +148,45 @@ int main(void)
 			copy_address(runtime.dns1, field[5]);
 			copy_address(runtime.dns2, field[6]);
 			printf("up-result=%d\n", hotdog_network_bearer_connected(&network, a, &runtime));
+			continue;
+		}
+		if (!strcmp(field[0], "LEG_UP") && count == 4 &&
+		    !number(field[1], UINT32_MAX, &a) &&
+		    !number(field[3], UINT32_MAX, &b)) {
+			printf("leg-up-result=%d\n", hotdog_network_bearer_leg_started(
+				&network, a, family(field[2]), b));
+			continue;
+		}
+		if (!strcmp(field[0], "STOP_BEGIN") && count == 2 &&
+		    !number(field[1], UINT32_MAX, &a)) {
+			struct hotdog_bearer_stop_plan plan;
+			size_t index;
+
+			result = hotdog_network_bearer_disconnect(&network, a, &plan);
+			printf("stop-begin-result=%d legs=%zu", result,
+			       result ? 0 : plan.count);
+			if (!result)
+				for (index = 0; index < plan.count; index++)
+					printf(",%s:%u", hotdog_ip_family_name(plan.legs[index].family),
+					       plan.legs[index].packet_handle);
+			printf("\n");
+			continue;
+		}
+		if (!strcmp(field[0], "FAIL") && count == 3 &&
+		    !number(field[1], UINT32_MAX, &a) &&
+		    !number(field[2], UINT32_MAX, &b)) {
+			struct hotdog_bearer_stop_plan plan;
+
+			result = hotdog_network_bearer_fail(&network, a, b, &plan);
+			printf("fail-result=%d legs=%zu\n", result,
+			       result ? 0 : plan.count);
+			continue;
+		}
+		if (!strcmp(field[0], "LEG_DOWN") && count == 4 &&
+		    !number(field[1], UINT32_MAX, &a) &&
+		    !number(field[3], UINT32_MAX, &b)) {
+			printf("leg-down-result=%d\n", hotdog_network_bearer_leg_stopped(
+				&network, a, family(field[2]), b));
 			continue;
 		}
 		if (!strcmp(field[0], "DOWN") && count == 2 &&

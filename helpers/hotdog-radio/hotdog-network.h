@@ -84,8 +84,21 @@ struct hotdog_bearer {
 	enum hotdog_ip_family family;
 	enum hotdog_data_auth auth;
 	enum hotdog_bearer_state state;
+	uint32_t packet_handle_v4;
+	uint32_t packet_handle_v6;
+	unsigned int error;
 	char apn[HOTDOG_NETWORK_APN_SIZE];
 	struct hotdog_bearer_runtime runtime;
+};
+
+struct hotdog_bearer_stop_leg {
+	enum hotdog_ip_family family;
+	uint32_t packet_handle;
+};
+
+struct hotdog_bearer_stop_plan {
+	size_t count;
+	struct hotdog_bearer_stop_leg legs[2];
 };
 
 struct hotdog_network {
@@ -111,6 +124,20 @@ int hotdog_network_bearer_start(struct hotdog_network *network, unsigned int sub
 				const char *apn, unsigned int *bearer_id);
 int hotdog_network_bearer_connected(struct hotdog_network *network, unsigned int bearer_id,
 				    const struct hotdog_bearer_runtime *runtime);
+int hotdog_network_bearer_leg_started(struct hotdog_network *network,
+				      unsigned int bearer_id,
+				      enum hotdog_ip_family family,
+				      uint32_t packet_handle);
+int hotdog_network_bearer_disconnect(struct hotdog_network *network,
+				     unsigned int bearer_id,
+				     struct hotdog_bearer_stop_plan *plan);
+int hotdog_network_bearer_fail(struct hotdog_network *network,
+			       unsigned int bearer_id, unsigned int error,
+			       struct hotdog_bearer_stop_plan *plan);
+int hotdog_network_bearer_leg_stopped(struct hotdog_network *network,
+				      unsigned int bearer_id,
+				      enum hotdog_ip_family family,
+				      uint32_t packet_handle);
 int hotdog_network_bearer_stop(struct hotdog_network *network, unsigned int bearer_id);
 void hotdog_network_ssr(struct hotdog_network *network);
 const struct hotdog_bearer *hotdog_network_find_bearer(const struct hotdog_network *network,

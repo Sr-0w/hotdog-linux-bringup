@@ -110,6 +110,17 @@ handle. Current Settings decoding preserves per-family address, gateway and DNS
 plus IPv6 prefix and a consistent MTU, rejecting incomplete addresses, malformed
 IPv6 arrays and mismatched dual-stack MTUs before the bearer becomes connected.
 
+The model now retains the exact IPv4 and IPv6 packet handles. A bearer cannot
+become connected until every family it requested has both a handle and valid
+runtime settings. Disconnect produces a bounded stop plan, and each completion
+must echo the matching family and handle before local state is released. If one
+dual-stack leg fails after the other starts, the surviving remote leg is stopped
+before the bearer becomes failed. Live remote handles also make a DDS switch
+fail with `EBUSY`; force never orphans a session. SSR is the only path that may
+discard handles without Stop Network, because their QMI generation has ceased,
+and records `ENETRESET`. APN length, every address string, gateways, per-family
+and generic DNS, MTU and IPv6 prefix are validated before publication.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and
