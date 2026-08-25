@@ -70,14 +70,52 @@ An earlier guess that the missing far transitions came from asymmetric
 confirmation windows is **not supported by this data** — far follows within
 seconds here. The guided runs failed because they were performed with the box.
 
-## What remains
+## The IIO proximity device
 
-The driver reports `EV_MSC`/`MSC_RAW`, 1 for near and 0 for far, which is the
-OxygenOS convention that `send_event_to_user` implements downstream. It is not
-a Linux proximity interface: there is no IIO proximity channel, and nothing
-consumes `/dev/input/event4`. The screen therefore does not blank during a
-call. Standard integration — an IIO proximity device or an
-`iio-sensor-proxy`-visible source — is the remaining work.
+The driver now registers an IIO proximity device beside the input one. The
+input device stays because the test tooling reads it; removing it is a separate
+decision.
+
+```
+iio:device5   name = elliptic_proximity
+              in_proximity_raw
+              events/in_proximity_thresh_rising_en
+              events/in_proximity_thresh_falling_en
+```
+
+A read taken before the engine has reported anything returns `-EAGAIN`
+(`Resource temporarily unavailable`) rather than a fabricated `far`. The engine
+only speaks while the ultrasound audio path is armed, and an invented far
+reading would be indistinguishable from a real one — which is precisely the
+failure mode of the SEE proximity sub-sensor this replaces. With the engine
+armed the same read returns 0, and both event enables can be set and read back.
+
+udev tags the node from
+[`62-hotdog-elliptic-proximity.rules`](../../udev/62-hotdog-elliptic-proximity.rules):
+
+```
+IIO_SENSOR_PROXY_TYPE=iio-poll-proximity
+PROXIMITY_NEAR_LEVEL=1
+```
+
+The level is 1 because the engine reports a decision, not a distance.
+`iio-sensor-proxy` refuses a proximity sensor whose threshold it cannot
+determine: *Found proximity sensor but no PROXIMITY_NEAR_LEVEL udev property*.
+
+## What remains: two proximity sensors, and the wrong one wins
+
+`HasProximity` was already `true` before any of this, and `ProximityNear`
+already `false`. That reading comes from SEE, whose TCS3701 proximity
+sub-sensor is published but never emits — a sensor that answers "nothing near"
+forever. On this device `iio-sensor-proxy` is linked against libssc and holds
+fourteen QMI sockets with no file descriptor on IIO sysfs, so it is that dead
+sub-sensor it reports, not the working one.
+
+The IIO device is therefore complete and unused. Resolving it means either
+dropping the SEE proximity sub-sensor so SSC has nothing to offer, or changing
+which source `iio-sensor-proxy` prefers. The first is not a free action: `.prox`
+and `.als` are declared in the same `tcs3701` configuration, and the ambient
+light sensor on that chip works and is calibrated. Neither has been done.
 
 `Ultrasound ML`, the 432-byte control, is bidirectional on stock and the audio
 HAL references it. This port neither reads nor writes it, and which direction
