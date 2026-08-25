@@ -167,3 +167,110 @@ int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *outp
 		result = copy_id(pending_array, pending);
 	return result;
 }
+
+static int decode_indication_result(gboolean have_token, guint32 token,
+				    gboolean have_result, guint16 indication_result,
+				    uint32_t expected_token,
+				    uint16_t *remote_result)
+{
+	if (!remote_result)
+		return -EINVAL;
+	*remote_result = 0;
+	if (!have_token || !have_result)
+		return -ENODATA;
+	if (token != expected_token)
+		return -ESTALE;
+	if (indication_result) {
+		*remote_result = indication_result;
+		return -EREMOTEIO;
+	}
+	return 0;
+}
+
+int hotdog_qmi_pdc_decode_set_selected(
+	QmiIndicationPdcSetSelectedConfigOutput *output, uint32_t expected_token,
+	uint16_t *remote_result)
+{
+	GError *error = NULL;
+	guint32 token = 0;
+	guint16 result = 0;
+	gboolean have_token, have_result;
+
+	if (!output)
+		return -EINVAL;
+	have_token = qmi_indication_pdc_set_selected_config_output_get_token(
+		output, &token, &error);
+	g_clear_error(&error);
+	have_result = qmi_indication_pdc_set_selected_config_output_get_indication_result(
+		output, &result, &error);
+	g_clear_error(&error);
+	return decode_indication_result(have_token, token, have_result, result,
+					expected_token, remote_result);
+}
+
+int hotdog_qmi_pdc_decode_activate(QmiIndicationPdcActivateConfigOutput *output,
+				   uint32_t expected_token,
+				   uint16_t *remote_result)
+{
+	GError *error = NULL;
+	guint32 token = 0;
+	guint16 result = 0;
+	gboolean have_token, have_result;
+
+	if (!output)
+		return -EINVAL;
+	have_token = qmi_indication_pdc_activate_config_output_get_token(
+		output, &token, &error);
+	g_clear_error(&error);
+	have_result = qmi_indication_pdc_activate_config_output_get_indication_result(
+		output, &result, &error);
+	g_clear_error(&error);
+	return decode_indication_result(have_token, token, have_result, result,
+					expected_token, remote_result);
+}
+
+int hotdog_qmi_pdc_decode_deactivate(QmiIndicationPdcDeactivateConfigOutput *output,
+				     uint32_t expected_token,
+				     uint16_t *remote_result)
+{
+	GError *error = NULL;
+	guint32 token = 0;
+	guint16 result = 0;
+	gboolean have_token, have_result;
+
+	if (!output)
+		return -EINVAL;
+	have_token = qmi_indication_pdc_deactivate_config_output_get_token(
+		output, &token, &error);
+	g_clear_error(&error);
+	have_result = qmi_indication_pdc_deactivate_config_output_get_indication_result(
+		output, &result, &error);
+	g_clear_error(&error);
+	return decode_indication_result(have_token, token, have_result, result,
+					expected_token, remote_result);
+}
+
+int hotdog_qmi_pdc_decode_delete(QmiMessagePdcDeleteConfigOutput *output,
+				 uint32_t expected_token,
+				 uint16_t *remote_result)
+{
+	GError *error = NULL;
+	guint32 token;
+
+	if (!output || !remote_result)
+		return -EINVAL;
+	*remote_result = 0;
+	if (!qmi_message_pdc_delete_config_output_get_token(output, &token, &error)) {
+		g_clear_error(&error);
+		return -ENODATA;
+	}
+	if (token != expected_token)
+		return -ESTALE;
+	if (!qmi_message_pdc_delete_config_output_get_result(output, &error)) {
+		if (error && error->domain == QMI_PROTOCOL_ERROR)
+			*remote_result = (uint16_t)error->code;
+		g_clear_error(&error);
+		return -EREMOTEIO;
+	}
+	return 0;
+}

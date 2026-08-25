@@ -20,5 +20,17 @@ int hotdog_qmi_pdc_decode_selected(QmiIndicationPdcGetSelectedConfigOutput *outp
 				   struct hotdog_pdc_id *active,
 				   struct hotdog_pdc_id *pending,
 				   uint16_t *remote_result);
+int hotdog_qmi_pdc_decode_set_selected(
+	QmiIndicationPdcSetSelectedConfigOutput *output, uint32_t expected_token,
+	uint16_t *remote_result);
+int hotdog_qmi_pdc_decode_activate(QmiIndicationPdcActivateConfigOutput *output,
+				   uint32_t expected_token,
+				   uint16_t *remote_result);
+int hotdog_qmi_pdc_decode_deactivate(QmiIndicationPdcDeactivateConfigOutput *output,
+				     uint32_t expected_token,
+				     uint16_t *remote_result);
+int hotdog_qmi_pdc_decode_delete(QmiMessagePdcDeleteConfigOutput *output,
+				 uint32_t expected_token,
+				 uint16_t *remote_result);
 
 #endif

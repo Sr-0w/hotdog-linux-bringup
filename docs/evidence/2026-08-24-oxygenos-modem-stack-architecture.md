@@ -288,6 +288,10 @@ into bounded active/pending IDs. Missing fields, stale tokens, a nonzero remote
 result and oversized IDs fail closed before they can advance the radio state.
 Its compile-check uses the public libqmi API plus exactly the four generated
 subscription setters carried by the local libqmi patch.
+The same adapter now decodes Set Selected, Activate and Deactivate indications
+plus the Delete response. Every mutation confirmation requires its exact token
+and a zero remote result; stale tokens, missing fields and protocol errors are
+preserved as failures rather than being collapsed into generic success.
 
 The load phase is modeled separately by `hotdog-pdc-load` and
 `hotdog-qmi-pdc-load`. A complete MBN is addressed by its 20-byte SHA-1 ID and

@@ -200,6 +200,18 @@ gboolean qmi_message_pdc_deactivate_config_input_set_subscription_id(
         ):
             self.assertIn(f"qmi_message_pdc_{operation}_input_set_subscription_id", patch)
 
+    def test_adapter_requires_confirmation_for_every_mutation(self) -> None:
+        source = (SOURCE / "hotdog-qmi-pdc.c").read_text()
+        for decoder in (
+            "hotdog_qmi_pdc_decode_set_selected",
+            "hotdog_qmi_pdc_decode_activate",
+            "hotdog_qmi_pdc_decode_deactivate",
+            "hotdog_qmi_pdc_decode_delete",
+        ):
+            self.assertIn(decoder, source)
+        self.assertGreaterEqual(source.count("return -ESTALE;"), 3)
+        self.assertGreaterEqual(source.count("return -EREMOTEIO;"), 3)
+
     def test_uim_pdc_bootstrap_syntax_with_patched_api(self) -> None:
         flags = subprocess.run(
             ["pkg-config", "--cflags", "qmi-glib", "qrtr-glib", "gio-2.0", "glib-2.0"],
