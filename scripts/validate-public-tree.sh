@@ -719,7 +719,8 @@ validate_hotdog_radio_state_contract() {
 		die "read-only WDS profile probe contains a mutating modem operation"
 	fi
 	for source in hotdog-network.c hotdog-network.h \
-		hotdog-ims-bearer.c hotdog-ims-bearer.h; do
+		hotdog-ims-bearer.c hotdog-ims-bearer.h \
+		hotdog-ims-executor.c hotdog-ims-executor.h; do
 		[ -f "$source_dir/$source" ] || die "missing IMS bearer model: $source"
 	done
 	grep -q 'HOTDOG_APN_TYPE_IMS' "$source_dir/hotdog-ims-bearer.h" ||
@@ -731,6 +732,11 @@ validate_hotdog_radio_state_contract() {
 		die "WDS Current Settings do not request P-CSCF routing evidence"
 	grep -q 'purpose == HOTDOG_BEARER_IMS' "$source_dir/hotdog-network.c" ||
 		die "IMS connected state does not require P-CSCF routing evidence"
+	grep -q 'HOTDOG_IMS_EXECUTOR_BLOCKED' "$source_dir/hotdog-ims-executor.c" ||
+		die "IMS executor does not preserve unresolved rollback residue"
+	grep -q 'HOTDOG_IMS_EXECUTOR_ACTION_RELEASE_CLIENTS' \
+		"$source_dir/hotdog-ims-executor.c" ||
+		die "IMS executor does not release WDS clients during rollback"
 	for source in hotdog-qmi-wms.c hotdog-qmi-wms.h; do
 		[ -f "$source_dir/$source" ] || die "missing WMS SMS adapter: $source"
 	done

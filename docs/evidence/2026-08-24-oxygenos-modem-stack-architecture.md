@@ -150,6 +150,16 @@ must therefore ask rmnet for an available mux dynamically and retain the
 returned ID; hard-coding a guessed IMS mux would not reproduce OxygenOS and
 could collide with ModemManager.
 
+`hotdog-ims-executor` makes that ownership transactional. Its forward sequence
+is link allocation, one WDS CID per IP family, per-leg mux bind, per-leg Start
+Network, Current Settings, local link configuration and publication. Cleanup
+is the exact reverse ownership order: every confirmed packet handle is stopped,
+then all acquired CIDs are released, then the owned rmnet link is deleted. A
+partial CID allocation is already owned and therefore released. A failed Stop,
+CID release or link deletion enters `blocked` without erasing the residue. On
+SSR only, remote CIDs and packet handles are invalidated by the lost QMI
+generation before the still-local rmnet link is removed.
+
 ### SMS and cell broadcast
 
 QCRIL WMS handles PDU submission, delivery reports, modem/SIM storage and
