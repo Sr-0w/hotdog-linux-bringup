@@ -182,10 +182,10 @@ subscription ID, unique token and bounded indication timeout. It neither
 submits a PIN, changes a selected config nor changes DMS state. Mutation,
 online gating and SSR re-entry remain later daemon phases.
 
-The current slice is packaged as `hotdog-radio-bootstrap-0.13-r0` plus an
+The current slice is packaged as `hotdog-radio-bootstrap-0.14-r0` plus an
 OpenRC oneshot service. The aarch64 APKs have SHA-256
-`750a9563303f9bbae4ab21781074b64ebe08c5d2eefb770ef651099287cae314`
-and `ffdee5f90bf73c6137d45ed96bafed1b953923d31deb9b72ed7478d65d7ab12b`.
+`437f5d839325caa2eb3398e06ff463715f3a27a8802ac37090909cbbbfc18102`
+and `58ad00d4fb71dbc8c206702ff0f4654cec9ff90e1fb184b27571a2dfcb623e5d`.
 The binary links to the four subscription setters from libqmi `r2`. The
 disabled service writes boot ID, kernel identity, UIM and PDC output atomically
 to `/run/hotdog-radio/observation`. It deliberately does not create the future
