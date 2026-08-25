@@ -2,7 +2,7 @@
 maintainer="Achill Gilgenast <achill@achill.org>"
 pkgname=modemmanager
 pkgver=1.25.95_git20260709
-pkgrel=3
+pkgrel=4
 _commit=d776ea38d29ca472a12323c1d45002ee19a66f57
 pkgdesc="ModemManager library"
 url="https://www.freedesktop.org/wiki/Software/ModemManager"
@@ -14,7 +14,7 @@ depends="
 	dbus
 	libmm-glib=$pkgver-r$pkgrel
 	mobile-broadband-provider-info
-	polkit
+	polkit-elogind
 	"
 depends_dev="libmm-glib=$pkgver-r$pkgrel"
 makedepends="
