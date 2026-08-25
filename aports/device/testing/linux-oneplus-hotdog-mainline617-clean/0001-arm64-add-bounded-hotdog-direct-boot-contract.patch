@@ -1,9 +1,9 @@
 From 3bda90e0c24f086554d8b30ed0a7fa3434dbe367 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:53:09 +0200
 Subject: [PATCH 1/7] arm64: add bounded hotdog direct-boot contract
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/arch/arm64/Kconfig.platforms b/arch/arm64/Kconfig.platforms
 index a88f5ad9328c..7ff45e5a1b07 100644

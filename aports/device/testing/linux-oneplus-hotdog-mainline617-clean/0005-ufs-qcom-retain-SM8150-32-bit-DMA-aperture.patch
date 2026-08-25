@@ -1,9 +1,9 @@
 From 645436d1fef74ac88a129f83945909ac386e5218 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:36 +0200
 Subject: [PATCH 5/7] ufs: qcom: retain SM8150 32-bit DMA aperture
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
 index 9574fdc2bb0f..fa57afc33add 100644

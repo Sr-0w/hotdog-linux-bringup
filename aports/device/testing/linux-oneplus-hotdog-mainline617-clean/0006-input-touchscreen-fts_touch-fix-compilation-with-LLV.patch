@@ -4,7 +4,7 @@ Date: Fri, 31 Oct 2025 18:38:21 +0100
 Subject: [PATCH 6/7] input: touchscreen: fts_touch: fix compilation with LLVM
 
 (cherry picked from commit 01fc3dd3c8317362bcddd9eab9f243909621a4a0)
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c b/drivers/input/touchscreen/fts_touch/fts_lib/ftsIO.c
 index ef6d66229cc1..18211a0470bf 100644

@@ -1,9 +1,9 @@
 From c1b8aff58c2ba5dc428c51e57dfe669a36a189c6 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 23:14:50 +0200
 Subject: [PATCH 7/7] dt-bindings: document hotdog display and touch
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/Documentation/devicetree/bindings/arm/qcom.yaml b/Documentation/devicetree/bindings/arm/qcom.yaml
 index ae43b3556580..35c096d9b6c8 100644
@@ -36,7 +36,7 @@ index 000000000000..6c4ac74e92ea
 +title: Samsung 1440x3120 DSC panel for the OnePlus 7T Pro
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +description:
 +  Command-mode AMOLED panel used by the OnePlus 7T Pro. The panel carries two
@@ -132,7 +132,7 @@ index dfe7806beeec..d47f9189948b 100644
  F:	drivers/usb/misc/onboard_usb_dev.c
  
 +ONEPLUS 7T PRO (HOTDOG) SUPPORT
-+M:	Sr-0w <Sr-0w@users.noreply.github.com>
++M:	Robin Snyders <robin@snyders.xyz>
 +S:	Maintained
 +F:	Documentation/devicetree/bindings/display/panel/samsung,oneplus-dsc.yaml
 +F:	arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts

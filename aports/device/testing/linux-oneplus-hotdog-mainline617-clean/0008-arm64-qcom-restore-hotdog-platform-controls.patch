@@ -1,9 +1,9 @@
 From c1d178e9b8cb7a7b5a6714413402c578426831af Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 23:56:46 +0200
 Subject: [PATCH] arm64: qcom: restore hotdog platform controls
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/Documentation/devicetree/bindings/input/awinic,aw8697.yaml b/Documentation/devicetree/bindings/input/awinic,aw8697.yaml
 new file mode 100644
@@ -20,7 +20,7 @@ index 000000000000..ea70e9ab122f
 +title: Awinic AW8697 LRA haptics controller
 +
 +maintainers:
-+  - Sr-0w <Sr-0w@users.noreply.github.com>
++  - Robin Snyders <robin@snyders.xyz>
 +
 +properties:
 +  compatible:
@@ -862,7 +862,7 @@ index 000000000000..2ec6e0b70cbb
 +};
 +module_i2c_driver(aw8697_driver);
 +
-+MODULE_AUTHOR("Sr-0w <Sr-0w@users.noreply.github.com>");
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
 +MODULE_DESCRIPTION("Awinic AW8697 LRA haptics driver");
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/nfc/nxp-nci/core.c b/drivers/nfc/nxp-nci/core.c

@@ -1,9 +1,9 @@
 From 29590f0324ba0d11abf9b620f44598d4f9285887 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:55:41 +0200
 Subject: [PATCH 2/7] arm64: dts: qcom: add hotdog boot foundation
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
 index 01bc586700da..fa13fa398406 100644

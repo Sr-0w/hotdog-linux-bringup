@@ -1,9 +1,9 @@
 From 899982446cce189b5732268599694aef15e15800 Mon Sep 17 00:00:00 2001
-From: Sr-0w <Sr-0w@users.noreply.github.com>
+From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:10 +0200
 Subject: [PATCH 4/7] drm: restore hotdog DSC panel pipeline
 
-Signed-off-by: Sr-0w <Sr-0w@users.noreply.github.com>
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
 
 diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
 index e0de545d4077..ec9b03b90285 100644
