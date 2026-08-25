@@ -124,6 +124,12 @@ multipart identity, storage, modem reference, delivery-report state and strict
 queued/submitted/sent/delivered/failed transitions. Incoming messages retain
 their subscription, transport and SIM/modem storage identity.
 
+`hotdog-qmi-wms` now carries the opaque 3GPP TPDU into Raw Send, explicitly
+selecting CS or SMS-over-IMS from the model without logging payload bytes. It
+requires an admitted queued MO message and exact PDU length, then decodes the
+16-bit modem reference or preserves QMI plus packed RP/TP failure causes for the
+submitted/sent/failed transition.
+
 ### Voice and supplementary services
 
 QMI Voice covers dial, answer, hangup, call state, DTMF, call waiting,
