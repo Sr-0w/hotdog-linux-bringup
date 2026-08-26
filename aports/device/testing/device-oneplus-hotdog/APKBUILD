@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=38
+pkgrel=39
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -37,6 +37,7 @@ source="
 	hotdog-usb-acm-login
 	hotdog-usb-acm.initd
 	hotdog-qbootctl.initd
+	hotdog-reboot-mode.py
 	62-hotdog-elliptic-proximity.rules
 	elliptic-proximity-smoke.py
 	hotdog-elliptic-calibration.py
@@ -87,6 +88,8 @@ package() {
 		"$pkgdir/etc/init.d/hotdog-usb-acm"
 	install -Dm755 "$srcdir/hotdog-qbootctl.initd" \
 		"$pkgdir/etc/init.d/hotdog-qbootctl"
+	install -Dm755 "$srcdir/hotdog-reboot-mode.py" \
+		"$pkgdir/usr/libexec/hotdog-reboot-mode.py"
 }
 
 sensors() {

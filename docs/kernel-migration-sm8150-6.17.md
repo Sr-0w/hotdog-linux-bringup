@@ -140,6 +140,24 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
   sensors subpackage depends on it; verified from a clean state with the
   manual copy removed first.
 
+- Non-physical runtime gate: PASS, 35 of 35, from a cold boot with no hand
+  placed file anywhere. `scripts/gate-sm8150-617-runtime.sh` covers kernel
+  identity, writable rootfs, UFS and its inline crypto profile, the three
+  remote processors with `rmtfs` and `pd-mapper`, the SEE descriptions and all
+  three SensorProxy sensors, the IIO proximity device, DRM with a connected
+  DSI and a bound Adreno, touch, alert slider and power key, `usb0`, `wlan0`
+  and the ACM console, the audio card, the fuel gauge, the media graph and its
+  video nodes, the syscon reboot mode with its helper, and the absence of
+  module section-size errors.
+
+  It exists because the first global gate was run by hand: the SSC regression
+  was seen once and nothing would have caught it on the next boot. Two faults
+  it found were the same fault twice -- a file that only existed because it had
+  been copied by hand and that no package owned.
+
+**What remains is physical.** Popup camera, camera flash, haptics, and any
+sensor check that needs a gesture. Everything observable over SSH now passes.
+
 The hardware-tested 6.16 package remains the default until all pending gates
 above pass.
 

@@ -133,6 +133,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm-login | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm.initd | \
 		device/testing/device-oneplus-hotdog:hotdog-qbootctl.initd | \
+		device/testing/device-oneplus-hotdog:hotdog-reboot-mode.py | \
 		device/testing/device-oneplus-hotdog:62-hotdog-elliptic-proximity.rules | \
 		device/testing/device-oneplus-hotdog:elliptic-proximity-smoke.py | \
 		device/testing/device-oneplus-hotdog:hotdog-elliptic-calibration.py | \
