@@ -1,0 +1,51 @@
+From 378628506e19af724bcdb14f46198ad3dd37a786 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 20:34:35 +0200
+Subject: [PATCH 2/2] Bluetooth: hci_qca: do not fail system suspend for a
+ controller that never came up
+
+qca_suspend() waits for QCA_IBS_DISABLED to clear. That flag is set while
+a firmware download is in flight and cleared when one completes, so on a
+controller whose setup never completed it is set and stays set. The wait
+then always runs its full FW_DOWNLOAD_TIMEOUT_MS and returns -ETIMEDOUT:
+
+  Bluetooth: hci0: SSR or FW download time out
+  hci_uart_qca serial0-0: PM: dpm_run_callback(): qca_suspend returns -110
+  hci_uart_qca serial0-0: PM: failed to suspend: error -110
+  PM: Some devices failed to suspend, or early wake event detected
+
+The measured cost is 3.3 s per attempt, and every system suspend on the
+machine is abandoned -- for a Bluetooth controller that was never usable
+in the first place.
+
+If hci_uart_open() never ran there is no in-band sleep to negotiate, so
+return early. The existing QCA_ROM_FW and QCA_BT_OFF cases already take
+this shape.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/bluetooth/hci_qca.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_qca.c b/drivers/bluetooth/hci_qca.c
+index 976f099fcb1ba..311778e4974fc 100644
+--- a/drivers/bluetooth/hci_qca.c
++++ b/drivers/bluetooth/hci_qca.c
+@@ -2603,6 +2603,17 @@ static int __maybe_unused qca_suspend(struct device *dev)
+ 	u8 cmd;
+ 	u32 wait_timeout = 0;
+ 
++	/* If the controller never came up, hci_uart_open() never ran and
++	 * there is no in-band sleep to negotiate. QCA_IBS_DISABLED is set
++	 * while firmware downloads and cleared when one completes, so on a
++	 * controller that never completed setup it stays set forever and the
++	 * wait below always runs its full FW_DOWNLOAD_TIMEOUT_MS before
++	 * returning -ETIMEDOUT. That turns a dead Bluetooth controller into a
++	 * failed system suspend for the whole machine.
++	 */
++	if (!test_bit(HCI_UART_PROTO_READY, &hu->flags))
++		return 0;
++
+ 	set_bit(QCA_SUSPENDING, &qca->flags);
+ 
+ 	/* if BT SoC is running with default firmware then it does not

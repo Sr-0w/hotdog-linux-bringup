@@ -1,0 +1,59 @@
+From ea94e22b790981588e1b858b2bbcf123812aa969 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 20:34:21 +0200
+Subject: [PATCH 1/2] Bluetooth: hci_qca: do not touch a closed serdev port on
+ shutdown
+
+qca_power_shutdown() sets the baud rate and sends a power pulse through
+the serdev port. Both need that port open, and it is only open between
+hci_uart_open() and hci_uart_close(). host_set_baudrate() checks that
+hu->serdev exists, which it does from probe onward, but not that it is
+open; ttyport_set_baudrate() then dereferences serport->tty, which is
+only set while the port is open.
+
+A controller that never completes setup leaves hci0 down, so the port is
+never opened. Removing the driver reaches qca_power_shutdown() from
+qca_serdev_remove() and oopses:
+
+  Unable to handle kernel NULL pointer dereference
+  pc : tty_set_termios+0x28/0x3dc
+  lr : ttyport_set_baudrate+0x74/0xa0
+  Call trace:
+    ttyport_set_baudrate
+    serdev_device_set_baudrate
+    qca_power_shutdown [hci_uart]
+    qca_serdev_remove [hci_uart]
+
+Skip the two operations that need an open port, and keep disabling the
+regulators, which is what actually has to happen on the way down.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/bluetooth/hci_qca.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bluetooth/hci_qca.c b/drivers/bluetooth/hci_qca.c
+index 4cff4d9be3132..976f099fcb1ba 100644
+--- a/drivers/bluetooth/hci_qca.c
++++ b/drivers/bluetooth/hci_qca.c
+@@ -2208,8 +2208,18 @@ static void qca_power_shutdown(struct hci_uart *hu)
+ 	case QCA_WCN3990:
+ 	case QCA_WCN3991:
+ 	case QCA_WCN3998:
+-		host_set_baudrate(hu, 2400);
+-		qca_send_power_pulse(hu, false);
++		/* Both of these talk to the serdev port, and the port is only
++		 * open between hci_uart_open() and hci_uart_close().
++		 * ttyport_set_baudrate() dereferences the tty behind it
++		 * without checking, so a controller that never came up -- the
++		 * port never opened -- takes the baud rate change through a
++		 * NULL tty and oopses on driver removal. The rails still have
++		 * to come down either way.
++		 */
++		if (test_bit(HCI_UART_PROTO_READY, &hu->flags)) {
++			host_set_baudrate(hu, 2400);
++			qca_send_power_pulse(hu, false);
++		}
+ 		qca_regulator_disable(qcadev);
+ 		break;
+ 
