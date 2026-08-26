@@ -128,6 +128,18 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
   CAMSS, four sensor drivers, both focus actuators, popup power domain,
   SLPI/FastRPC/PDR and Elliptic proximity all enumerate together.
 
+- SSC sensors on the clean image: PASS after repair. The first global gate
+  found `HasAccelerometer` and `HasAmbientLight` false while `HasProximity`
+  stayed true. That split named the fault: proximity comes from the IIO
+  Elliptic device and owes SEE nothing, the other two come from SSC.
+  `hexagonrpcd` serves `/usr/share/qcom` to the sensor DSP and the directory
+  was empty, so `iio-sensor-proxy` connected to the SSC service and released
+  the client a hundred seconds later, unanswered. The sixty-five SEE
+  descriptions were shipped by no package and had only survived because the
+  rootfs was never recreated. `hotdog-sensor-config` now ships them and the
+  sensors subpackage depends on it; verified from a clean state with the
+  manual copy removed first.
+
 The hardware-tested 6.16 package remains the default until all pending gates
 above pass.
 

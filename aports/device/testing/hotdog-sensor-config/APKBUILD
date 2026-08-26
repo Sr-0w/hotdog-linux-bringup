@@ -21,7 +21,7 @@ options="!check"
 # Le registre n'est pas livre ici : il est propre a chaque exemplaire et
 # hotdog-import-factory-calibration le remplit depuis la partition persist.
 
-_commit="0000000000000000000000000000000000000000"
+_commit="4ed82bedcb859430566095a202acb39163038f6c"
 source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
 builddir="$srcdir/hotdog-linux-bringup-$_commit"
 

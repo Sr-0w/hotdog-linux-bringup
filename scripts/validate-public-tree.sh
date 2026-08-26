@@ -691,6 +691,34 @@ validate_oxygenos_modem_inventory_contract() {
 		die "modem firmware inventory lacks source identity"
 }
 
+validate_hotdog_sensor_config_contract() {
+	log "hotdog SEE sensor description contract"
+
+	local aport="aports/device/testing/hotdog-sensor-config/APKBUILD"
+	local count
+	[ -f "$aport" ] || die "missing SEE sensor description aport"
+
+	count="$(find firmware/sensors/config -maxdepth 1 -name '*.json' | wc -l)"
+	[ "$count" -ge 60 ] ||
+		die "SEE sensor descriptions are missing from the tree: $count"
+
+	grep -q 'usr/share/qcom/sensors/config' "$aport" ||
+		die "SEE sensor aport does not install where hexagonrpcd serves"
+
+	# Sans cette dependance, une image propre repart sans les descriptions
+	# et perd l'accelerometre et la lumiere en gardant la proximite, qui
+	# passe par IIO. C'est exactement ce qui est arrive sur la 6.17.
+	grep -q 'hotdog-sensor-config' \
+		"aports/device/testing/device-oneplus-hotdog/APKBUILD" ||
+		die "sensors subpackage does not depend on the SEE descriptions"
+
+	# Le registre est propre a chaque exemplaire : il vient de persist, il
+	# ne se livre jamais.
+	grep -q 'sensors/registry' "$aport" &&
+		! grep -qE 'install .*sensors/registry/.*\.' "$aport" ||
+		die "SEE sensor aport must create but never populate the registry"
+}
+
 validate_hotdog_radio_state_contract() {
 	local source_dir="helpers/hotdog-radio"
 	local glib_flags=""
@@ -1339,7 +1367,8 @@ main() {
 	validate_modemmanager_slot_pin_contract
 	validate_libqmi_pdc_subscription_contract
 	validate_oxygenos_modem_inventory_contract
-	validate_hotdog_radio_state_contract
+	validate_hotdog_sensor_config_contract
+validate_hotdog_radio_state_contract
 	validate_hotdog_oos10_modem_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract
