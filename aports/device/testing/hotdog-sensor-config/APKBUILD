@@ -1,7 +1,7 @@
 # Maintainer: Sr-0w <Sr-0w@users.noreply.github.com>
 pkgname=hotdog-sensor-config
 pkgver=1
-pkgrel=0
+pkgrel=1
 pkgdesc="SEE sensor descriptions the SLPI sensor core reads on OnePlus Hotdog"
 url="https://github.com/Sr-0w/hotdog-linux-bringup"
 arch="noarch"
@@ -21,7 +21,7 @@ options="!check"
 # Le registre n'est pas livre ici : il est propre a chaque exemplaire et
 # hotdog-import-factory-calibration le remplit depuis la partition persist.
 
-_commit="4ed82bedcb859430566095a202acb39163038f6c"
+_commit="633155ec09dbcaf6d2b8f60520a848b770eef0b9"
 source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
 builddir="$srcdir/hotdog-linux-bringup-$_commit"
 
@@ -33,10 +33,21 @@ package() {
 		return 1
 	}
 
+	# L'IMU reel n'avait aucune orientation : SEE retombait sur l'identite et
+	# l'ecran restait a 90 degres. Une absence ne se voit pas, alors on la
+	# refuse ici plutot que sur le telephone.
+	grep -q '"\.orient"' \
+		"$builddir/firmware/sensors/config/msmnile_lsm6dsm.json" || {
+		printf 'the IMU board config lost its .orient\n' >&2
+		return 1
+	}
+
 	install -d -m 755 "$pkgdir/usr/share/qcom/sensors/config" \
 		"$pkgdir/usr/share/qcom/sensors/registry"
 	install -m 644 "$builddir"/firmware/sensors/config/*.json \
 		"$pkgdir/usr/share/qcom/sensors/config/"
 }
 
-sha512sums=""
+sha512sums="
+ab9b1c4e72b54e12e884556fc1bc303aa91bd0233da76a4a566dcdcf48a3782b10c9b03523f13ce1e728c9c6974de2347fa5a630149dd0f5c1324d8f56fc12ab  hotdog-sensor-config-633155ec09dbcaf6d2b8f60520a848b770eef0b9.tar.gz
+"
