@@ -14,7 +14,7 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Device | OnePlus 7T Pro, rear label HD1913; recovery reports HD1911 |
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
-| Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r10`; 6.16 r181 remains the immutable oracle |
+| Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r11`; 6.16 r181 remains the immutable oracle |
 | Device package | `device-oneplus-hotdog` `3-r38` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
