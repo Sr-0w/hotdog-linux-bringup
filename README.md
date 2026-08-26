@@ -170,6 +170,7 @@ function under **Working** and a broader integration or stability item under
 | Subsystem | Function | Notes |
 |---|---|---|
 | Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
+| Bluetooth | Controller lifecycle | The controller initialises from a cold boot: `crbtfw21.tlv` and `crnv21.bin` download, `hci0` reaches `UP RUNNING` with no error, system suspend completes, and unloading `hci_uart` no longer panics. The board never declared an `hsuart` alias, so `serial@c8c000` failed `of_alias_get_id()` and no controller was ever created. Reloading the module does not bring `hci0` back, scanning and pairing are unvalidated, and the address is still locally administered. |
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
@@ -191,7 +192,6 @@ function under **Working** and a broader integration or stability item under
 |---|---|---|
 | DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
-| Bluetooth | Controller lifecycle | The current controller no longer completes firmware initialization, and the QCA suspend/unload paths can time out or crash. The older HID success remains historical evidence, not a current support claim. |
 
 ### ⚪ Not yet supported
 

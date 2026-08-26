@@ -1,0 +1,41 @@
+From a45b6eb43bf6dc1f63e665095c78ca239858bad6 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 20:56:35 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150-oneplus-hotdog: give the Bluetooth
+ UART an alias
+
+The Bluetooth controller never initialised on this board, and the reason
+is one line earlier than anyone looked: the UART it hangs off never
+probed.
+
+qcom_geni_serial_probe() takes its line number from an alias, trying
+"serial" and then "hsuart". With neither present of_alias_get_id()
+returns -ENODEV and the probe stops:
+
+  qcom_geni_serial c8c000.serial: Invalid line -19
+
+So there is no ttyHS, no serdev child under serial@c8c000, and no
+controller for hci_uart to bind. hci0 was reported down with a locally
+administered address and no firmware download, which is exactly what a
+controller that was never created looks like from userspace.
+
+sm8150-google-flame, sm8150-xiaomi-nabu and sm8150-xiaomi-raphael all
+declare hsuart0 = &uart13 for the same UART. Do the same here.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index dadf512a04c29..750dc631e1089 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -49,6 +49,7 @@ memory@80000000 {
+ 
+ 	aliases {
+ 		display0 = &framebuffer0;
++		hsuart0 = &uart13;
+ 	};
+ 
+ 	chosen {

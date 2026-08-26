@@ -6,8 +6,9 @@ The README lists the controller lifecycle as Broken: `hci0` stays `DOWN` with a
 locally administered address, `qca_suspend()` aborts every system suspend, and
 `rmmod hci_uart` panics. The phone was unavailable, so this is source and
 firmware analysis against the traces already recorded in
-[suspend/resume defects](2026-08-17-suspend-resume-defects.md). Nothing here is
-hardware-validated.
+[suspend/resume defects](2026-08-17-suspend-resume-defects.md). The phone came
+back later and the last two sections are hardware-validated; everything before
+them was written blind.
 
 ## The firmware is a red herring, but the provenance is worth recording
 
@@ -96,4 +97,69 @@ unblocks the control experiment the earlier note could not run, since
 `rmmod hci_uart` was the way to test whether Bluetooth was the only thing
 aborting the cycle.
 
-Root-causing the initialisation failure itself still needs the phone.
+Root-causing the initialisation failure itself still needs the phone -- and
+the next section is what that turned up.
+
+## The actual root cause, found afterwards and validated
+
+Neither driver bug explained why the controller never came up. That answer was
+one line earlier: the UART it hangs off never probed.
+
+```
+qcom_geni_serial c8c000.serial: Invalid line -19
+```
+
+`-19` is `-ENODEV` from `of_alias_get_id()`. `qcom_geni_serial_probe()` takes
+its line number from an alias, trying `serial` then `hsuart`, and the board
+declared neither — `/aliases` held only `display0`. So there was no `ttyHS`, no
+serdev child under `serial@c8c000`, and no device for `hci_uart` to bind. `hci0`
+down with a locally administered address and no firmware download is exactly
+what that looks like from userspace.
+
+The alias was never present, on this branch or on `main`. This is not a
+migration regression; it was never fixed. `sm8150-google-flame`,
+`sm8150-xiaomi-nabu` and `sm8150-xiaomi-raphael` all declare
+`hsuart0 = &uart13` for the same UART.
+
+## Hardware validation, r13
+
+```
+c8c000.serial: ttyHS0 at MMIO 0xc8c000 (irq = 134, base_baud = 0) is a MSM
+/sys/bus/serial/devices/: serial0  serial0-0
+
+Bluetooth: hci0: QCA Product ID   :0x0000000a
+Bluetooth: hci0: QCA SOC Version  :0x40010224
+Bluetooth: hci0: QCA Downloading qca/crbtfw21.tlv
+Bluetooth: hci0: QCA Downloading qca/crnv21.bin
+Bluetooth: hci0: QCA setup on UART is completed
+
+hci0: Type: Primary  Bus: UART   UP RUNNING
+      RX bytes:4077 events:249 errors:0
+      TX bytes:725008 commands:3021 errors:0
+```
+
+The firmware downloads, which is the step that never happened before.
+
+The two driver fixes were exercised on the now-healthy path:
+
+- A full `s2idle` cycle completed — `PM: suspend entry` then `PM: suspend exit`
+  with no `failed to suspend`, no `qca_suspend returns -110` and no `SSR or FW
+  download time out`. Bluetooth no longer aborts system suspend.
+- `rmmod hci_uart` returned 0, unloaded cleanly and removed `hci0`, with the
+  boot ID unchanged: no panic, where it previously oopsed in
+  `tty_set_termios()`.
+
+Note that with the controller healthy the port is open, so both fixes take
+their normal path. What is proven is that they do not regress a working
+controller, and that the crash and the suspend abort are gone. Their guards
+still matter for any future boot where setup fails.
+
+## Still open
+
+Reloading the module does not restore the controller: after `rmmod` plus
+`modprobe hci_uart` the protocol registers but no `hci0` appears, and binding
+`serial0-0` to `hci_uart_qca` by hand hangs. Bluetooth is only healthy from a
+cold boot so far. Scanning and pairing are not validated.
+
+The BD address is still locally administered, `02:00:97:A6:3F:B2`; the factory
+address lives outside the NVM and remains a separate problem.

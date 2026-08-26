@@ -13,14 +13,14 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **214 Markdown files**.
+Total: **215 Markdown files**.
 
 | Role | Count |
 |---|---:|
 | Audit register | 1 |
 | Current documentation | 30 |
 | Disabled helper | 1 |
-| Evidence | 164 |
+| Evidence | 165 |
 | Evidence policy | 1 |
 | Mail archive | 1 |
 | Package documentation | 5 |
@@ -211,6 +211,7 @@ Total: **214 Markdown files**.
 | `docs/evidence/2026-08-25-ufs-ice-reboot-mode.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-25-v0.1.0-alpha.2.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-25-v0.1.0-alpha.3.md` | Evidence | Historical evidence; dated observations preserved |
+| `docs/evidence/2026-08-26-bluetooth-two-bugs-behind-one-dead-controller.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-26-imu-orientation-is-the-transpose-of-the-registry.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-26-sm8150-6.17-complete-runtime.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-26-sm8150-6.17-radio-audio.md` | Evidence | Historical evidence; dated observations preserved |
