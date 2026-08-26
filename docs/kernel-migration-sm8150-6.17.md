@@ -232,3 +232,11 @@ filesystems, AVB verification, p1 payload equality, UUID/cmdline matching,
 single module-tree inventory, exact r8/r36 package versions, SSH and OpenRC
 service inventory all pass. The candidate is preserved under
 `build/2026-08-26-sm8150-617-migration-r8-r36-full/` and is not a release.
+
+The first full-image boot exposed one deployment-only mismatch. The generated
+GPT described the 14,096,007,168-byte file, while Hotdog's physical userdata
+partition is 232,382,812,160 bytes. The initramfs stayed alive with NCM/ping
+but `kpartx` could not mount the short nested geometry. The pre-test backup
+proves that the working layout extends p2 and its backup GPT to the physical
+end. `scripts/prepare-hotdog-userdata-gpt.py` generates bounded patches for
+that exact geometry; applying and revalidating them is the next hardware step.
