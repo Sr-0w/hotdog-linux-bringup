@@ -162,7 +162,7 @@ an already completed request.
 | Artifact | Size | SHA256 |
 |---|---:|---|
 | `linux-oneplus-hotdog-mainline617-clean-6.17.0-r9.apk` | 23,013,574 | `f14e903f0b70e383d60b77c944566e224088b0a5000c0ccef43911a27dde68f1` |
-| packaged `boot/vmlinuz` | 31,492,608 | `43f119f358955b2529041f338ddca22bd8e8250cfdf9b2545a1c28318f21418a` |
+| packaged `boot/vmlinuz` | 31,492,608 | `7b754e67435640ca870d485755b39e44736001fb3f16d68cdd71dd70c76130b9` |
 | packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
 
 The strict r9 package build passed with the same 841-module inventory. Hardware
