@@ -65,6 +65,10 @@ for prop in HasAccelerometer HasAmbientLight HasProximity; do
 		"true"
 done
 check "peripherique IIO proximity" "grep -l elliptic_proximity /sys/bus/iio/devices/iio:device*/name >/dev/null && echo ok" "ok"
+# Le capteur ne doit s'annoncer qu'une fois. Il a longtemps existe aussi en
+# EV_MSC/MSC_RAW, et ce double n'a survecu que parce qu'un test lisait
+# /dev/input ; le patch 0019 l'a retire. L'absence est donc l'assertion.
+check "pas de double input pour la proximite" "grep -c 'Elliptic ultrasonic proximity' /proc/bus/input/devices" "^0$"
 
 head_ "Affichage et GPU"
 check "carte DRM" "ls /sys/class/drm/ | grep -c '^card0$'" "^1$"
@@ -72,7 +76,7 @@ check "connecteur DSI" "cat /sys/class/drm/card0-DSI-1/status 2>/dev/null" "conn
 check "GPU Adreno lie" "ls /sys/class/drm/card0/device/driver 2>/dev/null | head -1; readlink /sys/class/drm/card0/device/driver | sed 's|.*/||'" "msm"
 
 head_ "Entrees"
-for dev in s6sy761 "Alert slider" "Elliptic ultrasonic proximity" pm8941_pwrkey; do
+for dev in s6sy761 "Alert slider" pm8941_pwrkey; do
 	check "input: $dev" "grep -c '$dev' /proc/bus/input/devices" "^[1-9]"
 done
 
