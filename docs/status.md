@@ -15,7 +15,7 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
 | Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`; 6.16 r181 remains the immutable oracle |
-| Device package | `device-oneplus-hotdog` `3-r35` |
+| Device package | `device-oneplus-hotdog` `3-r36` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
 | Boot path | OnePlus ABL -> Linux 6.17 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |

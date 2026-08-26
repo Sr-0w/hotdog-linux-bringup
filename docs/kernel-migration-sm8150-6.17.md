@@ -109,7 +109,7 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
   `f4894e2512a4b8469f00579c68582bc2f2f62ca04fac7c38003c84f3950d7629`.
 - Full package-shaped image assembly/offline image QA: PASS. The exact
   14096007168-byte full image has SHA256
-  `b0adf3af7f39d891105cea72f9535f065449457aaea43b7d2c4ed0077f3ffbff`.
+  `55f893c9b5f9b7b03f5f668e64b25a8668f451d950e3e4a771d4207097528cb4`.
 - Hardware boot: PASS for r2, r3, r6, r7 and r8. The first r4 warm reboot
   anomaly remains recorded below, but r7 returned without intervention in 56
   seconds and r8 returned without intervention in 21 seconds.
@@ -208,25 +208,27 @@ after the complete migrated stack is present.
 
 ## Package-shaped full image
 
-The migration branch now selects r8 from `device-oneplus-hotdog` r35. Kernel
+The migration branch now selects r8 from `device-oneplus-hotdog` r36. Kernel
 subpackages pin the exact matching device package revision, preventing the APK
 solver from silently mixing a newer kernel package with an older device
 package. The device package also provides `/usr/sbin/sshd -> sshd.pam`, so the
 OpenRC SSH service works in a fresh rootfs rather than relying on an old output
 mutation.
+Its deviceinfo targets `userdata` explicitly and rejects the obsolete `super`
+rootfs target.
 
 The final offline candidate is:
 
 | Artifact | Size | SHA256 |
 |---|---:|---|
-| full nested-GPT image | 14,096,007,168 | `b0adf3af7f39d891105cea72f9535f065449457aaea43b7d2c4ed0077f3ffbff` |
-| boot AVB | 100,663,296 | `282d0d8becdd88e5e70515d9649ba9811aa16a22f026026b1157f3f70e9b3222` |
+| full nested-GPT image | 14,096,007,168 | `55f893c9b5f9b7b03f5f668e64b25a8668f451d950e3e4a771d4207097528cb4` |
+| boot AVB | 100,663,296 | `e60b2df6e3dc8be69de8e4e1ca8d91036e4591a2b1207f0d37dc4627947a4ce7` |
 | Image | 31,492,608 | `ad1bd2af47dc14f9bdecf282e9d8887fcb5605568d58f7b65c0d9df5bf6670ae` |
-| initramfs | 9,126,120 | `0df884537e6fb1ae4b685399a1de2390ad7e0bbd855d86b76247d31d4e073ba9` |
+| initramfs | 9,126,121 | `b88c9a8db53f1f5fd11969a3e400e9515b476978a8dfe6d7e73cb7ad5a1755ac` |
 | Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
 
 Independent GPT CRC checks, backup header placement, `e2fsck -fn` on both
 filesystems, AVB verification, p1 payload equality, UUID/cmdline matching,
-single module-tree inventory, exact r8/r35 package versions, SSH and OpenRC
+single module-tree inventory, exact r8/r36 package versions, SSH and OpenRC
 service inventory all pass. The candidate is preserved under
-`build/2026-08-26-sm8150-617-migration-r8-full/` and is not a release.
+`build/2026-08-26-sm8150-617-migration-r8-r36-full/` and is not a release.

@@ -1097,6 +1097,10 @@ validate_hotdog_avb_contract() {
 	grep -Fqx \
 		'deviceinfo_mkinitfs_postprocess="/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"' \
 		"$deviceinfo" || die "deviceinfo does not select the hotdog AVB hook"
+	grep -Fqx 'deviceinfo_flash_fastboot_partition_rootfs="userdata"' "$deviceinfo" ||
+		die "deviceinfo does not target the validated userdata rootfs partition"
+	! grep -Fq 'deviceinfo_flash_fastboot_partition_rootfs="super"' "$deviceinfo" ||
+		die "deviceinfo still targets forbidden super"
 	grep -q '^[[:space:]]*android-tools-avbtool$' "$apkbuild" ||
 		die "device package does not depend on android-tools-avbtool"
 	grep -q '^[[:space:]]*postprocess-boot-avb[.]sh$' "$apkbuild" ||

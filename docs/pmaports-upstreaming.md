@@ -10,7 +10,7 @@ success marking. The clean 6.17 migration has passed its complete electronic
 runtime gate and produced a full offline-validated package image; its exact
 full image still needs the final physical parity boot. The development
 snapshots are currently `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`,
-`device-oneplus-hotdog` `3-r35` and
+`device-oneplus-hotdog` `3-r36` and
 `firmware-oneplus-hotdog` `20241212-r7`.
 
 The port is still not submission-ready. Current blockers are:

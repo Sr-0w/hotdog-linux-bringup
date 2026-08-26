@@ -38,7 +38,7 @@ a separate pmaports checkout:
 The tracked development packages are currently:
 
 - `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`
-- `device-oneplus-hotdog` `3-r35`
+- `device-oneplus-hotdog` `3-r36`
 - `firmware-oneplus-hotdog` `20241212-r7`
 
 These revisions move as experiments are accepted. The source tree and built

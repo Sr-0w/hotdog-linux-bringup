@@ -54,7 +54,7 @@ Lomiri session has been validated on Hotdog yet. See the complete
 | Component | Current development snapshot |
 |---|---|
 | Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8` on the migration branch |
-| Device package | `device-oneplus-hotdog` `3-r35` |
+| Device package | `device-oneplus-hotdog` `3-r36` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
