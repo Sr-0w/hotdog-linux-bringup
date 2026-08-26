@@ -165,6 +165,28 @@ an already completed request.
 | packaged `boot/vmlinuz` | 31,492,608 | `7b754e67435640ca870d485755b39e44736001fb3f16d68cdd71dd70c76130b9` |
 | packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
 
-The strict r9 package build passed with the same 841-module inventory. Hardware
-validation is pending; this package is not yet the selected full-image
-candidate.
+The strict r9 package build passed with the same 841-module inventory. The
+oracle comparison that followed showed that this kernel fix was valid but not
+sufficient: the failing full image also contained a downgraded initramfs and a
+late userspace UDC reconfiguration.
+
+## Oracle parity and current-initramfs integration
+
+Revision r10 restores the three user-visible config contracts found missing by
+the r181 comparison: 900 mA gadget draw, V4L2 flash helpers and the TER16x32
+framebuffer font. The clean pmaports integration provisions NCM+ACM before the
+first UDC bind, and device r38 leaves the rootfs ACM service as a getty-only
+consumer.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r10.apk` | 23,021,064 | `389931d1a998bed3aaf111429ec26a801c53db2f09ad29e0129be9234eb417c2` |
+| packaged `boot/vmlinuz` | 31,558,144 | `55eff7b3bd759cf42eef703b5dd2f3aafe19071e9dd67370fbfd5c6c843de3bf` |
+| packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
+
+The r10 package contains 842 modules; the added module is
+`v4l2-flash-led-class.ko`. Hardware boot reached SSH on the exact r10/r37 full
+image, with `acm.usb0` and `ncm.usb0` present together at `MaxPower=900` and no
+DWC3 teardown warning or panic. Ninety samples over 15 minutes retained ACM,
+NCM, ping and SSH. Upgrading to device r38 and rebooting produced a new boot
+with the same USB state and `hotdog-qbootctl` started successfully.

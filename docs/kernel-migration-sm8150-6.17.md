@@ -121,7 +121,7 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
 - Full package-shaped image assembly/offline image QA: PASS. The exact
   14096007168-byte full image has SHA256
   `55f893c9b5f9b7b03f5f668e64b25a8668f451d950e3e4a771d4207097528cb4`.
-- Hardware boot: PASS for r2, r3, r6, r7 and r8. The first r4 warm reboot
+- Hardware boot: PASS for r2, r3, r6, r7, r8 and r10. The first r4 warm reboot
   anomaly remains recorded below, but r7 returned without intervention in 56
   seconds and r8 returned without intervention in 21 seconds.
 - Complete electronic runtime gate: PASS on r8. CAMCC, both CCI controllers,
@@ -268,3 +268,10 @@ and DTB; their initramfs and rootfs USB ownership differ. The corrected r10/r37
 composition uses current postmarketOS initramfs, creates NCM+ACM atomically
 before the first UDC bind, leaves the rootfs service as a getty-only consumer,
 and restores the r181 USB-current, V4L2-flash and framebuffer-font configs.
+
+The r10/r37 full hardware boot passed 90 samples over 15 minutes with stable
+ACM, NCM, ping and SSH. Device r38 then replaced the generic backgrounded
+qbootctl oneshot with a synchronous, localmount-ordered service; a fresh reboot
+returned with a changed boot ID, both gadget functions and the new service in
+started state. The final r10/r38 full image is preserved under
+`build/2026-08-26-sm8150-617-migration-r10-r38-current/` and is not a release.

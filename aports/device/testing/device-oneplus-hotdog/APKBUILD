@@ -3,12 +3,13 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=37
+pkgrel=38
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
 arch="aarch64"
 options="!check !archcheck"
+install="$pkgname.post-install $pkgname.post-upgrade"
 depends="
 	alsa-ucm-conf
 	android-tools-avbtool
@@ -35,6 +36,7 @@ source="
 	hotdog-usb-acm
 	hotdog-usb-acm-login
 	hotdog-usb-acm.initd
+	hotdog-qbootctl.initd
 	62-hotdog-elliptic-proximity.rules
 	elliptic-proximity-smoke.py
 	hotdog-elliptic-calibration.py
@@ -83,6 +85,8 @@ package() {
 		"$pkgdir/usr/libexec/hotdog-usb-acm-login"
 	install -Dm755 "$srcdir/hotdog-usb-acm.initd" \
 		"$pkgdir/etc/init.d/hotdog-usb-acm"
+	install -Dm755 "$srcdir/hotdog-qbootctl.initd" \
+		"$pkgdir/etc/init.d/hotdog-qbootctl"
 }
 
 sensors() {
@@ -259,6 +263,7 @@ cb46318d64e85e3fd432aa650784268710aa91226c35aa76d548a289d021f655f3e0c3fc1d4788f8
 197e634affe47aa501ce8471f6bf15ed5d9eab2aa0afa9da48841c4cad238880b3b9a7f40befd61cfd67db7385b854be5998f50754395eb6dcef0b3cec2f90e2  hotdog-usb-acm
 30cca79c18d824332630f4d03c4694663e29cd9132d532479d1687da8dc24756e221ecfd11e880a1ba52a2446ec5d2bf8fc933b451501892bd1a9621e2b9cbda  hotdog-usb-acm-login
 ae984c42514cd93a1eaf2f01bb8d3fbe308e07c993897b42c214c3b7c2d1d27b10b5051985a632505d8637c1a504d9e1f9f14c4a1099227be8ffa963f8700453  hotdog-usb-acm.initd
+36b916976b655b430043733b832d78386083f3fc984057172139c382070691e867a9e45dd23a66e685d40772cb2fa7b07525ed671854199c4363a7fd11b942d6  hotdog-qbootctl.initd
 d64438cb45d9cb66f0ba7bd43bd5676f0bb2359fd66458dbd689451d7d5c185b4033b794c4b7fb4316265e05c16867feeb86fc58a30061b468aa83deab7b5599  62-hotdog-elliptic-proximity.rules
 acf359a87c3d531e35689ea2cde01fdbbb3a9d82b5d47088d6be147e594bc2e53f903acd8709ee8a43529dfb74bfcf452e1d51ca22f1e8f51f132913d5f7b2b4  elliptic-proximity-smoke.py
 f059bcbca9e3b56acdccb2e30083dc70c4773ffe97a7a4344ec7271af5a23211ef029b9f25e288a807ac4097b0b12f4206c01bba659a26368f88863dd7026439  hotdog-elliptic-calibration.py

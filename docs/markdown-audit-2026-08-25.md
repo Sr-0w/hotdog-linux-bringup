@@ -13,14 +13,14 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **212 Markdown files**.
+Total: **213 Markdown files**.
 
 | Role | Count |
 |---|---:|
 | Audit register | 1 |
 | Current documentation | 30 |
 | Disabled helper | 1 |
-| Evidence | 162 |
+| Evidence | 163 |
 | Evidence policy | 1 |
 | Mail archive | 1 |
 | Package documentation | 5 |
@@ -213,6 +213,7 @@ Total: **212 Markdown files**.
 | `docs/evidence/2026-08-25-v0.1.0-alpha.3.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-26-sm8150-6.17-complete-runtime.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-26-sm8150-6.17-radio-audio.md` | Evidence | Historical evidence; dated observations preserved |
+| `docs/evidence/2026-08-26-sm8150-6.17-userdata-gpt-dwc3.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/README.md` | Evidence policy | Current archive/supersession policy |
 | `docs/evidence/k1-dtb-source.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/k1-kernel-package.md` | Evidence | Historical evidence; explicit supersession note present |

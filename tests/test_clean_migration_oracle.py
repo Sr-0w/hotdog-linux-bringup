@@ -48,6 +48,17 @@ class CleanMigrationOracleTests(unittest.TestCase):
 
         self.assertIn('deviceinfo_usb_acm="true"', deviceinfo)
 
+    def test_ab_success_service_is_synchronous_and_bounded(self):
+        service = (DEVICE_PACKAGE / "hotdog-qbootctl.initd").read_text()
+        post_install = (DEVICE_PACKAGE / "device-oneplus-hotdog.post-install").read_text()
+
+        self.assertIn("need localmount", service)
+        self.assertIn('while [ "$attempt" -lt 30 ]', service)
+        self.assertIn("/usr/bin/qbootctl -m", service)
+        self.assertNotIn("command_background", service)
+        self.assertIn("rc-update del qbootctl default", post_install)
+        self.assertIn("rc-update add hotdog-qbootctl default", post_install)
+
     def test_pmaports_preparer_pins_the_reviewed_base(self):
         preparer = (ROOT / "scripts/prepare-hotdog-pmaports-current.sh").read_text()
 
