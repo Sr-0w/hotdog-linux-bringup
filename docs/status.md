@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -14,16 +14,22 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Device | OnePlus 7T Pro, rear label HD1913; recovery reports HD1911 |
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
-| Active kernel line | Mainline-oriented Linux 6.16 reference package, currently `linux-oneplus-hotdog-mainline616` `6.16.0-r181` |
-| Device package | `device-oneplus-hotdog` `3-r32` |
+| Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`; 6.16 r181 remains the immutable oracle |
+| Device package | `device-oneplus-hotdog` `3-r35` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
-| Boot path | OnePlus ABL -> Linux 6.16 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |
+| Boot path | OnePlus ABL -> Linux 6.17 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |
 | Recovery reference | Known-good slot/image, fastboot, pstore/ramoops and guarded Qualcomm `900e` capture; kexec is historical only |
 
 The maintained endpoint is a current shared SM8150 kernel and upstream Hotdog
 DTS, not a permanent device-specific 6.16 package. Ubuntu Touch/Lomiri on the
 same mainline kernel is an additional roadmap target and has not started.
+
+The support rows below remain physical-function claims established on the 6.16
+oracle until the final 6.17 physical parity pass repeats them. The 6.17 r8
+candidate already passes direct boot, electronic subsystem enumeration and a
+300-second complete runtime monitor; this does not silently promote untested
+physical behavior.
 
 ## Current support matrix
 

@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=32
+pkgrel=35
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -70,6 +70,8 @@ package() {
 	# mkinitfs 2.11 still names the pre-usrmerge util-linux path.
 	mkdir -p "$pkgdir/usr/sbin"
 	ln -s /sbin/losetup "$pkgdir/usr/sbin/losetup"
+	# Alpine's PAM server is named sshd.pam while OpenRC starts sshd.
+	ln -s sshd.pam "$pkgdir/usr/sbin/sshd"
 	ln -s /usr/share/deviceinfo/deviceinfo "$pkgdir/etc/deviceinfo"
 	install -Dm644 "$srcdir/HiFi.conf" \
 		"$pkgdir/usr/share/alsa/ucm2/OnePlus/hotdog/HiFi.conf"
@@ -126,16 +128,18 @@ kernel_downstream() {
 	pkgdesc="LineageOS 4.14 rescue bridge (boot-proven)"
 	depends="
 		!$pkgname-kernel-mainline
+		$pkgname=$pkgver-r$pkgrel
 		linux-oneplus-hotdog-lineage414
 	"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
 
 kernel_mainline() {
-	pkgdesc="Mainline Linux 6.16 direct-boot reference kernel"
+	pkgdesc="Clean SM8150 6.17 direct-boot kernel"
 	depends="
 		!$pkgname-kernel-downstream
-		linux-oneplus-hotdog-mainline616
+		$pkgname=$pkgver-r$pkgrel
+		linux-oneplus-hotdog-mainline617-clean
 		mesa-vulkan-freedreno
 	"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname

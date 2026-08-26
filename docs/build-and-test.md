@@ -1,6 +1,6 @@
 # Build and test workflow
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 This is the active source-to-hardware workflow. K1, D-series and kexec commands
 are historical reproductions and are not the default release path.
@@ -37,8 +37,8 @@ a separate pmaports checkout:
 
 The tracked development packages are currently:
 
-- `linux-oneplus-hotdog-mainline616` `6.16.0-r181`
-- `device-oneplus-hotdog` `3-r32`
+- `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`
+- `device-oneplus-hotdog` `3-r35`
 - `firmware-oneplus-hotdog` `20241212-r7`
 
 These revisions move as experiments are accepted. The source tree and built
@@ -49,7 +49,7 @@ package metadata, not this list alone, are authoritative.
 ```bash
 HOTDOG_PMAPORTS_SM8150="$PWD/src/postmarketos/pmaports" \
 HOTDOG_PMBOOTSTRAP_WORK="$PWD/pmbootstrap-work-current" \
-./scripts/pmbootstrap-hotdog.sh -j 32 install --split --no-sparse \
+./scripts/pmbootstrap-hotdog.sh -j 32 -E 9170 install --no-sparse \
   --no-recommends \
   --add polkit-elogind,device-oneplus-hotdog-plasma-mobile-apps,device-oneplus-hotdog-sensors
 ```
@@ -70,8 +70,10 @@ use. Older raw images can be checked without modifying them with:
   --outdir build/pmaports-mainline616-avb
 ```
 
-The nested-GPT assembler remains a laboratory reproducer, not the target
-installer:
+The 9170 MiB addition produces the validated 14096007168-byte userdata payload
+and places the backup GPT at its true end. The nested-GPT assembler remains a
+laboratory deployment format while the final upstream installer design is
+pending:
 
 ```bash
 ./scripts/assemble-pmaports-subpartition-image.sh \

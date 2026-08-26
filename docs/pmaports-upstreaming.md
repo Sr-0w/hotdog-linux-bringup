@@ -1,21 +1,23 @@
 # pmaports upstreaming plan
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 ## Current submission snapshot
 
 The normal package flow has produced hardware-booted direct Linux images,
 writable rootfs, accelerated Plasma sessions, automatic AVB envelopes and A/B
-success marking. The package-complete Alpha 5 set itself is offline-validated
-but not yet booted as one exact set. The development snapshots are currently
-`linux-oneplus-hotdog-mainline616` `6.16.0-r181`,
-`device-oneplus-hotdog` `3-r32` and
+success marking. The clean 6.17 migration has passed its complete electronic
+runtime gate and produced a full offline-validated package image; its exact
+full image still needs the final physical parity boot. The development
+snapshots are currently `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8`,
+`device-oneplus-hotdog` `3-r35` and
 `firmware-oneplus-hotdog` `20241212-r7`.
 
 The port is still not submission-ready. Current blockers are:
 
-- migrate accepted Hotdog support from the device-specific 6.16 reference
-  package into a current shared `linux-postmarketos-qcom-sm8150` kernel;
+- finish physical parity validation of the clean 6.17 candidate, then reduce
+  its focused device series toward the shared `linux-postmarketos-qcom-sm8150`
+  kernel;
 - express every remaining binary DT transform, SMMU bypass and laboratory workaround
   as reviewable source integration or remove it;
 - replace the nested-GPT `super` deployment with a normal supported install,

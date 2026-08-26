@@ -1103,6 +1103,10 @@ validate_hotdog_avb_contract() {
 		die "device package does not source the hotdog AVB hook"
 	grep -Fq '"$pkgdir/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"' \
 		"$apkbuild" || die "device package does not install the hotdog AVB hook"
+	grep -Fq 'ln -s sshd.pam "$pkgdir/usr/sbin/sshd"' "$apkbuild" ||
+		die "device package does not provide the OpenRC sshd binary name"
+	[ "$(grep -c '^[[:space:]]*\$pkgname=\$pkgver-r\$pkgrel$' "$apkbuild")" -eq 2 ] ||
+		die "kernel subpackages do not pin the matching device package revision"
 
 	expected="$(awk '$2 == "postprocess-boot-avb.sh" { print $1 }' "$apkbuild")"
 	[[ "$expected" =~ ^[0-9a-f]{128}$ ]] ||

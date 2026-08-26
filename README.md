@@ -53,16 +53,18 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline616` `6.16.0-r181` |
-| Device package | `device-oneplus-hotdog` `3-r32` |
+| Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8` on the migration branch |
+| Device package | `device-oneplus-hotdog` `3-r35` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
 | Clean migration candidate | SM8150 6.17 r8; complete electronic kernel gate passed, not yet the default |
 | Historical paths | Downstream 4.14/kexec and Linux 6.17 K1, retained for recovery and evidence only |
 
-The Linux 6.16 package is a mainline-oriented reference stack. Its successful
-hardware bring-up does not mean every carried change has been accepted into
+The Linux 6.16 package remains the immutable hardware oracle. The clean 6.17
+migration now passes the complete electronic kernel gate and has a
+package-shaped full image; physical parity is still being revalidated before
+merge. Neither tree implies that every carried change has been accepted into
 Torvalds' Linux tree. The normal path no longer executes the downstream kernel
 or a kexec bridge.
 
