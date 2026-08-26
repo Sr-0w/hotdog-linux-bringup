@@ -24,11 +24,11 @@ import sys
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
-SMOKE = HERE / "elliptic-proximity-smoke.py"
-if not SMOKE.exists():
-    SMOKE = pathlib.Path("/usr/libexec/elliptic-proximity-smoke.py")
+MODULE = HERE / "hotdog-ultrasound.py"
+if not MODULE.exists():
+    MODULE = pathlib.Path("/usr/libexec/hotdog-ultrasound.py")
 
-_spec = importlib.util.spec_from_file_location("smoke", SMOKE)
+_spec = importlib.util.spec_from_file_location("hotdog_ultrasound", MODULE)
 S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
 

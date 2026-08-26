@@ -136,6 +136,8 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-reboot-mode.py | \
 		device/testing/device-oneplus-hotdog:62-hotdog-elliptic-proximity.rules | \
 		device/testing/device-oneplus-hotdog:elliptic-proximity-smoke.py | \
+		device/testing/device-oneplus-hotdog:hotdog-ultrasound.py | \
+		device/testing/device-oneplus-hotdog:proximity-dbus-verify.py | \
 		device/testing/device-oneplus-hotdog:hotdog-elliptic-calibration.py | \
 		device/testing/device-oneplus-hotdog:hotdog-import-factory-calibration.py | \
 		device/testing/device-oneplus-hotdog:hotdog-oppo-version-provision | \

@@ -1,5 +1,4 @@
 #!/sbin/openrc-run
-# shellcheck shell=sh disable=SC2034
 # Arme le chemin audio ultrason tant que quelqu'un lit la proximite.
 #
 # Il depend de iio-sensor-proxy parce que c'est ce demon qui produit la
@@ -9,6 +8,9 @@
 
 name="hotdog-proximity-arm"
 description="Arm the ultrasound path while proximity is being read"
+# Sans cela l'interpreteur ecrit un __pycache__ dans un repertoire
+# que possede un paquet, et l'audit des orphelins le signale.
+export PYTHONDONTWRITEBYTECODE=1
 command="/usr/libexec/hotdog-proximity-armd.py"
 supervisor="supervise-daemon"
 output_log="/var/log/hotdog-proximity-arm.log"
@@ -16,5 +18,5 @@ error_log="/var/log/hotdog-proximity-arm.log"
 
 depend() {
 	need dbus
-	need hotdog-sensor-gate
+	after iio-sensor-proxy
 }

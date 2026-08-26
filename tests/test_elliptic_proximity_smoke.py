@@ -15,6 +15,14 @@ smoke = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(smoke)
 
+# Les primitives partagees vivent dans le module, pas dans le script : c'est ce
+# qui permet de sortir le test de l'image sans emporter le demon d'armement.
+MODULE = ROOT / "helpers" / "hotdog-ultrasound.py"
+MSPEC = importlib.util.spec_from_file_location("hotdog_ultrasound", MODULE)
+ultrasound = importlib.util.module_from_spec(MSPEC)
+assert MSPEC.loader is not None
+MSPEC.loader.exec_module(ultrasound)
+
 
 class EllipticProximitySmokeTests(unittest.TestCase):
     def test_parse_pcm_devices_strips_alsa_marker(self):
@@ -58,8 +66,8 @@ class EllipticProximitySmokeTests(unittest.TestCase):
   : values=1
 """
         with unittest.mock.patch.object(
-                smoke, "run_checked", return_value=output):
-            self.assertEqual(smoke.read_control(0, "Example"), "1")
+                ultrasound, "run_checked", return_value=output):
+            self.assertEqual(ultrasound.read_control(0, "Example"), "1")
 
     def test_reads_stock_compatible_near_event(self):
         read_fd, write_fd = os.pipe()

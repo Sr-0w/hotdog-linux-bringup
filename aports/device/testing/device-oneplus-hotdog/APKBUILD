@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=39
+pkgrel=40
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -40,6 +40,8 @@ source="
 	hotdog-reboot-mode.py
 	62-hotdog-elliptic-proximity.rules
 	elliptic-proximity-smoke.py
+	hotdog-ultrasound.py
+	proximity-dbus-verify.py
 	hotdog-elliptic-calibration.py
 	hotdog-import-factory-calibration.py
 	hotdog-oppo-version-provision
@@ -108,8 +110,14 @@ sensors() {
 	"
 	install -Dm644 "$srcdir/62-hotdog-elliptic-proximity.rules" \
 		"$subpkgdir/usr/lib/udev/rules.d/62-hotdog-elliptic-proximity.rules"
-	install -Dm755 "$srcdir/elliptic-proximity-smoke.py" \
-		"$subpkgdir/usr/libexec/elliptic-proximity-smoke.py"
+	# Bibliotheque partagee par le demon d'armement et le test guide. Elle
+	# reste ici : le service en depend, l'instrument non.
+	install -Dm755 "$srcdir/hotdog-ultrasound.py" \
+		"$subpkgdir/usr/libexec/hotdog-ultrasound.py"
+	# Sonde SEE utilisee par la barriere pour attendre l'accelerometre :
+	# c'est un besoin de service, pas un instrument de diagnostic.
+	install -Dm755 "$srcdir/hotdog-ssc-client.py" \
+		"$subpkgdir/usr/libexec/hotdog-ssc-client.py"
 	install -Dm755 "$srcdir/hotdog-elliptic-calibration.py" \
 		"$subpkgdir/usr/libexec/hotdog-elliptic-calibration.py"
 	install -Dm755 "$srcdir/hotdog-import-factory-calibration.py" \
@@ -126,8 +134,6 @@ sensors() {
 		"$subpkgdir/etc/init.d/hotdog-sensor-gate"
 	install -Dm755 "$srcdir/hotdog-sensor-proxy-gate.sh" \
 		"$subpkgdir/usr/libexec/hotdog-sensor-proxy-gate.sh"
-	install -Dm755 "$srcdir/hotdog-ssc-client.py" \
-		"$subpkgdir/usr/libexec/hotdog-ssc-client.py"
 }
 
 kernel_downstream() {
@@ -156,6 +162,14 @@ bringup() {
 	depends="doas"
 	install -Dm0440 "$srcdir/90-hotdog-bringup-doas.conf" \
 		"$subpkgdir/etc/doas.d/90-hotdog-bringup.conf"
+
+	# Instruments de diagnostic : ils n'ont rien a faire dans l'image d'un
+	# utilisateur. Sans extension et dans le PATH, parce qu'ils se tapent.
+	depends="$depends python3 py3-gobject3"
+	install -Dm755 "$srcdir/elliptic-proximity-smoke.py" \
+		"$subpkgdir/usr/bin/elliptic-proximity-smoke"
+	install -Dm755 "$srcdir/proximity-dbus-verify.py" \
+		"$subpkgdir/usr/bin/proximity-dbus-verify"
 }
 
 plasma_mobile_apps() {

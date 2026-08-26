@@ -8,6 +8,9 @@
 
 name="hotdog-proximity-arm"
 description="Arm the ultrasound path while proximity is being read"
+# Sans cela l'interpreteur ecrit un __pycache__ dans un repertoire
+# que possede un paquet, et l'audit des orphelins le signale.
+export PYTHONDONTWRITEBYTECODE=1
 command="/usr/libexec/hotdog-proximity-armd.py"
 supervisor="supervise-daemon"
 output_log="/var/log/hotdog-proximity-arm.log"
