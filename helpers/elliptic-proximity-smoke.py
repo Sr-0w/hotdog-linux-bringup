@@ -131,8 +131,18 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
         raise SmokeError("run this smoke test as root")
 
     release = os.uname().release
-    if release != "6.16.0-sm8150":
-        raise SmokeError("unexpected kernel release: %s" % release)
+    # Ce test exigeait la version exacte "6.16.0-sm8150", et la migration vers
+    # 6.17 l'a donc mis en echec sans qu'on le voie : la porte physique a
+    # rapporte zero transition parce que rien ne s'etait execute. Ce qui compte
+    # n'a jamais ete le numero mais la capacite -- le peripherique IIO que le
+    # pilote enregistre. Un noyau qui l'expose sait faire tourner ce test, quel
+    # que soit son nom.
+    if not [d for d in pathlib.Path("/sys/bus/iio/devices").glob("iio:device*")
+            if (d / "name").exists()
+            and (d / "name").read_text().strip() == IIO_DEVICE_NAME]:
+        raise SmokeError(
+            "no IIO device named %s on %s; is q6elliptic loaded?"
+            % (IIO_DEVICE_NAME, release))
 
     devices = parse_pcm_devices(pathlib.Path("/proc/asound/pcm").read_text())
     playback = find_pcm(devices, PCM_PLAYBACK_NAME, "playback")

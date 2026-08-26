@@ -50,7 +50,7 @@
       {"path": "lsm6dsm_0.json", "source": "firmware/sensors/config/lsm6dsm_0.json", "size": 1860, "sha256": "221ef27478012c979c14dcdb145ee07f2a86679aea95e86262fc43265f948c5d"},
       {"path": "mmc5603nj_0.json", "source": "firmware/sensors/config/mmc5603nj_0.json", "size": 583, "sha256": "a8df6d57dbc91cb3ad72f4a16cac98cb83efc287706809e3217d37386d4a2a24"},
       {"path": "msmnile_irq.json", "source": "firmware/sensors/config/msmnile_irq.json", "size": 161, "sha256": "39efcfed8b6a7057873b7c22084a7c79931500a174b1685fd54eb4c6b09e62f0"},
-      {"path": "msmnile_lsm6dsm.json", "source": "firmware/sensors/config/msmnile_lsm6dsm.json", "size": 6616, "sha256": "222ad1223dc6d92a900655c6779190f86bbcf7451e29097eaa26ff10586ffe5b"},
+      {"path": "msmnile_lsm6dsm.json", "source": "firmware/sensors/config/msmnile_lsm6dsm.json", "size": 6871, "sha256": "363a301141809f1a376df4f564799189be7266a6d0029fd043818df701219cb9"},
       {"path": "msmnile_mmc5603nj.json", "source": "firmware/sensors/config-curated/45/msmnile_mmc5603nj.json", "size": 5962, "sha256": "ef36624ee32da1d715ee5a17645fe6ca0450ebe8d5461acc901c08f4fb26b502"},
       {"path": "msmnile_power_0.json", "source": "firmware/sensors/config/msmnile_power_0.json", "size": 8739, "sha256": "0baa123b3522fa794eb38a67f5b29faa696c8165f2dd8ef7f6573502694629f4"},
       {"path": "msmnile_sx9324_op.json", "source": "firmware/sensors/config/msmnile_sx9324_op.json", "size": 2424, "sha256": "afd5d29d4d39236768c3fcf4c49e7979246fc55171e042390cdb8c3d8f85fbf7"},

@@ -13,27 +13,49 @@
 # moteur, defaut de flash, transitions IIO -- et il les affiche a cote de la
 # question pour que la reponse soit eclairee.
 #
+# Elle tourne des deux cotes. Depuis l'hote elle passe par SSH ; posee sur le
+# telephone elle s'en apercoit et execute tout localement, parce que les gestes
+# se font sur le telephone et qu'on a alors rarement un vrai clavier.
+#
 # La camera escamotable bouge une piece mecanique. Le pilote est borne par les
 # capteurs a effet Hall et s'arrete de lui-meme sur obstruction, mais laissez
 # le telephone degage pendant ce test.
 #
 # Usage:
-#   gate-sm8150-617-physical.sh                sur 172.16.42.1
-#   PMOS_HOST=… gate-sm8150-617-physical.sh    ailleurs
-#   SKIP="popup flash" gate-sm8150-617-physical.sh   sauter des epreuves
+#   ./test.sh                        sur le telephone, tout en local
+#   gate-sm8150-617-physical.sh      depuis l'hote, via 172.16.42.1
+#   PMOS_HOST=… …                    autre hote
+#   SKIP="popup flash" …             sauter des epreuves
 set -Eeuo pipefail
 
-HOST="${PMOS_HOST:-172.16.42.1}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/.." && pwd)"
-STAMP="$(date +%F-%H%M%S)"
-REPORT="${REPORT:-$ROOT/build/gate-physique-$STAMP.txt}"
 SKIP="${SKIP:-}"
 POPUP="/sys/devices/platform/camera-popup"
 PASS=0
 FAIL=0
 SKIPPED=0
 
+# Le telephone se reconnait a son propre materiel, pas a son nom d'hote : le
+# moteur de la camera escamotable n'existe nulle part ailleurs.
+if [ -z "${PMOS_HOST:-}" ] && [ -d "$POPUP" ]; then
+	LOCAL=1
+	HOST="local"
+else
+	LOCAL=0
+	HOST="${PMOS_HOST:-172.16.42.1}"
+fi
+
+# Tout ce qui suit ecrit dans sysfs. Se relancer soi-meme sous sudo evite de
+# decouvrir le probleme a la troisieme question.
+if [ "$LOCAL" = 1 ] && [ "$(id -u)" != 0 ]; then
+	exec sudo -E "$0" "$@"
+fi
+
+if [ "$LOCAL" = 1 ]; then
+	REPORT="${REPORT:-$HOME/gate-physique-$(date +%F-%H%M%S).txt}"
+else
+	REPORT="${REPORT:-$(cd "$HERE/.." && pwd)/build/gate-physique-$(date +%F-%H%M%S).txt}"
+fi
 mkdir -p "$(dirname "$REPORT")"
 
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$*"; printf 'PASS  %s\n' "$*" >> "$REPORT"; PASS=$((PASS + 1)); }
@@ -42,7 +64,29 @@ skip() { printf '  \033[33mSKIP\033[0m  %s\n' "$*"; printf 'SKIP  %s\n' "$*" >> 
 head_() { printf '\n\033[1m%s\033[0m\n' "$*"; printf '\n== %s ==\n' "$*" >> "$REPORT"; }
 note() { printf '        %s\n' "$*"; printf '      %s\n' "$*" >> "$REPORT"; }
 
-R() { timeout 90 ssh -o BatchMode=yes -o StrictHostKeyChecking=no "root@$HOST" "$1" 2>/dev/null; }
+R() {
+	if [ "$LOCAL" = 1 ]; then
+		sh -c "$1" 2>/dev/null
+	else
+		timeout 90 ssh -o BatchMode=yes -o StrictHostKeyChecking=no "root@$HOST" "$1" 2>/dev/null
+	fi
+}
+
+DEPOSER() {  # DEPOSER <fichier ici> <chemin sur le telephone>
+	if [ "$LOCAL" = 1 ]; then
+		cp "$1" "$2"
+	else
+		scp -q -o BatchMode=yes -o StrictHostKeyChecking=no "$1" "root@$HOST:$2"
+	fi
+}
+
+TROUVER() {  # TROUVER <nom> : a cote du script, puis dans l'arbre du depot
+	local n="$1" p
+	for p in "$HERE/$n" "$HERE/../helpers/$n" "$HERE/../build/$n"; do
+		[ -s "$p" ] && { printf '%s' "$p"; return 0; }
+	done
+	return 1
+}
 
 # Les invites passent par /dev/tty : la sortie du script peut etre redirigee
 # sans que les questions disparaissent dans le fichier.
@@ -57,8 +101,9 @@ skipped() { printf ' %s ' "$SKIP" | grep -q " $1 "; }
 
 R true >/dev/null || { printf 'telephone injoignable sur %s\n' "$HOST" >&2; exit 2; }
 
-printf 'Porte physique  %s  %s\n' "$STAMP" "$(R 'uname -r')" > "$REPORT"
-printf '\033[1mPorte physique SM8150 6.17\033[0m  --  noyau %s\n' "$(R 'uname -r')"
+printf 'Porte physique  %s  %s\n' "$(date +%F-%H%M%S)" "$(R 'uname -r')" > "$REPORT"
+printf '\033[1mPorte physique SM8150 6.17\033[0m  --  noyau %s' "$(R 'uname -r')"
+[ "$LOCAL" = 1 ] && printf '  (en local)\n' || printf '  (via %s)\n' "$HOST"
 printf 'Rapport : %s\n' "$REPORT"
 
 # ---------------------------------------------------------------- camera popup
@@ -68,28 +113,40 @@ else
 	head_ "Camera escamotable"
 	champ() { R "cat $POPUP/status" | tr ' ' '\n' | sed -n "s/^$1=//p"; }
 
+	# open et close n'acceptent que la course complete -- kstrtouint puis
+	# `limit != HOTDOG_FULL_COURSE_MICROSTEPS` rend -EINVAL pour tout le reste.
+	# Ecrire 1 ne bougeait rien et laissait error=0 last_steps=0, ce qui se lit
+	# comme un moteur muet alors que le refus venait du script. La valeur est
+	# dans le statut, on la lit plutot que de la coder en dur.
+	COURSE="$(champ course_limit)"
+
 	if [ "$(champ error)" != "0" ]; then
 		bad "moteur deja en erreur avant l'epreuve (error=$(champ error))"
+	elif [ -z "$COURSE" ]; then
+		bad "moteur : course_limit illisible dans le statut"
+	elif [ "$(champ open_used)" = "1" ] || [ "$(champ close_used)" = "1" ]; then
+		# Le pilote de bring-up n'autorise qu'une course par demarrage.
+		skip "camera escamotable : course deja consommee, redemarrez pour rejouer"
 	else
 		note "avant : endpoint=$(champ endpoint) hall_up=$(champ hall_up) hall_down=$(champ hall_down)"
+		note "course complete : $COURSE microsteps"
 		printf '  Degagez le haut du telephone.\n'
-		R "echo 1 > $POPUP/open" || true
-		sleep 4
-		err="$(champ error)"; ep="$(champ endpoint)"
-		note "apres ouverture : endpoint=$ep error=$err last_steps=$(champ last_steps)"
+		R "echo $COURSE > $POPUP/open" || true
+		sleep 5
+		err="$(champ error)"
+		note "apres ouverture : endpoint=$(champ endpoint) error=$err last_steps=$(champ last_steps)"
 		if [ "$err" != "0" ]; then
 			bad "sortie : le pilote signale error=$err"
-			R "echo 1 > $POPUP/close" >/dev/null 2>&1 || true
 		elif ask "La camera est-elle sortie ?"; then
 			ok "camera escamotable : sortie"
 		else
 			bad "camera escamotable : sortie (rien observe)"
 		fi
 
-		R "echo 1 > $POPUP/close" || true
-		sleep 4
+		R "echo $COURSE > $POPUP/close" || true
+		sleep 5
 		err="$(champ error)"
-		note "apres fermeture : endpoint=$(champ endpoint) error=$err"
+		note "apres fermeture : endpoint=$(champ endpoint) error=$err last_steps=$(champ last_steps)"
 		if [ "$err" != "0" ]; then
 			bad "rentree : le pilote signale error=$err"
 		elif ask "Est-elle rentree completement ?"; then
@@ -114,14 +171,16 @@ else
 	printf '  Regardez le dos du telephone.\n'
 	R "echo 1 > /sys/class/leds/white:flash-1/flash_strobe" || true
 	sleep 1
-	faute="$(R 'cat /sys/class/leds/white:flash-1/flash_fault' || echo '?')"
-	note "flash_fault=$faute"
-	if [ "$faute" != "0" ] && [ "$faute" != "?" ]; then
-		bad "flash : defaut materiel signale ($faute)"
-	elif ask "Le flash a-t-il emis un eclair ?"; then
+	# flash_fault est une chaine ("flash-timeout-exceeded"), pas un nombre.
+	# La comparer a 0 faisait echouer l'epreuve sans jamais poser la question,
+	# ce qui contredit le principe du script : l'oeil tranche, le registre
+	# eclaire. Le defaut est donc du contexte, affiche a cote de la question.
+	faute="$(R 'cat /sys/class/leds/white:flash-1/flash_fault' | tr -d '\n' || true)"
+	[ -n "$faute" ] && note "flash_fault=$faute"
+	if ask "Le flash a-t-il emis un eclair ?"; then
 		ok "flash"
 	else
-		bad "flash (aucun eclair)"
+		bad "flash (aucun eclair${faute:+, flash_fault=$faute})"
 	fi
 fi
 
@@ -130,19 +189,17 @@ if skipped haptics; then
 	head_ "Haptique"; skip "haptique (demande)"
 else
 	head_ "Haptique"
-	OUTIL="$ROOT/build/hotdog-haptics-pulse-aarch64"
-	if [ ! -s "$OUTIL" ]; then
-		if command -v zig >/dev/null 2>&1; then
-			"$HERE/build-hotdog-haptics-pulse.sh" >/dev/null 2>&1 || true
-		fi
+	OUTIL="$(TROUVER hotdog-haptics-pulse || TROUVER hotdog-haptics-pulse-aarch64 || true)"
+	if [ -z "$OUTIL" ] && [ "$LOCAL" = 0 ] && command -v zig >/dev/null 2>&1; then
+		"$HERE/build-hotdog-haptics-pulse.sh" >/dev/null 2>&1 || true
+		OUTIL="$(TROUVER hotdog-haptics-pulse-aarch64 || true)"
 	fi
-	if [ ! -s "$OUTIL" ]; then
-		skip "haptique : outil absent et zig indisponible"
+	if [ -z "$OUTIL" ]; then
+		skip "haptique : outil absent"
 	else
 		# L'outil reste dans /tmp : c'est un diagnostic, il n'a pas a
 		# entrer dans l'image ni a apparaitre a l'audit des orphelins.
-		scp -q -o BatchMode=yes -o StrictHostKeyChecking=no \
-			"$OUTIL" "root@$HOST:/tmp/hotdog-haptics-pulse"
+		DEPOSER "$OUTIL" /tmp/hotdog-haptics-pulse
 		R "chmod +x /tmp/hotdog-haptics-pulse"
 		EV="$(R 'for e in /dev/input/event*; do
 			n=$(cat /sys/class/input/$(basename $e)/device/name 2>/dev/null)
@@ -163,21 +220,41 @@ if skipped proximity; then
 	head_ "Proximite ultrasonique"; skip "proximite (demande)"
 else
 	head_ "Proximite ultrasonique"
-	SMOKE="$ROOT/helpers/elliptic-proximity-smoke.py"
-	if [ ! -s "$SMOKE" ]; then
-		skip "proximite : $SMOKE absent"
+	SMOKE="$(TROUVER elliptic-proximity-smoke.py || true)"
+	if [ -z "$SMOKE" ]; then
+		skip "proximite : elliptic-proximity-smoke.py absent"
 	else
-		scp -q -o BatchMode=yes -o StrictHostKeyChecking=no "$SMOKE" "root@$HOST:/tmp/prox-smoke.py"
+		DEPOSER "$SMOKE" /tmp/prox-smoke.py
 		printf '  Portez le telephone a l'\''oreille cinq secondes, eloignez-le cinq\n'
 		printf '  secondes, et repetez pendant 45 s.\n'
+		R "rm -f /tmp/prox-gate.log"
 		R "PYTHONDONTWRITEBYTECODE=1 python3 /tmp/prox-smoke.py --record 45 --log /tmp/prox-gate.log" >/dev/null 2>&1 || true
-		PRES="$(R "grep -c 'near' /tmp/prox-gate.log 2>/dev/null" || echo 0)"
-		LOIN="$(R "grep -c 'far' /tmp/prox-gate.log 2>/dev/null" || echo 0)"
-		note "transitions relevees : near=$PRES far=$LOIN"
-		if [ "${PRES:-0}" -gt 0 ] && [ "${LOIN:-0}" -gt 0 ]; then
-			ok "proximite : les deux sens ont ete vus"
+		# Un test qui refuse de demarrer ecrit son motif dans le journal. Le
+		# premier passage l'a envoye dans /dev/null et a conclu "un sens
+		# manque" alors que rien ne s'etait execute : un test qui n'a pas
+		# tourne doit le dire, pas se faire passer pour un echec materiel.
+		# Le demarrage se prouve par la ligne d'en-tete "kernel=…", pas par
+		# l'absence d'ERROR : le repli du chemin audio en fin de course
+		# echoue en EBUSY quand le service d'armement le tient encore, et
+		# cela n'invalide pas les transitions deja relevees.
+		DEMARRE="$(R "grep -c '^kernel=' /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
+		ERR_PROX=""
+		[ "${DEMARRE:-0}" -gt 0 ] || \
+			ERR_PROX="$(R "grep -m1 ERROR /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
+		[ "${DEMARRE:-0}" -gt 0 ] || [ -n "$ERR_PROX" ] || ERR_PROX="journal vide"
+		# grep -c sort 1 quand le compte est zero, donc un `|| echo 0` ajoutait
+		# un second zero et rendait "0\n0", refuse par [ -gt ].
+		PRES="$(R "grep -c near /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
+		LOIN="$(R "grep -c far /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
+		if [ -n "$ERR_PROX" ]; then
+			bad "proximite : le test ne s'est pas execute -- $ERR_PROX"
 		else
-			bad "proximite : un sens manque (near=$PRES far=$LOIN)"
+			note "transitions relevees : near=${PRES:-0} far=${LOIN:-0}"
+			if [ "${PRES:-0}" -gt 0 ] && [ "${LOIN:-0}" -gt 0 ]; then
+				ok "proximite : les deux sens ont ete vus"
+			else
+				bad "proximite : un sens manque (near=${PRES:-0} far=${LOIN:-0})"
+			fi
 		fi
 		R "rm -f /tmp/prox-smoke.py"
 	fi
