@@ -57,8 +57,9 @@ class EllipticProximitySmokeTests(unittest.TestCase):
         with self.assertRaises(smoke.SmokeError):
             smoke.find_pcm(devices, smoke.PCM_CAPTURE_NAME, "capture")
 
-    def test_input_event_layout_matches_aarch64(self):
-        self.assertEqual(smoke.INPUT_EVENT.size, 24)
+    def test_iio_event_layout_matches_the_kernel(self):
+        # struct iio_event_data { __u64 id; __s64 timestamp; }
+        self.assertEqual(smoke.IIO_EVENT.size, 16)
 
     def test_reads_single_mixer_control_value(self):
         output = """numid=1,iface=MIXER,name='Example'
@@ -69,12 +70,13 @@ class EllipticProximitySmokeTests(unittest.TestCase):
                 ultrasound, "run_checked", return_value=output):
             self.assertEqual(ultrasound.read_control(0, "Example"), "1")
 
-    def test_reads_stock_compatible_near_event(self):
+    def test_a_rising_threshold_reads_as_near(self):
         read_fd, write_fd = os.pipe()
         with tempfile.TemporaryDirectory() as directory:
             state_file = pathlib.Path(directory) / "state"
-            os.write(write_fd, smoke.INPUT_EVENT.pack(
-                0, 0, smoke.EV_MSC, smoke.MSC_RAW, 1))
+            # IIO_UNMOD_EVENT_CODE place la direction en bits 48..55.
+            code = smoke.IIO_EV_DIR_RISING << 48
+            os.write(write_fd, smoke.IIO_EVENT.pack(code, 0))
             os.close(write_fd)
             with os.fdopen(read_fd, "rb", buffering=0) as event_file:
                 with unittest.mock.patch.object(smoke, "STATE_FILE", state_file):
@@ -83,6 +85,20 @@ class EllipticProximitySmokeTests(unittest.TestCase):
 
             self.assertEqual(state, "near")
             self.assertEqual(state_file.read_text(), "near\n")
+
+    def test_a_falling_threshold_reads_as_far(self):
+        read_fd, write_fd = os.pipe()
+        with tempfile.TemporaryDirectory() as directory:
+            state_file = pathlib.Path(directory) / "state"
+            code = smoke.IIO_EV_DIR_FALLING << 48
+            os.write(write_fd, smoke.IIO_EVENT.pack(code, 0))
+            os.close(write_fd)
+            with os.fdopen(read_fd, "rb", buffering=0) as event_file:
+                with unittest.mock.patch.object(smoke, "STATE_FILE", state_file):
+                    state = smoke.read_proximity_event(
+                        event_file, 0.1, output=None)
+
+            self.assertEqual(state, "far")
 
     def test_microphone_index_is_bounded_and_may_be_left_to_the_dsp(self):
         # Stock writes channel 0 on every boot. "none" reproduces what every

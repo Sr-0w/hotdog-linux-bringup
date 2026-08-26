@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=10
+pkgrel=11
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -55,6 +55,8 @@ source="
 	0016-soc-qcom-restore-hotdog-SLPI-infrastructure.patch
 	0017-sound-qcom-restore-hotdog-Elliptic-proximity-path.patch
 	0018-usb-dwc3-avoid-duplicate-request-giveback.patch
+	0019-ASoC-qdsp6-q6elliptic-report-proximity-only-through-.patch
+	0020-arm64-dts-qcom-hotdog-say-why-each-local-delta-exist.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"

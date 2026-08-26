@@ -2,6 +2,8 @@
 """Bounded smoke test for the OnePlus Elliptic ultrasonic proximity path."""
 
 import argparse
+import fcntl
+import array
 import importlib.util
 import ctypes
 import os
@@ -41,11 +43,13 @@ MIC_CONTROLS = U.MIC_CONTROLS
 PROXIMITY_MODE = U.PROXIMITY_MODE
 
 
-INPUT_EVENT = struct.Struct("llHHi")
-EV_MSC = 0x04
-MSC_RAW = 0x03
+# struct iio_event_data { __u64 id; __s64 timestamp; }
+IIO_EVENT = struct.Struct("Qq")
+IIO_GET_EVENT_FD_IOCTL = 0x80046990        # _IOR('i', 0x90, int)
+IIO_EV_DIR_RISING = 1                      # enum iio_event_direction
+IIO_EV_DIR_FALLING = 2
+IIO_DEVICE_NAME = "elliptic_proximity"
 
-INPUT_NAME = "Elliptic ultrasonic proximity"
 STATE_FILE = pathlib.Path("/run/hotdog-proximity")
 
 MICROPHONE_INDEX_MAX = 7
@@ -58,16 +62,30 @@ GESTURE_TIMEOUT = 30.0
 SND_PCM_FORMAT_S16_LE = 2
 
 
-def find_input_event():
-    matches = []
-    for event in pathlib.Path("/sys/class/input").glob("event*"):
-        name = event / "device" / "name"
-        try:
-            if name.read_text().strip() == INPUT_NAME:
-                matches.append(pathlib.Path("/dev/input") / event.name)
-        except OSError:
-            continue
-    return one_path(matches, "Elliptic input event device")
+def find_iio_event_fd():
+    """Ouvre le flux d'evenements du peripherique IIO de proximite.
+
+    Le pilote ne publie plus de peripherique input : la proximite est un canal
+    IIO, et ses transitions arrivent par le descripteur que rend cet ioctl.
+    """
+    matches = [d for d in pathlib.Path("/sys/bus/iio/devices").glob("iio:device*")
+               if (d / "name").exists()
+               and (d / "name").read_text().strip() == IIO_DEVICE_NAME]
+    node = one_path(matches, "IIO proximity device")
+
+    # Sans ces interrupteurs le pilote ne pousse rien.
+    for direction in ("rising", "falling"):
+        (node / "events" / ("in_proximity_thresh_%s_en" % direction)).write_text("1\n")
+
+    fd = os.open("/dev/" + node.name, os.O_RDONLY)
+    try:
+        buf = array.array("i", [0])
+        fcntl.ioctl(fd, IIO_GET_EVENT_FD_IOCTL, buf, True)
+        if buf[0] < 0:
+            raise SmokeError("le peripherique IIO refuse son flux d'evenements")
+    finally:
+        os.close(fd)
+    return os.fdopen(buf[0], "rb", buffering=0)
 
 
 def log_line(output, line):
@@ -83,13 +101,14 @@ def read_proximity_event(event_file, timeout, output):
         ready, _, _ = select.select([event_file], [], [], 0.5)
         if not ready:
             continue
-        data = event_file.read(INPUT_EVENT.size)
-        if len(data) != INPUT_EVENT.size:
-            raise SmokeError("short input event")
-        _, _, event_type, code, value = INPUT_EVENT.unpack(data)
-        if event_type != EV_MSC or code != MSC_RAW:
+        data = event_file.read(IIO_EVENT.size)
+        if len(data) != IIO_EVENT.size:
+            raise SmokeError("short IIO event")
+        code, _ = IIO_EVENT.unpack(data)
+        direction = (code >> 48) & 0x7F
+        if direction not in (IIO_EV_DIR_RISING, IIO_EV_DIR_FALLING):
             continue
-        state = "near" if value else "far"
+        state = "near" if direction == IIO_EV_DIR_RISING else "far"
         STATE_FILE.write_text(state + "\n")
         log_line(output, "%s %s" % (time.strftime("%F %T"), state))
         return state
@@ -142,7 +161,6 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
                 "driver has no microphone_index control; rebuild it or pass "
                 "--microphone-index none")
         mic_control = None
-    event_path = find_input_event()
     output = open(log_path, "a") if log_path else None
     hostless = None
     armed = False
@@ -153,9 +171,9 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
     mic_prestate = mic_control.read_text().strip() if mic_control else None
 
     try:
-        log_line(output, "kernel=%s card=%d playback=%d capture=%d event=%s mode=%d"
+        log_line(output, "kernel=%s card=%d playback=%d capture=%d mode=%d"
                  % (release, card, playback["device"], capture["device"],
-                    event_path, operation_mode))
+                    operation_mode))
         if interactive:
             print("\nTest de proximite ultrasonique Elliptic", flush=True)
             print("Pose le telephone face vers toi, sans rien devant le haut "
@@ -185,7 +203,7 @@ def smoke(duration, log_path=None, interactive=False, electronic_probe=False,
             log_line(output, "event-stats-armed: %s"
                      % event_stats.read_text().strip())
 
-        with event_path.open("rb", buffering=0) as event_file:
+        with find_iio_event_fd() as event_file:
             if interactive:
                 for cycle in range(1, 4):
                     print("\nCycle %d/3" % cycle, flush=True)

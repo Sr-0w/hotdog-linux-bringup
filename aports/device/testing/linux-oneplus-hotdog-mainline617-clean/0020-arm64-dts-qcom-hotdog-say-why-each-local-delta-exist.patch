@@ -1,0 +1,140 @@
+From d010aada1646aaa28c43e7ac24ed168ff97f3d65 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 16:59:16 +0200
+Subject: [PATCH 20/20] arm64: dts: qcom: hotdog: say why each local delta
+ exists
+
+Every /delete-property/ and /delete-node/ in this board was silent about
+its reason. That is how the UFS qcom,ice deletion outlived the failure
+that justified it by months: the person who could have removed it had
+nothing to read.
+
+Each one now says whether it is a description this board genuinely needs,
+a temporary bypass with the real fix named, or debt nobody recorded. The
+four GPI DMA removals are the last kind, and saying so is the point:
+unexplained is not the same as deliberate.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 43 +++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index dadf512a0..d01427393 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -23,7 +23,10 @@
+ #include "sm8150-oneplus-common.dtsi"
+ #include "sm8150-wcd9340.dtsi"
+ 
++/* This board reserves rmtfs elsewhere: see memory@fc201000 below. */
+ /delete-node/ &rmtfs_mem;
++
++/* Touch pinctrl from the common tree that nothing on this board references. */
+ /delete-node/ &tp_1v8_active;
+ /delete-node/ &tp_irq_active;
+ /delete-node/ &tp_rst_active;
+@@ -384,11 +387,18 @@ motor_direction_default: motor-direction-default-state {
+ };
+ 
+ &qupv3_id_0 {
++	/*
++	 * Temporary Apps SMMU bypass. The correct fix is to repair the SMMU
++	 * description and the client stream IDs; until then the QUP masters
++	 * translate through no domain. Removing this without that work gives
++	 * translation faults and loses the buses behind it.
++	 */
+ 	/delete-property/ iommus;
+ 	status = "okay";
+ };
+ 
+ &qupv3_id_1 {
++	/* Same temporary Apps SMMU bypass as qupv3_id_0. */
+ 	/delete-property/ iommus;
+ };
+ 
+@@ -588,6 +598,12 @@ &qupv3_id_2 {
+ };
+ 
+ &i2c1 {
++	/*
++	 * GPI DMA removed. Why is not recorded anywhere in this tree; it
++	 * predates the notes and no evidence document explains it. Treat it
++	 * as unexplained debt rather than a decision, and measure before
++	 * removing it.
++	 */
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+ 	clock-frequency = <100000>;
+@@ -617,6 +633,12 @@ &gpi_dma2 {
+ };
+ 
+ &i2c7 {
++	/*
++	 * GPI DMA removed. Why is not recorded anywhere in this tree; it
++	 * predates the notes and no evidence document explains it. Treat it
++	 * as unexplained debt rather than a decision, and measure before
++	 * removing it.
++	 */
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+ 	clock-frequency = <400000>;
+@@ -632,6 +654,12 @@ haptics@5a {
+ };
+ 
+ &i2c8 {
++	/*
++	 * GPI DMA removed. Why is not recorded anywhere in this tree; it
++	 * predates the notes and no evidence document explains it. Treat it
++	 * as unexplained debt rather than a decision, and measure before
++	 * removing it.
++	 */
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+ 	clock-frequency = <100000>;
+@@ -662,6 +690,12 @@ nfc@28 {
+ };
+ 
+ &i2c4 {
++	/*
++	 * GPI DMA removed. Why is not recorded anywhere in this tree; it
++	 * predates the notes and no evidence document explains it. Treat it
++	 * as unexplained debt rather than a decision, and measure before
++	 * removing it.
++	 */
+ 	/delete-property/ dmas;
+ 	/delete-property/ dma-names;
+ 	clock-frequency = <100000>;
+@@ -909,6 +943,8 @@ &wifi {
+ 
+ &uart13 {
+ 	status = "okay";
++	/* interrupts and interrupts-extended cannot coexist; the wakeup line
++	 * below needs the extended form. */
+ 	/delete-property/ interrupts;
+ 	interrupts-extended = <&intc GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>,
+ 			      <&tlmm 46 IRQ_TYPE_EDGE_FALLING>;
+@@ -946,6 +982,8 @@ zap-shader {
+ };
+ 
+ &ufs_mem_hc {
++	/* Explicit UFS stream ID. Unlike the QUP bypass above this one is a
++	 * real description, and UFS translates through the Apps SMMU with it. */
+ 	iommus = <&apps_smmu 0x300 0>;
+ };
+ 
+@@ -1082,6 +1120,11 @@ &pm8150b_charger {
+ };
+ 
+ &pm8150b_fg {
++	/*
++	 * The node is disabled below, so these removals are belt and braces:
++	 * the fuel gauge in use is the bq27411 on i2c, and leaving the PMIC
++	 * gauge described would give two supplies for one battery.
++	 */
+ 	/delete-property/ monitored-battery;
+ 	/delete-property/ power-supplies;
+ 	status = "disabled";
+-- 
+2.54.0
+

@@ -1,0 +1,93 @@
+From 7787f2456aee50b3fcc554e5e32ed0be31df0f1d Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 16:59:16 +0200
+Subject: [PATCH 19/20] ASoC: qdsp6: q6elliptic: report proximity only through
+ IIO
+
+The driver exposed the same sensor twice: an IIO proximity channel with
+threshold events, and an input device reporting EV_MSC/MSC_RAW. The
+second is the OxygenOS convention its downstream counterpart implements,
+and it only survived here because the guided test read /dev/input.
+
+A port should present one interface per sensor, and for proximity on
+Linux that is IIO. Drop the input device and the INPUT dependency with
+it.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/Kconfig            |  5 ++---
+ sound/soc/qcom/qdsp6/q6elliptic.c | 17 -----------------
+ 2 files changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/sound/soc/qcom/Kconfig b/sound/soc/qcom/Kconfig
+index 52717ca32..e6a2f054c 100644
+--- a/sound/soc/qcom/Kconfig
++++ b/sound/soc/qcom/Kconfig
+@@ -83,13 +83,12 @@ config SND_SOC_QDSP6_AFE
+ config SND_SOC_QDSP6_ELLIPTIC
+ 	tristate "OnePlus Elliptic ultrasonic proximity"
+ 	depends on SND_SOC_QDSP6_AFE
+-	depends on INPUT
+ 	depends on IIO
+ 	help
+ 	  Provide the AP-side transport for the Elliptic Labs ultrasonic
+ 	  proximity engine found in the ADSP firmware on OnePlus SM8150 phones.
+-	  The driver sends the vendor AFE parameters and reports near/far events
+-	  through the input subsystem. Audio routing for the speaker and microphone
++	  The driver sends the vendor AFE parameters and reports near/far as an
++	  IIO proximity channel with threshold events. Audio routing for the speaker and microphone
+ 	  must also be described by the machine driver.
+ 
+ config SND_SOC_QDSP6_HOSTLESS
+diff --git a/sound/soc/qcom/qdsp6/q6elliptic.c b/sound/soc/qcom/qdsp6/q6elliptic.c
+index 7f8dea7ad..216bfe586 100644
+--- a/sound/soc/qcom/qdsp6/q6elliptic.c
++++ b/sound/soc/qcom/qdsp6/q6elliptic.c
+@@ -5,7 +5,6 @@
+ #include <linux/firmware.h>
+ #include <linux/iio/events.h>
+ #include <linux/iio/iio.h>
+-#include <linux/input.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/of.h>
+@@ -51,7 +50,6 @@ struct q6elliptic_event {
+ struct q6elliptic {
+ 	struct device *dev;
+ 	struct q6afe_port *afe_port;
+-	struct input_dev *input;
+ 	struct iio_dev *iio;
+ 	/* Which IIO threshold directions a consumer asked to be told about. */
+ 	bool event_rising;
+@@ -203,8 +201,6 @@ static void q6elliptic_event(const void *data, size_t data_size, void *priv)
+ 	/* OxygenOS uses zero for near and non-zero for far. */
+ 	near = event->payload[0] == 0;
+ 	WRITE_ONCE(elliptic->state, near ? 1 : 0);
+-	input_event(elliptic->input, EV_MSC, MSC_RAW, near ? 1 : 0);
+-	input_sync(elliptic->input);
+ 
+ 	/* IIO_UNMOD_EVENT_CODE does not parenthesise its parameters, so the
+ 	 * direction has to arrive as a single token or the ternary is torn
+@@ -737,19 +733,6 @@ static int q6elliptic_probe(struct platform_device *pdev)
+ 		return dev_err_probe(&pdev->dev, PTR_ERR(elliptic->afe_port),
+ 				     "failed to acquire SLIMBUS_2_TX\n");
+ 
+-	elliptic->input = devm_input_allocate_device(&pdev->dev);
+-	if (!elliptic->input) {
+-		ret = -ENOMEM;
+-		goto put_port;
+-	}
+-	elliptic->input->name = "Elliptic ultrasonic proximity";
+-	elliptic->input->id.bustype = BUS_HOST;
+-	input_set_capability(elliptic->input, EV_MSC, MSC_RAW);
+-
+-	ret = input_register_device(elliptic->input);
+-	if (ret)
+-		goto put_port;
+-
+ 	/* The private area holds a pointer rather than the structure itself so
+ 	 * that the existing devm allocation and its drvdata stay as they are. */
+ 	elliptic->iio = devm_iio_device_alloc(&pdev->dev, sizeof(elliptic));
+-- 
+2.54.0
+
