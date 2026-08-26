@@ -107,6 +107,36 @@ DTB, modules and rootfs, the feature-specific test passes, USB recovery remains
 available, and dmesg/pstore contain no new fault. Repeat cold boot,
 suspend/resume and stress tests in proportion to the subsystem risk.
 
+### Installing a kernel package on a running phone
+
+`apk add` of a kernel package replaces every module in the rootfs, but the
+kernel image, DTB and initramfs are read from the `boot_b` partition. Installing
+without flashing runs one build's kernel against another build's modules, so
+install and flash are one operation, never two independent decisions:
+
+```bash
+scp "$APK" root@172.16.42.1:/tmp/k.apk && ssh root@172.16.42.1 'apk add --allow-untrusted /tmp/k.apk'
+scp root@172.16.42.1:/boot/boot.img boot.img
+./scripts/flash-boot-b-from-pmos-ssh.sh --image boot.img --image-sha256 "$SHA" --serial "$SERIAL" \
+  --expected-source-boot-id "$BOOT_ID" --expected-source-kernel "$RELEASE" --reboot
+```
+
+"Only a module changed" is never a reason to leave the partition stale: a
+Kconfig change propagates into the resolved `.config` and therefore into every
+module. Skipping the flash on 2026-08-26 produced a corrupted display and a
+`dsi_err_worker` fault that flashing the matching image cleared outright.
+
+### Gates
+
+Two scripts split hardware acceptance along the line of what needs a hand:
+
+- `scripts/gate-sm8150-617-runtime.sh` — 35 checks that need no gesture.
+  It exists because the first global gate was walked by hand and the SSC sensor
+  regression was seen exactly once.
+- `scripts/gate-sm8150-617-physical.sh` — pop-up camera, torch and flash,
+  haptics, proximity, ambient light and orientation. It triggers, then asks; the
+  operator's answer is the verdict. `SKIP="popup flash"` drops named tests.
+
 Feature helpers such as `deploy-test-mainline616-libcamera.sh`, the guarded
 haptics tester and the collectors under `scripts/` supplement this contract;
 they do not replace artifact identity and recovery checks.
