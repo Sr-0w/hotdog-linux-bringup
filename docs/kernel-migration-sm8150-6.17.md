@@ -32,6 +32,12 @@ Newer vanilla releases were not selected for the first migration checkpoint.
 Moving directly to 6.18/6.19 would combine board reconstruction with a larger
 kernel transition and make hardware regressions harder to localize.
 
+The image userspace now comes from a separate clean pmaports worktree based on
+upstream commit `8d24be3f898eb8c717678ceb881972cc6b1c76f9`. The repository's
+public aports are overlaid with `scripts/prepare-hotdog-pmaports-current.sh`.
+This replaces the old 2024 fork that accidentally downgraded the initramfs in
+the first full-image candidate.
+
 ## Reconstruction policy
 
 The r181 patch stack is an oracle, not an input series. Every new change must
@@ -255,3 +261,10 @@ fault at `0x178`. Kernel commit `d1584b678d01` backports the Linux 6.18 fix for
 the concurrent request-giveback race. Its r9 package passes offline validation;
 the next hardware image must combine r9 with the already validated physical
 GPT patches.
+
+The subsequent oracle comparison proved that r9 was necessary but not
+sufficient. The working standalone r8 and failing full r8 use the same kernel
+and DTB; their initramfs and rootfs USB ownership differ. The corrected r10/r37
+composition uses current postmarketOS initramfs, creates NCM+ACM atomically
+before the first UDC bind, leaves the rootfs service as a getty-only consumer,
+and restores the r181 USB-current, V4L2-flash and framebuffer-font configs.

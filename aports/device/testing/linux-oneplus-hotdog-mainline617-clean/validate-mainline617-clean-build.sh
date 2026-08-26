@@ -58,6 +58,10 @@ expect_config 'CONFIG_SND_SOC_QDSP6_ELLIPTIC=m'
 expect_config 'CONFIG_SND_SOC_QDSP6_HOSTLESS=m'
 expect_config 'CONFIG_USB_CONFIGFS_ACM=y'
 expect_config 'CONFIG_USB_CONFIGFS_NCM=y'
+expect_config 'CONFIG_USB_GADGET_VBUS_DRAW=900'
+expect_config 'CONFIG_V4L2_FLASH_LED_CLASS=m'
+expect_config 'CONFIG_FONTS=y'
+expect_config 'CONFIG_FONT_TER16x32=y'
 expect_config '# CONFIG_RAID6_PQ_BENCHMARK is not set'
 
 python3 - "$image" <<'PY'
@@ -146,6 +150,7 @@ if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	for module_name in s6sy761.ko ipa.ko ath10k_snoc.ko qcom_q6v5_pas.ko \
 			snd-soc-sm8150.ko snd-soc-tfa9874.ko snd-soc-wcd934x.ko \
+			v4l2-flash-led-class.ko \
 			camcc-sm8150.ko qcom-camss.ko imx586.ko imx481.ko imx471.ko s5k3m5.ko \
 			ak7375.ko lc898217xc.ko mxm1120.ko hotdog-popup-motor.ko \
 			qcom_pd_mapper.ko q6elliptic.ko q6hostless.ko; do

@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=36
+pkgrel=37
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -67,10 +67,8 @@ build() {
 
 package() {
 	devicepkg_package $startdir $pkgname
-	# mkinitfs 2.11 still names the pre-usrmerge util-linux path.
-	mkdir -p "$pkgdir/usr/sbin"
-	ln -s /sbin/losetup "$pkgdir/usr/sbin/losetup"
 	# Alpine's PAM server is named sshd.pam while OpenRC starts sshd.
+	mkdir -p "$pkgdir/usr/sbin"
 	ln -s sshd.pam "$pkgdir/usr/sbin/sshd"
 	ln -s /usr/share/deviceinfo/deviceinfo "$pkgdir/etc/deviceinfo"
 	install -Dm644 "$srcdir/HiFi.conf" \
@@ -246,7 +244,7 @@ wireplumber() {
 
 sha512sums="
 7ad66cc9fe557e7235c589c405fcd762126c190ffbe5f65f2e009e9528c0489a0410e6976b614781be1fce45f6f96595f80818e135fcfd8b8b8432cf17031f27  HiFi.conf
-8524e762c0ba2269d370749ef752f6b59c7599d3cbb7ca11026adf734286ad456e76814d3fc5e7ff1d6c813b5d96bc9ca810e8937709efd56b3487159ab75790  deviceinfo
+af7877321da99b5dd12184d0943863e70d254a9640af426bf9d4f183818e65a3b7bf65c56b21d33d026dc314a9676f51669bbdc32ff67d0ee418c15e5e1f3921  deviceinfo
 65281dddb922819d3dac7caed80887bec31a59dc1b351c1dac76e4f859612268c283abc6fe9498358a5b8aad1b58256d1da503045dae5c47923c6916a46fceee  hotdog.conf
 99eb9b254b9b40de66cc6d737645aca960bf8164d0bada7571fbe01eae52655303975c07690b27f52a5828dfc0e19a194979a61c488e9ed09fd4b6e344d75add  kernel-cmdline.conf
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
@@ -258,9 +256,9 @@ d97601fd5bd36c5710c9a122e400cdd0aecf37df7088bfef4490aef2356f15533cdf70e47e3a270c
 cd45e4428d503b234793b7f6ddc2e85dbb7c79cc262805371a5c608837d2a858772d406c419d90331a7bc7113434e8e3a1fcef15af2d534526bf4d9ffd7fb71a  hotdog-no-sleep.initd
 cb46318d64e85e3fd432aa650784268710aa91226c35aa76d548a289d021f655f3e0c3fc1d4788f8da427c1b7b019a231d190c329ee839d761da310b27325073  hotdog-plasma-no-sleep
 9af850d3d1508748cce0823a82d846872859306fa781c0cd96435c628f96030b7df7826c884b4de530fd54aab316740a4eff193f299850fbee76744fb8ee9523  hotdog-plasma-no-sleep.desktop
-94afe445336105e157977aafcc28324d0f702f35e81358b22afd16e6f9f2f5f08223f80aaf19f461031158aa754e5015d3b61e10972c5500d756a4f3a0ed7ca3  hotdog-usb-acm
+197e634affe47aa501ce8471f6bf15ed5d9eab2aa0afa9da48841c4cad238880b3b9a7f40befd61cfd67db7385b854be5998f50754395eb6dcef0b3cec2f90e2  hotdog-usb-acm
 30cca79c18d824332630f4d03c4694663e29cd9132d532479d1687da8dc24756e221ecfd11e880a1ba52a2446ec5d2bf8fc933b451501892bd1a9621e2b9cbda  hotdog-usb-acm-login
-dd43abf81951fd66890965916c88d4b290c873b45585be788ce2a7ea7ff3f5943fe0f01ef347d02f655f0921f0176cca0bb37d06a914cb6bc11580748e39fc51  hotdog-usb-acm.initd
+ae984c42514cd93a1eaf2f01bb8d3fbe308e07c993897b42c214c3b7c2d1d27b10b5051985a632505d8637c1a504d9e1f9f14c4a1099227be8ffa963f8700453  hotdog-usb-acm.initd
 d64438cb45d9cb66f0ba7bd43bd5676f0bb2359fd66458dbd689451d7d5c185b4033b794c4b7fb4316265e05c16867feeb86fc58a30061b468aa83deab7b5599  62-hotdog-elliptic-proximity.rules
 acf359a87c3d531e35689ea2cde01fdbbb3a9d82b5d47088d6be147e594bc2e53f903acd8709ee8a43529dfb74bfcf452e1d51ca22f1e8f51f132913d5f7b2b4  elliptic-proximity-smoke.py
 f059bcbca9e3b56acdccb2e30083dc70c4773ffe97a7a4344ec7271af5a23211ef029b9f25e288a807ac4097b0b12f4206c01bba659a26368f88863dd7026439  hotdog-elliptic-calibration.py

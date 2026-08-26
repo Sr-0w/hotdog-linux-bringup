@@ -3,7 +3,7 @@
 
 supervisor="supervise-daemon"
 name="OnePlus hotdog USB ACM console"
-description="Add a serial console while preserving the existing USB gadget"
+description="Start a serial console on the initramfs-provisioned ACM function"
 command="/usr/libexec/hotdog-usb-acm"
 respawn_delay=2
 respawn_max=0

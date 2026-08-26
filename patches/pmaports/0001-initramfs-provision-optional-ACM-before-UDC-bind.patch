@@ -1,0 +1,143 @@
+From 0d395b9ed6768cd51c7a48749e05efd5e325ac26 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 13:05:22 +0200
+Subject: [PATCH] initramfs: provision optional ACM before UDC bind
+
+Add a generic deviceinfo flag for a persistent CDC ACM function. Build it
+into the initial network gadget so devices do not need to disconnect active
+NCM merely to expose a serial console.
+
+Keep debug-shell cleanup ownership-aware and retain OpenRC as an explicit
+Plasma Mobile option for the Hotdog migration baseline.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ deviceinfo_schema.toml                        |  5 +++++
+ main/postmarketos-initramfs/APKBUILD          |  4 ++--
+ main/postmarketos-initramfs/init_functions.sh | 22 ++++++++++++++++---
+ main/postmarketos-ui-plasma-mobile/APKBUILD   |  4 ++--
+ 4 files changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/deviceinfo_schema.toml b/deviceinfo_schema.toml
+index 10edf579c3..425b57f95f 100644
+--- a/deviceinfo_schema.toml
++++ b/deviceinfo_schema.toml
+@@ -460,6 +460,11 @@ description = "Name of the USB Device Controller (UDC) to use, typically found i
+ [variable.usb.usb_network_host_addr]
+ description = "Sets the host-side Ethernet address of the ethernet-over-usb link"
+ 
++[variable.usb.usb_acm]
++description = "Add a CDC ACM serial function to the initial configfs USB gadget"
++datatype = "boolean"
++default_value = false
++
+ # cgpt/Depthcharge
+ 
+ [variable.cros.cgpt_kpart]
+diff --git a/main/postmarketos-initramfs/APKBUILD b/main/postmarketos-initramfs/APKBUILD
+index 985d39c81c..10d891bd67 100644
+--- a/main/postmarketos-initramfs/APKBUILD
++++ b/main/postmarketos-initramfs/APKBUILD
+@@ -2,7 +2,7 @@
+ maintainer="Casey Connolly <kcxt@postmarketos.org>"
+ pkgname=postmarketos-initramfs
+ pkgver=3.12.3
+-pkgrel=1
++pkgrel=2
+ pkgdesc="Base files for the postmarketOS initramfs / initramfs-extra"
+ url="https://postmarketos.org"
+ provides="postmarketos-ramdisk=$pkgver-r$pkgrel"
+@@ -118,7 +118,7 @@ ace852ba267b3408998970df6042603c8bec1d033066d1c30ed65f1be955fee8644b57882898f102
+ 69852928464f01757e2f473bd2c2e7ecb4132ecf3e26bdec95932e928dfe9042f59316e0a509fd38bcda88e24dd94bf33e8a88118b5adbec7023d1c13da12f59  00-initramfs-base.files
+ 669240c0c6b84ff68ea7696b3ffd39c209c7c6d52233f67a2515ac423e16c3daa7841d8451946b14dc95e1d18ff31cc35c4a22efb8a36caceb48aada5d4ee5ea  00-initramfs-extra-base.files
+ bd72e8b6345a46ec13516c64d78d4fa1a9a18a8db9ab04aac605f9708629453dc65b6fbccd96b58eeb1ea68102ddbcae9dc6b369255c6c6c1fb18ce0bd43ec79  init.sh
+-9765cad4f6c420a77dc975532e28c20fd89f9c6645b1c42e2fee98e3616729d30785e93affd7fef012a0118dd92d4e8b90718488bbd7782aa14424acd37d3e99  init_functions.sh
++3e6deac816df0e9bf9fe1043d6514e685445b2f0567c2a4d29df4356fe4bf95f52966847578c9a22e6ed6405a3dde86c703a442608b54d47315a2b85deee1097  init_functions.sh
+ 7aa82d5e2907470d667612643d98371dff27b2650051f8c568ab43d1b97677362c3e6fbd442474086d681ea7c0cfbcaf269d3eef2d2dc3ff4ebf17c786b82148  init_2nd.sh
+ 59f1e8954483dfe49182ddbaf0c1a4741f147161b92b5bb836e5bd405b419438f5757915546b46b846193c5a4b44c4b1a523f0ad0dcb87a1dfcaed9360e03146  init_functions_2nd.sh
+ 675e7d5bee39b2df7d322117f8dcaccc274d61beaf4d50ead19bbf2109446d64b1c0aa0c5b4f9846eb6c1c403418f28f6364eff4537ba41120fbfcbc484b7da7  mdev.conf
+diff --git a/main/postmarketos-initramfs/init_functions.sh b/main/postmarketos-initramfs/init_functions.sh
+index 936af83ce6..36b44aebe5 100644
+--- a/main/postmarketos-initramfs/init_functions.sh
++++ b/main/postmarketos-initramfs/init_functions.sh
+@@ -20,6 +20,7 @@ deviceinfo_codename="${deviceinfo_codename:-}"
+ deviceinfo_create_initfs_extra="${deviceinfo_create_initfs_extra:-}"
+ deviceinfo_no_framebuffer="${deviceinfo_no_framebuffer:-}"
+ deviceinfo_rootfs_image_sector_size="${deviceinfo_rootfs_image_sector_size:-}"
++deviceinfo_usb_acm="${deviceinfo_usb_acm:-false}"
+ 
+ # Default to no splash unless set on the kernel cmdline. Plymouth will not
+ # display a splash if this param is missing from the cmdline
+@@ -890,6 +891,16 @@ setup_usb_network_configfs() {
+ 	ln -s $CONFIGFS/g1/functions/"$usb_network_function" $CONFIGFS/g1/configs/c.1 \
+ 		|| echo "  Couldn't symlink $usb_network_function"
+ 
++	# Add serial before the first UDC bind so userspace never has to tear
++	# down an active network gadget merely to expose a console.
++	if [ "$deviceinfo_usb_acm" = "true" ]; then
++		mkdir "$CONFIGFS/g1/functions/$CONFIGFS_ACM_FUNCTION" \
++			|| echo "  Couldn't create $CONFIGFS/g1/functions/$CONFIGFS_ACM_FUNCTION"
++		ln -s "$CONFIGFS/g1/functions/$CONFIGFS_ACM_FUNCTION" \
++			"$CONFIGFS/g1/configs/c.1" \
++			|| echo "  Couldn't symlink $CONFIGFS_ACM_FUNCTION"
++	fi
++
+ 	# If an argument was supplied then skip writing to the UDC (only used for mass storage
+ 	# log recovery)
+ 	if [ -z "$skip_udc" ]; then
+@@ -1063,13 +1074,16 @@ debug_shell() {
+ 	echo "Entering debug shell"
+ 	# if we have a UDC it's already been configured for USB networking
+ 	local have_udc
++	local debug_added_acm=0
+ 	have_udc="$(cat $CONFIGFS/g1/UDC)"
+ 
+ 	# Use USB ACM gadget if no UDC is available,
+ 	# if UDC is available use configured USB networking,
+ 	# but DHCP server needs to be started
+-	if [ -n "$have_udc" ]; then
++	if [ -n "$have_udc" ] && \
++	   [ ! -e "$CONFIGFS/g1/configs/c.1/$CONFIGFS_ACM_FUNCTION" ]; then
+ 		setup_usb_acm_configfs
++		debug_added_acm=1
+ 	else
+ 		start_unudhcpd
+ 	fi
+@@ -1208,8 +1222,10 @@ debug_shell() {
+ 	# Remove the ACM/mass storage gadget devices
+ 	# FIXME: would be nice to have a way to keep this on and
+ 	# pipe kernel/init logs to it.
+-	rm -f $CONFIGFS/g1/configs/c.1/"$CONFIGFS_ACM_FUNCTION"
+-	rmdir $CONFIGFS/g1/functions/"$CONFIGFS_ACM_FUNCTION"
++	if [ "$debug_added_acm" = 1 ]; then
++		rm -f $CONFIGFS/g1/configs/c.1/"$CONFIGFS_ACM_FUNCTION"
++		rmdir $CONFIGFS/g1/functions/"$CONFIGFS_ACM_FUNCTION"
++	fi
+ 	rm -f "$CONFIGFS/g1/configs/c.1/$CONFIGFS_MASS_STORAGE_FUNCTION"
+ 	rmdir "$CONFIGFS/g1/functions/$CONFIGFS_MASS_STORAGE_FUNCTION"
+ 	setup_usb_configfs_udc
+diff --git a/main/postmarketos-ui-plasma-mobile/APKBUILD b/main/postmarketos-ui-plasma-mobile/APKBUILD
+index ee267ff137..6d39b82966 100644
+--- a/main/postmarketos-ui-plasma-mobile/APKBUILD
++++ b/main/postmarketos-ui-plasma-mobile/APKBUILD
+@@ -3,7 +3,7 @@
+ maintainer="Bart Ribbers <bribbers@disroot.org>"
+ pkgname=postmarketos-ui-plasma-mobile
+ pkgver=6
+-pkgrel=10
++pkgrel=11
+ pkgdesc="(Wayland) Mobile variant of KDE Plasma"
+ url="https://wiki.postmarketos.org/wiki/Plasma_Mobile"
+ # armhf blocked by pmaports#75
+@@ -51,7 +51,7 @@ install="
+ 	$pkgname-systemd.post-upgrade
+ 	"
+ replaces="plasma-mobile plasma-mobile-meta"
+-options="!check pmb:drm pmb:default-systemd pmb:support-systemd"
++options="!check pmb:drm pmb:default-systemd pmb:support-openrc pmb:support-systemd"
+ 
+ package() {
+ 	install -Dm644 \
+-- 
+2.54.0
+
