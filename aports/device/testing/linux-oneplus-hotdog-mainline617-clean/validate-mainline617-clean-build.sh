@@ -41,6 +41,20 @@ expect_config 'CONFIG_QCOM_Q6V5_MSS=m'
 expect_config 'CONFIG_SND_SOC_SM8150=m'
 expect_config 'CONFIG_SND_SOC_TFA9874=m'
 expect_config 'CONFIG_SND_SOC_WCD934X=m'
+expect_config 'CONFIG_I2C_QCOM_CCI=m'
+expect_config 'CONFIG_VIDEO_QCOM_CAMSS=m'
+expect_config 'CONFIG_VIDEO_QCOM_HOTDOG_POPUP=m'
+expect_config 'CONFIG_VIDEO_IMX471=m'
+expect_config 'CONFIG_VIDEO_IMX481=m'
+expect_config 'CONFIG_VIDEO_IMX586=m'
+expect_config 'CONFIG_VIDEO_S5K3M5=m'
+expect_config 'CONFIG_VIDEO_AK7375=m'
+expect_config 'CONFIG_VIDEO_LC898217XC=m'
+expect_config 'CONFIG_MXM1120=m'
+expect_config 'CONFIG_QCOM_FASTRPC=m'
+expect_config 'CONFIG_QCOM_PD_MAPPER=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_ELLIPTIC=m'
+expect_config 'CONFIG_SND_SOC_QDSP6_HOSTLESS=m'
 expect_config 'CONFIG_USB_CONFIGFS_ACM=y'
 expect_config 'CONFIG_USB_CONFIGFS_NCM=y'
 expect_config '# CONFIG_RAID6_PQ_BENCHMARK is not set'
@@ -91,6 +105,17 @@ for contract in \
 	'firmware-name = "qcom/sm8150/oneplus/hotdog/modem.mbn"' \
 	'firmware-name = "qcom/sm8150/oneplus/hotdog/adsp.mbn"' \
 	'firmware-name = "qcom/sm8150/oneplus/hotdog/ipa_fws.mbn"' \
+	'compatible = "qcom,sm8150-camss"' \
+	'compatible = "sony,imx586"' \
+	'compatible = "sony,imx481"' \
+	'compatible = "sony,imx471"' \
+	'compatible = "samsung,s5k3m5"' \
+	'compatible = "onnn,lc898217xc"' \
+	'compatible = "magnachip,mxm1120"' \
+	'compatible = "oneplus,hotdog-popup-motor"' \
+	'firmware-name = "qcom/sm8150/oneplus/hotdog/slpi.mbn"' \
+	'compatible = "oneplus,hotdog-elliptic-ultrasound"' \
+	'compatible = "qcom,q6dsp-hostless-dais"' \
 	'label = "Alert slider"' \
 	'linux,code = <0x22>' \
 	'compatible = "usb-c-connector"' \
@@ -119,7 +144,10 @@ done
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	for module_name in s6sy761.ko ipa.ko ath10k_snoc.ko qcom_q6v5_pas.ko \
-			snd-soc-sm8150.ko snd-soc-tfa9874.ko snd-soc-wcd934x.ko; do
+			snd-soc-sm8150.ko snd-soc-tfa9874.ko snd-soc-wcd934x.ko \
+			qcom-camss.ko imx586.ko imx481.ko imx471.ko s5k3m5.ko \
+			ak7375.ko lc898217xc.ko mxm1120.ko hotdog-popup-motor.ko \
+			qcom_pd_mapper.ko q6elliptic.ko q6hostless.ko; do
 		module=$(find "$modules_dir" -type f -name "$module_name" -print -quit)
 		[ -n "$module" ] || die "$module_name is absent"
 		vermagic=$(modinfo -F vermagic "$module")

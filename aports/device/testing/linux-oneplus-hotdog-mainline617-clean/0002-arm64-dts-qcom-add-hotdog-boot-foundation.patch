@@ -1,7 +1,7 @@
 From ee7bf4e0fc2e98ff37bd325bd58187caa0f7ee95 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:55:41 +0200
-Subject: [PATCH 02/12] arm64: dts: qcom: add hotdog boot foundation
+Subject: [PATCH 02/17] arm64: dts: qcom: add hotdog boot foundation
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

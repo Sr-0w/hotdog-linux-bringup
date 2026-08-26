@@ -1,7 +1,7 @@
 From af06d9a3dfc45a4ff096a4297f031a32e78c171f Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 23:56:46 +0200
-Subject: [PATCH 08/12] arm64: qcom: restore hotdog platform controls
+Subject: [PATCH 08/17] arm64: qcom: restore hotdog platform controls
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

@@ -1,0 +1,1502 @@
+From b5da6bbf863545f47eac4ecae04d41ee0fb1c165 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 01:47:46 +0200
+Subject: [PATCH 15/17] media: restore hotdog popup camera mechanism
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../iio/magnetometer/magnachip,mxm1120.yaml   |  53 ++
+ .../media/oneplus,hotdog-popup-motor.yaml     |  99 ++
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 142 +++
+ drivers/iio/magnetometer/Kconfig              |  11 +
+ drivers/iio/magnetometer/Makefile             |   1 +
+ drivers/iio/magnetometer/mxm1120.c            | 202 +++++
+ drivers/media/platform/qcom/Kconfig           |   8 +
+ drivers/media/platform/qcom/Makefile          |   1 +
+ .../media/platform/qcom/hotdog-popup-motor.c  | 845 ++++++++++++++++++
+ 9 files changed, 1362 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/iio/magnetometer/magnachip,mxm1120.yaml
+ create mode 100644 Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
+ create mode 100644 drivers/iio/magnetometer/mxm1120.c
+ create mode 100644 drivers/media/platform/qcom/hotdog-popup-motor.c
+
+diff --git a/Documentation/devicetree/bindings/iio/magnetometer/magnachip,mxm1120.yaml b/Documentation/devicetree/bindings/iio/magnetometer/magnachip,mxm1120.yaml
+new file mode 100644
+index 000000000000..e2962ab2e8b0
+--- /dev/null
++++ b/Documentation/devicetree/bindings/iio/magnetometer/magnachip,mxm1120.yaml
+@@ -0,0 +1,53 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/iio/magnetometer/magnachip,mxm1120.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: MagnaChip MXM1120 Hall effect magnetic position sensor
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++properties:
++  compatible:
++    const: magnachip,mxm1120
++
++  reg:
++    maxItems: 1
++
++  label:
++    description: Human-readable sensor position
++
++  "#io-channel-cells":
++    const: 0
++
++  vdd-supply:
++    description: Analog sensor supply
++
++  vio-supply:
++    description: I/O supply
++
++required:
++  - compatible
++  - reg
++  - vdd-supply
++  - vio-supply
++
++additionalProperties: false
++
++examples:
++  - |
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        magnetometer@c {
++            compatible = "magnachip,mxm1120";
++            reg = <0x0c>;
++            #io-channel-cells = <0>;
++            label = "camera-popup-up";
++            vdd-supply = <&vreg_hall_3p0>;
++            vio-supply = <&vreg_hall_1p8>;
++        };
++    };
+diff --git a/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml b/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
+new file mode 100644
+index 000000000000..1dfdd24f862e
+--- /dev/null
++++ b/Documentation/devicetree/bindings/media/oneplus,hotdog-popup-motor.yaml
+@@ -0,0 +1,99 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/media/oneplus,hotdog-popup-motor.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: OnePlus hotdog pop-up camera stepper motor
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++description: |
++  The OnePlus 7T Pro uses a DRV8834 stepper controller and two Hall effect
++  sensors to raise and lower its front camera. This binding exposes the
++  board-specific resources and a power domain consumed by the front camera
++  sensor. Runtime power transitions raise and lower the mechanism.
++
++properties:
++  compatible:
++    const: oneplus,hotdog-popup-motor
++
++  '#power-domain-cells':
++    const: 0
++
++  boost-enable-gpios:
++    maxItems: 1
++
++  direction-gpios:
++    maxItems: 1
++
++  mode1-gpios:
++    maxItems: 1
++
++  sleep-gpios:
++    maxItems: 1
++
++  step-gpios:
++    maxItems: 1
++
++  pwms:
++    maxItems: 1
++
++  pwm-names:
++    const: step
++
++  io-channels:
++    minItems: 2
++    maxItems: 2
++
++  io-channel-names:
++    items:
++      - const: hall-up
++      - const: hall-down
++
++  pinctrl-names:
++    items:
++      - const: default
++      - const: pwm
++
++  pinctrl-0: true
++
++  pinctrl-1: true
++
++required:
++  - compatible
++  - '#power-domain-cells'
++  - boost-enable-gpios
++  - direction-gpios
++  - mode1-gpios
++  - sleep-gpios
++  - step-gpios
++  - pwms
++  - pwm-names
++  - io-channels
++  - io-channel-names
++  - pinctrl-names
++  - pinctrl-0
++  - pinctrl-1
++
++additionalProperties: false
++
++examples:
++  - |
++    camera-popup {
++        compatible = "oneplus,hotdog-popup-motor";
++        #power-domain-cells = <0>;
++        boost-enable-gpios = <&pmic_gpio 12 0>;
++        direction-gpios = <&pmic_gpio 11 0>;
++        mode1-gpios = <&pmic_gpio 8 0>;
++        sleep-gpios = <&pmic_gpio 10 0>;
++        step-gpios = <&pmic_gpio 10 0>;
++        pwms = <&pmic_pwm 3 104166>;
++        pwm-names = "step";
++        io-channels = <&hall_up>, <&hall_down>;
++        io-channel-names = "hall-up", "hall-down";
++        pinctrl-names = "default", "pwm";
++        pinctrl-0 = <&motor_default>;
++        pinctrl-1 = <&motor_pwm>;
++    };
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 17d60c7698fd..26c32b97036a 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -110,6 +110,25 @@ switch-bottom {
+ 		};
+ 	};
+ 
++	camera_popup: camera-popup {
++		compatible = "oneplus,hotdog-popup-motor";
++		#power-domain-cells = <0>;
++		boost-enable-gpios = <&pm8150b_gpios 12 GPIO_ACTIVE_HIGH>;
++		direction-gpios = <&pm8150l_gpios 11 GPIO_ACTIVE_HIGH>;
++		mode1-gpios = <&pm8150l_gpios 8 GPIO_ACTIVE_HIGH>;
++		sleep-gpios = <&pm8150_gpios 10 GPIO_ACTIVE_HIGH>;
++		step-gpios = <&pm8150l_gpios 10 GPIO_ACTIVE_HIGH>;
++		pwms = <&pm8150l_lpg 4 105000>;
++		pwm-names = "step";
++		io-channels = <&hall_up>, <&hall_down>;
++		io-channel-names = "hall-up", "hall-down";
++		pinctrl-names = "gpio", "pwm";
++		pinctrl-0 = <&motor_sleep_default>, <&motor_mode1_default>,
++			    <&motor_direction_default>, <&motor_step_default>,
++			    <&motor_mode0_high_z>, <&motor_boost_default>;
++		pinctrl-1 = <&motor_step_pwm>;
++	};
++
+ 	reserved-memory {
+ 		/* Complete the stock-owned XBL/AOP interval. */
+ 		xbl_aop_gap: memory@85e40000 {
+@@ -264,6 +283,14 @@ &cdsp_mem {
+ };
+ 
+ &pm8150_gpios {
++	motor_sleep_default: motor-sleep-default-state {
++		pins = "gpio10";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
++
+ 	volume_up_state: volume-up-state {
+ 		pins = "gpio6";
+ 		function = "normal";
+@@ -281,6 +308,27 @@ volume_down_state: volume-down-state {
+ 	};
+ };
+ 
++&pm8150b_gpios {
++	motor_mode0_high_z: motor-mode0-high-z-state {
++		pins = "gpio5";
++		function = "normal";
++		power-source = <0>;
++		bias-high-impedance;
++	};
++
++	motor_boost_default: motor-boost-default-state {
++		pins = "gpio12";
++		function = "normal";
++		power-source = <0>;
++		output-high;
++		input-disable;
++	};
++};
++
++&pm8150l_lpg {
++	status = "okay";
++};
++
+ &pm8150l_gpios {
+ 	cam0_custom2_default: cam0-custom2-default-state {
+ 		pins = "gpio1";
+@@ -289,6 +337,37 @@ cam0_custom2_default: cam0-custom2-default-state {
+ 		output-low;
+ 		input-disable;
+ 	};
++
++	motor_mode1_default: motor-mode1-default-state {
++		pins = "gpio8";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
++
++	motor_step_default: motor-step-default-state {
++		pins = "gpio10";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
++
++	motor_step_pwm: motor-step-pwm-state {
++		pins = "gpio10";
++		function = "func1";
++		power-source = <0>;
++		bias-disable;
++	};
++
++	motor_direction_default: motor-direction-default-state {
++		pins = "gpio11";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
+ };
+ 
+ &qupv3_id_0 {
+@@ -495,6 +574,31 @@ &qupv3_id_2 {
+ 	status = "okay";
+ };
+ 
++&i2c1 {
++	/delete-property/ dmas;
++	/delete-property/ dma-names;
++	clock-frequency = <100000>;
++	status = "okay";
++
++	hall_up: magnetometer@c {
++		compatible = "magnachip,mxm1120";
++		reg = <0x0c>;
++		#io-channel-cells = <0>;
++		label = "camera-popup-up";
++		vdd-supply = <&vreg_l7c_3p0>;
++		vio-supply = <&vreg_l8c_1p8>;
++	};
++
++	hall_down: magnetometer@d {
++		compatible = "magnachip,mxm1120";
++		reg = <0x0d>;
++		#io-channel-cells = <0>;
++		label = "camera-popup-down";
++		vdd-supply = <&vreg_l7c_3p0>;
++		vio-supply = <&vreg_l8c_1p8>;
++	};
++};
++
+ &gpi_dma2 {
+ 	status = "okay";
+ };
+@@ -1075,6 +1179,35 @@ &vreg_l4f_1p05 {
+ 				   RPMH_REGULATOR_MODE_HPM>;
+ };
+ 
++&cci1_i2c0 {
++	camera@10 {
++		compatible = "sony,imx471";
++		reg = <0x10>;
++		orientation = <0>;
++		rotation = <90>;
++		clocks = <&camcc CAM_CC_MCLK2_CLK>;
++		assigned-clocks = <&camcc CAM_CC_MCLK2_CLK>;
++		assigned-clock-rates = <19200000>;
++		vio-supply = <&vreg_l1c_1p8>;
++		vana-supply = <&vreg_bob>;
++		vdig-supply = <&vreg_l3f_1p05>;
++		reset-gpios = <&tlmm 12 GPIO_ACTIVE_LOW>;
++		vana-enable-gpios = <&pm8150l_gpios 12 GPIO_ACTIVE_HIGH>;
++		power-domains = <&camera_popup>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk2_default>;
++
++		port {
++			imx471_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				data-lanes = <0 1 2 3>;
++				link-frequencies = /bits/ 64 <525262500>;
++				remote-endpoint = <&csiphy2_ep>;
++			};
++		};
++	};
++};
++
+ &cci1_i2c1 {
+ 	camera@1a {
+ 		compatible = "sony,imx481";
+@@ -1126,6 +1259,15 @@ csiphy1_ep: endpoint {
+ 			};
+ 		};
+ 
++		port@2 {
++			reg = <2>;
++
++			csiphy2_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&imx471_ep>;
++			};
++		};
++
+ 		port@3 {
+ 			reg = <3>;
+ 
+diff --git a/drivers/iio/magnetometer/Kconfig b/drivers/iio/magnetometer/Kconfig
+index 3debf1320ad1..996bb01e94b9 100644
+--- a/drivers/iio/magnetometer/Kconfig
++++ b/drivers/iio/magnetometer/Kconfig
+@@ -139,6 +139,17 @@ config MMC35240
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called mmc35240.
+ 
++config MXM1120
++	tristate "MagnaChip MXM1120 Hall effect sensor"
++	depends on I2C
++	select REGMAP_I2C
++	help
++	  Say yes here to build support for the MagnaChip MXM1120
++	  single-axis Hall effect magnetic position sensor.
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called mxm1120.
++
+ config IIO_ST_MAGN_3AXIS
+ 	tristate "STMicroelectronics magnetometers 3-Axis Driver"
+ 	depends on (I2C || SPI_MASTER) && SYSFS
+diff --git a/drivers/iio/magnetometer/Makefile b/drivers/iio/magnetometer/Makefile
+index 9297723a97d8..ce8ce776a894 100644
+--- a/drivers/iio/magnetometer/Makefile
++++ b/drivers/iio/magnetometer/Makefile
+@@ -15,6 +15,7 @@ obj-$(CONFIG_BMC150_MAGN_SPI) += bmc150_magn_spi.o
+ obj-$(CONFIG_MAG3110)	+= mag3110.o
+ obj-$(CONFIG_HID_SENSOR_MAGNETOMETER_3D) += hid-sensor-magn-3d.o
+ obj-$(CONFIG_MMC35240)	+= mmc35240.o
++obj-$(CONFIG_MXM1120)		+= mxm1120.o
+ 
+ obj-$(CONFIG_IIO_ST_MAGN_3AXIS) += st_magn.o
+ st_magn-y := st_magn_core.o
+diff --git a/drivers/iio/magnetometer/mxm1120.c b/drivers/iio/magnetometer/mxm1120.c
+new file mode 100644
+index 000000000000..0c4556aacf7d
+--- /dev/null
++++ b/drivers/iio/magnetometer/mxm1120.c
+@@ -0,0 +1,202 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * MagnaChip MXM1120 Hall effect magnetic position sensor driver
++ */
++
++#include <linux/bitops.h>
++#include <linux/cleanup.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/iio/iio.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/property.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++
++#define MXM1120_REG_PERSINT		0x00
++#define MXM1120_REG_INTSRS		0x01
++#define MXM1120_REG_SRST		0x07
++#define MXM1120_REG_OPF			0x08
++#define MXM1120_REG_DID			0x09
++#define MXM1120_REG_ST1			0x10
++#define MXM1120_REG_HSL			0x11
++#define MXM1120_REG_HSH			0x12
++
++#define MXM1120_SRST_RESET		0x01
++#define MXM1120_DID_VALUE		0x9c
++#define MXM1120_ST1_DRDY		BIT(0)
++#define MXM1120_PERSINT_COUNT_4		0x40
++#define MXM1120_INTSRS_POLL_0034_MT	0x01
++#define MXM1120_OPF_80HZ_10BIT_ACTIVE	0x41
++
++struct mxm1120_data {
++	struct regmap *regmap;
++	struct mutex lock; /* serialize status and sample register reads */
++};
++
++static const struct regmap_config mxm1120_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = MXM1120_REG_HSH,
++};
++
++static const struct iio_chan_spec mxm1120_channels[] = {
++	{
++		.type = IIO_MAGN,
++		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
++	},
++};
++
++static int mxm1120_read_measurement(struct mxm1120_data *data, int *value)
++{
++	unsigned int status;
++	u8 sample[2];
++	int ret;
++
++	guard(mutex)(&data->lock);
++
++	ret = regmap_read_poll_timeout(data->regmap, MXM1120_REG_ST1,
++				       status, status & MXM1120_ST1_DRDY,
++				       1000, 25000);
++	if (ret)
++		return ret;
++
++	ret = regmap_bulk_read(data->regmap, MXM1120_REG_HSL,
++			       sample, sizeof(sample));
++	if (ret)
++		return ret;
++
++	*value = ((sample[1] & BIT(6)) << 2) | sample[0];
++	if (sample[1] & BIT(7))
++		*value -= 0x200;
++
++	return 0;
++}
++
++static int mxm1120_read_raw(struct iio_dev *indio_dev,
++			    const struct iio_chan_spec *chan, int *val,
++			    int *val2, long mask)
++{
++	struct mxm1120_data *data = iio_priv(indio_dev);
++	int ret;
++
++	if (mask != IIO_CHAN_INFO_RAW)
++		return -EINVAL;
++
++	ret = mxm1120_read_measurement(data, val);
++	if (ret)
++		return ret;
++
++	return IIO_VAL_INT;
++}
++
++static const struct iio_info mxm1120_info = {
++	.read_raw = mxm1120_read_raw,
++};
++
++static int mxm1120_chip_init(struct device *dev, struct mxm1120_data *data)
++{
++	unsigned int id;
++	int ret;
++
++	ret = regmap_write(data->regmap, MXM1120_REG_SRST,
++			   MXM1120_SRST_RESET);
++	if (ret)
++		return ret;
++
++	usleep_range(5000, 6000);
++
++	ret = regmap_read(data->regmap, MXM1120_REG_DID, &id);
++	if (ret)
++		return ret;
++
++	if (id != MXM1120_DID_VALUE)
++		return dev_err_probe(dev, -ENODEV,
++				     "unexpected device ID 0x%02x\n", id);
++
++	ret = regmap_write(data->regmap, MXM1120_REG_PERSINT,
++			   MXM1120_PERSINT_COUNT_4);
++	if (ret)
++		return ret;
++
++	/* Polling mode avoids enabling the position IRQ before calibration. */
++	ret = regmap_write(data->regmap, MXM1120_REG_INTSRS,
++			   MXM1120_INTSRS_POLL_0034_MT);
++	if (ret)
++		return ret;
++
++	return regmap_write(data->regmap, MXM1120_REG_OPF,
++			    MXM1120_OPF_80HZ_10BIT_ACTIVE);
++}
++
++static int mxm1120_probe(struct i2c_client *client)
++{
++	static const char * const supply_names[] = { "vdd", "vio" };
++	struct device *dev = &client->dev;
++	struct mxm1120_data *data;
++	struct iio_dev *indio_dev;
++	const char *label;
++	int ret;
++
++	indio_dev = devm_iio_device_alloc(dev, sizeof(*data));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	data = iio_priv(indio_dev);
++	data->regmap = devm_regmap_init_i2c(client, &mxm1120_regmap_config);
++	if (IS_ERR(data->regmap))
++		return dev_err_probe(dev, PTR_ERR(data->regmap),
++				     "failed to initialize regmap\n");
++
++	ret = devm_mutex_init(dev, &data->lock);
++	if (ret)
++		return ret;
++
++	ret = devm_regulator_bulk_get_enable(dev, ARRAY_SIZE(supply_names),
++					     supply_names);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to enable supplies\n");
++
++	usleep_range(5000, 6000);
++
++	ret = mxm1120_chip_init(dev, data);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to initialize sensor\n");
++
++	indio_dev->name = "mxm1120";
++	indio_dev->modes = INDIO_DIRECT_MODE;
++	indio_dev->info = &mxm1120_info;
++	indio_dev->channels = mxm1120_channels;
++	indio_dev->num_channels = ARRAY_SIZE(mxm1120_channels);
++	if (!device_property_read_string(dev, "label", &label))
++		indio_dev->label = label;
++
++	return devm_iio_device_register(dev, indio_dev);
++}
++
++static const struct of_device_id mxm1120_of_match[] = {
++	{ .compatible = "magnachip,mxm1120" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mxm1120_of_match);
++
++static const struct i2c_device_id mxm1120_id[] = {
++	{ "mxm1120" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, mxm1120_id);
++
++static struct i2c_driver mxm1120_driver = {
++	.driver = {
++		.name = "mxm1120",
++		.of_match_table = mxm1120_of_match,
++	},
++	.probe = mxm1120_probe,
++	.id_table = mxm1120_id,
++};
++module_i2c_driver(mxm1120_driver);
++
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
++MODULE_DESCRIPTION("MagnaChip MXM1120 Hall effect sensor driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/platform/qcom/Kconfig b/drivers/media/platform/qcom/Kconfig
+index 4f4d3a68e6e5..9985a9a22df4 100644
+--- a/drivers/media/platform/qcom/Kconfig
++++ b/drivers/media/platform/qcom/Kconfig
+@@ -2,6 +2,14 @@
+ 
+ comment "Qualcomm media platform drivers"
+ 
++config VIDEO_QCOM_HOTDOG_POPUP
++	tristate "OnePlus hotdog pop-up camera motor"
++	depends on IIO && GPIOLIB && PM_GENERIC_DOMAINS_OF && PWM
++	help
++	  Enable the Hall-bounded driver for the OnePlus 7T Pro pop-up front
++	  camera stepper motor. It exposes a generic power domain so camera
++	  sensor runtime PM opens and closes the mechanism automatically.
++
+ source "drivers/media/platform/qcom/camss/Kconfig"
+ source "drivers/media/platform/qcom/iris/Kconfig"
+ source "drivers/media/platform/qcom/venus/Kconfig"
+diff --git a/drivers/media/platform/qcom/Makefile b/drivers/media/platform/qcom/Makefile
+index ea2221a202c0..3b4b74b68c35 100644
+--- a/drivers/media/platform/qcom/Makefile
++++ b/drivers/media/platform/qcom/Makefile
+@@ -2,3 +2,4 @@
+ obj-y += camss/
+ obj-y += iris/
+ obj-y += venus/
++obj-$(CONFIG_VIDEO_QCOM_HOTDOG_POPUP) += hotdog-popup-motor.o
+diff --git a/drivers/media/platform/qcom/hotdog-popup-motor.c b/drivers/media/platform/qcom/hotdog-popup-motor.c
+new file mode 100644
+index 000000000000..b88b10a5df14
+--- /dev/null
++++ b/drivers/media/platform/qcom/hotdog-popup-motor.c
+@@ -0,0 +1,845 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Bounded bring-up driver for the OnePlus 7T Pro pop-up camera motor.
++ */
++
++#include <linux/cleanup.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/iio/consumer.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/platform_device.h>
++#include <linux/pm_domain.h>
++#include <linux/pwm.h>
++
++#define HOTDOG_PREFLIGHT_MICROSTEPS	320
++#define HOTDOG_CLOSED_DOWN_MIN		300
++#define HOTDOG_CLOSED_UP_MAX		50
++#define HOTDOG_RESTORE_DOWN_MIN		340
++#define HOTDOG_RESTORE_DOWN_MAX		368
++#define HOTDOG_SETTLED_DOWN_MIN		350
++#define HOTDOG_RECOVER_MICROSTEPS	1920
++#define HOTDOG_RECOVER_DOWN_MIN		320
++#define HOTDOG_RECOVER_DOWN_MAX		360
++#define HOTDOG_OPEN_DOWN_MIN		368
++#define HOTDOG_FULL_COURSE_MICROSTEPS	(1380 * 32)
++#define HOTDOG_APPROACH_MICROSTEPS	31680
++#define HOTDOG_FINISH_OPEN_MICROSTEPS	(HOTDOG_FULL_COURSE_MICROSTEPS - \
++					 HOTDOG_APPROACH_MICROSTEPS)
++#define HOTDOG_FINISH_UP_MIN		130
++#define HOTDOG_FINISH_UP_MAX		200
++#define HOTDOG_FINISH_DOWN_MAX		50
++#define HOTDOG_HALL_SAMPLE_MICROSTEPS	64
++#define HOTDOG_PROGRESS_MIN_COUNTS	2
++#define HOTDOG_OPEN_HALL_MIN		150
++#define HOTDOG_HALL_ABS_MAX		450
++#define HOTDOG_HALL_SUM_MIN		4
++#define HOTDOG_FULL_OPEN_UP_MIN		300
++/* Exact periods supported by PM8150L LPG near the downstream 104166/12000 ns. */
++#define HOTDOG_SLOW_PERIOD_NS		105000
++#define HOTDOG_FAST_PERIOD_NS		13125
++#define HOTDOG_RAMP_MICROSTEPS		(30 * 32)
++#define HOTDOG_PROGRESS_PROBE_MICROSTEPS	(100 * 32)
++#define HOTDOG_HALL_POLL_US		15000
++
++struct hotdog_popup {
++	struct device *dev;
++	struct gpio_desc *boost;
++	struct gpio_desc *direction;
++	struct gpio_desc *mode1;
++	struct gpio_desc *sleep;
++	struct gpio_desc *step;
++	struct pwm_device *step_pwm;
++	struct pinctrl *pinctrl;
++	struct pinctrl_state *step_gpio_state;
++	struct pinctrl_state *step_pwm_state;
++	struct iio_channel *hall_up;
++	struct iio_channel *hall_down;
++	struct generic_pm_domain genpd;
++	struct mutex lock;
++	bool preflight_used;
++	bool restore_used;
++	bool open_used;
++	bool finish_open_used;
++	bool close_used;
++	bool endpoint_reached;
++	unsigned int last_steps;
++	int before_up;
++	int before_down;
++	int after_up;
++	int after_down;
++	int last_error;
++	unsigned int automatic_open_count;
++	unsigned int automatic_close_count;
++};
++
++static bool hotdog_popup_is_closed(int up, int down)
++{
++	return abs(up) < HOTDOG_CLOSED_UP_MAX &&
++	       abs(down) >= HOTDOG_RESTORE_DOWN_MIN;
++}
++
++static bool hotdog_popup_is_open(int up, int down)
++{
++	return abs(up) >= HOTDOG_FULL_OPEN_UP_MIN &&
++	       abs(down) <= HOTDOG_FINISH_DOWN_MAX;
++}
++
++static void hotdog_popup_pwm_disable(struct hotdog_popup *popup)
++{
++	struct pwm_state state;
++
++	if (popup->step_pwm) {
++		pwm_get_state(popup->step_pwm, &state);
++		state.enabled = false;
++		pwm_apply_might_sleep(popup->step_pwm, &state);
++	}
++
++	if (popup->pinctrl && popup->step_gpio_state)
++		pinctrl_select_state(popup->pinctrl, popup->step_gpio_state);
++
++	if (popup->step)
++		gpiod_set_value_cansleep(popup->step, 0);
++}
++
++static int hotdog_popup_pwm_enable(struct hotdog_popup *popup, u64 period)
++{
++	struct pwm_state state;
++	int ret;
++
++	ret = pinctrl_select_state(popup->pinctrl, popup->step_pwm_state);
++	if (ret)
++		return ret;
++
++	pwm_init_state(popup->step_pwm, &state);
++	state.period = period;
++	state.duty_cycle = period / 2;
++	state.polarity = PWM_POLARITY_NORMAL;
++	/* LPG needs the new period committed while disabled before restarting. */
++	state.enabled = false;
++	ret = pwm_apply_might_sleep(popup->step_pwm, &state);
++	if (ret)
++		goto err_disable;
++
++	state.enabled = true;
++	ret = pwm_apply_might_sleep(popup->step_pwm, &state);
++	if (ret)
++		goto err_disable;
++
++	return 0;
++
++err_disable:
++	hotdog_popup_pwm_disable(popup);
++	return ret;
++}
++
++static bool hotdog_popup_halls_plausible(int up, int down)
++{
++	/* Both endpoint sensors are naturally weak around mid-travel. */
++	return abs(up) <= HOTDOG_HALL_ABS_MAX &&
++	       abs(down) <= HOTDOG_HALL_ABS_MAX &&
++	       abs(up) + abs(down) >= HOTDOG_HALL_SUM_MIN;
++}
++
++static void hotdog_popup_stop(struct hotdog_popup *popup)
++{
++	hotdog_popup_pwm_disable(popup);
++	gpiod_set_value_cansleep(popup->sleep, 0);
++	gpiod_set_value_cansleep(popup->mode1, 0);
++	gpiod_set_value_cansleep(popup->direction, 0);
++}
++
++static int hotdog_popup_read_halls(struct hotdog_popup *popup,
++				   int *up, int *down)
++{
++	int ret;
++
++	ret = iio_read_channel_raw(popup->hall_up, up);
++	if (ret < 0)
++		return ret;
++
++	ret = iio_read_channel_raw(popup->hall_down, down);
++	if (ret < 0)
++		return ret;
++
++	return 0;
++}
++
++static void hotdog_popup_power_on(struct hotdog_popup *popup, bool upward)
++{
++	/* FI5 direction is physically low for up and high for down. */
++	gpiod_set_value_cansleep(popup->direction, !upward);
++	gpiod_set_value_cansleep(popup->mode1, 1);
++	gpiod_set_value_cansleep(popup->sleep, 1);
++	usleep_range(1000, 1500);
++}
++
++static int hotdog_popup_drive_exact(struct hotdog_popup *popup, bool upward,
++				    unsigned int microsteps)
++{
++	u64 duration_us;
++	int ret;
++
++	hotdog_popup_power_on(popup, upward);
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_SLOW_PERIOD_NS);
++	if (ret)
++		goto out;
++
++	duration_us = DIV_ROUND_UP_ULL((u64)microsteps *
++					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
++	usleep_range(duration_us, duration_us + 100);
++
++out:
++	hotdog_popup_stop(popup);
++	return ret;
++}
++
++static int hotdog_popup_preflight_up(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_down) < HOTDOG_CLOSED_DOWN_MIN ||
++	    abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++		return -ERANGE;
++
++	/* DRV8834 1/32 mode: M0 is high-impedance in pinctrl, M1 is high. */
++	ret = hotdog_popup_drive_exact(popup, true,
++				       HOTDOG_PREFLIGHT_MICROSTEPS);
++	if (ret)
++		return ret;
++	msleep(20);
++
++	ret = hotdog_popup_read_halls(popup, &popup->after_up,
++				       &popup->after_down);
++	if (ret)
++		return ret;
++
++	dev_info(popup->dev,
++		 "preflight up: %d microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 HOTDOG_PREFLIGHT_MICROSTEPS, popup->before_up, popup->after_up,
++		 popup->before_down, popup->after_down);
++
++	return 0;
++}
++
++static int hotdog_popup_restore_closed(struct hotdog_popup *popup,
++				       unsigned int microsteps)
++{
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_up) >= HOTDOG_CLOSED_UP_MAX)
++		return -ERANGE;
++
++	if (microsteps == HOTDOG_PREFLIGHT_MICROSTEPS &&
++	    (abs(popup->before_down) < HOTDOG_RESTORE_DOWN_MIN ||
++	     abs(popup->before_down) > HOTDOG_RESTORE_DOWN_MAX))
++		return -ERANGE;
++
++	if (microsteps == HOTDOG_RECOVER_MICROSTEPS &&
++	    (abs(popup->before_down) < HOTDOG_RECOVER_DOWN_MIN ||
++	     abs(popup->before_down) > HOTDOG_RECOVER_DOWN_MAX))
++		return -ERANGE;
++
++	ret = hotdog_popup_drive_exact(popup, false, microsteps);
++	if (ret)
++		return ret;
++	msleep(20);
++
++	ret = hotdog_popup_read_halls(popup, &popup->after_up,
++				       &popup->after_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->after_down) <= abs(popup->before_down))
++		return -EPROTO;
++
++	popup->last_steps = microsteps;
++	dev_info(popup->dev,
++		 "restore closed: %u microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 microsteps, popup->before_up, popup->after_up,
++		 popup->before_down, popup->after_down);
++
++	return 0;
++}
++
++static bool hotdog_popup_motion_endpoint(bool upward, int up, int down)
++{
++	return upward ? hotdog_popup_is_open(up, down) :
++			 hotdog_popup_is_closed(up, down);
++}
++
++static int hotdog_popup_move_profile(struct hotdog_popup *popup, bool upward)
++{
++	int current_up;
++	int current_down;
++	bool progress;
++	u64 remaining_ns;
++	u64 sleep_us;
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++	if (hotdog_popup_motion_endpoint(upward, popup->before_up,
++					 popup->before_down)) {
++		popup->after_up = popup->before_up;
++		popup->after_down = popup->before_down;
++		popup->endpoint_reached = true;
++		popup->last_steps = 0;
++		return 0;
++	}
++
++	if (upward && !hotdog_popup_is_closed(popup->before_up,
++					      popup->before_down))
++		return -ERANGE;
++	if (!upward &&
++	    !hotdog_popup_halls_plausible(popup->before_up, popup->before_down))
++		return -ERANGE;
++
++	popup->endpoint_reached = false;
++	popup->last_steps = 0;
++	hotdog_popup_power_on(popup, upward);
++
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_SLOW_PERIOD_NS);
++	if (ret)
++		goto out_stop;
++
++	/*
++	 * The Hall sensors are flat close to either mechanical endpoint. Let the
++	 * complete stock slow-start ramp run before deciding that the motor did
++	 * not move; a 320-pulse check produces false stalls when closing a fully
++	 * extended camera.
++	 */
++	sleep_us = DIV_ROUND_UP_ULL((u64)HOTDOG_RAMP_MICROSTEPS *
++					HOTDOG_SLOW_PERIOD_NS, NSEC_PER_USEC);
++	usleep_range(sleep_us, sleep_us + 100);
++	popup->last_steps = HOTDOG_RAMP_MICROSTEPS;
++
++	ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++	if (ret)
++		goto out_stop;
++	popup->after_up = current_up;
++	popup->after_down = current_down;
++	progress = upward ?
++		current_down - popup->before_down >= HOTDOG_PROGRESS_MIN_COUNTS :
++		abs(current_down) - abs(popup->before_down) >=
++			HOTDOG_PROGRESS_MIN_COUNTS ||
++		abs(popup->before_up) - abs(current_up) >=
++			HOTDOG_PROGRESS_MIN_COUNTS;
++
++	ret = hotdog_popup_pwm_enable(popup, HOTDOG_FAST_PERIOD_NS);
++	if (ret)
++		goto out_stop;
++
++	/*
++	 * Both Hall sensors are flat at the mechanical endpoints.  The stock
++	 * driver accelerates unconditionally after its slow ramp, so allow a
++	 * short, bounded fast probe to clear endpoint backlash before declaring
++	 * a stall.  A real obstruction is still stopped far short of a course.
++	 */
++	if (!progress) {
++		sleep_us = DIV_ROUND_UP_ULL(
++			(u64)HOTDOG_PROGRESS_PROBE_MICROSTEPS *
++			HOTDOG_FAST_PERIOD_NS, NSEC_PER_USEC);
++		usleep_range(sleep_us, sleep_us + 100);
++		popup->last_steps += HOTDOG_PROGRESS_PROBE_MICROSTEPS;
++
++		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++		if (ret)
++			goto out_stop;
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++		progress = upward ?
++			current_down - popup->before_down >=
++				HOTDOG_PROGRESS_MIN_COUNTS :
++			abs(current_down) - abs(popup->before_down) >=
++				HOTDOG_PROGRESS_MIN_COUNTS ||
++			abs(popup->before_up) - abs(current_up) >=
++				HOTDOG_PROGRESS_MIN_COUNTS;
++		if (!progress) {
++			ret = -EPROTO;
++			goto out_stop;
++		}
++	}
++
++	remaining_ns = (u64)(HOTDOG_FULL_COURSE_MICROSTEPS -
++				 popup->last_steps) * HOTDOG_FAST_PERIOD_NS;
++	while (remaining_ns) {
++		u64 interval_ns = min_t(u64, remaining_ns,
++					 (u64)HOTDOG_HALL_POLL_US * NSEC_PER_USEC);
++
++		sleep_us = DIV_ROUND_UP_ULL(interval_ns, NSEC_PER_USEC);
++		usleep_range(sleep_us, sleep_us + 100);
++		remaining_ns -= interval_ns;
++		popup->last_steps = HOTDOG_FULL_COURSE_MICROSTEPS -
++			DIV_ROUND_UP_ULL(remaining_ns, HOTDOG_FAST_PERIOD_NS);
++
++		ret = hotdog_popup_read_halls(popup, &current_up, &current_down);
++		if (ret)
++			goto out_stop;
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++		if (!hotdog_popup_halls_plausible(current_up, current_down)) {
++			ret = -ERANGE;
++			goto out_stop;
++		}
++		if (hotdog_popup_motion_endpoint(upward, current_up,
++						  current_down)) {
++			popup->endpoint_reached = true;
++			ret = 0;
++			goto out_stop;
++		}
++	}
++
++	ret = -ERANGE;
++
++out_stop:
++	hotdog_popup_stop(popup);
++	msleep(20);
++	if (!hotdog_popup_read_halls(popup, &current_up, &current_down)) {
++		popup->after_up = current_up;
++		popup->after_down = current_down;
++	}
++
++	dev_info(popup->dev,
++		 "%s stopped: steps=%u endpoint=%u error=%d Hall up %d -> %d, down %d -> %d\n",
++		 upward ? "open" : "close",
++		 popup->last_steps, popup->endpoint_reached, ret,
++		 popup->before_up, popup->after_up, popup->before_down,
++		 popup->after_down);
++
++	return ret;
++}
++
++static int hotdog_popup_open(struct hotdog_popup *popup)
++{
++	return hotdog_popup_move_profile(popup, true);
++}
++
++static int hotdog_popup_finish_open(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_read_halls(popup, &popup->before_up,
++				       &popup->before_down);
++	if (ret)
++		return ret;
++
++	if (abs(popup->before_up) < HOTDOG_FINISH_UP_MIN ||
++	    abs(popup->before_up) > HOTDOG_FINISH_UP_MAX ||
++	    abs(popup->before_down) > HOTDOG_FINISH_DOWN_MAX)
++		return -ERANGE;
++
++	ret = hotdog_popup_drive_exact(popup, true,
++				       HOTDOG_FINISH_OPEN_MICROSTEPS);
++	if (ret)
++		return ret;
++	msleep(20);
++
++	ret = hotdog_popup_read_halls(popup, &popup->after_up,
++				       &popup->after_down);
++	if (ret)
++		return ret;
++
++	popup->last_steps = HOTDOG_FINISH_OPEN_MICROSTEPS;
++	popup->endpoint_reached = abs(popup->after_up) >= HOTDOG_OPEN_HALL_MIN;
++	if (!popup->endpoint_reached)
++		return -ERANGE;
++
++	dev_info(popup->dev,
++		 "finish open: %u microsteps, Hall up %d -> %d, down %d -> %d\n",
++		 HOTDOG_FINISH_OPEN_MICROSTEPS, popup->before_up,
++		 popup->after_up, popup->before_down, popup->after_down);
++
++	return 0;
++}
++
++static int hotdog_popup_close(struct hotdog_popup *popup)
++{
++	unsigned int close_steps;
++	int ret;
++
++	ret = hotdog_popup_move_profile(popup, false);
++	if (ret || abs(popup->after_down) >= HOTDOG_SETTLED_DOWN_MIN)
++		return ret;
++
++	close_steps = popup->last_steps;
++	ret = hotdog_popup_restore_closed(popup,
++					 HOTDOG_PREFLIGHT_MICROSTEPS);
++	if (!ret)
++		popup->last_steps += close_steps;
++
++	return ret;
++}
++
++static int hotdog_popup_close_with_retry(struct hotdog_popup *popup)
++{
++	int ret;
++
++	ret = hotdog_popup_close(popup);
++	if (ret != -EPROTO)
++		return ret;
++
++	/* The LPG/DRV8834 pair can ignore the first ramp after a fast stop. */
++	dev_info(popup->dev, "close ramp did not move; retrying once\n");
++	msleep(250);
++	return hotdog_popup_close(popup);
++}
++
++static int hotdog_popup_domain_power_on(struct generic_pm_domain *domain)
++{
++	struct hotdog_popup *popup =
++		container_of(domain, struct hotdog_popup, genpd);
++	int recovery_ret;
++	int ret;
++
++	guard(mutex)(&popup->lock);
++	popup->automatic_open_count++;
++	ret = hotdog_popup_open(popup);
++	if (ret) {
++		/* Never leave a failed opening at an unknown intermediate point. */
++		recovery_ret = hotdog_popup_close_with_retry(popup);
++		if (recovery_ret)
++			dev_err(popup->dev,
++				"automatic open failed (%d), close recovery failed (%d)\n",
++				ret, recovery_ret);
++	}
++
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	return ret;
++}
++
++static int hotdog_popup_domain_power_off(struct generic_pm_domain *domain)
++{
++	struct hotdog_popup *popup =
++		container_of(domain, struct hotdog_popup, genpd);
++	int ret;
++
++	guard(mutex)(&popup->lock);
++	popup->automatic_close_count++;
++	ret = hotdog_popup_close_with_retry(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	return ret;
++}
++
++static ssize_t status_show(struct device *dev,
++			   struct device_attribute *attr, char *buf)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	int up;
++	int down;
++	int ret;
++
++	guard(mutex)(&popup->lock);
++	ret = hotdog_popup_read_halls(popup, &up, &down);
++	if (ret)
++		return ret;
++
++	return sysfs_emit(buf,
++		"preflight_used=%u restore_used=%u open_used=%u finish_open_used=%u close_used=%u automatic_open_count=%u automatic_close_count=%u endpoint=%u error=%d hall_up=%d hall_down=%d before_up=%d before_down=%d after_up=%d after_down=%d last_steps=%u preflight_microsteps=%u course_limit=%u\n",
++		popup->preflight_used, popup->restore_used, popup->open_used,
++		popup->finish_open_used, popup->close_used,
++		popup->automatic_open_count, popup->automatic_close_count,
++		popup->endpoint_reached, popup->last_error, up, down,
++		popup->before_up, popup->before_down, popup->after_up,
++		popup->after_down, popup->last_steps,
++		HOTDOG_PREFLIGHT_MICROSTEPS, HOTDOG_FULL_COURSE_MICROSTEPS);
++}
++static DEVICE_ATTR_RO(status);
++
++static ssize_t pulse_up_store(struct device *dev,
++			      struct device_attribute *attr,
++			      const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int microsteps;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &microsteps);
++	if (ret)
++		return ret;
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->preflight_used)
++		return -EALREADY;
++
++	popup->preflight_used = true;
++	ret = hotdog_popup_preflight_up(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(pulse_up);
++
++static ssize_t restore_closed_store(struct device *dev,
++				    struct device_attribute *attr,
++				    const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int microsteps;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &microsteps);
++	if (ret)
++		return ret;
++	if (microsteps != HOTDOG_PREFLIGHT_MICROSTEPS &&
++	    microsteps != HOTDOG_RECOVER_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->restore_used)
++		return -EALREADY;
++
++	popup->restore_used = true;
++	ret = hotdog_popup_restore_closed(popup, microsteps);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(restore_closed);
++
++static ssize_t open_store(struct device *dev,
++			  struct device_attribute *attr,
++			  const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int limit;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &limit);
++	if (ret)
++		return ret;
++	if (limit != HOTDOG_FULL_COURSE_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->open_used)
++		return -EALREADY;
++
++	popup->open_used = true;
++	ret = hotdog_popup_open(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(open);
++
++static ssize_t finish_open_store(struct device *dev,
++				 struct device_attribute *attr,
++				 const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int microsteps;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &microsteps);
++	if (ret)
++		return ret;
++	if (microsteps != HOTDOG_FINISH_OPEN_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->finish_open_used)
++		return -EALREADY;
++
++	popup->finish_open_used = true;
++	ret = hotdog_popup_finish_open(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(finish_open);
++
++static ssize_t close_store(struct device *dev,
++			   struct device_attribute *attr,
++			   const char *buf, size_t count)
++{
++	struct hotdog_popup *popup = dev_get_drvdata(dev);
++	unsigned int limit;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &limit);
++	if (ret)
++		return ret;
++	if (limit != HOTDOG_FULL_COURSE_MICROSTEPS)
++		return -EINVAL;
++
++	guard(mutex)(&popup->lock);
++	if (popup->close_used)
++		return -EALREADY;
++
++	popup->close_used = true;
++	ret = hotdog_popup_close(popup);
++	hotdog_popup_stop(popup);
++	popup->last_error = ret;
++	if (ret)
++		return ret;
++
++	return count;
++}
++static DEVICE_ATTR_WO(close);
++
++static struct attribute *hotdog_popup_attrs[] = {
++	&dev_attr_status.attr,
++	&dev_attr_pulse_up.attr,
++	&dev_attr_restore_closed.attr,
++	&dev_attr_open.attr,
++	&dev_attr_finish_open.attr,
++	&dev_attr_close.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(hotdog_popup);
++
++static int hotdog_popup_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct hotdog_popup *popup;
++	int ret;
++
++	popup = devm_kzalloc(dev, sizeof(*popup), GFP_KERNEL);
++	if (!popup)
++		return -ENOMEM;
++
++	popup->dev = dev;
++	mutex_init(&popup->lock);
++	platform_set_drvdata(pdev, popup);
++
++	/* OxygenOS keeps the motor boost converter on across movements. */
++	popup->boost = devm_gpiod_get(dev, "boost-enable", GPIOD_OUT_HIGH);
++	if (IS_ERR(popup->boost))
++		return dev_err_probe(dev, PTR_ERR(popup->boost),
++				     "failed to get boost GPIO\n");
++	popup->direction = devm_gpiod_get(dev, "direction", GPIOD_OUT_LOW);
++	if (IS_ERR(popup->direction))
++		return dev_err_probe(dev, PTR_ERR(popup->direction),
++				     "failed to get direction GPIO\n");
++	popup->mode1 = devm_gpiod_get(dev, "mode1", GPIOD_OUT_LOW);
++	if (IS_ERR(popup->mode1))
++		return dev_err_probe(dev, PTR_ERR(popup->mode1),
++				     "failed to get mode1 GPIO\n");
++	popup->sleep = devm_gpiod_get(dev, "sleep", GPIOD_OUT_LOW);
++	if (IS_ERR(popup->sleep))
++		return dev_err_probe(dev, PTR_ERR(popup->sleep),
++				     "failed to get sleep GPIO\n");
++	popup->step = devm_gpiod_get(dev, "step", GPIOD_OUT_LOW);
++	if (IS_ERR(popup->step))
++		return dev_err_probe(dev, PTR_ERR(popup->step),
++				     "failed to get step GPIO\n");
++	popup->step_pwm = devm_pwm_get(dev, "step");
++	if (IS_ERR(popup->step_pwm))
++		return dev_err_probe(dev, PTR_ERR(popup->step_pwm),
++				     "failed to get step PWM\n");
++	popup->pinctrl = devm_pinctrl_get(dev);
++	if (IS_ERR(popup->pinctrl))
++		return dev_err_probe(dev, PTR_ERR(popup->pinctrl),
++				     "failed to get pinctrl\n");
++	popup->step_gpio_state = pinctrl_lookup_state(popup->pinctrl, "gpio");
++	if (IS_ERR(popup->step_gpio_state))
++		return dev_err_probe(dev, PTR_ERR(popup->step_gpio_state),
++				     "failed to get GPIO step state\n");
++	popup->step_pwm_state = pinctrl_lookup_state(popup->pinctrl, "pwm");
++	if (IS_ERR(popup->step_pwm_state))
++		return dev_err_probe(dev, PTR_ERR(popup->step_pwm_state),
++				     "failed to get PWM step state\n");
++
++	popup->hall_up = devm_iio_channel_get(dev, "hall-up");
++	if (IS_ERR(popup->hall_up))
++		return dev_err_probe(dev, PTR_ERR(popup->hall_up),
++				     "failed to get upper Hall channel\n");
++	popup->hall_down = devm_iio_channel_get(dev, "hall-down");
++	if (IS_ERR(popup->hall_down))
++		return dev_err_probe(dev, PTR_ERR(popup->hall_down),
++				     "failed to get lower Hall channel\n");
++
++	hotdog_popup_stop(popup);
++	popup->genpd.name = "hotdog-camera-popup";
++	popup->genpd.power_on = hotdog_popup_domain_power_on;
++	popup->genpd.power_off = hotdog_popup_domain_power_off;
++	/*
++	 * The sensor is probed while retracted. Start logically on so attaching
++	 * the I2C device does not move the mechanism; its first runtime suspend
++	 * establishes the closed/off state.
++	 */
++	ret = pm_genpd_init(&popup->genpd, NULL, false);
++	if (ret)
++		return dev_err_probe(dev, ret,
++				     "failed to initialize power domain\n");
++
++	ret = of_genpd_add_provider_simple(dev->of_node, &popup->genpd);
++	if (ret) {
++		pm_genpd_remove(&popup->genpd);
++		return dev_err_probe(dev, ret,
++				     "failed to register power domain\n");
++	}
++
++	ret = devm_device_add_group(dev, hotdog_popup_groups[0]);
++	if (ret) {
++		of_genpd_del_provider(dev->of_node);
++		pm_genpd_remove(&popup->genpd);
++		return ret;
++	}
++
++	dev_info(dev, "Hall-bounded pop-up power domain ready; motor remains off\n");
++	return 0;
++}
++
++static void hotdog_popup_remove(struct platform_device *pdev)
++{
++	struct hotdog_popup *popup = platform_get_drvdata(pdev);
++
++	of_genpd_del_provider(pdev->dev.of_node);
++	pm_genpd_remove(&popup->genpd);
++	hotdog_popup_stop(popup);
++	gpiod_set_value_cansleep(popup->boost, 0);
++}
++
++static const struct of_device_id hotdog_popup_of_match[] = {
++	{ .compatible = "oneplus,hotdog-popup-motor" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, hotdog_popup_of_match);
++
++static struct platform_driver hotdog_popup_driver = {
++	.probe = hotdog_popup_probe,
++	.remove = hotdog_popup_remove,
++	.driver = {
++		.name = "oneplus-hotdog-popup-motor",
++		.of_match_table = hotdog_popup_of_match,
++	},
++};
++module_platform_driver(hotdog_popup_driver);
++
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
++MODULE_DESCRIPTION("OnePlus hotdog pop-up camera motor bring-up driver");
++MODULE_LICENSE("GPL");

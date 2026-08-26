@@ -1,7 +1,7 @@
 From 7571d55580276650882698838a78b071601c12e5 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 26 Aug 2026 00:17:56 +0200
-Subject: [PATCH 09/12] arm64: dts: preserve hotdog overlay symbols
+Subject: [PATCH 09/17] arm64: dts: preserve hotdog overlay symbols
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

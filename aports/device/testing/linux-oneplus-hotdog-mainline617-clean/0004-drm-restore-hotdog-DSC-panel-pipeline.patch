@@ -1,7 +1,7 @@
 From 9a02cbf5aa3807f93557563006faf12160130b95 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:10 +0200
-Subject: [PATCH 04/12] drm: restore hotdog DSC panel pipeline
+Subject: [PATCH 04/17] drm: restore hotdog DSC panel pipeline
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

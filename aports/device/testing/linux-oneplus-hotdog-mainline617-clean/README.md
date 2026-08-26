@@ -15,10 +15,10 @@ hardware-tested package and is not selected by the device package yet.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The twelve patches are exported from the local kernel branch
+name. The seventeen patches are exported from the local kernel branch
 `bringup/hotdog-sm8150-clean-baseline` at commit
-`1c869546edb1127c15d28e68b21f1efb3b25ceba`, tree
-`5c5776653e12bbf4aae4d557477f1c3637a61948`, and retain their commit
+`cbb657877fd2ef7ad7925f8857ee81964e897819`, tree
+`da7868a395cf9df795287bc4ac41489dce811cba`, and retain their commit
 identities.
 
 ## Included foundation
@@ -38,12 +38,17 @@ identities.
 - IPA 4.1, the hotdog MPSS/ADSP firmware paths and QRTR radio foundation;
 - WCN3990 Wi-Fi and Bluetooth wiring with modem-restart recovery;
 - WCD9340 handset audio, DisplayPort audio and dual TFA9874 speakers;
+- SM8150 CAMSS with all four hotdog sensors, both focus actuators, dual-LED
+  flash and the Hall-terminated popup mechanism;
+- SLPI/FastRPC with the two SM8150 PDR domains and the complete Elliptic
+  hostless audio/IIO proximity path;
 - the pmaports LLVM prototype fix required by the shared configuration.
 
 ## Deliberately deferred
 
-The next blocks still need cameras, popup motor, SLPI sensors and Elliptic
-proximity. Radio userspace for data/calls/SMS remains in the device packages;
+The kernel-side functional matrix is now restored. Radio userspace for
+data/calls/SMS and the private Elliptic calibration remain in the device
+packages;
 this kernel block restores the hardware and transport foundation it requires.
 The remaining pieces stay available in the immutable r181 checkpoint and are
 restored only in bounded, independently tested groups.
@@ -91,7 +96,29 @@ firmware paths and installed modules both before and after packaging.
 | packaged `qcom_q6v5_pas.ko` | - | `3524c42e1dafcfa4389610bac514e179a0a877c3b56e80cb815be59bd9965acb` |
 | packaged `snd-soc-tfa9874.ko` | - | `b9b70c071504a07c082f603dca82c2e79e19239ace3ea031cbdd1d6bc8000d79` |
 
-The package contains 829 modules, all with vermagic
+The r4 package contains 829 modules, all with vermagic
 `6.17.0-sm8150-hotdog-clean SMP preempt mod_unload aarch64`. This remains an
 offline checkpoint until the staged phone boot confirms modem, QRTR, IPA,
 Wi-Fi and audio enumeration.
+
+## Complete migration package build
+
+Revision r7 adds CAMSS, all four camera sensors, both actuators, flash, popup,
+SLPI/FastRPC and Elliptic proximity. It also keeps sensors-PD FastRPC messages
+in the remote heap and prevents generic power-domain pinctrl from claiming the
+popup GPIO state. The strict build and complete validator passed on 2026-08-26.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r7.apk` | 23,003,641 | `41f173a19b5cbe0202e7e0848c41a730d99c2a772c50ecb777da595356535abf` |
+| packaged `boot/vmlinuz` | 31,492,608 | `e0dd783787bce562c87e87d9339307747bcde0b37ca00940d41c24ee3e86dbb0` |
+| packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
+| packaged `qcom-camss.ko` | - | `07e437a6c6756ae32f41860f9119dbcfc2ec36c245387ebe181404b7fa37a339` |
+| packaged `hotdog-popup-motor.ko` | - | `408a6d134d98da8efdbe241f9c6d0160df4ce52bcdbba1bc42c8d3a381159a19` |
+| packaged `fastrpc.ko` | - | `a21f85d84452b69f0ddee59ff9e9d7e98db8b7d5b84a58cc5ee2b3f85e18deae` |
+| packaged `qcom_pd_mapper.ko` | - | `2eecc4aeb4ca37a94605bd56d8c9032597f077e761c62d00dcca93a188950eab` |
+| packaged `q6elliptic.ko` | - | `1a49b33e8123151a207fb8141e8af5a3b25846e1684fee61bfd61b0fd7c17c40` |
+
+The r7 package contains 840 modules with the same unique 6.17 vermagic. It is
+the first package containing the complete migrated kernel feature matrix; its
+camera, SLPI and proximity additions still require the staged hardware gate.

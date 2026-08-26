@@ -1,7 +1,7 @@
 From 91595c6f1e4563c754f29bf5a58e03d307487ecd Mon Sep 17 00:00:00 2001
 From: Nicola Guerrera <guerrera.nicola@gmail.com>
 Date: Fri, 31 Oct 2025 18:38:21 +0100
-Subject: [PATCH 06/12] input: touchscreen: fts_touch: fix compilation with
+Subject: [PATCH 06/17] input: touchscreen: fts_touch: fix compilation with
  LLVM
 
 (cherry picked from commit 01fc3dd3c8317362bcddd9eab9f243909621a4a0)

@@ -1,7 +1,7 @@
 From 48ba027fa078e6befcb259fe7e46612d45532f18 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 26 Aug 2026 00:33:21 +0200
-Subject: [PATCH 10/12] arm64: dts: enable the hotdog haptics bus
+Subject: [PATCH 10/17] arm64: dts: enable the hotdog haptics bus
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

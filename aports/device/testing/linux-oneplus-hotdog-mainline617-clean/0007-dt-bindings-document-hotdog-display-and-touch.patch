@@ -1,7 +1,7 @@
 From a629ce918a194224edcec40da5f24f3fbf902f29 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 23:14:50 +0200
-Subject: [PATCH 07/12] dt-bindings: document hotdog display and touch
+Subject: [PATCH 07/17] dt-bindings: document hotdog display and touch
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

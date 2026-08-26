@@ -1,7 +1,7 @@
 From 6a1a6138fbd63a9fdcfeb65a321ce136c0106fd5 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Tue, 25 Aug 2026 22:57:36 +0200
-Subject: [PATCH 05/12] ufs: qcom: retain SM8150 32-bit DMA aperture
+Subject: [PATCH 05/17] ufs: qcom: retain SM8150 32-bit DMA aperture
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

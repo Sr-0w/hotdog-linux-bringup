@@ -40,7 +40,7 @@ it. Diagnostic framebuffer painting, direct-entry pstore markers, camera
 experiments, superseded UFS dumps and other historical scaffolding stay in the
 immutable checkpoint.
 
-The current tree uses thirteen focused commits and changes 58 kernel files.
+The current tree uses seventeen focused commits and changes 99 kernel files.
 The first seven-commit offline foundation build produced:
 
 | Artifact | SHA256 |
@@ -102,11 +102,13 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
 - Full DT schema: retains pre-existing SM8150 common-tree warnings for UFS,
   PMIC, APR and RPMh naming; new Hotdog-specific schema findings are addressed.
 - Packaged foundation build: PASS through r3. The strict r4 radio/audio build
-  is also PASS, APK SHA256
-  `958d2eb4ab469f8465df9a5e2389fe29b5bc411a45006241ed2529083f3cb438`.
+  is PASS, and the corrected strict r7 camera/SLPI/proximity build is PASS with
+  APK SHA256
+  `41f173a19b5cbe0202e7e0848c41a730d99c2a772c50ecb777da595356535abf`.
 - Full image assembly/offline image QA: pending.
 - Hardware boot: PASS for the r2 foundation and r3 haptics tree; the current
-  radio/audio commit has not been booted yet.
+  radio/audio tree is PARTIAL as documented below. The r7 camera/SLPI tree has
+  not been booted yet.
 
 The hardware-tested 6.16 package remains the default until all pending gates
 above pass.

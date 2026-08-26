@@ -1,7 +1,7 @@
 From 764fab6f08cd423465c189294a5f98107f1c6e76 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 26 Aug 2026 00:53:22 +0200
-Subject: [PATCH 11/12] arm64: dts: normalize hotdog common regulators
+Subject: [PATCH 11/17] arm64: dts: normalize hotdog common regulators
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---

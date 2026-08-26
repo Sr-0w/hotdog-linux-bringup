@@ -1,7 +1,7 @@
 From 1c869546edb1127c15d28e68b21f1efb3b25ceba Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
 Date: Wed, 26 Aug 2026 00:56:29 +0200
-Subject: [PATCH 12/12] arm64: qcom: restore hotdog radio and audio stack
+Subject: [PATCH 12/17] arm64: qcom: restore hotdog radio and audio stack
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
