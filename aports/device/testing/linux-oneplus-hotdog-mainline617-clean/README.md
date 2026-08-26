@@ -122,3 +122,27 @@ popup GPIO state. The strict build and complete validator passed on 2026-08-26.
 The r7 package contains 840 modules with the same unique 6.17 vermagic. It is
 the first package containing the complete migrated kernel feature matrix; its
 camera, SLPI and proximity additions still require the staged hardware gate.
+
+## Camera clock correction and complete electronic gate
+
+Revision r8 enables the SM8150 camera clock controller that the r7 config had
+accidentally omitted. The validator now requires both
+`CONFIG_SM_CAMCC_8150=m` and the packaged `camcc-sm8150.ko`. No kernel source
+patch changed between r7 and r8.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r8.apk` | 23,013,453 | `f4894e2512a4b8469f00579c68582bc2f2f62ca04fac7c38003c84f3950d7629` |
+| packaged `boot/vmlinuz` | 31,492,608 | `ad1bd2af47dc14f9bdecf282e9d8887fcb5605568d58f7b65c0d9df5bf6670ae` |
+| packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
+| packaged `camcc-sm8150.ko` | - | `1862d62bef4afe92defca7eba18c02481f3e483640dec47442ccc2d7a1ae90f4` |
+
+The r8 package contains 841 modules with the same unique 6.17 vermagic. On
+hardware it booted directly in 21 seconds. CAMCC, both CCI controllers and
+CAMSS bound; `/dev/media0`, eight video nodes and twenty subdevices appeared,
+with all four sensors and both actuators loaded. SLPI, modem and ADSP remained
+running and Elliptic proximity remained enumerated. This is the complete
+electronic kernel gate. A 30-sample, 300-second monitor retained the same boot,
+media topology, three running remote processors and QRTR service 400 at every
+sample. Physical camera, popup and broader interaction tests remain
+deliberately deferred until the final test pass.

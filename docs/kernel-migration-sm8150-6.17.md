@@ -68,11 +68,13 @@ The first boot candidate included:
 - Adreno 640 GPU/GMU;
 - power/volume keys and S6SY761 touch.
 
-The next validated block adds the alert slider, charging policy, Type-C role
-switching, reboot modes, AW8697 haptics and PN553 NFC. The current offline
-block adds IPA 4.1, the hotdog MPSS/ADSP firmware paths, WCN3990 Wi-Fi and
-Bluetooth, WCD9340 audio and both TFA9874 speaker amplifiers. Cameras, popup
-motor and the SLPI/Elliptic path remain deferred.
+The reconstructed tree now also contains the alert slider, charging policy,
+Type-C role switching, reboot modes, AW8697 haptics, PN553 NFC, IPA 4.1,
+hotdog MPSS/ADSP firmware paths, WCN3990 Wi-Fi and Bluetooth, WCD9340 audio,
+both TFA9874 amplifiers, CAMSS and all four cameras, the Hall-bounded popup
+mechanism, SLPI/FastRPC/PDR and the Elliptic proximity path. The source series
+is complete for the currently validated kernel feature matrix; remaining work
+is runtime integration, physical coverage and upstream cleanup.
 
 ## Foundation oracle decisions
 
@@ -102,13 +104,16 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
 - Full DT schema: retains pre-existing SM8150 common-tree warnings for UFS,
   PMIC, APR and RPMh naming; new Hotdog-specific schema findings are addressed.
 - Packaged foundation build: PASS through r3. The strict r4 radio/audio build
-  is PASS, and the corrected strict r7 camera/SLPI/proximity build is PASS with
-  APK SHA256
-  `41f173a19b5cbe0202e7e0848c41a730d99c2a772c50ecb777da595356535abf`.
+  is PASS. The strict r8 complete build is PASS with 841 modules and APK
+  SHA256
+  `f4894e2512a4b8469f00579c68582bc2f2f62ca04fac7c38003c84f3950d7629`.
 - Full image assembly/offline image QA: pending.
-- Hardware boot: PASS for the r2 foundation and r3 haptics tree; the current
-  radio/audio tree is PARTIAL as documented below. The r7 camera/SLPI tree has
-  not been booted yet.
+- Hardware boot: PASS for r2, r3, r6, r7 and r8. The first r4 warm reboot
+  anomaly remains recorded below, but r7 returned without intervention in 56
+  seconds and r8 returned without intervention in 21 seconds.
+- Complete electronic runtime gate: PASS on r8. CAMCC, both CCI controllers,
+  CAMSS, four sensor drivers, both focus actuators, popup power domain,
+  SLPI/FastRPC/PDR and Elliptic proximity all enumerate together.
 
 The hardware-tested 6.16 package remains the default until all pending gates
 above pass.
@@ -159,3 +164,42 @@ This is a partial hardware gate, not a stable-boot PASS. A further ordinary
 reboot must complete without a manual key sequence before the radio/audio
 block can be promoted. The first black boot remains an unresolved regression
 until that repetition classifies it.
+
+## Complete r8 electronic runtime gate
+
+The complete r7 tree first proved the FastRPC sensors-PD correction: SLPI,
+modem and ADSP remained running for all 30 samples of a 300-second monitor,
+with QRTR service 400 present and no SLPI crash. Camera enumeration was still
+blocked because the package config omitted `CONFIG_SM_CAMCC_8150`; the
+`ad00000.clock-controller` platform device therefore had no driver and both
+CCI controllers deferred.
+
+Revision r8 changes only the package config and validation contract. It adds
+`camcc-sm8150.ko`, producing 841 modules. Its AVB boot image has SHA256
+`de20bf94620195958c54d7fe790d58754aef8650e68f4703d1916b92947aef54`.
+The readback-verified image booted directly on slot B in 21 seconds with no
+9008 or 900e transition. Runtime then showed:
+
+- CAMCC, `ac4a000.cci`, `ac4b000.cci` and `acb3000.camss` bound;
+- `/dev/media0`, eight `/dev/video*` nodes and twenty V4L2 subdevices;
+- IMX586, IMX481, IMX471 and S5K3M5 loaded, plus both LC898217XC actuators;
+- the popup power domain ready while explicitly leaving the motor off;
+- SLPI, modem and ADSP running, QRTR service 400 present and
+  `elliptic_proximity` exposed through IIO;
+- no camera-related deferred device; only the unrelated gpio-keys entry
+  remains in `devices_deferred`.
+
+A second 30-sample, 300-second monitor retained the same r8 boot identity,
+media topology, all three running remote processors and QRTR service 400 for
+every sample.
+
+The A/B metadata was also checked read-only after the earlier r4 anomaly. Slot
+B is active, bootable and successful; slot A is also bootable and successful.
+The failed first r4 warm boot was therefore not caused by slot B being marked
+unbootable. It remains classified as a transient warm-reset or initialization
+state until stronger evidence identifies the exact cause.
+
+This is an electronic enumeration and stability gate. No camera stream,
+autofocus movement, flash, popup movement or other physical interaction was
+performed, in accordance with the decision to run physical parity tests only
+after the complete migrated stack is present.

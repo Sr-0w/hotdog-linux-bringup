@@ -42,6 +42,7 @@ expect_config 'CONFIG_SND_SOC_SM8150=m'
 expect_config 'CONFIG_SND_SOC_TFA9874=m'
 expect_config 'CONFIG_SND_SOC_WCD934X=m'
 expect_config 'CONFIG_I2C_QCOM_CCI=m'
+expect_config 'CONFIG_SM_CAMCC_8150=m'
 expect_config 'CONFIG_VIDEO_QCOM_CAMSS=m'
 expect_config 'CONFIG_VIDEO_QCOM_HOTDOG_POPUP=m'
 expect_config 'CONFIG_VIDEO_IMX471=m'
@@ -145,7 +146,7 @@ if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	for module_name in s6sy761.ko ipa.ko ath10k_snoc.ko qcom_q6v5_pas.ko \
 			snd-soc-sm8150.ko snd-soc-tfa9874.ko snd-soc-wcd934x.ko \
-			qcom-camss.ko imx586.ko imx481.ko imx471.ko s5k3m5.ko \
+			camcc-sm8150.ko qcom-camss.ko imx586.ko imx481.ko imx471.ko s5k3m5.ko \
 			ak7375.ko lc898217xc.ko mxm1120.ko hotdog-popup-motor.ko \
 			qcom_pd_mapper.ko q6elliptic.ko q6hostless.ko; do
 		module=$(find "$modules_dir" -type f -name "$module_name" -print -quit)

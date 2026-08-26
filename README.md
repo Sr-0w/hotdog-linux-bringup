@@ -58,6 +58,7 @@ Lomiri session has been validated on Hotdog yet. See the complete
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
+| Clean migration candidate | SM8150 6.17 r8; complete electronic kernel gate passed, not yet the default |
 | Historical paths | Downstream 4.14/kexec and Linux 6.17 K1, retained for recovery and evidence only |
 
 The Linux 6.16 package is a mainline-oriented reference stack. Its successful
@@ -228,11 +229,11 @@ flowchart LR
 
 The active engineering frontier is:
 
-1. rebuild and boot the package-complete sensor/proximity image, including the
-   per-device calibration provisioned from `persist`, then validate call
-   blanking when a SIM is available;
-2. finish the guarded modem readiness handoff and test registration, LTE data,
+1. finish the guarded modem readiness handoff and test registration, LTE data,
    SMS and calls with a SIM;
+2. run the final physical parity pass on the complete 6.17 migration image,
+   including camera streams, autofocus, popup, flash, haptics, USB and the
+   per-device proximity calibration provisioned from `persist`;
 3. close display wake, remaining audio, dock, charging and
    camera-quality gaps, and measure what holding `cx`/`mss` for the life of the
    modem costs in power now that suspend itself is clean;
