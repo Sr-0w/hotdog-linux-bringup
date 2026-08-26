@@ -220,43 +220,33 @@ if skipped proximity; then
 	head_ "Proximite ultrasonique"; skip "proximite (demande)"
 else
 	head_ "Proximite ultrasonique"
-	SMOKE="$(TROUVER elliptic-proximity-smoke.py || true)"
-	if [ -z "$SMOKE" ]; then
-		skip "proximite : elliptic-proximity-smoke.py absent"
+	# On ne lance plus le diagnostic ici. Il arme le chemin audio lui-meme, et
+	# depuis que hotdog-proximity-arm existe ce chemin est deja tenu : les deux
+	# se disputaient les memes PCM et le test mourait en EBUSY avant meme
+	# d'enregistrer. C'etait le symptome, pas le capteur.
+	#
+	# Le vrai chemin utilisateur est plus simple et se teste tel quel :
+	# reclamer la proximite fait scruter in_proximity_raw, ce qui leve `demand`,
+	# ce qui fait armer le service. monitor-sensor reclame exactement comme le
+	# ferait une application, donc c'est lui qu'on ecoute.
+	printf '  Portez le telephone a l'\''oreille comme pour telephoner, cinq\n'
+	printf '  secondes, puis eloignez-le cinq secondes. Repetez pendant 45 s.\n'
+	printf '  Un objet ne suffit pas : il faut la main ou le visage.\n'
+	PROX="$(R 'timeout 45 monitor-sensor 2>&1 | grep -i proximity' || true)"
+	if ! printf '%s' "$PROX" | grep -qi "has proximity"; then
+		bad "proximite : SensorProxy n'annonce aucun capteur de proximite"
 	else
-		DEPOSER "$SMOKE" /tmp/prox-smoke.py
-		printf '  Portez le telephone a l'\''oreille cinq secondes, eloignez-le cinq\n'
-		printf '  secondes, et repetez pendant 45 s.\n'
-		R "rm -f /tmp/prox-gate.log"
-		R "PYTHONDONTWRITEBYTECODE=1 python3 /tmp/prox-smoke.py --record 45 --log /tmp/prox-gate.log" >/dev/null 2>&1 || true
-		# Un test qui refuse de demarrer ecrit son motif dans le journal. Le
-		# premier passage l'a envoye dans /dev/null et a conclu "un sens
-		# manque" alors que rien ne s'etait execute : un test qui n'a pas
-		# tourne doit le dire, pas se faire passer pour un echec materiel.
-		# Le demarrage se prouve par la ligne d'en-tete "kernel=…", pas par
-		# l'absence d'ERROR : le repli du chemin audio en fin de course
-		# echoue en EBUSY quand le service d'armement le tient encore, et
-		# cela n'invalide pas les transitions deja relevees.
-		DEMARRE="$(R "grep -c '^kernel=' /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
-		ERR_PROX=""
-		[ "${DEMARRE:-0}" -gt 0 ] || \
-			ERR_PROX="$(R "grep -m1 ERROR /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
-		[ "${DEMARRE:-0}" -gt 0 ] || [ -n "$ERR_PROX" ] || ERR_PROX="journal vide"
-		# grep -c sort 1 quand le compte est zero, donc un `|| echo 0` ajoutait
-		# un second zero et rendait "0\n0", refuse par [ -gt ].
-		PRES="$(R "grep -c near /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
-		LOIN="$(R "grep -c far /tmp/prox-gate.log 2>/dev/null || true" | tr -d '\n')"
-		if [ -n "$ERR_PROX" ]; then
-			bad "proximite : le test ne s'est pas execute -- $ERR_PROX"
+		# Motif exact de monitor-sensor : "    Proximity value changed: %d".
+		# S'y tenir evite de compter la ligne d'annonce, qui porte elle aussi
+		# un "near: 0" et ferait croire a un eloignement jamais survenu.
+		PRES="$(printf '%s\n' "$PROX" | grep -cE 'Proximity value changed: *1' || true)"
+		LOIN="$(printf '%s\n' "$PROX" | grep -cE 'Proximity value changed: *0' || true)"
+		note "transitions relevees : near=${PRES:-0} far=${LOIN:-0}"
+		if [ "${PRES:-0}" -gt 0 ] && [ "${LOIN:-0}" -gt 0 ]; then
+			ok "proximite : les deux sens ont ete vus"
 		else
-			note "transitions relevees : near=${PRES:-0} far=${LOIN:-0}"
-			if [ "${PRES:-0}" -gt 0 ] && [ "${LOIN:-0}" -gt 0 ]; then
-				ok "proximite : les deux sens ont ete vus"
-			else
-				bad "proximite : un sens manque (near=${PRES:-0} far=${LOIN:-0})"
-			fi
+			bad "proximite : un sens manque (near=${PRES:-0} far=${LOIN:-0})"
 		fi
-		R "rm -f /tmp/prox-smoke.py"
 	fi
 fi
 
