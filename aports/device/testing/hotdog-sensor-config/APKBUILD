@@ -1,0 +1,42 @@
+# Maintainer: Sr-0w <Sr-0w@users.noreply.github.com>
+pkgname=hotdog-sensor-config
+pkgver=1
+pkgrel=0
+pkgdesc="SEE sensor descriptions the SLPI sensor core reads on OnePlus Hotdog"
+url="https://github.com/Sr-0w/hotdog-linux-bringup"
+arch="noarch"
+license="MIT"
+options="!check"
+
+# Ces descriptions disent au coeur capteurs du SLPI quels sous-capteurs
+# existent. hexagonrpcd sert le repertoire ; sans elles SEE ne repond jamais,
+# iio-sensor-proxy relache son client SSC apres cent secondes, et
+# l'accelerometre comme la lumiere disparaissent de SensorProxy pendant que la
+# proximite, qui passe par IIO, continue de fonctionner.
+#
+# Elles n'etaient livrees par aucun paquet et n'avaient survecu au bring-up que
+# parce que le rootfs n'avait jamais ete recree. La premiere image propre les a
+# perdues.
+#
+# Le registre n'est pas livre ici : il est propre a chaque exemplaire et
+# hotdog-import-factory-calibration le remplit depuis la partition persist.
+
+_commit="0000000000000000000000000000000000000000"
+source="$pkgname-$_commit.tar.gz::$url/archive/$_commit.tar.gz"
+builddir="$srcdir/hotdog-linux-bringup-$_commit"
+
+package() {
+	local count
+	count="$(find "$builddir/firmware/sensors/config" -maxdepth 1 -name '*.json' | wc -l)"
+	[ "$count" -ge 60 ] || {
+		printf 'unexpected sensor config count: %s\n' "$count" >&2
+		return 1
+	}
+
+	install -d -m 755 "$pkgdir/usr/share/qcom/sensors/config" \
+		"$pkgdir/usr/share/qcom/sensors/registry"
+	install -m 644 "$builddir"/firmware/sensors/config/*.json \
+		"$pkgdir/usr/share/qcom/sensors/config/"
+}
+
+sha512sums=""

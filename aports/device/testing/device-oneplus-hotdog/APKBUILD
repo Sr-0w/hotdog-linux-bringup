@@ -96,6 +96,7 @@ sensors() {
 	depends="
 		alsa-utils
 		hexagonrpcd
+		hotdog-sensor-config
 		iio-sensor-proxy
 		iio-sensor-proxy-openrc
 		pd-mapper-openrc

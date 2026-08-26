@@ -39,6 +39,7 @@ target_pmaports="$HOTDOG_PMAPORTS_SM8150"
 snapshot_root="$HOTDOG_ROOT/aports"
 snapshot_rels=(
 	"device/testing/device-oneplus-hotdog"
+	"device/testing/hotdog-sensor-config"
 	"device/testing/firmware-oneplus-hotdog"
 	"device/testing/hotdog-radio-bootstrap"
 	"device/testing/linux-postmarketos-sm8150-staging"
@@ -119,6 +120,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:30-initramfs-firmware.files | \
 		device/testing/device-oneplus-hotdog:51-qcom-sm8150.lua | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-install | \
+		device/testing/device-oneplus-hotdog:device-oneplus-hotdog.post-upgrade | \
 		device/testing/device-oneplus-hotdog:postprocess-boot-avb.sh | \
 		device/testing/device-oneplus-hotdog:90-hotdog-bringup-doas.conf | \
 		device/testing/device-oneplus-hotdog:90-hotdog-camera.conf | \
@@ -130,6 +132,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm-login | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm.initd | \
+		device/testing/device-oneplus-hotdog:hotdog-qbootctl.initd | \
 		device/testing/device-oneplus-hotdog:62-hotdog-elliptic-proximity.rules | \
 		device/testing/device-oneplus-hotdog:elliptic-proximity-smoke.py | \
 		device/testing/device-oneplus-hotdog:hotdog-elliptic-calibration.py | \
@@ -146,6 +149,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog.conf | \
 		device/testing/device-oneplus-hotdog:HiFi.conf | \
 		device/testing/device-oneplus-hotdog:device-oneplus-hotdog-nonfree-firmware.post-install | \
+		device/testing/hotdog-sensor-config:APKBUILD | \
 		device/testing/firmware-oneplus-hotdog:APKBUILD | \
 		device/testing/firmware-oneplus-hotdog:pn553-hotdog.nci | \
 		device/testing/firmware-oneplus-hotdog:*.jsn | \
