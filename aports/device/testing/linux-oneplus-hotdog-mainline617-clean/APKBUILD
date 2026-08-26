@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=8
+pkgrel=9
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -54,6 +54,7 @@ source="
 	0015-media-restore-hotdog-popup-camera-mechanism.patch
 	0016-soc-qcom-restore-hotdog-SLPI-infrastructure.patch
 	0017-sound-qcom-restore-hotdog-Elliptic-proximity-path.patch
+	0018-usb-dwc3-avoid-duplicate-request-giveback.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -122,5 +123,6 @@ b67eb5432b8ac73e7fcf1487b672e8ef606428614e7220a73dd9966e8c9fce5584995ec1d9e569c6
 4703ccf53cbb10ce5fe78aa1e42d2761c8790d68281d79f069c691eadd5add795d66b4d7227634775050d612a991f1d2810318b933e328d5ab0f639eecb64319  0015-media-restore-hotdog-popup-camera-mechanism.patch
 a5fc0ef2d2688967dfa3c4261806413e6b0cef6e326271994c49ae7c9fac1558938d77c8fd235ba18c7bf9bbc99b540488df217a818b1c8886d7f3d4c487a3f5  0016-soc-qcom-restore-hotdog-SLPI-infrastructure.patch
 39ab078b50d32c7d80e2c0cce38649795d7f6b133fb326466c161991adfb5b65bbf94f1e8f4407a7312aac38ad41602f477de34c3f8b5d667960aab40f30a07d  0017-sound-qcom-restore-hotdog-Elliptic-proximity-path.patch
+d3d5746c1d1455f31228d3f38a1c78770dd57c3eb8e82344aef3c094b84f27141cea22c44926f41d206ccfb2651c958d59f81166a8aaea10f286c02fe21297af  0018-usb-dwc3-avoid-duplicate-request-giveback.patch
 312006fe5c62ab13df0725a6e007314415226354e343f510cd5bfcde2d65c004ae0062b45461c55079ce7dcd38f692e792d8f38199f65118dee9a9d603e2a9d2  validate-mainline617-clean-build.sh
 "

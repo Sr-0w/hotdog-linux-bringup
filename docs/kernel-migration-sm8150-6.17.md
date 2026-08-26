@@ -40,7 +40,7 @@ it. Diagnostic framebuffer painting, direct-entry pstore markers, camera
 experiments, superseded UFS dumps and other historical scaffolding stay in the
 immutable checkpoint.
 
-The current tree uses seventeen focused commits and changes 99 kernel files.
+The current tree uses eighteen focused commits and changes 102 kernel files.
 The first seven-commit offline foundation build produced:
 
 | Artifact | SHA256 |
@@ -89,6 +89,7 @@ is runtime integration, physical coverage and upstream cleanup.
 | `0017` | Adreno 640/GMU and Hotdog ZAP firmware | DT enable and firmware path retained; no GPU driver changes were needed. |
 | `0018`, `0053` | Real PM8150 GPIO volume keys | Recreated in the minimal DTS; the misleading RESIN input is disabled. |
 | `0048`, USB parts of `0156` | Gadget recovery over ACM/NCM and translated DWC3 stream `0x140` | The 6.17 SM8150 SoC/common DT and config already provide these contracts, so no duplicate patch was added. |
+| Linux 6.18 DWC3 fix | Concurrent endpoint teardown must not give back an already completed request | Backported after the first full-image rootfs boot reproduced the upstream use-after-free while adding ACM to active NCM. |
 | Experimental RAID6 evidence outside r181 | 6.17 direct boot can stall in `raid6_select_algo()` benchmark | `CONFIG_RAID6_PQ_BENCHMARK` is disabled in the new package config; RAID6 functionality remains enabled. |
 
 UFS ICE is also already described by the 6.17 SoC DT and enabled by the shared
@@ -107,6 +108,10 @@ configuration. The older temporary `qcom,ice` deletion is not reproduced.
   is PASS. The strict r8 complete build is PASS with 841 modules and APK
   SHA256
   `f4894e2512a4b8469f00579c68582bc2f2f62ca04fac7c38003c84f3950d7629`.
+- DWC3 teardown correction: r9 offline package build PASS with 841 modules and
+  APK SHA256
+  `f14e903f0b70e383d60b77c944566e224088b0a5000c0ccef43911a27dde68f1`;
+  hardware validation is pending.
 - Full package-shaped image assembly/offline image QA: PASS. The exact
   14096007168-byte full image has SHA256
   `55f893c9b5f9b7b03f5f668e64b25a8668f451d950e3e4a771d4207097528cb4`.
@@ -238,5 +243,15 @@ GPT described the 14,096,007,168-byte file, while Hotdog's physical userdata
 partition is 232,382,812,160 bytes. The initramfs stayed alive with NCM/ping
 but `kpartx` could not mount the short nested geometry. The pre-test backup
 proves that the working layout extends p2 and its backup GPT to the physical
-end. `scripts/prepare-hotdog-userdata-gpt.py` generates bounded patches for
-that exact geometry; applying and revalidating them is the next hardware step.
+end. `scripts/prepare-hotdog-userdata-gpt.py` generated bounded patches for
+that exact geometry. Recovery write/readback passed and the following debug
+boot reported the full physical size plus both nested partitions through
+`kpartx`.
+
+Continuing that boot exposed a second, independent blocker at about 65 seconds:
+the rootfs ACM service unbound the active NCM gadget and DWC3 logged a request
+that was no longer queued to `ep3in`, immediately followed by a NULL pointer
+fault at `0x178`. Kernel commit `d1584b678d01` backports the Linux 6.18 fix for
+the concurrent request-giveback race. Its r9 package passes offline validation;
+the next hardware image must combine r9 with the already validated physical
+GPT patches.

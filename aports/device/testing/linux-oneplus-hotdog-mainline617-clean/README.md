@@ -1,8 +1,8 @@
 # OnePlus 7T Pro Clean SM8150 6.17 Baseline
 
-This experimental aport is the first clean migration checkpoint away from the
-ClearStaff 6.16 r181 bring-up stack. It is intentionally separate from the
-hardware-tested package and is not selected by the device package yet.
+This aport is the clean migration baseline away from the ClearStaff 6.16 r181
+bring-up stack. The migration device package selects it; every revision still
+passes the normal offline image and staged hardware gates before promotion.
 
 ## Base
 
@@ -15,10 +15,10 @@ hardware-tested package and is not selected by the device package yet.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The seventeen patches are exported from the local kernel branch
+name. The eighteen patches are exported from the local kernel branch
 `bringup/hotdog-sm8150-clean-baseline` at commit
-`cbb657877fd2ef7ad7925f8857ee81964e897819`, tree
-`da7868a395cf9df795287bc4ac41489dce811cba`, and retain their commit
+`d1584b678d01ed2797d26687c9d23e2793fca305`, tree
+`07702ec78144a2b5b3bfbefc1e8111e42c774f3c`, and retain their commit
 identities.
 
 ## Included foundation
@@ -42,6 +42,8 @@ identities.
   flash and the Hall-terminated popup mechanism;
 - SLPI/FastRPC with the two SM8150 PDR domains and the complete Elliptic
   hostless audio/IIO proximity path;
+- the upstream DWC3 request-giveback race fix needed when an active NCM gadget
+  is reconfigured to add the ACM console;
 - the pmaports LLVM prototype fix required by the shared configuration.
 
 ## Deliberately deferred
@@ -146,3 +148,23 @@ electronic kernel gate. A 30-sample, 300-second monitor retained the same boot,
 media topology, three running remote processors and QRTR service 400 at every
 sample. Physical camera, popup and broader interaction tests remain
 deliberately deferred until the final test pass.
+
+## DWC3 teardown race correction
+
+Revision r9 backports the upstream fix for concurrent DWC3 request giveback.
+The full r8/r36 image reached the real rootfs after its nested GPT was expanded
+to the 232 GB physical userdata partition, then reproduced a NULL pointer fault
+while the OpenRC ACM service unbound the active initramfs NCM gadget. The kernel
+logged `request ... was not queued to ep3in` immediately before the fault. The
+upstream fix records the queued state for EP0 and prevents a second giveback of
+an already completed request.
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `linux-oneplus-hotdog-mainline617-clean-6.17.0-r9.apk` | 23,013,574 | `f14e903f0b70e383d60b77c944566e224088b0a5000c0ccef43911a27dde68f1` |
+| packaged `boot/vmlinuz` | 31,492,608 | `43f119f358955b2529041f338ddca22bd8e8250cfdf9b2545a1c28318f21418a` |
+| packaged Hotdog DTB | 164,102 | `9d31fa35ecd38dfd560209e6fb7d93f32dbc71eadac2b349ed594b07a32b3b12` |
+
+The strict r9 package build passed with the same 841-module inventory. Hardware
+validation is pending; this package is not yet the selected full-image
+candidate.
