@@ -89,7 +89,7 @@ check "noeuds video" "ls /dev/video* 2>/dev/null | wc -l" "^[1-9]"
 
 head_ "Modes de redemarrage"
 check "syscon reboot-mode lie" "ls /sys/bus/platform/drivers/syscon-reboot-mode/ | grep -c reboot-mode" "^1$"
-check "outil de mode present" "test -x /usr/local/bin/hotdog-reboot-mode.py -o -x /usr/libexec/hotdog-reboot-mode.py && echo ok" "ok"
+check "outil de mode present" "test -x /usr/sbin/reboot-mode && echo ok" "ok"
 
 head_ "Sante du chargement"
 check "aucune erreur de section de module" "dmesg | grep -c 'section size must match'" "^0$"

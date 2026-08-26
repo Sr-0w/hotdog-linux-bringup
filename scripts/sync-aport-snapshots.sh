@@ -133,7 +133,7 @@ allowed_snapshot_file() {
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm-login | \
 		device/testing/device-oneplus-hotdog:hotdog-usb-acm.initd | \
 		device/testing/device-oneplus-hotdog:hotdog-qbootctl.initd | \
-		device/testing/device-oneplus-hotdog:hotdog-reboot-mode.py | \
+		device/testing/device-oneplus-hotdog:reboot-mode.c | \
 		device/testing/device-oneplus-hotdog:62-hotdog-elliptic-proximity.rules | \
 		device/testing/device-oneplus-hotdog:elliptic-proximity-smoke.py | \
 		device/testing/device-oneplus-hotdog:hotdog-ultrasound.py | \
@@ -215,6 +215,11 @@ validate_snapshot_tree() {
 	if find "$root" -type l -print -quit | grep -q .; then
 		die "snapshot package must not contain symlinks: $root"
 	fi
+
+	# Le bytecode Python n'est jamais du contenu d'aport : il apparait des
+	# qu'un outil importe un de ces fichiers, et faire echouer la
+	# synchronisation dessus ne protege de rien.
+	find "$root" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
 	while IFS= read -r -d '' path; do
 		snapshot_path="${path#"$root"/}"

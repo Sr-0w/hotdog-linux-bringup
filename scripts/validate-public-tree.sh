@@ -1159,7 +1159,7 @@ validate_hotdog_avb_contract() {
 
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
-	local reboot_helper="helpers/hotdog-reboot-mode.py"
+	local reboot_helper="helpers/reboot-mode.c"
 	local builder="scripts/build-hotdog-rescue-supervisor.sh"
 	local initramfs_builder="scripts/build-mainline-pmos-wrapper-initramfs.sh"
 	local dtb_builder="scripts/build-mainline-pmos-boot-dtb.sh"
@@ -1204,13 +1204,20 @@ validate_rescue_supervisor_source() {
 		die "mainline boot DTB builder lacks the PM8150 Fastboot mode"
 	grep -q 'mode-recovery 1' "$dtb_builder" ||
 		die "mainline boot DTB builder lacks the PM8150 recovery mode"
-	grep -q 'SYS_REBOOT = 142' "$reboot_helper" ||
-		die "userspace reboot helper does not use the aarch64 syscall number"
-	grep -q 'libc.syscall' "$reboot_helper" ||
-		die "userspace reboot helper does not issue raw RESTART2"
-	if grep -q 'libc.reboot' "$reboot_helper"; then
+	# SYS_reboot plutot que 142 en dur : le numero est propre a l'
+	# architecture et le symbole le sait, ce que le port n'a pas a savoir.
+	grep -q 'SYS_reboot' "$reboot_helper" ||
+		die "userspace reboot helper does not issue the reboot syscall"
+	grep -q 'LINUX_REBOOT_CMD_RESTART2' "$reboot_helper" ||
+		die "userspace reboot helper does not issue RESTART2"
+	# La fonction reboot() de la libc ne prend qu'un argument : l'appeler
+	# avec les quatre rend EINVAL, et cet EINVAL ne dit rien du materiel.
+	if grep -qE '^[[:space:]]*[a-z_]* ?=? ?reboot\(' "$reboot_helper"; then
 		die "userspace reboot helper calls the one-argument libc wrapper"
 	fi
+	grep -q 'usr/sbin/reboot-mode' \
+		"aports/device/testing/device-oneplus-hotdog/APKBUILD" ||
+		die "reboot-mode is not installed anywhere a human can reach it"
 }
 
 validate_bounded_exec_source() {
