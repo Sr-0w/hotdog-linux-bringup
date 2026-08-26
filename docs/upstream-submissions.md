@@ -18,6 +18,7 @@ OnePlus 7T Pro device-tree series has not been mailed.
 | Q6AFE DisplayPort playback widget | 1 | [v1 withdrawn](https://lore.kernel.org/r/178648858640.3471590.18184750436169014545.q6afe-withdrawal-resend@snyders.xyz) | Do not send the unsupported runtime claim as v2 |
 | SM8150 download-mode register | 1 | [Submitted v2](https://lore.kernel.org/r/20260811-submit-sm8150-dload-v2-1-fb688ac4896b@snyders.xyz) | Awaiting review; no unresolved finding |
 | Qualcomm SMB2 fixes | 5 | [Submitted v1](https://lore.kernel.org/r/20260812-qcom-smbx-fixes-v1-0-eb48246be599@snyders.xyz) | Awaiting review |
+| SM8150 IMEM and reboot modes | 2 | Not submitted | Validated on hardware; needs a b4 series |
 | Qualcomm SMB5 charger support | 2 | [Submitted v3](https://lore.kernel.org/r/20260813-submit-qcom-smbx-send-v1-v3-0-27be0091d7c7@snyders.xyz) | Awaiting review; exact tree passed charge and physical VBUS gates; depends on the five SMB2 fixes |
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
 | S6SY761 resume sensing | 1 | Local, `checkpatch --strict` clean | Confirm on a second suspend cycle after the next flash, then send standalone; it is an upstream driver bug, not device-specific |
@@ -40,6 +41,33 @@ The device-tree series intentionally excludes native panel support, audio,
 Type-C role switching, cameras, NFC, haptics and other experimental pieces.
 Those require focused follow-up series with their own bindings and evidence.
 
+## SM8150 IMEM and reboot modes
+
+Mainline `sm8150.dtsi` describes neither the IMEM nor any reboot mode, so
+`reboot bootloader` on any SM8150 board reboots normally and the bootloader is
+unreachable without the key combination. Downstream `msm-poweroff.c` writes the
+reason twice: a PMIC PON reason, and a magic cookie into IMEM at
+`qcom,msm-imem@146bf000` offset `0x65c` -- `0x77665500` for bootloader,
+`0x77665502` for recovery, with `rtc`, the two dm-verity states, keys-clear and
+an OEM range beside them.
+
+Two patches. The first adds `sram@146bf000` with `qcom,sm8150-imem`, `syscon`
+and `simple-mfd`, carrying a `syscon-reboot-mode` child, and the `mode-*`
+properties on the PM8150 PON node where `pm8998.dtsi` already puts them; the
+PON compatible carries `GEN2_REASON_SHIFT`, so it registers. The second adds
+`qcom,sm8150-imem` to the `qcom,imem` binding, which currently stops at
+`qcom,sdm845-imem` despite the same address.
+
+Validated on hardware from mainline: `RESTART2("bootloader")` reached
+protocol-valid fastboot, which reported product `msmnile` and slot `b`, and
+`fastboot reboot` returned to postmarketOS. Neither the PON reason alone nor
+the Android bootloader control block in the `misc` partition reaches this
+bootloader -- a `bootonce-bootloader` BCB survived a reboot unconsumed.
+
+Both live in the clean SM8150 6.17 series as
+`0008-arm64-qcom-restore-hotdog-platform-controls.patch` and need splitting
+into a two-patch `b4` series against `linux-arm-msm` before sending.
+
 ## Userspace upstream
 
 Not kernel patches, so not part of the `b4` queue above, but found here and
@@ -47,7 +75,7 @@ worth reporting.
 
 | Project | Issue | State |
 | --- | --- | --- |
-| iio-sensor-proxy 3.9 | A `Claim*` that arrives before the matching driver has registered is accepted and lost. The daemon owns its D-Bus name before it finishes enumerating SSC sensors, so any client watching the name wins the race | Patch written, not yet submitted |
+| iio-sensor-proxy 3.9 | A `Claim*` that arrives before the matching driver has registered is accepted and lost. The daemon owns its D-Bus name before it finishes enumerating SSC sensors, so any client watching the name wins the race | Two patches, validated on hardware, not yet submitted |
 
 The daemon takes `net.hadess.SensorProxy` and only then discovers sensors. On a
 Qualcomm SSC device that discovery is a QMI round trip per sensor over QRTR —
