@@ -201,3 +201,40 @@ input.
 
 What stays open is unchanged: reloading `hci_uart` does not bring `hci0` back,
 and the address is still locally administered.
+
+## The two items left open, resolved and characterised
+
+**Module reload.** Not reproducible. Three consecutive `rmmod hci_uart` /
+`modprobe hci_uart` cycles each recreated `hci0`, rebound `serial0-0` to
+`hci_uart_qca` and re-ran the firmware download, and the paired controller
+reconnected by itself:
+
+```
+microsoft 0005:045E:0B13.0002: input,hidraw0: BLUETOOTH HID v5.23 Gamepad
+    [Xbox Wireless Controller] on 02:00:97:a6:3f:b2
+```
+
+The single earlier failure — no `hci0`, and a manual bind that hung — happened on
+the boot where sshd also never started, after a chain of unclean busybox
+reboots. It belongs to that degraded boot, not to the driver.
+
+**The address.** It is not recoverable on this handset, and the reason is
+structural rather than a port defect.
+
+The QCA NVM carries the BD address as a six-byte TLV, and it is all zeros in
+*both* the community `crnv21.bin` and the one from OxygenOS 11.0.9.1 — the
+factory value is provisioned per unit, not shipped in firmware. On this phone
+that provisioning is empty: `/persist/wlan_mac.bin` and
+`/persist/qca6390/wlan_mac.bin` are both 0 bytes, no `bdaddr`/`MacAddress`
+record appears anywhere in `persist`, `devinfo`, `opproduct`, `oem_stanvbk`,
+`oem_dycnvbk`, `fsg`, `modemst1` or `modemst2`. Wi-Fi shows the same symptom
+from the same gap — `ath10k: invalid MAC address: choosing random`.
+
+What we have instead is serviceable: `02:00:97:A6:3F:B2` is stable across
+reboots and across module reloads, so pairings persist, and `btmgmt info`
+reports `missing options:` empty — BlueZ does not consider the controller
+unconfigured.
+
+If the factory value is ever recovered, applying it needs no kernel change:
+`hci_qca` sets `hdev->set_bdaddr`, so `btmgmt public-addr <ADDR>` is enough, and
+`btmgmt info` already lists `public-address` under supported options.
