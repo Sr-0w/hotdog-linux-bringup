@@ -107,3 +107,51 @@ The alternative that settles it in one step is Qualcomm's public downstream
 `apr_audio-v2.h`, which defines these identifiers outright. That is a lookup,
 not reverse engineering, and it is worth doing before spending the Hexagon
 effort.
+
+## The identifiers, and what the firmware demands of them
+
+Qualcomm's public downstream `apr_audio-v2.h` defines them outright:
+
+```c
+#define AFE_PARAM_ID_HDMI_CONFIG                 0x00010210
+#define AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG     0x000102b5
+#define AFE_PARAM_ID_HDMI_DPTX_IDX_CFG           0x000102b6
+```
+
+The header stops there: it declares no payload structure for either DP
+parameter, and neither the OnePlus SM8150 downstream `q6afe.c` nor its
+`msm-dai-q6-v2.c` uses them at all — consistent with a handset that never
+shipped DisplayPort audio.
+
+The firmware supplies what the header does not. With the numeric value in hand
+the Hexagon image becomes searchable, and `0x102b6` appears five times. One site
+is the payload-size validator, and the same shape repeats for each parameter:
+
+```
+b04bc218: r2 = memw(r16+#0x8)                       ; incoming payload size
+b04bc21c: if (cmp.gtu(r2.new,#0xf)) jump 0xb04bc390 ; accept only if > 15
+b04bc224: r0 = ##0xb082c620                         ; "Invalid payload size"
+b04bc230: r1 = ##0x102b6;  r3 = #0x10               ; param 0x102b6, wants 0x10
+```
+
+and immediately above it, for the MST parameter:
+
+```
+b04bc1fc: if (cmp.gtu(r2.new,#0x3)) jump 0xb04bc370
+b04bc210: r1 = ##0x102b5;  r3 = #0x4                ; param 0x102b5, wants 0x04
+```
+
+The register pair carried into the error logger is the parameter and the size it
+expects, which the firmware's own message confirms:
+`HDMI DP mst config fail: Invalid payload size: %ld, port_id: 0x%x`.
+
+| parameter | id | payload |
+| --- | --- | ---: |
+| `AFE_PARAM_ID_HDMI_CONFIG` | `0x00010210` | as in mainline |
+| `AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG` | `0x000102b5` | 4 bytes |
+| `AFE_PARAM_ID_HDMI_DPTX_IDX_CFG` | `0x000102b6` | **16 bytes** |
+
+What is still missing is the field layout inside those 16 bytes. The logging
+text names two of them — `DPTX index: %u, intf: 0x%x` — and a Qualcomm parameter
+payload of this shape conventionally opens with a minor-version word, but that
+is inference and not yet read out of the image.
