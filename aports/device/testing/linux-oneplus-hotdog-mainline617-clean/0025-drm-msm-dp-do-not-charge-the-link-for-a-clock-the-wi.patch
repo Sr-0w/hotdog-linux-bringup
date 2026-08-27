@@ -1,0 +1,89 @@
+From 67791af61a320563affde6c23af662b38cc85839 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 12:16:27 +0200
+Subject: [PATCH] drm/msm/dp: do not charge the link for a clock the wide bus
+ halved
+
+msm_dp_bridge_mode_valid() halves mode_pclk_khz when a wide bus is
+available, then reuses that halved value to compute the link bandwidth.
+
+Only one of the two clocks is halved by a wide bus. The DPU-to-DP
+interface clock is, because the bus carries two pixels per clock, and
+that is what the DP_MAX_PIXEL_CLK_KHZ ceiling checks. The link is not:
+every pixel still crosses the lanes. Only 4:2:0 genuinely halves the
+data.
+
+Sharing one variable therefore accepts modes at twice the available link
+budget. On a two-lane HBR2 connection the budget is 8640000; 2560x1440@120
+needs 469150 * 24 = 11259600 and must be rejected, but the halved form
+gives 5629800 and passes. The mode is then driven beyond what the lanes
+can carry and the output tears.
+
+msm_dp_panel_get_mode_bpp() was fed the same halved clock and
+overestimated the sustainable bpp for the same reason.
+
+Split the two clocks. Every controller with wide_bus_supported is
+affected, which is sc7180, sc7280, sm8350 and everything that falls back
+to their descriptors.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ drivers/gpu/drm/msm/dp/dp_display.c | 30 ++++++++++++++++++++++++-----
+ 1 file changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dp/dp_display.c b/drivers/gpu/drm/msm/dp/dp_display.c
+index d87d47cc7ec3e..5ac4c9d311315 100644
+--- a/drivers/gpu/drm/msm/dp/dp_display.c
++++ b/drivers/gpu/drm/msm/dp/dp_display.c
+@@ -929,6 +929,8 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
+ 	u32 mode_rate_khz = 0, supported_rate_khz = 0, mode_bpp = 0;
+ 	struct msm_dp *dp;
+ 	int mode_pclk_khz = mode->clock;
++	int link_pclk_khz;
++	bool yuv420;
+ 
+ 	dp = to_dp_bridge(bridge)->msm_dp_display;
+ 
+@@ -940,9 +942,27 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
+ 	msm_dp_display = container_of(dp, struct msm_dp_display_private, msm_dp_display);
+ 	link_info = &msm_dp_display->panel->link_info;
+ 
+-	if ((drm_mode_is_420_only(&dp->connector->display_info, mode) &&
+-	     msm_dp_display->panel->vsc_sdp_supported) ||
+-	     msm_dp_wide_bus_available(dp))
++	yuv420 = drm_mode_is_420_only(&dp->connector->display_info, mode) &&
++		 msm_dp_display->panel->vsc_sdp_supported;
++
++	/*
++	 * Two different clocks are at stake here and only one of them is
++	 * halved by a wide bus.
++	 *
++	 * mode_pclk_khz is the DPU-to-DP interface clock, and wide bus does
++	 * halve it, because it carries two pixels per clock. That is what the
++	 * DP_MAX_PIXEL_CLK_KHZ ceiling below is about.
++	 *
++	 * link_pclk_khz is what the link has to carry, and a wide bus changes
++	 * nothing there: every pixel still crosses the lanes. Only 4:2:0
++	 * genuinely halves the data.
++	 *
++	 * Sharing one variable let a mode be accepted at twice the available
++	 * link budget, and the output tore.
++	 */
++	link_pclk_khz = yuv420 ? mode_pclk_khz / 2 : mode_pclk_khz;
++
++	if (yuv420 || msm_dp_wide_bus_available(dp))
+ 		mode_pclk_khz /= 2;
+ 
+ 	if (mode_pclk_khz > DP_MAX_PIXEL_CLK_KHZ)
+@@ -953,9 +973,9 @@ enum drm_mode_status msm_dp_bridge_mode_valid(struct drm_bridge *bridge,
+ 		mode_bpp = default_bpp;
+ 
+ 	mode_bpp = msm_dp_panel_get_mode_bpp(msm_dp_display->panel,
+-			mode_bpp, mode_pclk_khz);
++			mode_bpp, link_pclk_khz);
+ 
+-	mode_rate_khz = mode_pclk_khz * mode_bpp;
++	mode_rate_khz = link_pclk_khz * mode_bpp;
+ 	supported_rate_khz = link_info->num_lanes * link_info->rate * 8;
+ 
+ 	if (mode_rate_khz > supported_rate_khz)

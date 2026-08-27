@@ -50,7 +50,10 @@ done
 
 printf 'boot_id apres : %s\n' "$APRES"
 
-REJEU="$(R 'dmesg | grep -ci "recovering journal"' || echo '?')"
+# grep -c sort 1 quand le compte est zero, donc un `|| echo` de repli ajoute
+# une seconde ligne a un resultat parfaitement valide et transforme un arret
+# propre en echec. Le repli va donc dans la commande distante, pas autour.
+REJEU="$(R 'dmesg | grep -ci "recovering journal" || true' | tr -d '\n')"
 if [ "$REJEU" = "0" ]; then
 	printf 'arret propre : aucun rejeu de journal\n'
 else
