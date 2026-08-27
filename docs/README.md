@@ -60,6 +60,7 @@ Halium.
 
 Recent evidence and current regression records:
 
+- [OxygenOS 12 slot-A install control](evidence/2026-08-28-oos12-slot-a-control.md)
 - [Alpha 1 validation](evidence/2026-08-10-v0.1.0-alpha.1.md)
 - [Alpha 2 validation and corrected DTBO contract](evidence/2026-08-25-v0.1.0-alpha.2.md)
 - [Alpha 3 source-complete replacement](evidence/2026-08-25-v0.1.0-alpha.3.md)
