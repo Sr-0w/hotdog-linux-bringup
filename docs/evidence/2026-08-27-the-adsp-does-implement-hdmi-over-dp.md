@@ -191,3 +191,41 @@ The DPTX parameter remains real and its payload size is now known, but it is no
 longer the leading explanation. Mainline is on its own here: making this work
 means bringing a path up that this handset's software stack never used, not
 restoring one it had.
+
+## The 24-bit hypothesis, tested and refuted
+
+`sm8150_be_hw_params_fixup()` sorts backends into two groups — odd SLIMBUS TX
+links get mono `S16_LE`, everything else stereo `S24_LE` — and the DisplayPort
+backend lands in the 24-bit branch by default. `sm8250`, where q6afe DisplayPort
+playback works, fixes every backend to `S16_LE`.
+
+That looked like the difference. It is not. With `DISPLAY_PORT_RX` given its own
+16-bit stereo case, built and flashed as `r17`, routing `MultiMedia1` to
+`DISPLAY_PORT_RX` and playing produces the same failure:
+
+```
+qcom-q6afe: AFE enable for port 0x6020 failed -110
+q6afe-dai: fail to start AFE port 68
+q6afe-dai: ASoC error (-110): at snd_soc_dai_prepare() on DISPLAY_PORT_RX_0
+```
+
+The change was reverted. It fixed nothing and its justification was this
+hypothesis, so keeping it would have left an unvalidated delta in a baseline
+that exists to be clean.
+
+Two things were learned anyway.
+
+A second attempt logs something the first does not:
+
+```
+qcom-q6afe: recovering already active AFE port 0x6020
+```
+
+so the failed start leaves the port marked active on the DSP side, and the
+retry path does not clear it. Any future attempt has to start from a fresh boot
+to mean anything.
+
+And the UCM profile has no DisplayPort device at all — `HiFi.conf` declares only
+`Speaker` and `Mic`. Even with a working AFE port there would be no sink for
+Plasma to offer, which is why the desktop shows no second output. That is
+separate from the `-110` and will need doing regardless.
