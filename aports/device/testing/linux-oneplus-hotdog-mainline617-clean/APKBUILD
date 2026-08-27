@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=15
+pkgrel=16
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -62,6 +62,7 @@ source="
 	0023-arm64-dts-qcom-sm8150-oneplus-hotdog-give-the-Blueto.patch
 	0024-arm64-dts-qcom-sm8150-oneplus-hotdog-restore-the-Dis.patch
 	0025-drm-msm-dp-do-not-charge-the-link-for-a-clock-the-wi.patch
+	0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -138,5 +139,6 @@ a5c593ee601bf54d57082acc5f2fb660dc03f9c6fadd6100f2188835ae39f0a327d28682de2f2a33
 ee76ce3c041b32611647790265c862e737063b920729b485ad81e787507f1449d833e8641e8d408eee6eab7f8fb8bfa3fc3295ed8291428f16ebed21630877a3  0023-arm64-dts-qcom-sm8150-oneplus-hotdog-give-the-Blueto.patch
 8bdde895d865cab095f5e9e3b349902e8efb79c3795216931205924342da15f02c5124c3b331e9979ad96a60e74a51a0bc5d8e4c3dab1b88b906cb4e7c488736  0024-arm64-dts-qcom-sm8150-oneplus-hotdog-restore-the-Dis.patch
 48b58637eb83692befe679c3d87bdc3b3f24e333eaed039c7f432afe161a986823653edb99af66e6cdf3af56932ba105437631bfcadc9154ad96c65467a38aaf  0025-drm-msm-dp-do-not-charge-the-link-for-a-clock-the-wi.patch
+034cad54606603dd392ddf431b5bd9c107ec2e7ef30fc805b65ff49a31cec0ccfff4c3633043aad6e6b47834dc6cd2ace2301fd1a1baf140fe101d6957e74fa9  0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 312006fe5c62ab13df0725a6e007314415226354e343f510cd5bfcde2d65c004ae0062b45461c55079ce7dcd38f692e792d8f38199f65118dee9a9d603e2a9d2  validate-mainline617-clean-build.sh
 "

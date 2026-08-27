@@ -1,0 +1,57 @@
+From 85cdd32995f3bb89af2315965325ec92ad011a4b Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 12:57:00 +0200
+Subject: [PATCH] ASoC: tfa9872: stop claiming nxp,tfa9874
+
+sound/soc/codecs/ carries a dedicated tfa9874 driver, and this one lists
+nxp,tfa9874 in its match table as well. Two drivers matching one
+compatible is a race the board cannot win: whichever binds first takes
+the part.
+
+On the OnePlus 7T Pro, which has two of these amplifiers, this driver won
+both of them and then overwrote its own widgets, because it registers the
+same DAPM names for every instance:
+
+  tfa987x 2-0034: Chip revision: 0x0c74
+  tfa987x 2-0035: Chip revision: 0x0c74
+  tfa987x 2-0035: ASoC: sink widget PWUP overwritten
+  tfa987x 2-0035: ASoC: sink widget Speaker overwritten
+
+Both chips answer on I2C and the card enumerates, but no audio reaches
+the speakers: the routing collapses onto one set of widgets and the
+driver that was validated on this hardware never binds.
+
+Leave nxp,tfa9874 to the driver written for it. This can be claimed again
+once the widget names are per-instance.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/codecs/tfa9872.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/tfa9872.c b/sound/soc/codecs/tfa9872.c
+index 26bed43059941..682346a010f12 100644
+--- a/sound/soc/codecs/tfa9872.c
++++ b/sound/soc/codecs/tfa9872.c
+@@ -299,7 +299,20 @@ static int tfa987x_i2c_probe(struct i2c_client *i2c)
+ 
+ static const struct of_device_id tfa987x_of_match[] = {
+ 	{ .compatible = "nxp,tfa9872" },
+-	{ .compatible = "nxp,tfa9874" },
++	/*
++	 * nxp,tfa9874 is deliberately not claimed here. sound/soc/codecs/
++	 * carries a dedicated tfa9874 driver, and two drivers matching one
++	 * compatible is a race the board cannot win: whichever binds first
++	 * takes the part. On a board with two of these amplifiers this one
++	 * won and then overwrote its own DAPM widgets --
++	 *
++	 *   tfa987x 2-0035: ASoC: sink widget PWUP overwritten
++	 *   tfa987x 2-0035: ASoC: sink widget Speaker overwritten
++	 *
++	 * -- because it registers the same widget names for each instance.
++	 * The speakers went silent. Claim it again once the widget names are
++	 * per-instance and the tfa9874 driver can retire.
++	 */
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, tfa987x_of_match);
