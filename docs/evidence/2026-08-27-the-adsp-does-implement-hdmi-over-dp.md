@@ -155,3 +155,39 @@ What is still missing is the field layout inside those 16 bytes. The logging
 text names two of them — `DPTX index: %u, intf: 0x%x` — and a Qualcomm parameter
 payload of this shape conventionally opens with a minor-version word, but that
 is inference and not yet read out of the image.
+
+## The vendor never wired it, which weakens the DPTX lead
+
+The OxygenOS vendor partition was recovered from
+`cache/oos10.0.13-hd1913-ops/super.img` by the route
+[2026-08-24-the-oxygenos-vendor-is-recoverable.md](2026-08-24-the-oxygenos-vendor-is-recoverable.md)
+documents, using `helpers/android-sparse-read.py` and `debugfs`. `vendor_a` is
+942 MB of ext4 and reads without mounting.
+
+`audio.primary.msmnile.so` carries full DisplayPort support at the mixer level —
+`Display Port RX Channels`, `Display Port RX CA`, `Display Port RX Bit Format`,
+`audio_extn_is_display_port_enabled` — and **none of the AFE parameter
+identifiers**. That is expected: the HAL reaches the DSP through ALSA controls,
+and the kernel builds the APR payloads. It also means stock never sends the DPTX
+index from userspace.
+
+The device configuration goes further. `audio_platform_info.xml`, the
+OnePlus-specific file that declares which backends and interfaces exist on this
+handset, contains **zero** references to display-port. The 102 references in
+`mixer_paths_tavil.xml` are the Qualcomm reference boilerplate the 2026-08-07
+note already showed says nothing about this device — the same file carries
+headphone paths for a handset with no jack.
+
+So the honest reading is:
+
+- the DSP firmware implements HDMI-over-DP, with parameters, DMA back ends and
+  mute handling;
+- the vendor never provisioned a DisplayPort audio backend on this device;
+- and therefore there is no stock sequence to mirror, no ACDB calibration for a
+  DP backend, and no evidence that the missing DPTX parameter is what the
+  `-110` timeout is about.
+
+The DPTX parameter remains real and its payload size is now known, but it is no
+longer the leading explanation. Mainline is on its own here: making this work
+means bringing a path up that this handset's software stack never used, not
+restoring one it had.
