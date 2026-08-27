@@ -126,6 +126,21 @@ Kconfig change propagates into the resolved `.config` and therefore into every
 module. Skipping the flash on 2026-08-26 produced a corrupted display and a
 `dsi_err_worker` fault that flashing the matching image cleared outright.
 
+### Rebooting
+
+Never reboot with busybox `reboot` over SSH. It leaves the root filesystem to
+replay its journal on the next boot, one such boot came up with sshd missing,
+and twice the phone ended in EDL needing physical recovery:
+
+```bash
+./scripts/hotdog-reboot.sh
+```
+
+It stops the runlevel first, detaches with `setsid` — without which the sequence
+dies with the SSH session and nothing reboots at all — and then checks
+`dmesg | grep -c "recovering journal"` on the way back. A non-zero count means
+the shutdown was dirty. `fastboot reboot` is the one path observed clean.
+
 ### When SSH is down
 
 `device-oneplus-hotdog` runs an auto-login root getty on `ttyGS0`, which the
