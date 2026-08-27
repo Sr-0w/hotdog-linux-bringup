@@ -66,3 +66,46 @@ With a dock attached the boot stalls on it long enough to look like a boot loop:
 two crashes, no userspace, no network, and the phone appearing dead from the
 host. It resumed on its own when the USB role changed. Without a dock the boot
 completes and the cycle simply continues underneath.
+
+## Resolved: it was the console, and so was the boot stall
+
+Both this cycle and the boot stall had one cause, and it was not the SLPI.
+
+The kernel booted with `console=ttyGS0,115200` — the console on the USB gadget
+serial — together with `loglevel=8 ignore_loglevel keep_bootcon`, so every
+message went to a device that only has a reader when a USB host is attached in
+*device* mode. With nobody draining it, `printk` eventually blocks, and the
+whole kernel blocks with it.
+
+That is why the three cases behaved as they did:
+
+| boot with | result |
+| --- | --- |
+| the PC | completes — the host drains ttyGS0 |
+| a dock | stalls — the phone is a USB *host*, so there is no gadget and no reader |
+| nothing | stalls |
+
+Unplugging the dock did not help, and plugging the PC did, which is what pointed
+at the gadget rather than at the dock.
+
+The watchdog cycle follows from the same stall: a kernel blocked in `printk`
+does not answer the SLPI's QMI messages in time, its user protection domain
+waits, and `dog_virtual_user.c` fires at 40.17 s. The
+`String len 128 >= Max Len 65` decode failure went away with it.
+
+`kernel-cmdline.conf` was a debugging command line, not a production one.
+Dropping `console=ttyGS0`, `keep_bootcon` and `ignore_loglevel`, and taking
+`loglevel` from 8 to 4:
+
+```
+consoles: tty0 ramoops-1
+uptime 315 s: 0 SLPI crashes, 0 QMI decode failures
+HasAccelerometer / HasAmbientLight / HasProximity: all true
+```
+
+against six crashes and six decode failures in the first 289 s before. The phone
+now boots with no cable attached at all.
+
+The root-level `getty` on `ttyGS0` is untouched — it is a userspace service, so
+`scripts/hotdog-usb-console.sh` still works, and it no longer competes with
+kernel output on the same device.
