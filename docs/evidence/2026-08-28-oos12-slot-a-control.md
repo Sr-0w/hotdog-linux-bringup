@@ -51,7 +51,7 @@ The original known-good slot-B vbmeta was restored after the control.
 
 ## Next discriminating experiment
 
-Create a stock HD1911 F.22 OxygenOS 12 control on slot A while preserving slot B
+Create a stock HD1913 F.22 OxygenOS 12 control on slot A while preserving slot B
 and a complete pmOS `super` backup. Confirm that stock OxygenOS boots, then
 reproduce the published Alpha 5 installation in its documented order before
 adding any correction. If it fails like the external handset, introduce one
@@ -63,6 +63,33 @@ backs up the full current `super`, every F.22-targeted physical slot-A partition
 the shared `oem_stanvbk`, boot-control metadata and the device-specific modem and
 persist state. Raw dumps, hashes tied to private hardware and runtime logs remain
 outside Git.
+
+## Stock slot-A baseline result
+
+The control was prepared from the model-correct HD1913/EU F.22 full OTA. Its
+payload manifest describes one 7,511,998,464-byte dynamic-partition group with
+Virtual A/B snapshots enabled. A sparse `super` image was rebuilt with all 15
+slot-A logical partitions, three metadata slots and an empty reserved slot-B
+group. Converting it back to raw form, reading it with `lpdump`, unpacking every
+logical partition and comparing each image byte-for-byte against the OTA all
+passed before flash.
+
+The existing slot-A firmware was already F.22 for most boot-critical
+partitions. Only the partitions that differed were written: `LOGO_a`, `boot_a`,
+`dtbo_a`, `opproduct_a`, `recovery_a`, `vbmeta_a`, `vbmeta_system_a`, the shared
+`oem_stanvbk`, and physical `super`. Bootloader fastboot correctly refused the
+two critical partitions; recovery fastbootd wrote them without changing the
+critical-unlock state.
+
+The first OxygenOS boot entered stock recovery because the previous encrypted
+userdata was incompatible. After an explicitly authorised recovery data wipe,
+the same slot reached OxygenOS Android userspace and enumerated ADB. This proves
+that the reconstructed EU F.22 slot-A baseline is bootable.
+
+The next step is now narrower: reproduce the exact Alpha 5 public installation
+on top of this known-stock state. A failure there will be directly comparable to
+the external HD1911 report. No vbmeta correction will be introduced until that
+published sequence has first been observed unchanged.
 
 ## Safety and publication consequences
 
