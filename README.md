@@ -128,6 +128,7 @@ function under **Working** and a broader integration or stability item under
 | Boot | Bootloader and recovery selection | `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot; `RESTART2("recovery")` reaches the existing authorized root-ADB recovery. Both return to postmarketOS. |
 | Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
 | DisplayPort | Link budget enforcement | 2560×1440@120 is now refused instead of driven, and the external output is clean. `msm_dp_bridge_mode_valid()` reused the wide-bus-halved pixel clock to compute link bandwidth; the interface clock is halved by a wide bus, the link is not. Two lanes of HBR2 cannot carry the mode, so refusing it is the correct outcome. |
+| DisplayPort | Audio | Audio reaches a monitor over DisplayPort. `q6afe` started the AFE port from the CPU DAI prepare, which ASoC runs before the codec prepare that switches on the controller's audio engine, so the port was started into a sink that was not listening and the DSP never answered. Configuring and starting from `trigger` instead fixes it. Plasma is offered the sink through a new UCM `HDMI` device. Two starts in six still log `-110` without stopping playback, and hotplug reporting is not wired. |
 | Storage | UFS ICE / blk-crypto | `qcom-ice` binds, UFS mounts the rootfs and blk-crypto exposes the complete AES-256-XTS profile. This proves ICE operation, not encryption of the current rootfs. |
 | Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
 | Display | Internal panel 1440×3120 at 60 Hz | Function-level KMS scanout is validated; the aggregate display state remains `Partial` because of the transient DSI/DSC regression. See [display regression 01](docs/evidence/2026-08-20-display-regression-01.md). |
@@ -193,7 +194,6 @@ function under **Working** and a broader integration or stability item under
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| DisplayPort | Audio | The Linux-side backend is present and the ADSP times out starting AFE port `0x6020`. The firmware is not the limit: `adsp.mbn` carries a full HDMI-over-DP driver with two DMA back ends. It expects `AFE_PARAM_ID_HDMI_DPTX_IDX_CFG` to say which DP transmitter a stream belongs to, and mainline `q6afe` sends only `AFE_PARAM_ID_HDMI_CONFIG`. |
 
 ### ⚪ Not yet supported
 

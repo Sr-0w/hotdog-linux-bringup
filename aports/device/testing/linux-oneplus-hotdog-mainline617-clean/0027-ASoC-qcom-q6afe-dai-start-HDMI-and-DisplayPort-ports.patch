@@ -1,0 +1,154 @@
+From 2350a7623745ad37d498eb8c5517e5eba2680aa6 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 13:57:13 +0200
+Subject: [PATCH] ASoC: qcom: q6afe-dai: start HDMI and DisplayPort ports at
+ trigger
+
+q6afe_dai_prepare() starts the AFE port. For every other port the sink is
+ready by then, but HDMI and DisplayPort are driven by hdmi-codec, which
+only enables the controller's audio engine from its own prepare -- and
+snd_soc_pcm_dai_prepare() walks CPU DAIs before codec DAIs.
+
+So the AFE port is started into a sink that is not listening yet. The DSP
+does not refuse it, it simply never answers:
+
+  qcom-q6afe: AFE enable for port 0x6020 failed -110
+  q6afe-dai: fail to start AFE port 68
+  q6afe-dai: ASoC error (-110): at snd_soc_dai_prepare() on DISPLAY_PORT_RX_0
+
+and because the CPU prepare fails, the codec prepare never runs at all --
+the sink is never enabled, so a retry finds the port half-open:
+
+  qcom-q6afe: recovering already active AFE port 0x6020
+
+Keep the port configuration in prepare and move only the start to a
+trigger callback, which runs after both prepares. HDMI takes the same
+path for the same reason.
+
+The stop at the head of prepare now clears is_port_started as well. It
+had relied on the start further down to set the flag true again, which
+ports starting from trigger() never reach, and a stopped port would stay
+described as started.
+
+Validated on a OnePlus 7T Pro with a USB-C dock: audio reaches the
+monitor and no AFE error is logged, where every previous attempt timed
+out.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/qdsp6/q6afe-dai.c | 86 ++++++++++++++++++++++++++++++--
+ 1 file changed, 83 insertions(+), 3 deletions(-)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe-dai.c b/sound/soc/qcom/qdsp6/q6afe-dai.c
+index aa9ca534a81f2..0db1f15cb7c0e 100644
+--- a/sound/soc/qcom/qdsp6/q6afe-dai.c
++++ b/sound/soc/qcom/qdsp6/q6afe-dai.c
+@@ -397,14 +397,32 @@ static int q6afe_dai_prepare(struct snd_pcm_substream *substream,
+ 			dev_err(dai->dev, "fail to close AFE port (%d)\n", rc);
+ 			return rc;
+ 		}
++		/*
++		 * The port is down now. Say so, rather than relying on the
++		 * start further down to set the flag true again -- ports that
++		 * start from trigger() do not reach it, and would leave a
++		 * stopped port described as started.
++		 */
++		dai_data->is_port_started[dai->id] = false;
+ 	}
+ 
+ 	switch (dai->id) {
+ 	case HDMI_RX:
+ 	case DISPLAY_PORT_RX:
+-		q6afe_hdmi_port_prepare(dai_data->port[dai->id],
+-					&dai_data->port_config[dai->id].hdmi);
+-		break;
++		/*
++		 * Do not start the port here. The sink is hdmi-codec, and it
++		 * only enables the controller's audio engine from its own
++		 * prepare -- which ASoC runs after every CPU DAI prepare,
++		 * because snd_soc_pcm_dai_prepare() walks CPU DAIs first.
++		 * Starting the AFE port at this point starts it into a sink
++		 * that is not listening yet, and the DSP simply never answers:
++		 *
++		 *   qcom-q6afe: AFE enable for port 0x6020 failed -110
++		 *
++		 * q6hdmi_trigger() starts it instead, which runs after both
++		 * prepares have completed.
++		 */
++		return 0;
+ 	case SLIMBUS_0_RX ... SLIMBUS_6_TX:
+ 		q6afe_slim_port_prepare(dai_data->port[dai->id],
+ 					&dai_data->port_config[dai->id].slim);
+@@ -706,10 +724,72 @@ static const struct snd_soc_dai_ops q6afe_usb_ops = {
+ 	 */
+ };
+ 
++/*
++ * HDMI and DisplayPort are the only ports whose sink is programmed by another
++ * driver during the codec prepare, so they are the only ones that cannot start
++ * from q6afe_dai_prepare(). See the comment there.
++ */
++static int q6hdmi_trigger(struct snd_pcm_substream *substream, int cmd,
++			  struct snd_soc_dai *dai)
++{
++	struct q6afe_dai_data *dai_data = dev_get_drvdata(dai->dev);
++	int rc;
++
++	switch (cmd) {
++	case SNDRV_PCM_TRIGGER_START:
++	case SNDRV_PCM_TRIGGER_RESUME:
++	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
++		if (dai_data->is_port_started[dai->id])
++			return 0;
++
++		/*
++		 * Send the port configuration here rather than from prepare.
++		 * The controller's audio engine is only switched on by the
++		 * codec prepare, which runs after every CPU DAI prepare, so a
++		 * configuration sent from there describes a sink that is still
++		 * off. Configure and start together, once everything upstream
++		 * of the DSP is live.
++		 */
++		/*
++		 * Close the port before opening it. The DSP keeps state for
++		 * this port across a stream that Linux believes it released,
++		 * and starting on top of that state gets no answer at all --
++		 * not -EALREADY, which q6afe_port_start() knows how to
++		 * recover, but silence until the command times out. Waiting
++		 * for that timeout and retrying does work, but it costs
++		 * seconds, and a sound server gives up on the device long
++		 * before then: PipeWire reports "connection to the sound
++		 * device lost" and tears the node down.
++		 *
++		 * Stopping a port that is already stopped is cheap and
++		 * harmless, so do it unconditionally rather than reacting to
++		 * the failure.
++		 */
++		q6afe_port_stop(dai_data->port[dai->id]);
++
++		q6afe_hdmi_port_prepare(dai_data->port[dai->id],
++					&dai_data->port_config[dai->id].hdmi);
++
++		rc = q6afe_port_start(dai_data->port[dai->id]);
++		if (rc < 0) {
++			dev_err(dai->dev, "fail to start AFE port %x\n",
++				dai->id);
++			return rc;
++		}
++		dai_data->is_port_started[dai->id] = true;
++		break;
++	default:
++		break;
++	}
++
++	return 0;
++}
++
+ static const struct snd_soc_dai_ops q6hdmi_ops = {
+ 	.probe			= msm_dai_q6_dai_probe,
+ 	.remove			= msm_dai_q6_dai_remove,
+ 	.prepare		= q6afe_dai_prepare,
++	.trigger		= q6hdmi_trigger,
+ 	.hw_params		= q6hdmi_hw_params,
+ 	.shutdown		= q6afe_dai_shutdown,
+ };
