@@ -192,8 +192,7 @@ function under **Working** and a broader integration or stability item under
 
 ### 🔴 Broken
 
-| Subsystem | Function | Notes |
-|---|---|---|
+_None currently identified._
 
 ### ⚪ Not yet supported
 
