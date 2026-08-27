@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=13
+pkgrel=14
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -60,6 +60,7 @@ source="
 	0021-Bluetooth-hci_qca-do-not-touch-a-closed-serdev-port-.patch
 	0022-Bluetooth-hci_qca-do-not-fail-system-suspend-for-a-c.patch
 	0023-arm64-dts-qcom-sm8150-oneplus-hotdog-give-the-Blueto.patch
+	0024-arm64-dts-qcom-sm8150-oneplus-hotdog-restore-the-Dis.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -134,5 +135,6 @@ a37ad82c3ea44ac96d5e0722a89a7caec33e7deb3567544b7b0ba066459eb527cb921c3d6173cdf7
 a5c593ee601bf54d57082acc5f2fb660dc03f9c6fadd6100f2188835ae39f0a327d28682de2f2a3300833365b575c99cff31b432c8e5ba8c0eeb6fb6906275a7  0021-Bluetooth-hci_qca-do-not-touch-a-closed-serdev-port-.patch
 5f4a538d83310fd14ac300f2f7d49436caed79f908ad08c77ab56b04587abe9137282cede76b3a35515cd46cffb2c6d79dfee29af21c649e8b709e3ba0a5155b  0022-Bluetooth-hci_qca-do-not-fail-system-suspend-for-a-c.patch
 ee76ce3c041b32611647790265c862e737063b920729b485ad81e787507f1449d833e8641e8d408eee6eab7f8fb8bfa3fc3295ed8291428f16ebed21630877a3  0023-arm64-dts-qcom-sm8150-oneplus-hotdog-give-the-Blueto.patch
+8bdde895d865cab095f5e9e3b349902e8efb79c3795216931205924342da15f02c5124c3b331e9979ad96a60e74a51a0bc5d8e4c3dab1b88b906cb4e7c488736  0024-arm64-dts-qcom-sm8150-oneplus-hotdog-restore-the-Dis.patch
 312006fe5c62ab13df0725a6e007314415226354e343f510cd5bfcde2d65c004ae0062b45461c55079ce7dcd38f692e792d8f38199f65118dee9a9d603e2a9d2  validate-mainline617-clean-build.sh
 "

@@ -1,0 +1,43 @@
+From b5f8dbbb42d1733952dc0fb7e23d6790554c3e30 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 11:37:27 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150-oneplus-hotdog: restore the
+ DisplayPort alt mode
+
+The USB-C connector lost its altmodes node in the 6.17 reconstruction, so
+the port registered no alternate mode at all. /sys/class/typec then holds
+only port0 and port0-partner: the partner advertises SVID ff01 and PD
+negotiates fine, but with nothing on the port side to enter the mode the
+DisplayPort connector stays disconnected and no video ever leaves the
+phone.
+
+The dock enumerates its hub, its Realtek ethernet and its mass storage
+perfectly, which is what makes this look like a display problem rather
+than a missing description.
+
+Same node as sm8150-hdk and qrb5165-rb5, and the same one this board
+carried on 6.16, where DisplayPort worked on this dock.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 750dc631e1089..f4ed8ed75e6c1 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -999,6 +999,13 @@ PDO_FIXED_USB_COMM |
+ 				       PDO_FIXED_DATA_SWAP)>;
+ 		op-sink-microwatt = <10000000>;
+ 
++		altmodes {
++			displayport {
++				svid = /bits/ 16 <0xff01>;
++				vdo = <0x00001c46>;
++			};
++		};
++
+ 		ports {
+ 			#address-cells = <1>;
+ 			#size-cells = <0>;
