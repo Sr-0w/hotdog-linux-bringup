@@ -193,7 +193,7 @@ function under **Working** and a broader integration or stability item under
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
+| DisplayPort | Audio | The Linux-side backend is present and the ADSP times out starting AFE port `0x6020`. The firmware is not the limit: `adsp.mbn` carries a full HDMI-over-DP driver with two DMA back ends. It expects `AFE_PARAM_ID_HDMI_DPTX_IDX_CFG` to say which DP transmitter a stream belongs to, and mainline `q6afe` sends only `AFE_PARAM_ID_HDMI_CONFIG`. |
 
 ### ⚪ Not yet supported
 
