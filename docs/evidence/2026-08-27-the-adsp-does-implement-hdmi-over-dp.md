@@ -70,3 +70,40 @@ test, which is why this took one command to settle once the OxygenOS firmware
 package was at hand. What it got wrong is the conclusion drawn in the status
 tables, where "the ADSP times out" had hardened into "the firmware probably
 cannot do it". It can. Nobody has yet told it which transmitter to use.
+
+## How far the image can be read, and where it stops
+
+`adsp.mbn` is `ELF 32-bit LSB executable, QUALCOMM DSP6`, stripped of section
+headers but with intact program headers, and `llvm-objdump -d --triple=hexagon`
+disassembles it whole — about 170 MB of listing. So the image is readable; the
+difficulty is addressing.
+
+Mapping works. The `AFE_PARAM_ID_HDMI_DPTX_IDX_CFG` log string sits at file
+offset `0xd98ed6`, which the `LOAD` at `0xd55000 → 0xb1444000` places at virtual
+address `0xb1487ed6`.
+
+The AFE parameter dispatch is findable too. `AFE_PARAM_ID_HDMI_CONFIG` appears
+exactly where it should, as an extended immediate in a comparison:
+
+```
+b04cd7c0: immext(#0x10200)
+b04cd7c4: p0 = cmp.eq(r1,##0x10210)
+```
+
+What does not work is the usual shortcut of finding the code that logs a string
+by searching for the string's address. These log pointers are formed
+GP-relative:
+
+```
+b083ded0: r0 = add(r8,#0x1585)
+```
+
+so no absolute address appears in the instruction stream and there is nothing to
+grep for. Recovering the DPTX parameter ID means resolving the base register for
+that region and walking the handler that emits the message — a focused piece of
+work rather than a one-liner, and the natural continuation of this note.
+
+The alternative that settles it in one step is Qualcomm's public downstream
+`apr_audio-v2.h`, which defines these identifiers outright. That is a lookup,
+not reverse engineering, and it is worth doing before spending the Hexagon
+effort.
