@@ -126,6 +126,23 @@ Kconfig change propagates into the resolved `.config` and therefore into every
 module. Skipping the flash on 2026-08-26 produced a corrupted display and a
 `dsi_err_worker` fault that flashing the matching image cleared outright.
 
+### When SSH is down
+
+`device-oneplus-hotdog` runs an auto-login root getty on `ttyGS0`, which the
+host sees as `/dev/ttyACM0`. It depends on neither sshd nor the network, so it
+works on any boot that reaches userspace:
+
+```bash
+./scripts/hotdog-usb-console.sh 'rc-service sshd restart' 15
+```
+
+The port must be opened with `clocal`, otherwise the open waits for a carrier
+the USB gadget never asserts and hangs. Setting `c_cflag` from scratch without
+the baud bits selects `B0`, which means *hang up the line* — that mistake made
+this console look absent for an entire evening, and the phone was handed back
+to its owner to type commands that could have been sent from here. An empty
+read never proves there is no console.
+
 ### Gates
 
 Two scripts split hardware acceptance along the line of what needs a hand:
