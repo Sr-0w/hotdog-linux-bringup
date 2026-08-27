@@ -163,3 +163,41 @@ cold boot so far. Scanning and pairing are not validated.
 
 The BD address is still locally administered, `02:00:97:A6:3F:B2`; the factory
 address lives outside the NVM and remains a separate problem.
+
+## Scan, pair and input, validated end to end
+
+2026-08-27, `r13`, after a clean `fastboot reboot`.
+
+An LE scan lists nearby devices, and the owner's controller answers at -39 dBm:
+
+```
+Device 28:EA:0B:CC:4D:28 Xbox Wireless Controller
+```
+
+Pairing has to happen inside one `bluetoothctl` session: each separate
+invocation is its own session, so the discovery cache is gone by the time
+`pair` runs and the device reads as "not available". Held in one session, with
+scanning still on:
+
+```
+Pairing successful
+Name: Xbox Wireless Controller
+Paired: yes   Trusted: yes   Connected: yes
+hcitool con: LE 28:EA:0B:CC:4D:28 handle 1 state 1 lm CENTRAL AUTH ENCRYPT
+```
+
+The link is authenticated and encrypted, and the kernel creates the input
+device:
+
+```
+N: Name="Xbox Wireless Controller"
+/dev/input/js0
+```
+
+Reading that node while the owner moved the sticks gave **2484 real events**
+against 23 init events -- axes 0, 1 and 3 -- with `errors:0` on both directions
+of the HCI counters. Bluetooth is Working: scan, pair, encrypted link, HID
+input.
+
+What stays open is unchanged: reloading `hci_uart` does not bring `hci0` back,
+and the address is still locally administered.

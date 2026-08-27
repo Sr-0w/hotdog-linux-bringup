@@ -77,8 +77,10 @@ or a kexec bridge.
   `Partial` state: the 2026-08-20 r2 scanout corruption recovered immediately
   after lock/unlock, but DSI/DSC FIFO/timeout instability needs follow-up.
 - Hardware validation of touch, physical keys, Wi-Fi, both speakers and the
-  handset microphone. Bluetooth HID worked on an earlier checkpoint, but the
-  current controller lifecycle is regressed and tracked under `Broken`.
+  handset microphone. Bluetooth scans, pairs an Xbox Wireless Controller over an
+  authenticated encrypted link and delivers its axis events on `/dev/input/js0`;
+  the controller had simply never existed, because the board declared no
+  `hsuart` alias and its UART never probed.
 - USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
   mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60.
 - Capture from all four cameras through libcamera, rear autofocus and automatic
@@ -121,6 +123,7 @@ function under **Working** and a broader integration or stability item under
 |---|---|---|
 | Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`; no downstream kernel or kexec bridge executes. |
 | Boot | Persistent postmarketOS rootfs / OpenRC / SSH | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
+| Bluetooth | Scan, pair and HID input | `crbtfw21.tlv` and `crnv21.bin` download at boot, `hci0` reaches `UP RUNNING`, an LE scan finds nearby devices, and an Xbox Wireless Controller pairs, trusts and connects over an authenticated encrypted link. `/dev/input/js0` delivers real axis events. The board had never declared an `hsuart` alias, so the UART failed `of_alias_get_id()` and no controller was ever created. Module reload does not restore `hci0` and the address is still locally administered. |
 | Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
 | Boot | Bootloader and recovery selection | `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot; `RESTART2("recovery")` reaches the existing authorized root-ADB recovery. Both return to postmarketOS. |
 | Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
@@ -170,7 +173,6 @@ function under **Working** and a broader integration or stability item under
 | Subsystem | Function | Notes |
 |---|---|---|
 | Apps SMMU | Client coverage | DWC3 stream `0x140` and UFS stream `0x300` work in translated domains; remaining clients and temporary bypass removal are open. |
-| Bluetooth | Controller lifecycle | The controller initialises from a cold boot: `crbtfw21.tlv` and `crnv21.bin` download, `hci0` reaches `UP RUNNING` with no error, system suspend completes, and unloading `hci_uart` no longer panics. The board never declared an `hsuart` alias, so `serial@c8c000` failed `of_alias_get_id()` and no controller was ever created. Reloading the module does not bring `hci0` back, scanning and pairing are unvalidated, and the address is still locally administered. |
 | Display | Internal panel 90 Hz / dynamic 60↔90 selection | 90 Hz and runtime mode switching work at the function level, but the 2026-08-20 episode is canonical `TRANSIENT_RECOVERED / NEEDS_FOLLOWUP`; 48 DSI worker FIFO/timeout events and panel reinitializations were recorded, with no DPU underrun. |
 | USB-C | USB Ethernet | RTL8153 enumerates, `r8152` binds and creates `eth0`; complete link/data and repeatability coverage remain. |
 | Wi-Fi | Power management / stable factory identity | Basic data works and the link now survives suspend once WoWLAN triggers are configured, which needed the missing `device_init_wakeup()` in `ath10k_snoc`. Sustained throughput, AP/roaming and factory-address handling remain. |
