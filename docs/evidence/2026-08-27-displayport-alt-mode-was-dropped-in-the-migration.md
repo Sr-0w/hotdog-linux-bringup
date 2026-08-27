@@ -60,3 +60,18 @@ mode needs 469,150 × 24 = 11,259,600 and is correctly rejected, but the halved
 form gives 5,629,800 and passes. `msm_dp_panel_get_supported_bpp()` receives the
 same halved clock and overestimates bpp too. Every msm controller with
 `wide_bus_supported` is affected.
+
+## The 120 Hz mode, fixed and validated
+
+`r15`, on the same dock and monitor. `2560x1440` now appears **once** in the
+connector's mode list where it appeared twice before, and the owner reports the
+external output is clean — no tearing.
+
+The fix separates the two clocks that `msm_dp_bridge_mode_valid()` had shared.
+The DPU-to-DP interface clock is genuinely halved by a wide bus, which is what
+the `DP_MAX_PIXEL_CLK_KHZ` ceiling is about; the link is not, because every
+pixel still crosses the lanes. Only 4:2:0 halves the data.
+
+Refusing the mode is the correct outcome, not a limitation introduced by the
+patch: two lanes of HBR2 give 8,640,000 and the mode needs 469,150 × 24 =
+11,259,600. It was never drivable, only accepted.

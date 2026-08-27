@@ -127,6 +127,7 @@ function under **Working** and a broader integration or stability item under
 | Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
 | Boot | Bootloader and recovery selection | `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot; `RESTART2("recovery")` reaches the existing authorized root-ADB recovery. Both return to postmarketOS. |
 | Storage | UFS | Direct boot, raw/random I/O, large buffered writes/imports and application workloads pass with the current reservation fixes. |
+| DisplayPort | Link budget enforcement | 2560×1440@120 is now refused instead of driven, and the external output is clean. `msm_dp_bridge_mode_valid()` reused the wide-bus-halved pixel clock to compute link bandwidth; the interface clock is halved by a wide bus, the link is not. Two lanes of HBR2 cannot carry the mode, so refusing it is the correct outcome. |
 | Storage | UFS ICE / blk-crypto | `qcom-ice` binds, UFS mounts the rootfs and blk-crypto exposes the complete AES-256-XTS profile. This proves ICE operation, not encryption of the current rootfs. |
 | Memory | RAM map and firmware reservations | The complete stock HD1913 reservation union is applied and passed the workload that previously collided with firmware-owned memory. |
 | Display | Internal panel 1440×3120 at 60 Hz | Function-level KMS scanout is validated; the aggregate display state remains `Partial` because of the transient DSI/DSC regression. See [display regression 01](docs/evidence/2026-08-20-display-regression-01.md). |
@@ -192,7 +193,6 @@ function under **Working** and a broader integration or stability item under
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| DisplayPort | 2560×1440@120 on two-lane HBR2 | Hardware output is corrupt because msm DP accepts a mode beyond the available link budget. |
 | DisplayPort | Audio | The Linux-side backend is present, but the ADSP times out starting AFE port `0x6020`. |
 
 ### ⚪ Not yet supported
