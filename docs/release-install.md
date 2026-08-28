@@ -7,10 +7,16 @@ HD1913** with the `hotdog` codename and an **unlocked bootloader**. Do not use
 them on another OnePlus model solely because it looks similar. A wrong boot
 image or a failed test kernel can require fastboot or recovery to regain access.
 
-The project publishes a boot image, a filtered DTBO image and a rootfs image as
-one atomic release set. The boot command line contains the UUIDs of the
+The project publishes a boot image, a filtered DTBO image, a verification-
+disabled vbmeta image and a rootfs image as one atomic release set. The boot
+command line contains the UUIDs of the
 `pmOS_boot` and `pmOS_root` filesystems inside the rootfs image. Never mix any
-of these three images with an asset from another release.
+of these images with an asset from another release.
+
+The vbmeta asset is derived from the byte-identical HD1911-IN and HD1913-EU
+OxygenOS 12 F.22 top-level vbmeta and sets AVB flags `3` (hashtree and
+verification disabled), matching the LineageOS Hotdog installation contract.
+It is intended only for an already-unlocked bootloader.
 
 ## Version policy
 
@@ -63,7 +69,8 @@ This release intentionally uses slot B and leaves `boot_a`, `dtbo_a`, Android
 `super` and both recovery partitions untouched. `userdata` is shared and will
 be destroyed, so an Android slot may still reach recovery or initial setup but
 cannot retain its user data. Before flashing, use a trusted root recovery to
-make complete local backups of `boot_b` and `dtbo_b`, then record their hashes.
+make complete local backups of `boot_b`, `dtbo_b` and `vbmeta_b`, then record
+their hashes.
 The Hotdog fastboot implementations tested here do not support `fastboot fetch`.
 
 ```bash
@@ -73,11 +80,14 @@ adb exec-out 'dd if=/dev/block/by-name/boot_b bs=4M' \
   > hotdog-slot-b-backup/boot_b.img
 adb exec-out 'dd if=/dev/block/by-name/dtbo_b bs=4M' \
   > hotdog-slot-b-backup/dtbo_b.img
+adb exec-out 'dd if=/dev/block/by-name/vbmeta_b bs=4096 count=16' \
+  > hotdog-slot-b-backup/vbmeta_b.img
 sha256sum hotdog-slot-b-backup/boot_b.img \
-  hotdog-slot-b-backup/dtbo_b.img \
+  hotdog-slot-b-backup/dtbo_b.img hotdog-slot-b-backup/vbmeta_b.img \
   > hotdog-slot-b-backup/SHA256SUMS
 test "$(stat -c %s hotdog-slot-b-backup/boot_b.img)" -eq 100663296
 test "$(stat -c %s hotdog-slot-b-backup/dtbo_b.img)" -eq 25165824
+test "$(stat -c %s hotdog-slot-b-backup/vbmeta_b.img)" -eq 65536
 ```
 
 On macOS, use `shasum -a 256` and `stat -f %z` for the equivalent checks. Do not
@@ -131,6 +141,7 @@ fastboot -S 128M flash userdata \
 fastboot reboot bootloader
 fastboot getvar is-userspace  # must report: no
 fastboot getvar product       # must report: msmnile
+fastboot flash vbmeta_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-vbmeta-disabled.img
 fastboot flash dtbo_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-dtbo.img
 fastboot flash boot_b oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-boot.img
 fastboot set_active b
@@ -174,17 +185,18 @@ If the phone enumerates as Qualcomm `05c6:900e` or `05c6:9008`, inspect it
 read-only only. Never issue a protocol reset, reboot or flash command in that
 state. Disconnect it and use the physical HD1913 key sequence to return to
 bootloader fastboot, then confirm `fastboot devices` before writing anything.
-A failed Alpha boot can be recovered by restoring both saved slot-B images:
+A failed Alpha boot can be recovered by restoring all saved slot-B images:
 
 ```bash
+fastboot flash vbmeta_b hotdog-slot-b-backup/vbmeta_b.img
 fastboot flash dtbo_b hotdog-slot-b-backup/dtbo_b.img
 fastboot flash boot_b hotdog-slot-b-backup/boot_b.img
 fastboot set_active b
 ```
 
 Alternatively select an intact slot A or restore official software for the
-exact model. Do not restore only one half of the boot/DTBO pair, and do not
-flash a boot or DTBO image from another release against this rootfs.
+exact model. Do not restore only part of the boot/DTBO/vbmeta set, and do not
+flash an image from another release against this rootfs.
 
 ## Current Alpha limitations
 

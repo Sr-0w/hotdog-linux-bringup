@@ -6,10 +6,10 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 usage() {
 	cat <<'USAGE'
 Usage: package-public-release.sh --version VERSION --boot IMAGE --dtbo IMAGE \
-  --rootfs IMAGE --apk APK --install-guide FILE --outdir DIR
+  --vbmeta IMAGE --rootfs IMAGE --apk APK --install-guide FILE --outdir DIR
 
 Validate and package a matching OnePlus 7T Pro postmarketOS release set.
-The boot image, filtered DTBO and rootfs are an atomic set: this script rejects
+The boot image, filtered DTBO, vbmeta and rootfs are an atomic set: this script rejects
 mismatched pmOS UUIDs, non-AVB boot/DTBO images, or APK kernel/DTB payloads that
 do not match the boot image. It compresses the rootfs and splits an archive
 only when it is too large for a conservative GitHub release asset limit.
@@ -31,6 +31,7 @@ readonly rootfs_target=userdata
 version=""
 boot=""
 dtbo=""
+vbmeta=""
 rootfs=""
 apk=""
 install_guide=""
@@ -41,6 +42,7 @@ while [ "$#" -gt 0 ]; do
 		--version) version="${2:-}"; shift ;;
 		--boot) boot="${2:-}"; shift ;;
 		--dtbo) dtbo="${2:-}"; shift ;;
+		--vbmeta) vbmeta="${2:-}"; shift ;;
 		--rootfs) rootfs="${2:-}"; shift ;;
 		--apk) apk="${2:-}"; shift ;;
 		--install-guide) install_guide="${2:-}"; shift ;;
@@ -56,7 +58,7 @@ done
 for tool in avbtool blkid cmp debugfs e2fsck losetup partprobe sha256sum sgdisk stat tar unpack_bootimg zstd; do
 	command -v "$tool" >/dev/null 2>&1 || die "missing required command: $tool"
 done
-for input in "$boot" "$dtbo" "$rootfs" "$apk" "$install_guide"; do
+for input in "$boot" "$dtbo" "$vbmeta" "$rootfs" "$apk" "$install_guide"; do
 	[ -f "$input" ] || die "missing input: $input"
 	[ -s "$input" ] || die "empty input: $input"
 done
@@ -65,6 +67,7 @@ done
 
 boot="$(realpath "$boot")"
 dtbo="$(realpath "$dtbo")"
+vbmeta="$(realpath "$vbmeta")"
 rootfs="$(realpath "$rootfs")"
 apk="$(realpath "$apk")"
 install_guide="$(realpath "$install_guide")"
@@ -95,6 +98,12 @@ avbtool info_image --image "$dtbo" > "$outdir/reports/avbtool-info-dtbo.txt"
 grep -Eq '^[[:space:]]+Partition Name:[[:space:]]+dtbo$' \
 	"$outdir/reports/avbtool-info-dtbo.txt" ||
 	die "DTBO AVB descriptor does not name the dtbo partition"
+vbmeta_size="$(stat -c '%s' "$vbmeta")"
+[ "$vbmeta_size" -eq 65536 ] ||
+	die "vbmeta image must fill the 64 KiB Hotdog vbmeta partition"
+avbtool info_image --image "$vbmeta" > "$outdir/reports/avbtool-info-vbmeta.txt"
+grep -Eq '^Flags:[[:space:]]+3$' "$outdir/reports/avbtool-info-vbmeta.txt" ||
+	die "vbmeta image does not disable hashtree and verification"
 unpack_bootimg --boot_img "$boot" --out "$unpack_dir" > "$outdir/reports/unpack_bootimg.txt"
 cmdline="$(sed -n 's/^command line args: //p' "$outdir/reports/unpack_bootimg.txt")"
 boot_uuid="$(printf '%s\n' "$cmdline" | tr ' ' '\n' | sed -n 's/^pmos_boot_uuid=//p')"
@@ -153,10 +162,12 @@ cmp -s "$unpack_dir/dtb" "$apk_dir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" ||
 prefix="oneplus-7t-pro-hotdog-${version}"
 boot_asset="$outdir/${prefix}-boot.img"
 dtbo_asset="$outdir/${prefix}-dtbo.img"
+vbmeta_asset="$outdir/${prefix}-vbmeta-disabled.img"
 apk_asset="$outdir/${prefix}-kernel-${apk_version}.apk"
 install_asset="$outdir/INSTALL.md"
 install -m 0644 "$boot" "$boot_asset"
 install -m 0644 "$dtbo" "$dtbo_asset"
+install -m 0644 "$vbmeta" "$vbmeta_asset"
 install -m 0644 "$apk" "$apk_asset"
 install -m 0644 "$install_guide" "$install_asset"
 root_archive="$outdir/${prefix}-rootfs.img.zst"
@@ -176,6 +187,7 @@ boot_kernel_sha="$(sha256sum "$unpack_dir/kernel" | awk '{print $1}')"
 boot_dtb_sha="$(sha256sum "$unpack_dir/dtb" | awk '{print $1}')"
 boot_sha="$(sha256sum "$boot_asset" | awk '{print $1}')"
 dtbo_sha="$(sha256sum "$dtbo_asset" | awk '{print $1}')"
+vbmeta_sha="$(sha256sum "$vbmeta_asset" | awk '{print $1}')"
 root_sha="$(sha256sum "$rootfs" | awk '{print $1}')"
 source_commit="${HOTDOG_RELEASE_SOURCE_COMMIT:-$(git -C "$script_dir/.." rev-parse HEAD)}"
 [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || die "invalid release source commit"
@@ -193,6 +205,8 @@ set and must not be mixed with another release.
 | Boot image SHA-256 | \`${boot_sha}\` |
 | Filtered DTBO SHA-256 | \`${dtbo_sha}\` |
 | Filtered DTBO size | \`${dtbo_size}\` bytes |
+| Verification-disabled vbmeta SHA-256 | \`${vbmeta_sha}\` |
+| Verification-disabled vbmeta size | \`${vbmeta_size}\` bytes |
 | Kernel SHA-256 | \`${boot_kernel_sha}\` |
 | DTB SHA-256 | \`${boot_dtb_sha}\` |
 | Rootfs raw SHA-256 | \`${root_sha}\` |
@@ -207,7 +221,7 @@ attached \`INSTALL.md\` before writing any phone partition.
 EOF
 
 {
-	for file in "$boot_asset" "$dtbo_asset" "$apk_asset" "$install_asset" \
+	for file in "$boot_asset" "$dtbo_asset" "$vbmeta_asset" "$apk_asset" "$install_asset" \
 		"$outdir/MANIFEST.md"; do
 		(cd "$outdir" && sha256sum "$(basename "$file")")
 	done

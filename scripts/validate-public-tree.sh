@@ -1170,15 +1170,24 @@ validate_public_release_userdata_contract() {
 		die "release packager does not pin the HD1913 userdata size"
 	grep -Fq 'readonly rootfs_target=userdata' "$packager" ||
 		die "release packager does not identify userdata as the rootfs target"
+	grep -Fq -- '--vbmeta IMAGE' "$packager" ||
+		die "release packager does not require the vbmeta artifact"
+	grep -Fq 'vbmeta image must fill the 64 KiB Hotdog vbmeta partition' "$packager" ||
+		die "release packager does not pin the vbmeta partition size"
 	grep -Fq 'ln -s "$boot" "$unpack_dir/boot.img"' "$packager" ||
 		die "release packager does not verify boot under its AVB partition name"
 	grep -Fq 'fastboot -S 128M flash userdata' "$install_guide" ||
 		die "release guide does not flash the validated userdata target"
+	grep -Fq 'fastboot flash vbmeta_b oneplus-7t-pro-hotdog-' "$install_guide" ||
+		die "release guide does not install the matching vbmeta"
 	! grep -Fq 'fastboot -S 128M flash super' "$install_guide" ||
 		die "release guide still flashes the obsolete super target"
 	grep -Fq 'deviceinfo_rootfs_image_sector_size="4096"' \
 		"aports/device/testing/device-oneplus-hotdog/deviceinfo" ||
 		die "deviceinfo does not pin the nested GPT sector size"
+	[ -x scripts/build-hotdog-regional-vbmeta.py ] ||
+		die "missing regional vbmeta builder"
+	python3 -m unittest tests.test_build_hotdog_regional_vbmeta
 }
 
 validate_rescue_supervisor_source() {
