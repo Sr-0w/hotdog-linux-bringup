@@ -1,0 +1,140 @@
+From 8d72b9bca683a77968aa9492aeca67e3637b3f61 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 28 Aug 2026 18:34:05 +0200
+Subject: [PATCH 1/2] ASoC: qcom: q6afe: add DisplayPort stream configuration
+
+Qualcomm AFE firmware binds DisplayPort audio to both a controller and an
+MST stream. The downstream driver sends
+AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG and
+AFE_PARAM_ID_HDMI_DPTX_IDX_CFG together before it configures and starts the
+shared DisplayPort AFE port.
+
+Mainline has no equivalent operation, so the firmware receives the
+HDMI sample format without the DisplayPort routing indices. Add an API
+that packs the two version-1 index payloads into one
+AFE_PORT_CMD_SET_PARAM_V2 command, using the v2 parameter headers already
+used by this driver.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/qdsp6/q6afe.c | 86 ++++++++++++++++++++++++++++++++++++
+ sound/soc/qcom/qdsp6/q6afe.h |  2 +
+ 2 files changed, 88 insertions(+)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe.c b/sound/soc/qcom/qdsp6/q6afe.c
+index 9707cd891ddbe..63d32950cf95d 100644
+--- a/sound/soc/qcom/qdsp6/q6afe.c
++++ b/sound/soc/qcom/qdsp6/q6afe.c
+@@ -426,6 +426,20 @@ struct afe_param_id_hdmi_multi_chan_audio_cfg {
+ 	u16 reserved;
+ } __packed;
+ 
++#define AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG	0x000102b5
++#define AFE_PARAM_ID_HDMI_DPTX_IDX_CFG		0x000102b6
++#define AFE_API_VERSION_HDMI_DISPLAY_CFG	1
++
++struct afe_display_stream_idx {
++	u32 minor_version;
++	u32 stream_idx;
++} __packed;
++
++struct afe_display_ctl_idx {
++	u32 minor_version;
++	u32 ctl_idx;
++} __packed;
++
+ struct afe_param_id_slimbus_cfg {
+ 	u32                  sb_cfg_minor_version;
+ /* Minor version used for tracking the version of the SLIMBUS
+@@ -1235,6 +1249,78 @@ int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
+ }
+ EXPORT_SYMBOL_GPL(q6afe_port_set_vendor_param);
+ 
++/**
++ * q6afe_port_set_display_stream() - Configure a DisplayPort AFE stream
++ * @port: DisplayPort AFE port
++ * @stream_idx: DisplayPort MST stream index
++ * @ctl_idx: DisplayPort controller index
++ *
++ * Return: Zero on success, or a negative error code on failure.
++ */
++int q6afe_port_set_display_stream(struct q6afe_port *port, u32 stream_idx,
++				  u32 ctl_idx)
++{
++	struct afe_display_stream_idx stream = {
++		.minor_version = AFE_API_VERSION_HDMI_DISPLAY_CFG,
++		.stream_idx = stream_idx,
++	};
++	struct afe_display_ctl_idx controller = {
++		.minor_version = AFE_API_VERSION_HDMI_DISPLAY_CFG,
++		.ctl_idx = ctl_idx,
++	};
++	struct afe_port_cmd_set_param_v2 *param;
++	struct afe_port_param_data_v2 *pdata;
++	struct q6afe *afe = port->afe;
++	struct apr_pkt *pkt;
++	size_t payload_size;
++	size_t pkt_size;
++	u8 *p;
++	int ret;
++
++	payload_size = 2 * sizeof(*pdata) + sizeof(stream) +
++		       sizeof(controller);
++	pkt_size = APR_HDR_SIZE + sizeof(*param) + payload_size;
++	p = kzalloc(pkt_size, GFP_KERNEL);
++	if (!p)
++		return -ENOMEM;
++
++	pkt = (struct apr_pkt *)p;
++	param = (struct afe_port_cmd_set_param_v2 *)(p + APR_HDR_SIZE);
++	pdata = (struct afe_port_param_data_v2 *)(param + 1);
++
++	pdata->module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
++	pdata->param_id = AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG;
++	pdata->param_size = sizeof(stream);
++	memcpy(pdata + 1, &stream, sizeof(stream));
++
++	pdata = (struct afe_port_param_data_v2 *)
++		((u8 *)(pdata + 1) + sizeof(stream));
++	pdata->module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
++	pdata->param_id = AFE_PARAM_ID_HDMI_DPTX_IDX_CFG;
++	pdata->param_size = sizeof(controller);
++	memcpy(pdata + 1, &controller, sizeof(controller));
++
++	pkt->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
++					   APR_HDR_LEN(APR_HDR_SIZE),
++					   APR_PKT_VER);
++	pkt->hdr.pkt_size = pkt_size;
++	pkt->hdr.token = port->token;
++	pkt->hdr.opcode = AFE_PORT_CMD_SET_PARAM_V2;
++
++	param->port_id = port->id;
++	param->payload_size = payload_size;
++
++	ret = afe_apr_send_pkt(afe, pkt, port, AFE_PORT_CMD_SET_PARAM_V2);
++	if (ret)
++		dev_err(afe->dev,
++			"AFE display stream config failed for port 0x%x: %d\n",
++			port->id, ret);
++
++	kfree(pkt);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(q6afe_port_set_display_stream);
++
+ int q6afe_port_set_event_handler(struct q6afe_port *port, u32 opcode,
+ 				 q6afe_event_cb_t callback, void *priv)
+ {
+diff --git a/sound/soc/qcom/qdsp6/q6afe.h b/sound/soc/qcom/qdsp6/q6afe.h
+index 7308c2ac8b24d..43376b0d6cdee 100644
+--- a/sound/soc/qcom/qdsp6/q6afe.h
++++ b/sound/soc/qcom/qdsp6/q6afe.h
+@@ -251,6 +251,8 @@ typedef void (*q6afe_event_cb_t)(const void *payload, size_t payload_size,
+ struct q6afe_port *q6afe_port_get_from_id(struct device *dev, int id);
+ int q6afe_port_start(struct q6afe_port *port);
+ int q6afe_port_stop(struct q6afe_port *port);
++int q6afe_port_set_display_stream(struct q6afe_port *port, u32 stream_idx,
++				  u32 ctl_idx);
+ void q6afe_port_put(struct q6afe_port *port);
+ int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
+ 				int param_id, int module_id, size_t size);
