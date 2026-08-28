@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=43
+pkgrel=44
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -197,7 +197,6 @@ plasma_mobile_apps() {
 		pipewire-spa-libcamera
 		plasma-camera
 		plasma-dialer
-		polkit-elogind
 		py3-libcamera
 		spacebar
 		xdg-user-dirs
