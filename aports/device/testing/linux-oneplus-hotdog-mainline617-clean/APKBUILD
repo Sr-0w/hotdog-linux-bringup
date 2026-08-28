@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=34
+pkgrel=39
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -65,6 +65,7 @@ source="
 	0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 	0027-ASoC-qcom-q6afe-add-DisplayPort-stream-configuration.patch
 	0028-ASoC-qcom-q6afe-dai-configure-DisplayPort-before-start.patch
+	0029-ASoC-qcom-sm8150-use-S16_LE-for-DisplayPort-playback.patch
 	0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
 	validate-mainline617-clean-build.sh
 "
@@ -145,6 +146,7 @@ ee76ce3c041b32611647790265c862e737063b920729b485ad81e787507f1449d833e8641e8d408e
 034cad54606603dd392ddf431b5bd9c107ec2e7ef30fc805b65ff49a31cec0ccfff4c3633043aad6e6b47834dc6cd2ace2301fd1a1baf140fe101d6957e74fa9  0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 dfc629eaa8a87b90b0fdc75f740fbdc7bb018d0272a5049d6ae2ad096ba1f3675873c0daa5eea8242c545914c1e8e6c1863409f7636804afd408245af6f7f6f8  0027-ASoC-qcom-q6afe-add-DisplayPort-stream-configuration.patch
 ec17b8d803077c3bb961737dad038c8917998f24b549507c7758ba8106bc3bda5d6f0904bb839db481382b2038afa785d2f934d7b8bdee774dd95442f14d7f13  0028-ASoC-qcom-q6afe-dai-configure-DisplayPort-before-start.patch
+1eb1671b5ae428608917f8aa35ddcf7baf7f735876371230aedcefe6dd0940f3f2facf824bf5a21497674cd936dafc8599ee82a59c852090c53121c46441ed77  0029-ASoC-qcom-sm8150-use-S16_LE-for-DisplayPort-playback.patch
 94751aa82121106518cd7c436b8e9372fde452251f0688a539a67bae54187f2f473f52f549396c44beef8c3db5934b036a415b6dac90411635a8b947bfcbb463  0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
 e4ec68912a9c8b810ddc361b56ea0e39d5c28ba3b924084d4f2ac75a1e381ad59a0a377f7499772010f3a16e85c12c2b0b9e17ee370c10d67a0fd4b5061c3118  validate-mainline617-clean-build.sh
 "

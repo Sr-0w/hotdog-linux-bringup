@@ -1,0 +1,41 @@
+From 2704cf214ba6b8aed635f08b838c56e547b700d9 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 13:36:16 +0200
+Subject: [PATCH] ASoC: qcom: sm8150: use S16_LE for DisplayPort playback
+
+SM8150 currently sends DisplayPort through the generic 24-bit backend
+path. On hotdog, a bounded A/B test on the same boot and route
+completed with an S16_LE frontend but timed out in
+AFE_PORT_CMD_DEVICE_START with an S24_LE frontend.
+
+Use the 16-bit stereo backend contract already established by sm8250
+for DISPLAY_PORT_RX. Wider frontend streams remain valid and are
+converted by the DSP before reaching the AFE backend.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/sm8150.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/qcom/sm8150.c b/sound/soc/qcom/sm8150.c
+index 078b2b1f6a420..78fb9bb0b0970 100644
+--- a/sound/soc/qcom/sm8150.c
++++ b/sound/soc/qcom/sm8150.c
+@@ -57,7 +57,16 @@ static int sm8150_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 
+ 	rate->min = rate->max = 48000;
+ 	snd_mask_none(fmt);
+-	if (cpu_dai->id >= SLIMBUS_0_TX &&
++	if (cpu_dai->id == DISPLAY_PORT_RX) {
++		/*
++		 * Keep the legacy DisplayPort AFE backend on the 16-bit stereo
++		 * contract also used by sm8250. The DSP can convert a wider
++		 * frontend stream before it reaches this backend.
++		 */
++		channels->min = 2;
++		channels->max = 2;
++		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
++	} else if (cpu_dai->id >= SLIMBUS_0_TX &&
+ 	    cpu_dai->id <= SLIMBUS_6_TX && (cpu_dai->id & 1)) {
+ 		channels->min = 1;
+ 		channels->max = 1;
