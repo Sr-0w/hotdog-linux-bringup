@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img alt="Linux 6.16" src="https://img.shields.io/badge/Linux-6.16-FCC624?logo=linux&logoColor=black">
+  <img alt="Linux 6.17" src="https://img.shields.io/badge/Linux-6.17-FCC624?logo=linux&logoColor=black">
   <img alt="postmarketOS edge" src="https://img.shields.io/badge/postmarketOS-edge-009900">
   <img alt="Plasma Mobile" src="https://img.shields.io/badge/Plasma-Mobile-1D99F3?logo=kde">
   <img alt="Ubuntu Touch planned" src="https://img.shields.io/badge/Ubuntu%20Touch-planned-E95420?logo=ubuntu&logoColor=white">
@@ -18,10 +18,10 @@
 </p>
 
 <p align="center">
-  <strong>OnePlus 7T Pro HD1913 · Snapdragon 855+ · Linux 6.16 · postmarketOS · Plasma Mobile</strong>
+  <strong>OnePlus 7T Pro HD1913 · Snapdragon 855+ · Linux 6.17 · postmarketOS · Plasma Mobile</strong>
 </p>
 
-Last reviewed: **2026-08-25**
+Last reviewed: **2026-08-28**
 
 ## Project goals
 
@@ -53,18 +53,18 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r8` on the migration branch |
-| Device package | `device-oneplus-hotdog` `3-r36` |
+| Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r10` |
+| Device package | `device-oneplus-hotdog` `3-r37` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
-| Clean migration candidate | SM8150 6.17 r8; complete electronic kernel gate passed, not yet the default |
+| Public image | `v0.2.0-alpha.1`; hardware-booted from `userdata` with Plasma Mobile and SSH |
 | Historical paths | Downstream 4.14/kexec and Linux 6.17 K1, retained for recovery and evidence only |
 
 The Linux 6.16 package remains the immutable hardware oracle. The clean 6.17
-migration now passes the complete electronic kernel gate and has a
-package-shaped full image; physical parity is still being revalidated before
-merge. Neither tree implies that every carried change has been accepted into
+migration is now the public boot path and passes direct boot, writable root,
+Plasma Mobile and SSH validation. Physical parity for every function remains an
+ongoing gate. Neither tree implies that every carried change has been accepted into
 Torvalds' Linux tree. The normal path no longer executes the downstream kernel
 or a kexec bridge.
 
@@ -119,7 +119,7 @@ function under **Working** and a broader integration or stability item under
 
 | Subsystem | Function | Notes |
 |---|---|---|
-| Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.16, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`; no downstream kernel or kexec bridge executes. |
+| Boot | Direct boot from OnePlus bootloader | Package-built Linux 6.17, DTB, initramfs and postmarketOS rootfs direct-boot from `boot_b`; no downstream kernel or kexec bridge executes. |
 | Boot | Persistent postmarketOS rootfs / OpenRC / SSH | Read-write rootfs, OpenRC, USB networking and SSH are hardware-validated. |
 | Boot | Clean software reboot and A/B success marking | Six consecutive software reboots returned directly to USB networking and SSH without Qualcomm `900e`; `qbootctl` marks the active slot successful. |
 | Boot | Bootloader and recovery selection | `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot; `RESTART2("recovery")` reaches the existing authorized root-ADB recovery. Both return to postmarketOS. |
@@ -270,11 +270,12 @@ bridge boundary.
 > dedicated test handset and read [device safety](docs/device-safety.md) before
 > any hardware operation.
 
-The current public image set is `v0.1.0-alpha.5`, pairing postmarketOS Plasma
-Mobile with kernel `r181`, the matching AVB boot image and the required
-filtered DTBO. The boot, DTBO and rootfs form one atomic set and must not be
-mixed across releases. The exact Alpha 5 set is offline-validated but has not
-yet been booted as a unit. Follow the [release installation guide](docs/release-install.md).
+The current public image set is `v0.2.0-alpha.1`, pairing postmarketOS Plasma
+Mobile with the clean Linux 6.17 kernel, matching AVB boot image, required
+filtered DTBO and a rootfs installed on `userdata`. The boot, DTBO, kernel APK
+and rootfs form one atomic set and must not be mixed across releases. The exact
+release assets were flashed and booted on the reference HD1913. Follow the
+[release installation guide](docs/release-install.md).
 
 Clone and bootstrap the host workspace:
 

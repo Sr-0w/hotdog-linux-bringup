@@ -1,16 +1,16 @@
 # Boot architecture
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 ## Current supported path
 
-The physical HD1913 now boots the mainline-oriented Linux 6.16 reference stack
+The physical HD1913 now boots the clean SM8150 Linux 6.17 stack
 directly. The downstream 4.14 bridge and kexec are not executed.
 
 ```mermaid
 sequenceDiagram
     participant BL as OnePlus ABL bootloader
-    participant K as Linux 6.16 Image + Hotdog DTB
+    participant K as Linux 6.17 Image + Hotdog DTB
     participant IR as standard pmOS initramfs
     participant RF as writable pmOS rootfs
     participant UI as OpenRC + Plasma Mobile
@@ -26,7 +26,7 @@ sequenceDiagram
 Validated properties include direct kernel entry, native UFS and ICE, writable
 root, USB NCM/ACM/SSH, native DRM, accelerated Plasma Mobile, clean reboot,
 bootloader/recovery selection and A/B success marking. The current laboratory
-installation maps a split image from `super`;
+installation maps a split image from `userdata`;
 the final pmaports installer must replace that layout without changing the
 kernel/DTB hardware contract.
 
@@ -41,7 +41,7 @@ kernel/DTB hardware contract.
 
 The exact validated identities are versioned in
 [package evidence](evidence/2026-08-03-mainline616-pmaports.md) and the
-[Alpha 5 release notes](release-notes-v0.1.0-alpha.5.md), rather than
+[v0.2.0-alpha.1 release notes](release-notes-v0.2.0-alpha.1.md), rather than
 hard-coded here as if one historical hash were permanently current.
 
 ## Recovery and A/B behavior

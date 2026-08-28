@@ -1,6 +1,6 @@
 # Hardware support status
 
-Last updated: 2026-08-26
+Last updated: 2026-08-28
 
 This is the current evidence-based status of the physical OnePlus 7T Pro
 HD1913. Historical K1, D-series and kexec experiments remain in
@@ -43,7 +43,7 @@ State meanings:
 
 | Subsystem | State | Current evidence and remaining gap |
 |---|---|---|
-| Direct kernel entry | Working | ABL directly starts the package-generated Linux 6.16 image; no downstream kernel or kexec bridge executes. |
+| Direct kernel entry | Working | ABL directly starts the package-generated Linux 6.17 image; no downstream kernel or kexec bridge executes. |
 | Rootfs / OpenRC / Plasma | Working | Writable split pmOS filesystems, `switch_root`, OpenRC, NetworkManager, SSH and accelerated Plasma Mobile boot automatically. The laboratory nested-GPT deployment is not the final installer layout. |
 | A/B success and reboot | Working | `qbootctl` marks the active slot successful; six clean software reboot cycles returned to pmOS. `RESTART2("bootloader")` reaches protocol-valid bootloader fastboot, and `RESTART2("recovery")` reaches the authorized root-ADB recovery; both return automatically to pmOS. The historical image-pipeline retry regression and a native pmOS recovery still need completion. See [A/B retry regression](evidence/2026-08-17-ab-slot-retry-regression.md) and [ICE/reboot-mode validation](evidence/2026-08-25-ufs-ice-reboot-mode.md). |
 | UFS and RAM map | Working | UFS survives raw/random I/O, a multi-gigabyte Flatpak deployment and the former pressure reproducer after completing the stock reserved-memory union. |
