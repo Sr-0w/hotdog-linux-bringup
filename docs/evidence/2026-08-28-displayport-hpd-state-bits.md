@@ -71,8 +71,12 @@ Both the kernel build validation and AVB verification pass.
 
 ## Gate
 
-Status: **EDID and mode negotiation PASS; visual confirmation and repeated
-hotplug remain pending**.
+Status: **EDID, mode negotiation and visual output PASS; repeated hotplug
+remains pending**.
+
+The monitor displayed the Plasma desktop at the negotiated mode after its
+USB-C input was selected. This closes the visual part of the gate: r36 did not
+merely populate sysfs, it drove a usable external image at 2560x1440@60.
 
 DisplayPort audio is a separate gate. No audio was played during this proof,
 and this fix does not claim to repair AFE port `0x6020`.
