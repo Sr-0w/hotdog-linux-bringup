@@ -89,6 +89,52 @@ controller audio engine must be enabled before the AFE start waits on it.
 The earlier unconditional stop experiment is removed. Qualcomm does not use
 it, and it can add another timeout without supplying the missing routing data.
 
+## Hardware result
+
+The instance-aware implementation was packaged as kernel revision r38 and
+booted on the phone as:
+
+```text
+6.17.0-sm8150-hotdog-clean #39-oneplus-hotdog-mainline617-clean
+```
+
+With Plasma, PipeWire, WirePlumber and callaudiod stopped, one bounded ALSA
+playback through `MultiMedia1` succeeded. The test selected only
+`DISPLAY_PORT_RX Audio Mixer MultiMedia1`, played a 48 kHz stereo S16_LE WAV
+with `aplay -D hw:0,0`, and returned zero. The 440 Hz tone was physically
+heard from the monitor. Stopping playback and unplugging the dock produced no
+new kernel error, APR retry, timeout or loss of SSH.
+
+This proves the following kernel path on the tested hardware:
+
+```text
+Q6ASM MultiMedia1 -> Q6 routing -> Q6AFE DisplayPort -> DPTX -> monitor
+```
+
+The same boot still fails under the normal Plasma audio stack. PipeWire
+selects the DisplayPort sink, then `AFE_PORT_CMD_DEVICE_START` repeatedly
+times out with `-110`; Plasma Settings consequently reports that its
+connection to the sound service was lost. Adding `JackHWMute "Speaker"` to
+the UCM HDMI device correctly leaves only the available HDMI sink in the
+active profile, but does not change this failure.
+
+The kernel transport is therefore hardware-validated, while normal-user
+playback remains blocked by a difference between the successful direct ALSA
+stream and the PipeWire stream lifecycle or parameters. A literal no-sound
+result from Plasma must not be used to revert the DisplayPort stream
+configuration protocol.
+
+Private evidence directories:
+
+```text
+r38-v3-headless-single.15XoPG
+r38-r47-plasma-topology.VXe1rc
+r38-r47-plasma-failure.wYxejH
+```
+
+The directories contain local runtime data and are intentionally not part of
+the public repository.
+
 ## Offline gate
 
 - `git diff --check`: PASS
@@ -103,6 +149,6 @@ q6afe.o      9fceffe50461683523219de27a91282b9835ac43ae742ae18a574421692adf23
 q6afe-dai.o  d91a117281cbc0f492bac949b942b5299531c8f0e8aa506a6b58850a0a410eef
 ```
 
-Status: **OFFLINE PASS, HARDWARE NOT YET VALIDATED**. Promotion requires a
-fresh boot followed by one bounded normal-user playback, successful stop, and
-dock unplug without `-110`, APR retry loops or loss of SSH.
+Status: **KERNEL HARDWARE PASS, NORMAL-USER PLAYBACK PARTIAL**. Direct ALSA
+playback and clean unplug pass. PipeWire/Plasma playback still requires a
+separate, bounded fix and must not be reported as working yet.
