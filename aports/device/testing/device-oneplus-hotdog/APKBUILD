@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=45
+pkgrel=46
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -278,7 +278,7 @@ wireplumber() {
 }
 
 sha512sums="
-fe62505dc8dd43985ae14f5db982b73afc59c710802a4ac6e418194b7fda806b7df42a5a0b8e122581cf9ab5b010b5d3f4b9218b1d1dd694a5788857dc3afaab  HiFi.conf
+db50b36a55defc63e6a68ae55c90e51311a2224c9148e678b87b990f08e6b448cc6df0e20bd23c36e1ced2854d98538f58530e730000617e2a0f9feb29bf9f53  HiFi.conf
 af7877321da99b5dd12184d0943863e70d254a9640af426bf9d4f183818e65a3b7bf65c56b21d33d026dc314a9676f51669bbdc32ff67d0ee418c15e5e1f3921  deviceinfo
 65281dddb922819d3dac7caed80887bec31a59dc1b351c1dac76e4f859612268c283abc6fe9498358a5b8aad1b58256d1da503045dae5c47923c6916a46fceee  hotdog.conf
 ff18992b1050030eca46a403846f93a3cf473c389a8b1eb68fa2e1f5ced6cf0b702e78aa8c1c77daacca3639cd512bc6a8635c6321dfff1c499c21b5d9134609  kernel-cmdline.conf
