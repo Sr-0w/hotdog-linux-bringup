@@ -95,13 +95,32 @@ otherwise identical to the working 6.16 oracle. The remaining boundary is a
 6.17-era host/Type-C/DP transition or a recently added hotplug consumer, not a
 missing VBUS or role-switch description.
 
-## Next isolation
+## r32 isolation without the DP jack callback
 
-The first controlled candidate should remove only the new DisplayPort
-jack-presence callback while retaining the DP link, DP audio ordering fixes,
-USB contracts, Bluetooth fix and ramoops. The callback is the only recent
-consumer that runs on DP presence and was not present in the repeatedly
-working 6.16 image. A successful dock enumeration would implicate that
-callback; another 900e would move the bisect below ASoC into Type-C/QMP/xHCI.
+r32 removed only the unvalidated SM8150 DisplayPort jack-presence callback.
+The DP link, DP audio ordering fixes, USB contracts, Bluetooth fix and ramoops
+remained. The package booted normally on slot A and the slot was marked
+successful.
 
-No claim is made that DisplayPort audio or dock stability works on r30.
+Dock insertion reproduced the complete-phone failure. This run reached
+`05c6:9008`, then rebooted automatically to the same r32 image. A phone-local
+logger synchronized its state every second. It did not observe a USB host
+child before the reset; the last new kernel line was:
+
+```text
+dwc3 a600000.usb: remote wakeup not configured
+```
+
+There was no panic record in pstore after reboot. The earlier r30 run reached
+both hub devices before entering 900e, while r32 reset during the preceding
+role transition. Removing the ASoC callback therefore does not fix the dock
+failure and moves the investigation below ASoC into DWC3, Type-C policy, the
+QMP combo PHY or their power transition.
+
+The callback remains outside the clean series because its intended jack-state
+behavior has not passed a hardware test. It is not retained merely because it
+was ruled out as the crash trigger. The ramoops adjustment was useful for this
+last diagnostic cycle but produced no panic and is also removed from the clean
+series.
+
+No claim is made that DisplayPort audio or dock stability works on r30/r32.

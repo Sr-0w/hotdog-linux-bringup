@@ -46,6 +46,44 @@ it. Diagnostic framebuffer painting, direct-entry pstore markers, camera
 experiments, superseded UFS dumps and other historical scaffolding stay in the
 immutable checkpoint.
 
+This is a continuing merge gate, not only the policy used to create the first
+tree. [Issue #5](https://github.com/Sr-0w/hotdog-linux-bringup/issues/5)
+tracks every compatibility mechanism that still needs a single-variable
+hardware re-evaluation. Before final pmaports or upstream preparation, every
+kernel delta must have one explicit disposition:
+
+- **required hardware contract**: retained with current hardware evidence;
+- **upstream or stable backport**: retained with its upstream identity;
+- **pmaports integration**: kept in package config, userspace or the board DTS
+  rather than presented as a generic kernel change;
+- **temporary diagnostic**: kept only while its named investigation is active,
+  then removed before the final series.
+
+Build success and inherited r181 necessity are not sufficient evidence. An
+experimental change must not become permanent merely because later candidates
+were built on top of it. Re-evaluation removes one mechanism at a time against
+the immutable checkpoint and the current known-good 6.17 baseline.
+
+## Branch promotion policy
+
+The public branch topology mirrors that evidence rule:
+
+- `archive/hotdog-clearstaff-6.16-r181` freezes the former `main` as the
+  rebuildable 6.16 source of truth;
+- `bringup/hotdog-sm8150-clean-baseline` carries only the candidate clean 6.17
+  baseline while it completes its gates;
+- every unvalidated kernel change is developed and hardware-tested on its own
+  `bringup/hotdog-sm8150-<topic>` branch;
+- a topic reaches the clean baseline only after its affected hardware path
+  passes and its patch is suitable for pmaports or an identified upstream
+  subsystem;
+- `main` advances to 6.17 only by fast-forward after the clean package and a
+  fresh stock-style postmarketOS image pass their boot and runtime gates.
+
+Tests, capture scripts, private logs and diagnostic-only kernel changes are not
+part of the publishable kernel patch queue. They may support a topic branch,
+but cannot enter `main` as a substitute for a production fix.
+
 The current tree uses eighteen focused commits and changes 102 kernel files.
 The first seven-commit offline foundation build produced:
 
