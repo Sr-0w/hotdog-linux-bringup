@@ -80,12 +80,28 @@ tested on three Qualcomm platforms, and is the minimal correction for the
 observed underflow. The exact upstream patch is staged alone as r34 on
 `bringup/hotdog-sm8150-dock-stability`.
 
-## Gate
+## Hardware validation
 
-Status: **candidate ready for hardware validation**.
+The r34 boot image changed only this upstream fix relative to the r33 kernel.
+It booted the existing fresh Plasma Mobile rootfs, and the complete dock then
+enumerated its USB2 and USB3 hubs, RTL8153 Ethernet, USB storage and DisplayPort
+connector. KWin remained active while the phone stayed reachable for more than
+twelve minutes of dock and audio inspection.
 
-PASS requires repeated dock insertion/removal with KWin active, no
-`msm_gem_free_object` warning, no refcount underflow, no Qualcomm 900e/9008
-transition and stable USB2, USB3 and DisplayPort enumeration. DisplayPort audio
-is validated separately on `bringup/hotdog-sm8150-dp-audio`; neither topic
-merges into the clean baseline merely because it builds.
+The pre-fix signatures did not recur:
+
+- no `msm_gem_free_object` warning;
+- no refcount underflow or use-after-free report;
+- no Qualcomm `05c6:900e` or `05c6:9008` transition;
+- no loss of SSH caused by the dock.
+
+The USB3 hub did renegotiate once, and DisplayPort audio still failed with AFE
+port `0x6020` timeouts. Those are separate gates; neither is evidence that the
+GEM ownership fix failed.
+
+Status: **hardware PASS for the imported dma-buf GEM fix**.
+
+DisplayPort presence and audio are validated independently on
+`bringup/hotdog-sm8150-dp-jack-presence` and
+`bringup/hotdog-sm8150-dp-audio`. This topic must not absorb either change just
+because the combined validation image contains them.
