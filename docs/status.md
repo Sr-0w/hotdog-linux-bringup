@@ -14,8 +14,8 @@ HD1913. Historical K1, D-series and kexec experiments remain in
 | Device | OnePlus 7T Pro, rear label HD1913; recovery reports HD1911 |
 | Codename / SoC | `hotdog` / Qualcomm SM8150-AC |
 | Bootloader | Unlocked OnePlus A/B bootloader |
-| Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r11`; 6.16 r181 remains the immutable oracle |
-| Device package | `device-oneplus-hotdog` `3-r38` |
+| Active kernel line | Clean SM8150 Linux 6.17 migration candidate `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r33`; 6.16 r181 remains the immutable oracle and current `main` |
+| Device package | `device-oneplus-hotdog` `3-r43` |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Userspace | postmarketOS edge, OpenRC, Plasma Mobile |
 | Boot path | OnePlus ABL -> Linux 6.17 -> standard pmOS initramfs -> writable rootfs -> Plasma Mobile |
@@ -26,10 +26,12 @@ DTS, not a permanent device-specific 6.16 package. Ubuntu Touch/Lomiri on the
 same mainline kernel is an additional roadmap target and has not started.
 
 The support rows below remain physical-function claims established on the 6.16
-oracle until the final 6.17 physical parity pass repeats them. The 6.17 r10
-candidate passes direct boot, current-initramfs rootfs integration, electronic
-subsystem enumeration and sustained NCM+ACM+SSH monitoring; this does not
-silently promote untested physical behavior.
+oracle until the final 6.17 physical parity pass repeats them. The 6.17 line
+passes direct boot, current-initramfs rootfs integration, electronic subsystem
+enumeration and sustained NCM+ACM+SSH monitoring. The latest r32 hardware test
+isolated a USB-C dock reset; r33 is the clean queue built without the
+unvalidated DP-jack patch or expanded ramoops diagnostic. None of this silently
+promotes untested physical behavior.
 
 ## Current support matrix
 

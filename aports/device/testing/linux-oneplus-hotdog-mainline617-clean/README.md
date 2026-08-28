@@ -33,6 +33,11 @@ also removed after the final diagnostic cycle. The GENI RX-DMA correction is
 the byte-identical upstream commit
 [`b93062b6d8a1`](https://github.com/torvalds/linux/commit/b93062b6d8a1b2d9bad235cac25558a909819026).
 
+`CONFIG_FONT_TER16x32` remains in the pmaports kernel configuration because the
+high-density 1440x3120 framebuffer needs a readable console. It is a packaged
+integration choice consumed by the existing `fbcon=font:TER16x32` command line,
+not a source patch, runtime probe or troubleshooting instrument.
+
 The remaining compatibility mechanisms tracked by
 [issue #5](https://github.com/Sr-0w/hotdog-linux-bringup/issues/5) are tested
 one at a time on dedicated branches. They do not become acceptable for final

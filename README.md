@@ -53,20 +53,21 @@ Lomiri session has been validated on Hotdog yet. See the complete
 
 | Component | Current development snapshot |
 |---|---|
-| Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r10` |
-| Device package | `device-oneplus-hotdog` `3-r37` |
+| Kernel package | `linux-oneplus-hotdog-mainline617-clean` `6.17.0-r33` candidate |
+| Device package | `device-oneplus-hotdog` `3-r43` candidate |
 | Firmware package | `firmware-oneplus-hotdog` `20241212-r7` |
 | Boot path | OnePlus A/B bootloader directly starts a header-v2 Linux image |
 | Validated userspace | Writable postmarketOS edge, OpenRC and accelerated Plasma Mobile |
 | Public image | `v0.2.0-alpha.1`; hardware-booted from `userdata` with Plasma Mobile and SSH |
 | Historical paths | Downstream 4.14/kexec and Linux 6.17 K1, retained for recovery and evidence only |
 
-The Linux 6.16 package remains the immutable hardware oracle. The clean 6.17
-migration is now the public boot path and passes direct boot, writable root,
-Plasma Mobile and SSH validation. Physical parity for every function remains an
-ongoing gate. Neither tree implies that every carried change has been accepted into
-Torvalds' Linux tree. The normal path no longer executes the downstream kernel
-or a kexec bridge.
+The Linux 6.16 package remains the immutable hardware oracle and the current
+`main` branch. The clean 6.17 candidate passes direct boot, writable root,
+Plasma Mobile and SSH validation, but `main` advances only after a fresh
+stock-style postmarketOS image passes its boot gate. Physical parity for every
+function remains an ongoing gate. Neither tree implies that every carried
+change has been accepted into Torvalds' Linux tree. The normal path no longer
+executes the downstream kernel or a kexec bridge.
 
 ## Validated highlights
 
@@ -83,9 +84,11 @@ or a kexec bridge.
   `hsuart` alias and its UART never probed.
 - USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
   mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60
-  are validated on the 6.16 oracle. The current 6.17 r30 image regressed dock
-  insertion: it entered Qualcomm 900e immediately after enumerating the two
-  hub functions, before any child or DP hotplug event. See the
+  are validated on the 6.16 oracle. The 6.17 r30 image entered Qualcomm 900e
+  immediately after enumerating the two hub functions; r32, without the
+  unvalidated DP-jack patch, reset earlier during the DWC3 role transition.
+  This rules out that patch as the primary cause but leaves the dock regression
+  open. See the
   [900e ramdump analysis](docs/evidence/2026-08-28-usbc-dock-900e-ramdump.md).
 - Capture from all four cameras through libcamera, rear autofocus and automatic
   Hall-bounded extension/retraction of the IMX471 pop-up camera.
