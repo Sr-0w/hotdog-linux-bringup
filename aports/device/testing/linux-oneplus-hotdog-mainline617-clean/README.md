@@ -88,6 +88,12 @@ This is an offline baseline only. Do not replace the hardware-tested kernel or
 publish a release from it until a packaged image has passed the normal offline
 image gate and a supervised hardware boot.
 
+Revision r33 is the first queue with the unvalidated DP-jack callback and the
+expanded ramoops diagnostic removed. It builds as part of a completely fresh
+Plasma Mobile image; see
+[the clean-room image evidence](../../../../docs/evidence/2026-08-28-stock-style-6.17-r33-image.md).
+That image has passed offline validation but not yet the hardware boot gate.
+
 ## First strict package build
 
 The isolated pmbootstrap build completed on 2026-08-25. Package readback

@@ -80,6 +80,11 @@ The public branch topology mirrors that evidence rule:
 - `main` advances to 6.17 only by fast-forward after the clean package and a
   fresh stock-style postmarketOS image pass their boot and runtime gates.
 
+The first clean-room r33/r44 image now passes the complete offline gate; its
+inputs, package inventory, privacy checks and exact hashes are recorded in
+[the stock-style image evidence](evidence/2026-08-28-stock-style-6.17-r33-image.md).
+Hardware boot remains the final prerequisite for advancing `main`.
+
 Tests, capture scripts, private logs and diagnostic-only kernel changes are not
 part of the publishable kernel patch queue. They may support a topic branch,
 but cannot enter `main` as a substitute for a production fix.
