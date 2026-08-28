@@ -92,14 +92,19 @@ The pre-fix signatures did not recur:
 
 - no `msm_gem_free_object` warning;
 - no refcount underflow or use-after-free report;
-- no Qualcomm `05c6:900e` or `05c6:9008` transition;
-- no loss of SSH caused by the dock.
+- no Qualcomm `05c6:900e` or `05c6:9008` transition while SSH remained
+  reachable;
+- no immediate loss of SSH during enumeration.
 
 The USB3 hub did renegotiate once, and DisplayPort audio still failed with AFE
-port `0x6020` timeouts. Those are separate gates; neither is evidence that the
-GEM ownership fix failed.
+port `0x6020` timeouts. After the reachable observation window ended, reconnecting
+the phone to the PC exposed it in Qualcomm `05c6:900e`. A second complete
+no-reset RAM capture was therefore started. The phone-local logger did not
+record the terminal event, so the late crash must not be attributed to the GEM
+bug merely because that was the first known defect.
 
-Status: **hardware PASS for the imported dma-buf GEM fix**.
+Status: **the exact GEM warning is not reproduced, but overall dock stability
+remains BLOCKED by a later 900e transition**.
 
 DisplayPort presence and audio are validated independently on
 `bringup/hotdog-sm8150-dp-jack-presence` and
