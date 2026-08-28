@@ -86,11 +86,38 @@ hash. `unpack_bootimg` returns payloads byte-identical to the files listed
 above. The generated command line selects TER16x32 and the new boot/root UUIDs,
 without a laboratory-rootfs reference.
 
+## First hardware deployment attempt
+
+The phone entered protocol-valid bootloader fastboot from the running r32
+system on slot A. Preflight confirmed an unlocked bootloader, a successful and
+bootable slot, a 96 MiB `boot_a` partition and a 232,382,812,160-byte
+`userdata` partition. The running `boot_a` hash matched the retained r32
+rollback image.
+
+`fastboot -S 512M flash userdata` wrote the complete r33 image as eight bounded
+sparse fragments. Every send and write returned `OKAY`; total time was 258.609
+seconds. The subsequent `boot_a` command did not return a send/write status and
+hit its 120-second host timeout. It is therefore not evidence that `boot_a` was
+written.
+
+After the large transfer, the device remained visible as `18d1:d00d` but no
+longer answered `getvar`. A host-side USB unbind/rebind produced xHCI setup
+timeouts and the device stopped enumerating. No new Qualcomm `900e` or `9008`
+identity appeared. Testing stopped at this boundary: `userdata` is known to be
+r33, while `boot_a` must be treated as unknown until fastboot is restored and
+the r33 boot image is flashed again with an explicit `OKAY` result.
+
+This is a transport interruption, not a failed r33 boot result; the phone was
+never instructed to reboot after the incomplete boot command.
+
 ## Gate status
 
 Offline image gate: **PASS**.
 
-Remaining gate before moving `main`: flash the generated boot and nested GPT
-image under the normal rollback protocol, confirm direct boot, writable root,
-Plasma Mobile, NCM/ACM and SSH, then retain every unvalidated kernel experiment
-on its separate topic branch.
+Hardware image gate: **BLOCKED before boot** by the wedged fastboot USB
+transport.
+
+Remaining gate before moving `main`: restore protocol-valid fastboot, flash the
+r33 boot image with a positive acknowledgement, then confirm direct boot,
+writable root, Plasma Mobile, NCM/ACM and SSH. Every unvalidated kernel
+experiment remains on its separate topic branch.
