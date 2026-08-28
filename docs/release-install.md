@@ -37,8 +37,8 @@ asset changes.
 ## Before flashing
 
 1. Read the matching release notes and the current [support status](status.md).
-2. Back up any data that matters. Flashing `super` replaces the Android system
-   layout used by this experiment. Do not expect Android to remain bootable.
+2. Back up any data that matters. Flashing `userdata` destroys Android user
+   data and replaces the whole partition with the nested pmOS disk image.
 3. Keep an official HD1913 OxygenOS or Lineage recovery path available. This
    project does not distribute proprietary factory images.
 4. Install Android Platform Tools (`fastboot`), `zstd`, `sha256sum`, and keep
@@ -59,19 +59,20 @@ Do not use `fastboot getvar all` in a public log: it prints the device serial.
 
 ## Back up slot B before changing it
 
-This release intentionally uses slot B and leaves `boot_a` and `dtbo_a`
-untouched. The `super` partition is shared and will still be replaced, so slot
-A is not an intact Android installation. Before flashing, enter fastbootd,
-make complete local backups of the current `boot_b` and `dtbo_b`, and record
-their hashes. Recent Android Platform Tools can read a physical partition with
-`fastboot fetch`:
+This release intentionally uses slot B and leaves `boot_a`, `dtbo_a`, Android
+`super` and both recovery partitions untouched. `userdata` is shared and will
+be destroyed, so an Android slot may still reach recovery or initial setup but
+cannot retain its user data. Before flashing, use a trusted root recovery to
+make complete local backups of `boot_b` and `dtbo_b`, then record their hashes.
+The Hotdog fastboot implementations tested here do not support `fastboot fetch`.
 
 ```bash
 mkdir hotdog-slot-b-backup
-fastboot reboot fastboot
-fastboot getvar is-userspace  # must report: yes
-fastboot fetch boot_b hotdog-slot-b-backup/boot_b.img
-fastboot fetch dtbo_b hotdog-slot-b-backup/dtbo_b.img
+adb devices                  # must report the trusted recovery as recovery
+adb exec-out 'dd if=/dev/block/by-name/boot_b bs=4M' \
+  > hotdog-slot-b-backup/boot_b.img
+adb exec-out 'dd if=/dev/block/by-name/dtbo_b bs=4M' \
+  > hotdog-slot-b-backup/dtbo_b.img
 sha256sum hotdog-slot-b-backup/boot_b.img \
   hotdog-slot-b-backup/dtbo_b.img \
   > hotdog-slot-b-backup/SHA256SUMS
@@ -79,10 +80,9 @@ test "$(stat -c %s hotdog-slot-b-backup/boot_b.img)" -eq 100663296
 test "$(stat -c %s hotdog-slot-b-backup/dtbo_b.img)" -eq 25165824
 ```
 
-On macOS, use `shasum -a 256` and `stat -f %z` for the equivalent checks. If
-the installed `fastboot` does not support `fetch`, stop and back up both
-partitions from a trusted recovery shell before continuing. Do not flash first
-and plan the rollback later. Stay in fastbootd after making the backups.
+On macOS, use `shasum -a 256` and `stat -f %z` for the equivalent checks. Do not
+flash first and plan the rollback later. After verifying the backup, use the
+recovery UI or `adb reboot fastboot` to enter fastbootd.
 
 ## Verify and expand the download
 
@@ -112,22 +112,21 @@ test "$(stat -c %s oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-dtbo.img)" -eq 25165824
 
 ## Flash the matching set
 
-The rootfs is written to physical `super`. The filtered DTBO and mainline boot
-image are written to `dtbo_b` and `boot_b`. Flashing `super` replaces the
-Android system layout and is destructive. Confirm that the backups above are
-readable before continuing.
+The rootfs is written to physical `userdata`. The filtered DTBO and mainline
+boot image are written to `dtbo_b` and `boot_b`. Flashing `userdata` is
+destructive. Confirm that the backups above are readable before continuing.
 
-Use userspace fastboot (`fastbootd`) for `super`. The HD1913 bootloader accepted
-the first large sparse segment during release validation but stopped responding
-on the next transfer. Fastbootd completed the same image as 30 bounded segments.
+Use userspace fastboot (`fastbootd`) for `userdata`. The bootloader path is not
+the validated transport for this large image; fastbootd completed the exact
+hardware-readback image in bounded sparse segments.
 
 ```bash
 # The backup section leaves the phone in recovery-provided fastbootd.
 fastboot getvar is-userspace  # must report: yes
-fastboot getvar partition-size:super
+fastboot getvar partition-size:userdata
 
 # Keep sparse transfers small enough for the tested HD1913 USB path.
-fastboot -S 128M flash super \
+fastboot -S 128M flash userdata \
   oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 fastboot reboot bootloader
 fastboot getvar is-userspace  # must report: no
@@ -140,9 +139,9 @@ fastboot reboot
 
 If `fastboot reboot fastboot` cannot start fastbootd, the active slot does not
 contain a compatible recovery. Restore or select a known-good HD1913 recovery
-slot before continuing. Do not substitute a direct bootloader `super` flash.
-`boot_a` is deliberately preserved for that recovery path, but its Android
-system partitions are not preserved because `super` is shared.
+slot before continuing. Do not substitute a direct bootloader `userdata` flash.
+`boot_a`, `dtbo_a`, Android `super` and both recovery partitions are deliberately
+preserved, but Android user data is not.
 
 The first boot can take longer than normal while the root partition is checked
 and expanded. A healthy boot reaches Plasma Mobile and exposes USB networking
