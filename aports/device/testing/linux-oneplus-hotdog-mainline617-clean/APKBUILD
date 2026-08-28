@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=33
+pkgrel=34
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -64,6 +64,7 @@ source="
 	0025-drm-msm-dp-do-not-charge-the-link-for-a-clock-the-wi.patch
 	0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 	0027-ASoC-qcom-q6afe-dai-start-HDMI-and-DisplayPort-ports.patch
+	0028-ASoC-qcom-sm8150-report-DisplayPort-presence.patch
 	0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
 	validate-mainline617-clean-build.sh
 "
@@ -143,6 +144,7 @@ ee76ce3c041b32611647790265c862e737063b920729b485ad81e787507f1449d833e8641e8d408e
 48b58637eb83692befe679c3d87bdc3b3f24e333eaed039c7f432afe161a986823653edb99af66e6cdf3af56932ba105437631bfcadc9154ad96c65467a38aaf  0025-drm-msm-dp-do-not-charge-the-link-for-a-clock-the-wi.patch
 034cad54606603dd392ddf431b5bd9c107ec2e7ef30fc805b65ff49a31cec0ccfff4c3633043aad6e6b47834dc6cd2ace2301fd1a1baf140fe101d6957e74fa9  0026-ASoC-tfa9872-stop-claiming-nxp-tfa9874.patch
 faa6a3d75594bc55f6a00a44e05d1f120cc84ee42ed08a942ce25dace7c12960efed40ceaeb16514766486f3b27faa296994ba71bd0063a0e834ff1eaec10658  0027-ASoC-qcom-q6afe-dai-start-HDMI-and-DisplayPort-ports.patch
+6cd743ac68481566e5dce3c0418a7de9d21396a62ac29059ad66e0626b4ffb91904e8d11a70c5ea805d6164bf22349b1b11242ce49105bc18722745e31afed2c  0028-ASoC-qcom-sm8150-report-DisplayPort-presence.patch
 94751aa82121106518cd7c436b8e9372fde452251f0688a539a67bae54187f2f473f52f549396c44beef8c3db5934b036a415b6dac90411635a8b947bfcbb463  0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
 e4ec68912a9c8b810ddc361b56ea0e39d5c28ba3b924084d4f2ac75a1e381ad59a0a377f7499772010f3a16e85c12c2b0b9e17ee370c10d67a0fd4b5061c3118  validate-mainline617-clean-build.sh
 "
