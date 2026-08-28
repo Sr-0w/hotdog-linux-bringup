@@ -15,11 +15,28 @@ passes the normal offline image and staged hardware gates before promotion.
   at pmaports commit `c7e574b4975ed244a10d368cc3d01454ca7c1cef`
 
 The source archive URL is pinned to the commit rather than relying on the tag
-name. The eighteen patches are exported from the local kernel branch
-`bringup/hotdog-sm8150-clean-baseline` at commit
-`d1584b678d01ed2797d26687c9d23e2793fca305`, tree
-`07702ec78144a2b5b3bfbefc1e8111e42c774f3c`, and retain their commit
-identities.
+name. `APKBUILD` is the authoritative ordered queue. The queue is not treated
+as clean merely because it builds: every patch must retain a current hardware
+reason and a defined pmaports or upstream destination.
+
+## Patch promotion policy
+
+The clean baseline contains no unvalidated feature patch or temporary crash
+instrumentation. Such work is built on one topic branch per change and merges
+only after its affected hardware path passes. Tests, capture scripts and
+private logs remain outside the kernel patch queue.
+
+The r32 dock isolation ruled out the unvalidated SM8150 DP jack callback as
+the primary crash trigger but did not validate its intended behavior, so that
+patch remains outside this queue. The temporary absolute ramoops layout was
+also removed after the final diagnostic cycle. The GENI RX-DMA correction is
+the byte-identical upstream commit
+[`b93062b6d8a1`](https://github.com/torvalds/linux/commit/b93062b6d8a1b2d9bad235cac25558a909819026).
+
+The remaining compatibility mechanisms tracked by
+[issue #5](https://github.com/Sr-0w/hotdog-linux-bringup/issues/5) are tested
+one at a time on dedicated branches. They do not become acceptable for final
+submission through age or inheritance from the 6.16 oracle.
 
 ## Included foundation
 

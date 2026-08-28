@@ -47,5 +47,3 @@ index d81b539cff7f05..7ead87b4eb65b2 100644
  		handle_rx_uart(uport, rx_in);
  
  	ret = geni_se_rx_dma_prep(&port->se, port->rx_buf,
--- 
-2.52.0

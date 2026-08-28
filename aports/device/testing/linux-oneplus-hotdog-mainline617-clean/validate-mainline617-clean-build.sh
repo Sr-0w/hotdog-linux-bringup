@@ -154,10 +154,10 @@ done
 	die "QUP0 haptics wrapper is not enabled"
 [ "$(fdtget -t s "$dtb" /aliases hsuart0)" = "/soc@0/geniqup@cc0000/serial@c8c000" ] ||
 	die "Bluetooth UART alias is missing"
-[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 console-size)" = 20000 ] ||
-	die "ramoops console is not 128 KiB"
-[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 ecc-size)" = 10 ] ||
-	die "ramoops ECC is not enabled"
+[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 console-size)" = 1000 ] ||
+	die "ramoops console differs from the clean foundation"
+[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 ecc-size)" = 0 ] ||
+	die "ramoops ECC differs from the clean foundation"
 
 grep -A1 -F 'dev_warn_ratelimited(uport->dev, "serial engine reports 0 RX bytes in!\n");' \
 		drivers/tty/serial/qcom_geni_serial.c | grep -Fq 'else if (!drop)' ||
