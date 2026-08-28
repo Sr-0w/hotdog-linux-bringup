@@ -23,6 +23,18 @@
 
 Last reviewed: **2026-08-25**
 
+## ⚠️ Read this if the latest release does not boot ⚠️
+
+Before I started working on this project, my phone was running LineageOS. It appears that LineageOS changes something on the device that persists even after a full reflash of OxygenOS 12. For some reason, this persistent change seems to be required for the current release to boot.
+
+This workaround has also been successfully tested by another user.
+
+If the release does not boot on your device, try flashing the latest LineageOS build first, then follow the installation instructions provided in the release notes.
+
+<sub>If you have **never** flashed LineageOS on your device and the release boots successfully anyway, please let me know. This would be very useful for narrowing down the actual cause.</sub>
+
+I am currently investigating what kind of magic LineageOS performs on the device, with the goal of identifying and integrating the required changes directly into future releases so that this extra step is no longer necessary.
+
 ## Project goals
 
 This repository develops upstream-quality support for the OnePlus 7T Pro
