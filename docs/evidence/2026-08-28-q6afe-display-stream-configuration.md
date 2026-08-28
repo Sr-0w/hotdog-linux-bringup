@@ -135,6 +135,35 @@ r38-r47-plasma-failure.wYxejH
 The directories contain local runtime data and are intentionally not part of
 the public repository.
 
+## Frontend format isolation
+
+A second headless test reused the same r38 boot, `MultiMedia1` route, 48 kHz
+stereo parameters, connected monitor and active DP jack. It changed only the
+ALSA frontend format:
+
+```text
+S16_LE: aplay rc=0, no new kernel message, tone physically heard
+S24_LE: aplay rc=1, write error, AFE port 0x6020 start timed out (-110)
+```
+
+The machine driver currently fixes the DisplayPort backend to S24_LE for both
+attempts. The result therefore isolates the failure to the all-24-bit
+frontend/backend stream contract rather than HPD, EDID, UCM selection, the
+monitor, or the Q6AFE DisplayPort index parameters.
+
+The follow-up candidate gives `DISPLAY_PORT_RX` the S16_LE stereo backend
+contract used by SM8250. PipeWire may continue to expose wider frontend
+formats; conversion belongs at the DSP boundary before the AFE backend. This
+candidate remains on the separate
+`bringup/hotdog-sm8150-dp-audio-s16` branch until normal Plasma playback and
+disconnect are both validated.
+
+Private A/B evidence directory:
+
+```text
+r38-dp-format-ab-20260828T193405
+```
+
 ## Offline gate
 
 - `git diff --check`: PASS
