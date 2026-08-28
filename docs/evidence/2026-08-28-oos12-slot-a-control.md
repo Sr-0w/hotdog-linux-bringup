@@ -91,6 +91,51 @@ on top of this known-stock state. A failure there will be directly comparable to
 the external HD1911 report. No vbmeta correction will be introduced until that
 published sequence has first been observed unchanged.
 
+## Exact Alpha 5 reproduction
+
+The published Alpha 5 boot, DTBO and decompressed rootfs were installed on slot
+A over the validated stock baseline. Their hashes matched the public release;
+the kernel APK was verified as a package artifact and was not treated as a
+flashable partition. Stock OxygenOS `vbmeta_a`, flags `0`, was deliberately left
+unchanged.
+
+ABL accepted the image set and entered the Alpha 5 kernel and initramfs. The
+boot then stopped in `mount_subpartitions()` while `kpartx` processed physical
+`super`. This is a real release defect, but it is later than the external
+bootloader-return symptom and therefore may coexist with a second issue.
+
+The released rootfs is a valid 4,523,556,864-byte nested GPT image using
+4096-byte logical sectors. Its two filesystems are clean and its UUIDs exactly
+match the boot command line. Physical `super`, however, is 15,032,385,536 bytes.
+After the shorter image is flashed, its backup GPT remains at the end of the
+short image instead of the end of the physical partition. The kernel reports
+that mismatch and `kpartx -afs` blocks before the initramfs timeout can run.
+
+A corrected control image was generated without changing boot, DTBO or UUIDs:
+
+- extend the nested image to the exact physical `super` size;
+- relocate the backup GPT to the real final logical sector;
+- extend partition 2 to the final usable sector;
+- grow the existing ext4 root filesystem;
+- convert the result to Android sparse format.
+
+The resulting GPT, both filesystems and sparse-to-raw byte-for-byte round trip
+pass offline validation. Hardware validation of this corrected rootfs is the
+next action.
+
+## Why EDL is not the next control
+
+The external handset showed its original failure before its later EDL restore,
+so EDL cannot explain the original report. In addition, the development handset
+does not yet have a complete restore set for every partition a Firehose package
+may overwrite, every UFS LUN, userdata and partition-table state. A model-correct
+EDL restore would therefore add risk and several new variables while a concrete
+release defect is already reproduced.
+
+EDL remains out of scope for this control. If it is ever considered separately,
+it requires a complete readback and explicit plan for the exact Firehose package
+before any write.
+
 ## Safety and publication consequences
 
 - Do not use EDL as part of this experiment.
