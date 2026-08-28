@@ -159,6 +159,10 @@ done
 [ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 ecc-size)" = 10 ] ||
 	die "ramoops ECC is not enabled"
 
+grep -A1 -F 'dev_warn_ratelimited(uport->dev, "serial engine reports 0 RX bytes in!\n");' \
+		drivers/tty/serial/qcom_geni_serial.c | grep -Fq 'else if (!drop)' ||
+	die "zero-length GENI RX DMA completion does not stay on the rearm path"
+
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
 	for module_name in s6sy761.ko ipa.ko ath10k_snoc.ko qcom_q6v5_pas.ko \

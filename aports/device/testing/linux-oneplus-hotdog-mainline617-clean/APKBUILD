@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=29
+pkgrel=30
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -66,6 +66,7 @@ source="
 	0027-ASoC-qcom-q6afe-dai-start-HDMI-and-DisplayPort-ports.patch
 	0028-ASoC-qcom-sm8150-report-DisplayPort-presence.patch
 	0029-arm64-dts-qcom-sm8150-oneplus-hotdog-make-ramoops-ab.patch
+	0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
 	validate-mainline617-clean-build.sh
 "
 builddir="$srcdir/linux-$_commit"
@@ -146,5 +147,6 @@ ee76ce3c041b32611647790265c862e737063b920729b485ad81e787507f1449d833e8641e8d408e
 faa6a3d75594bc55f6a00a44e05d1f120cc84ee42ed08a942ce25dace7c12960efed40ceaeb16514766486f3b27faa296994ba71bd0063a0e834ff1eaec10658  0027-ASoC-qcom-q6afe-dai-start-HDMI-and-DisplayPort-ports.patch
 6cd743ac68481566e5dce3c0418a7de9d21396a62ac29059ad66e0626b4ffb91904e8d11a70c5ea805d6164bf22349b1b11242ce49105bc18722745e31afed2c  0028-ASoC-qcom-sm8150-report-DisplayPort-presence.patch
 3022989a95334a5528dda70538d40d02807b1d490f394af5e94f3733c78fb886d83c69a308caeca17228dba8c34293fa58a83292bd6a4595b7fc83921caf4272  0029-arm64-dts-qcom-sm8150-oneplus-hotdog-make-ramoops-ab.patch
-955090a1e55bed66c594efef3d5a7ac739a429304650995acd2b0e7910ad64c445f91f7592652c960246fa4cb2ffbdcbb662b1556eabe95c795b50106e3e0cba  validate-mainline617-clean-build.sh
+b2fb78767909d33277c34a70ab9069fb932714d53d1ecd10e7da47bea930569620d91879821cae9d2af1f501291577b42f7cf9533a65a8bb10caf595e680999f  0030-serial-qcom_geni-Fix-RX-DMA-stall-when-SE_DMA_RX_LE.patch
+1e8b4191f1bb8f1849232155e807e0e545b0f312dd7dd5a2651ccd466920a03650c312dbc87bda1f1f8253884d202e800b2d6343c03b96f745e2a509254248d1  validate-mainline617-clean-build.sh
 "
