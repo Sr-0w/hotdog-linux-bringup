@@ -106,14 +106,26 @@ sha256sum -c SHA256SUMS
 On macOS, the equivalent command is `shasum -a 256 -c SHA256SUMS`.
 Use `stat -f %z` instead of `stat -c %s` for the two size checks below.
 
-For split rootfs assets, reconstruct the archive in numeric order, verify it,
-then expand it. The expanded file is a raw 4096-byte-sector GPT image containing
-`pmOS_boot` and `pmOS_root`; it is not an Android sparse image.
+For a release carrying one rootfs archive, expand that file directly:
+
+```bash
+zstd -d --keep oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst
+```
+
+For split rootfs assets, reconstruct the archive in numeric order first, then
+expand it:
 
 ```bash
 cat oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst.part* \
   > oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst
 zstd -d --keep oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img.zst
+```
+
+The expanded file is a raw 4096-byte-sector GPT image containing `pmOS_boot`
+and `pmOS_root`; it is not an Android sparse image. For either packaging form,
+continue with the same validation:
+
+```bash
 # Compare this digest with the "Rootfs raw SHA-256" in MANIFEST.md.
 sha256sum oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-rootfs.img
 test "$(stat -c %s oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-boot.img)" -eq 100663296
@@ -125,6 +137,9 @@ test "$(stat -c %s oneplus-7t-pro-hotdog-vX.Y.Z-alpha.N-dtbo.img)" -eq 25165824
 The rootfs is written to physical `userdata`. The filtered DTBO and mainline
 boot image are written to `dtbo_b` and `boot_b`. Flashing `userdata` is
 destructive. Confirm that the backups above are readable before continuing.
+Do not run `fastboot -w`, `fastboot erase userdata`, a recovery format or a
+separate wipe: the documented `flash userdata` operation replaces the complete
+partition and is the only userdata write required by this installation.
 
 Use userspace fastboot (`fastbootd`) for `userdata`. The bootloader path is not
 the validated transport for this large image; fastbootd completed the exact

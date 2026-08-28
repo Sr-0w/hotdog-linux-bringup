@@ -125,3 +125,32 @@ that complete atomic set.
 The packaged common image was flashed to the reference slot B and read back
 byte-for-byte. Linux 6.17, writable root and SSH returned, followed by a
 919-second stable monitor with no fastboot or EDL transition.
+
+## IN userspace control on the reference handset
+
+The reference HD1913 was also converted to a complete HD1911-IN F.22 software
+baseline on slot A. The reconstructed `super` contained all 15 IN dynamic
+partitions; stock IN `boot_a`, `dtbo_a`, `vbmeta_a` and `vbmeta_system_a` were
+installed, while the other 29 OTA partitions had already been proven
+byte-identical between IN and EU. OxygenOS booted after its required userdata
+wipe and reported region `IN` and product model `HD1911` from the Android
+system image.
+
+This did not turn the handset into an HD1911. Bootloader-provided properties
+still identified the physical HD1913 project: project `19801`, hardware version
+`14`, RF version `4` and the HD1913 DTBO selection. The control is therefore a
+regional-software test, not an HD1911 hardware emulation.
+
+The exact published Alpha 2 rootfs, boot, DTBO and verification-disabled vbmeta
+were then installed on slot A over that IN baseline. Linux
+`6.17.0-sm8150-hotdog-clean`, writable root and SSH returned in 81 seconds. Full
+partition readback matched the published boot, DTBO and vbmeta sizes and
+SHA-256 values byte-for-byte. This rules out the differing IN Android logical
+partitions as the cause of the early bootloader return on the external HD1911.
+It does not rule out a real HD1911 hardware, provisioning or bootloader-state
+difference; validation on physical HD1911 hardware remains required.
+
+A subsequent live metadata audit also proved that `vendor_dlkm`, the only
+LineageOS payload partition absent from F.22, did not survive in physical
+`super`. The 31-sample Alpha 2 monitor passed for 907 seconds with one boot ID.
+See [the residual-state audit](2026-08-28-lineage-residual-state.md).

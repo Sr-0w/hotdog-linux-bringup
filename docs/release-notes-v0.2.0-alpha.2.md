@@ -61,6 +61,15 @@ See [the full comparison](evidence/2026-08-28-oxygenos-f22-in-eu-and-lineage.md)
 - Full-partition readback of `vbmeta_b` matched the packaged SHA-256.
 - A 31-sample monitor covered 919 seconds with one unchanged boot ID, continuous
   SSH, no fastboot return and no Qualcomm 9008/900e transition.
+- A second control converted slot A to a complete HD1911-IN F.22 Android
+  userspace baseline, confirmed it bootable, then installed the exact Alpha 2
+  payload set. Linux 6.17 and SSH returned in 81 seconds; full
+  `boot_a`, `dtbo_a` and `vbmeta_a` readback matched the public release hashes.
+  The handset still exposed its physical HD1913 project identity, so this
+  excludes IN userspace differences but is not an HD1911 hardware validation.
+- A second 31-sample monitor passed for 907 seconds with continuous USB, ping
+  and SSH and one unchanged boot ID. Live `super` metadata contained no
+  `vendor_dlkm`, the only LineageOS payload image absent from OxygenOS F.22.
 - Offline AVB metadata inspection reports flags `3`; package generation rejects
   any other flags or partition size.
 
