@@ -25,6 +25,9 @@ note() {
 	printf '[public-release] %s\n' "$*"
 }
 
+readonly hotdog_userdata_size=232382812160
+readonly rootfs_target=userdata
+
 version=""
 boot=""
 dtbo=""
@@ -80,7 +83,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-avbtool verify_image --image "$boot" > "$outdir/reports/avbtool-verify.txt"
+ln -s "$boot" "$unpack_dir/boot.img"
+avbtool verify_image --image "$unpack_dir/boot.img" > "$outdir/reports/avbtool-verify.txt"
 dtbo_size="$(stat -c '%s' "$dtbo")"
 [ "$dtbo_size" -eq 25165824 ] ||
 	die "DTBO image must fill the 24 MiB HD1913 dtbo partition"
@@ -99,8 +103,8 @@ root_uuid="$(printf '%s\n' "$cmdline" | tr ' ' '\n' | sed -n 's/^pmos_root_uuid=
 [[ "$root_uuid" =~ ^[0-9a-f-]{36}$ ]] || die "boot image lacks a valid pmos_root_uuid"
 
 rootfs_size="$(stat -c '%s' "$rootfs")"
-[ "$rootfs_size" -le 15032385536 ] ||
-	die "rootfs image is larger than the validated HD1913 super partition"
+[ "$rootfs_size" -le "$hotdog_userdata_size" ] ||
+	die "rootfs image is larger than the validated HD1913 userdata partition"
 loop_dev="$(losetup --read-only --find --show --sector-size 4096 "$rootfs")"
 partprobe "$loop_dev" 2>/dev/null || true
 part_prefix="$loop_dev"
@@ -140,7 +144,8 @@ loop_dev=""
 tar --warning=no-unknown-keyword -xf "$apk" -C "$apk_dir" \
 	boot/vmlinuz boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb .PKGINFO
 apk_version="$(sed -n 's/^pkgver = //p' "$apk_dir/.PKGINFO")"
-[[ "$apk_version" =~ ^6\.16\.0-r[0-9]+$ ]] || die "unexpected kernel APK version: ${apk_version:-missing}"
+[[ "$apk_version" =~ ^6\.[0-9]+\.[0-9]+-r[0-9]+$ ]] ||
+	die "unexpected kernel APK version: ${apk_version:-missing}"
 cmp -s "$unpack_dir/kernel" "$apk_dir/boot/vmlinuz" || die "APK kernel does not match boot image"
 cmp -s "$unpack_dir/dtb" "$apk_dir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" ||
 	die "APK hotdog DTB does not match boot image"
@@ -192,6 +197,7 @@ set and must not be mixed with another release.
 | DTB SHA-256 | \`${boot_dtb_sha}\` |
 | Rootfs raw SHA-256 | \`${root_sha}\` |
 | Rootfs raw size | \`${rootfs_size}\` bytes |
+| Rootfs flash target | \`${rootfs_target}\` |
 | pmOS_boot UUID | \`${boot_uuid}\` |
 | pmOS_root UUID | \`${root_uuid}\` |
 

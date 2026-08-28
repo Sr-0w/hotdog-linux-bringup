@@ -1157,6 +1157,30 @@ validate_hotdog_avb_contract() {
 		die "hotdog AVB hook does not verify its result"
 }
 
+validate_public_release_userdata_contract() {
+	local packager="scripts/package-public-release.sh"
+	local install_guide="docs/release-install.md"
+
+	log "public release userdata installation contract"
+	[ -x "$packager" ] || die "missing public release packager"
+	bash -n "$packager"
+	shellcheck --severity=warning --shell=bash -- "$packager"
+
+	grep -Fq 'readonly hotdog_userdata_size=232382812160' "$packager" ||
+		die "release packager does not pin the HD1913 userdata size"
+	grep -Fq 'readonly rootfs_target=userdata' "$packager" ||
+		die "release packager does not identify userdata as the rootfs target"
+	grep -Fq 'ln -s "$boot" "$unpack_dir/boot.img"' "$packager" ||
+		die "release packager does not verify boot under its AVB partition name"
+	grep -Fq 'fastboot -S 128M flash userdata' "$install_guide" ||
+		die "release guide does not flash the validated userdata target"
+	! grep -Fq 'fastboot -S 128M flash super' "$install_guide" ||
+		die "release guide still flashes the obsolete super target"
+	grep -Fq 'deviceinfo_rootfs_image_sector_size="4096"' \
+		"aports/device/testing/device-oneplus-hotdog/deviceinfo" ||
+		die "deviceinfo does not pin the nested GPT sector size"
+}
+
 validate_rescue_supervisor_source() {
 	local source="helpers/hotdog-rescue-supervisor.c"
 	local reboot_helper="helpers/reboot-mode.c"
@@ -1380,6 +1404,7 @@ validate_hotdog_radio_state_contract
 	validate_hotdog_plasma_apps_contract
 	validate_hotdog_ucm_contract
 	validate_hotdog_avb_contract
+	validate_public_release_userdata_contract
 	validate_rescue_supervisor_source
 	validate_bounded_exec_source
 	validate_disabled_r6_ufs_probe
