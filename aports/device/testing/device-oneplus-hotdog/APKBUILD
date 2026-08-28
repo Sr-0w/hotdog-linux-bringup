@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=44
+pkgrel=45
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Igor Belwon <igor.belwon@mentallysanemainliners.org>"
@@ -60,6 +60,7 @@ subpackages="
 	$pkgname-kernel-mainline:kernel_mainline
 	$pkgname-nonfree-firmware:nonfree_firmware
 	$pkgname-mainline-firmware:mainline_firmware
+	$pkgname-audio:audio
 	$pkgname-wireplumber:wireplumber
 	$pkgname-sensors:sensors
 	$pkgname-bringup:bringup
@@ -256,6 +257,16 @@ nonfree_firmware() {
 		alsa-utils
 		"
 	mkdir "$subpkgdir"
+}
+
+audio() {
+	pkgdesc="Audio integration for OnePlus 7T Pro"
+	install_if="$pkgname=$pkgver-r$pkgrel postmarketos-base-ui-audio"
+	depends="
+		alsa-ucm-conf
+		postmarketos-base-ui-audio-backend-pipewire
+	"
+	mkdir -p "$subpkgdir"
 }
 
 wireplumber() {
