@@ -62,6 +62,13 @@ expect_config 'CONFIG_USB_GADGET_VBUS_DRAW=900'
 expect_config 'CONFIG_V4L2_FLASH_LED_CLASS=m'
 expect_config 'CONFIG_FONTS=y'
 expect_config 'CONFIG_FONT_TER16x32=y'
+expect_config 'CONFIG_SOFTLOCKUP_DETECTOR=y'
+expect_config 'CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC=y'
+expect_config 'CONFIG_HARDLOCKUP_DETECTOR=y'
+expect_config 'CONFIG_BOOTPARAM_HARDLOCKUP_PANIC=y'
+expect_config 'CONFIG_DETECT_HUNG_TASK=y'
+expect_config 'CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=60'
+expect_config 'CONFIG_BOOTPARAM_HUNG_TASK_PANIC=y'
 expect_config '# CONFIG_RAID6_PQ_BENCHMARK is not set'
 
 python3 - "$image" <<'PY'
@@ -145,6 +152,12 @@ done
 
 [ "$(fdtget -t s "$dtb" /soc@0/geniqup@8c0000 status)" = okay ] ||
 	die "QUP0 haptics wrapper is not enabled"
+[ "$(fdtget -t s "$dtb" /aliases hsuart0)" = "/soc@0/geniqup@cc0000/serial@c8c000" ] ||
+	die "Bluetooth UART alias is missing"
+[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 console-size)" = 20000 ] ||
+	die "ramoops console is not 128 KiB"
+[ "$(fdtget -t x "$dtb" /reserved-memory/ramoops@a9800000 ecc-size)" = 10 ] ||
+	die "ramoops ECC is not enabled"
 
 if [ -n "$modules_dir" ]; then
 	[ -d "$modules_dir" ] || die "missing modules directory: $modules_dir"
