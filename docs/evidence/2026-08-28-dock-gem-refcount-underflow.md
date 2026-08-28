@@ -85,8 +85,7 @@ observed underflow. The exact upstream patch is staged alone as r34 on
 The r34 boot image changed only this upstream fix relative to the r33 kernel.
 It booted the existing fresh Plasma Mobile rootfs, and the complete dock then
 enumerated its USB2 and USB3 hubs, RTL8153 Ethernet, USB storage and DisplayPort
-connector. KWin remained active while the phone stayed reachable for more than
-twelve minutes of dock and audio inspection.
+connector. KWin remained active while the phone was initially reachable.
 
 The pre-fix signatures did not recur:
 
@@ -102,6 +101,38 @@ the phone to the PC exposed it in Qualcomm `05c6:900e`. A second complete
 no-reset RAM capture was therefore started. The phone-local logger did not
 record the terminal event, so the late crash must not be attributed to the GEM
 bug merely because that was the first known defect.
+
+## Exact r34 RAM result
+
+The second QDL capture again contains all four 2 GiB DDR segments and was
+completed with `--skip-reset`. Public identifiers are:
+
+- firmware KMSG region SHA256:
+  `91970cb8e80534ccb2ea87a90c2ede166d22f173c626a87aa301d707b9ad7f8b`;
+- ramoops reservation SHA256:
+  `5f7f92a784b7d4d4874573d8614d843ea608f23f38d38f65f5b146de8dbf1234`;
+- decoded ramoops SHA256:
+  `158b6bc346a85472fc5fd536969453815ac9211a1aeab021dae24f18dfa13630`.
+
+An exact-symbol r34 `vmlinux` was rebuilt with the same Alpine toolchain. Its
+Image is byte-identical to the kernel unpacked from the tested r34 boot image.
+Ramparser recovered KASLR offset `0x3e4b8e080000` and the complete printk ring.
+
+There is still no Linux panic, oops or lockup report. The dock is inserted at
+kernel time 744 s. PipeWire's normal-user DisplayPort stream immediately starts
+AFE port `0x6020`; configuration times out, and the sound server retries every
+three seconds while the DSP alternates timeout, generic error and already-active
+responses. The final line at 923.563 s is:
+
+```text
+[drm:msm_dp_bridge_atomic_post_disable] *ERROR* audio comp timeout
+```
+
+The transition therefore occurs after about 179 seconds of active dock time,
+not after the initially inferred twelve-minute stable interval. It crosses the
+DisplayPort audio teardown boundary without a Linux panic. The GEM fix removes
+one demonstrated memory-corruption bug, but it does not solve this second
+failure.
 
 Status: **the exact GEM warning is not reproduced, but overall dock stability
 remains BLOCKED by a later 900e transition**.
