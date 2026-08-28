@@ -54,6 +54,8 @@ with Alpha 5 or another internal build.
   DTBO assets were flashed to slot B without changing vbmeta.
 - The exact set reached Linux 6.17, writable root, OpenRC, Plasma Mobile, NCM and
   SSH. Boot and DTBO partition readbacks matched the release hashes.
+- A 31-sample monitor covered 918 seconds with one unchanged boot ID, continuous
+  SSH, no fastboot return and no Qualcomm 9008/900e transition.
 
 ## Scope and limitations
 

@@ -123,6 +123,14 @@ The resulting GPT, both filesystems and sparse-to-raw byte-for-byte round trip
 pass offline validation. Hardware validation of this corrected rootfs is the
 next action.
 
+The final release direction did not retain this repaired legacy path. Restoring
+the matched clean-6.17 `userdata`, boot and DTBO set reached Plasma Mobile and
+SSH. A release package built from that exact atomic set was then flashed from
+its generated assets, read back at boot and DTBO, and monitored for 918 seconds
+with one stable boot ID and no fastboot or EDL transition. The maintained 6.17
+initramfs uses a 4096-byte-sector loop device instead of the obsolete `kpartx`
+path.
+
 ## Why EDL is not the next control
 
 The external handset showed its original failure before its later EDL restore,
