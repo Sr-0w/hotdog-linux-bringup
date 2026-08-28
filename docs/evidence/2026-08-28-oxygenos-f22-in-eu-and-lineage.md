@@ -86,6 +86,15 @@ installs its boot/DTBO pair while leaving a stock flags-0 vbmeta behind. The
 first pmOS releases accidentally relied on the reference handset already having
 this LineageOS state.
 
+This is not a recent workaround. The initial SM8150 commonisation commit
+`529ec479f075ae411c1f59cd4e98a5fb045beb3d` already combined the hashtree flag
+with raw flag `2` in 2019. Commit
+`bb377f02b8bab1ed6c6e2adb4beec7da1ce1d80a` only migrated that longstanding
+contract to avbtool's named verification-disabled option in 2025.
+The device-specific ancestor commit
+`62660de6ab5e9d300d41bc7820b26a91a9e1c859` already described the intent as
+"disable vbmeta verification" in June 2019.
+
 Primary references:
 
 - <https://github.com/LineageOS/lineage_wiki/blob/main/_data/devices/hotdog.yml>
@@ -112,3 +121,7 @@ an HD1911 hardware validation that has not happened.
 The next release instead carries one common verification-disabled vbmeta and
 keeps HD1911 support explicitly unvalidated until the external handset boots
 that complete atomic set.
+
+The packaged common image was flashed to the reference slot B and read back
+byte-for-byte. Linux 6.17, writable root and SSH returned, followed by a
+919-second stable monitor with no fastboot or EDL transition.

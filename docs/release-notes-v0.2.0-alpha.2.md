@@ -59,6 +59,8 @@ See [the full comparison](evidence/2026-08-28-oxygenos-f22-in-eu-and-lineage.md)
 - The Alpha 2 vbmeta was flashed from the packaged candidate without changing
   boot, DTBO or rootfs; Linux 6.17, writable root and SSH returned.
 - Full-partition readback of `vbmeta_b` matched the packaged SHA-256.
+- A 31-sample monitor covered 919 seconds with one unchanged boot ID, continuous
+  SSH, no fastboot return and no Qualcomm 9008/900e transition.
 - Offline AVB metadata inspection reports flags `3`; package generation rejects
   any other flags or partition size.
 

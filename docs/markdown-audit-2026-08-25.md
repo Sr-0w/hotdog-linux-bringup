@@ -13,7 +13,7 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **223 Markdown files**.
+Total: **224 Markdown files**.
 
 | Role | Count |
 |---|---:|
@@ -26,7 +26,7 @@ Total: **223 Markdown files**.
 | Package documentation | 5 |
 | Package history | 1 |
 | Project history | 3 |
-| Release record | 6 |
+| Release record | 7 |
 | Work note | 2 |
 
 ## File-by-file register
@@ -243,6 +243,7 @@ Total: **223 Markdown files**.
 | `docs/release-notes-v0.1.0-alpha.4.md` | Release record | Immutable description of its exact release |
 | `docs/release-notes-v0.1.0-alpha.5.md` | Release record | Immutable description of its exact release |
 | `docs/release-notes-v0.2.0-alpha.1.md` | Release record | Immutable description of its exact release |
+| `docs/release-notes-v0.2.0-alpha.2.md` | Release record | Immutable description of its exact release |
 | `docs/repository-layout.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/roadmap.md` | Current documentation | Reviewed against Alpha 5 and current status |
 | `docs/sensors-slpi-ap-stm-etf-decode.md` | Current documentation | Reviewed against Alpha 5 and current status |
