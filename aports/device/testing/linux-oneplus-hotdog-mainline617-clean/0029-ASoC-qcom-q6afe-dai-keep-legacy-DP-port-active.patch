@@ -1,0 +1,61 @@
+From 51d3cd59dbf3c68bcc2faca396af9982ff17e6e1 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Fri, 28 Aug 2026 19:53:21 +0200
+Subject: [PATCH] ASoC: qcom: q6afe-dai: keep legacy DP port active
+
+The SM8150 legacy DisplayPort AFE port starts correctly once, but a
+later SET_PARAM after DEVICE_STOP times out and eventually reports
+ADSP_EALREADY. Stopping earlier while DPTX is active also times out.
+
+Keep the AFE backend active across prepare and shutdown while allowing
+hdmi-codec to cycle DPTX normally. Stop a still-active port when the DAI
+is removed so driver teardown retains a bounded cleanup path.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ sound/soc/qcom/qdsp6/q6afe-dai.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe-dai.c b/sound/soc/qcom/qdsp6/q6afe-dai.c
+index 0548d4c6ed5e2..89db00094e9b4 100644
+--- a/sound/soc/qcom/qdsp6/q6afe-dai.c
++++ b/sound/soc/qcom/qdsp6/q6afe-dai.c
+@@ -373,6 +373,13 @@ static void q6afe_dai_shutdown(struct snd_pcm_substream *substream,
+ 	struct q6afe_dai_data *dai_data = dev_get_drvdata(dai->dev);
+ 	int rc;
+ 
++	/*
++	 * This legacy DP AFE port cannot be restarted after DEVICE_STOP. Keep
++	 * it active between PCM streams; hdmi-codec still shuts DPTX down.
++	 */
++	if (dai->id == DISPLAY_PORT_RX)
++		return;
++
+ 	if (!dai_data->is_port_started[dai->id])
+ 		return;
+ 
+@@ -391,6 +398,9 @@ static int q6afe_dai_prepare(struct snd_pcm_substream *substream,
+ 	int rc;
+ 
+ 	if (dai_data->is_port_started[dai->id]) {
++		if (dai->id == DISPLAY_PORT_RX)
++			return 0;
++
+ 		/* stop the port and restart with new port config */
+ 		rc = q6afe_port_stop(dai_data->port[dai->id]);
+ 		if (rc < 0) {
+@@ -681,6 +691,14 @@ static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
+ static int msm_dai_q6_dai_remove(struct snd_soc_dai *dai)
+ {
+ 	struct q6afe_dai_data *dai_data = dev_get_drvdata(dai->dev);
++	int rc;
++
++	if (dai_data->is_port_started[dai->id]) {
++		rc = q6afe_port_stop(dai_data->port[dai->id]);
++		if (rc < 0)
++			dev_err(dai->dev, "fail to close AFE port (%d)\n", rc);
++		dai_data->is_port_started[dai->id] = false;
++	}
+ 
+ 	q6afe_port_put(dai_data->port[dai->id]);
+ 	dai_data->port[dai->id] = NULL;
