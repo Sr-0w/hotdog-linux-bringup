@@ -82,7 +82,11 @@ or a kexec bridge.
   the controller had simply never existed, because the board declared no
   `hsuart` alias and its UART never probed.
 - USB-C dual role, powered host/sink and unpowered host/source modes, USB 3,
-  mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60.
+  mass storage, Ethernet enumeration and DisplayPort video at 2560×1440@60
+  are validated on the 6.16 oracle. The current 6.17 r30 image regressed dock
+  insertion: it entered Qualcomm 900e immediately after enumerating the two
+  hub functions, before any child or DP hotplug event. See the
+  [900e ramdump analysis](docs/evidence/2026-08-28-usbc-dock-900e-ramdump.md).
 - Capture from all four cameras through libcamera, rear autofocus and automatic
   Hall-bounded extension/retraction of the IMX471 pop-up camera.
 - Both PM8150L flash channels register and pass electrical plus visible
