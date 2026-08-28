@@ -82,6 +82,27 @@ The failed r27 run and the passing r30 run used the same hardware, firmware,
 userspace peer and pairing procedure. The upstream GENI RX DMA fix closes the
 observed disconnect failure.
 
+## Reproducible follow-up
+
+The first two r30 builds differed only in the generated built-in cpio metadata:
+BusyBox `date` in the Alpine buildroot rejected the human
+`KBUILD_BUILD_TIMESTAMP`, so `gen_initramfs.sh` silently used the wall-clock
+time for three default entries. Their 12 mtime bytes and the derived 20-byte
+kernel hash were the only Image differences; the DTB and every module were
+identical.
+
+r31 passes the same fixed epoch as `@1761609785`, a form BusyBox accepts. Two
+fresh strict builds are byte-identical:
+
+| Artifact | SHA-256 |
+|---|---|
+| r31 kernel APK | `618d6c7a26294e597b098cf9bc549f44794852dca07e672df4a6d8abd0e8e01e` |
+| r31 kernel Image | `e9a0c2760251634fd8057ca7e340974bf27b54d8c7a35d88d45ff1a572ab1670` |
+
+r30 remains the exact hardware-tested artifact. r31 changes only deterministic
+build metadata around the same source, configuration, DTB and modules; it is
+the reproducible package for subsequent image composition.
+
 ## Remaining scope
 
 This validates BR/EDR pairing, service discovery, ordinary disconnects,

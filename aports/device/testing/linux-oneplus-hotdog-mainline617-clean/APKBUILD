@@ -2,7 +2,7 @@
 
 pkgname=linux-oneplus-hotdog-mainline617-clean
 pkgver=6.17.0
-pkgrel=30
+pkgrel=31
 pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
 maintainer="Robin Snyders <robin@snyders.xyz>"
 arch="aarch64"
@@ -81,7 +81,7 @@ build() {
 	unset LDFLAGS
 	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
 		SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
-		KBUILD_BUILD_TIMESTAMP="2025-10-28 00:03:05 UTC" \
+		KBUILD_BUILD_TIMESTAMP="@$SOURCE_DATE_EPOCH" \
 		KBUILD_BUILD_USER="postmarketOS" \
 		KBUILD_BUILD_HOST="pmaports" \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
