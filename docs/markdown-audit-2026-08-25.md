@@ -13,14 +13,14 @@ An external-link pass returned HTTP 200 for 42 of 46 unique URLs; the
 four exact lore.kernel.org message links returned the site's automated
 client 403 response and were retained as immutable submission IDs.
 
-Total: **225 Markdown files**.
+Total: **226 Markdown files**.
 
 | Role | Count |
 |---|---:|
 | Audit register | 1 |
 | Current documentation | 30 |
 | Disabled helper | 1 |
-| Evidence | 173 |
+| Evidence | 174 |
 | Evidence policy | 1 |
 | Mail archive | 1 |
 | Package documentation | 5 |
@@ -221,6 +221,7 @@ Total: **225 Markdown files**.
 | `docs/evidence/2026-08-27-slpi-watchdog-every-40-seconds.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-27-the-adsp-does-implement-hdmi-over-dp.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-27-two-drivers-one-compatible-silenced-the-speakers.md` | Evidence | Historical evidence; dated observations preserved |
+| `docs/evidence/2026-08-28-bluetooth-zero-rx-dma.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-28-lineage-residual-state.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-28-oos12-slot-a-control.md` | Evidence | Historical evidence; dated observations preserved |
 | `docs/evidence/2026-08-28-oxygenos-f22-in-eu-and-lineage.md` | Evidence | Historical evidence; dated observations preserved |

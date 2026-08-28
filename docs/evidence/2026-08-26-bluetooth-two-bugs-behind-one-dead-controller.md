@@ -2,6 +2,11 @@
 
 Date: 2026-08-26
 
+> Update, 2026-08-28: repeated disconnects exposed a separate upstream GENI
+> UART zero-length RX DMA stall. Linux commit `b93062b6d8a1`, carried by r30,
+> keeps RX armed and passes repeated host-to-phone pairing and disconnect
+> cycles. See [the RX DMA evidence](2026-08-28-bluetooth-zero-rx-dma.md).
+
 The README lists the controller lifecycle as Broken: `hci0` stays `DOWN` with a
 locally administered address, `qca_suspend()` aborts every system suspend, and
 `rmmod hci_uart` panics. The phone was unavailable, so this is source and

@@ -76,6 +76,10 @@ See [the full comparison](evidence/2026-08-28-oxygenos-f22-in-eu-and-lineage.md)
 ## Scope
 
 This remains an experimental HD1913 release and is not a daily-driver claim.
+The attached r10 kernel predates the Hotdog `hsuart0` alias and therefore does
+not expose the Bluetooth controller. The clean 6.17 branch fixes that packaging
+gap and the later disconnect-triggered GENI RX DMA stall in r30; those binaries
+are not silently substituted into this immutable Alpha 2 release.
 The complete support matrix and remaining telephony, camera, fingerprint,
 charging, audio and suspend gaps are documented in [status.md](status.md).
 
