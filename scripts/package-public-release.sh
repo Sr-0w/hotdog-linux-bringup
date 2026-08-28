@@ -195,8 +195,8 @@ cat > "$outdir/MANIFEST.md" <<EOF
 # ${version} release manifest
 
 This is an experimental postmarketOS release for the OnePlus 7T Pro HD1913
-(\`hotdog\`) only. The boot image, filtered DTBO and rootfs image are an atomic
-set and must not be mixed with another release.
+(\`hotdog\`) only. The boot image, filtered DTBO, verification-disabled vbmeta
+and rootfs image are an atomic set and must not be mixed with another release.
 
 | Property | Value |
 |---|---|

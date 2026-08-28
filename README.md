@@ -271,10 +271,10 @@ bridge boundary.
 > dedicated test handset and read [device safety](docs/device-safety.md) before
 > any hardware operation.
 
-The current public image set is `v0.2.0-alpha.1`, pairing postmarketOS Plasma
+The current public image set is `v0.2.0-alpha.2`, pairing postmarketOS Plasma
 Mobile with the clean Linux 6.17 kernel, matching AVB boot image, required
-filtered DTBO and a rootfs installed on `userdata`. The boot, DTBO, kernel APK
-and rootfs form one atomic set and must not be mixed across releases. The exact
+filtered DTBO, verification-disabled vbmeta and a rootfs installed on `userdata`.
+The boot, DTBO, vbmeta, kernel APK and rootfs form one atomic set and must not be mixed across releases. The exact
 release assets were flashed and booted on the reference HD1913. Follow the
 [release installation guide](docs/release-install.md).
 
