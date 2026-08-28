@@ -65,13 +65,21 @@ nevertheless provide an exact hardware protocol rather than a guessed payload.
 
 ## Mainline implementation
 
-Patch `0027` adds `q6afe_port_set_display_stream()`. It emits one
-`AFE_PORT_CMD_SET_PARAM_V2` whose 40-byte payload is:
+Patch `0027` adds `q6afe_port_set_display_stream()`. Qualcomm selects the
+instance-aware interface for this firmware, so it emits one
+`AFE_PORT_CMD_SET_PARAM_V3` whose 48-byte payload is:
 
 ```text
-12-byte v2 parameter header + 8-byte MST stream payload
-12-byte v2 parameter header + 8-byte DPTX controller payload
+16-byte v3 parameter header + 8-byte MST stream payload
+16-byte v3 parameter header + 8-byte DPTX controller payload
 ```
+
+Each v3 header carries module instance zero. The first r37 candidate used v2
+headers. Under an automatic PipeWire retry loop it produced 41 apparent
+display-config successes and three timeouts, followed by 44 device-start
+timeouts. Qualcomm's actual helper chooses v3 whenever module instances are
+supported; the v2 result therefore does not validate the payload and is
+superseded by this direct v3 implementation.
 
 Patch `0028` sends controller zero and stream zero for `DISPLAY_PORT_RX`, then
 the existing HDMI format and AFE start command. The start remains in the PCM
@@ -91,7 +99,7 @@ it, and it can add another timeout without supplying the missing routing data.
 Object SHA256 from the isolated build:
 
 ```text
-q6afe.o      3cb04202e368832cbd19cc2862f4e6a513e7b3f3b0e8d88669dfb67da503f594
+q6afe.o      9fceffe50461683523219de27a91282b9835ac43ae742ae18a574421692adf23
 q6afe-dai.o  d91a117281cbc0f492bac949b942b5299531c8f0e8aa506a6b58850a0a410eef
 ```
 

@@ -1,31 +1,68 @@
-From 8d72b9bca683a77968aa9492aeca67e3637b3f61 Mon Sep 17 00:00:00 2001
+From d648c978d39ee438951565699d3e24b651786396 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
-Date: Fri, 28 Aug 2026 18:34:05 +0200
+Date: Fri, 28 Aug 2026 18:57:05 +0200
 Subject: [PATCH 1/2] ASoC: qcom: q6afe: add DisplayPort stream configuration
 
-Qualcomm AFE firmware binds DisplayPort audio to both a controller and an
-MST stream. The downstream driver sends
+Qualcomm AFE firmware binds DisplayPort audio to a controller and an MST
+stream. Its downstream driver sends
 AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG and
-AFE_PARAM_ID_HDMI_DPTX_IDX_CFG together before it configures and starts the
-shared DisplayPort AFE port.
+AFE_PARAM_ID_HDMI_DPTX_IDX_CFG together before configuring and starting
+the shared DisplayPort AFE port.
 
-Mainline has no equivalent operation, so the firmware receives the
-HDMI sample format without the DisplayPort routing indices. Add an API
-that packs the two version-1 index payloads into one
-AFE_PORT_CMD_SET_PARAM_V2 command, using the v2 parameter headers already
-used by this driver.
+Add the missing operation using AFE_PORT_CMD_SET_PARAM_V3 and version-3
+parameter headers, including module instance zero, as required by the
+instance-aware Qualcomm firmware interface.
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
- sound/soc/qcom/qdsp6/q6afe.c | 86 ++++++++++++++++++++++++++++++++++++
- sound/soc/qcom/qdsp6/q6afe.h |  2 +
- 2 files changed, 88 insertions(+)
+ sound/soc/qcom/qdsp6/q6afe.c | 107 +++++++++++++++++++++++++++++++++++
+ sound/soc/qcom/qdsp6/q6afe.h |   2 +
+ 2 files changed, 109 insertions(+)
 
 diff --git a/sound/soc/qcom/qdsp6/q6afe.c b/sound/soc/qcom/qdsp6/q6afe.c
-index 9707cd891ddbe..63d32950cf95d 100644
+index 9707cd891ddbe..136848edec450 100644
 --- a/sound/soc/qcom/qdsp6/q6afe.c
 +++ b/sound/soc/qcom/qdsp6/q6afe.c
-@@ -426,6 +426,20 @@ struct afe_param_id_hdmi_multi_chan_audio_cfg {
+@@ -28,6 +28,7 @@
+ #define AFE_PORT_CMD_DEVICE_START	0x000100E5
+ #define AFE_PORT_CMD_DEVICE_STOP	0x000100E6
+ #define AFE_PORT_CMD_SET_PARAM_V2	0x000100EF
++#define AFE_PORT_CMD_SET_PARAM_V3	0x000100FA
+ #define AFE_PSEUDOPORT_CMD_START	0x000100CF
+ #define AFE_PSEUDOPORT_CMD_STOP		0x000100D0
+ #define AFE_SVC_CMD_SET_PARAM		0x000100f3
+@@ -402,6 +403,14 @@ struct afe_port_param_data_v2 {
+ 	u16 reserved;
+ } __packed;
+ 
++struct afe_port_param_data_v3 {
++	u32 module_id;
++	u16 instance_id;
++	u16 reserved;
++	u32 param_id;
++	u32 param_size;
++} __packed;
++
+ struct afe_svc_cmd_set_param {
+ 	uint32_t payload_size;
+ 	uint32_t payload_address_lsw;
+@@ -417,6 +426,15 @@ struct afe_port_cmd_set_param_v2 {
+ 	u32 mem_map_handle;
+ } __packed;
+ 
++struct afe_port_cmd_set_param_v3 {
++	u16 port_id;
++	u16 reserved;
++	u32 payload_address_lsw;
++	u32 payload_address_msw;
++	u32 mem_map_handle;
++	u32 payload_size;
++} __packed;
++
+ struct afe_param_id_hdmi_multi_chan_audio_cfg {
+ 	u32 hdmi_cfg_minor_version;
+ 	u16 datatype;
+@@ -426,6 +444,20 @@ struct afe_param_id_hdmi_multi_chan_audio_cfg {
  	u16 reserved;
  } __packed;
  
@@ -46,7 +83,15 @@ index 9707cd891ddbe..63d32950cf95d 100644
  struct afe_param_id_slimbus_cfg {
  	u32                  sb_cfg_minor_version;
  /* Minor version used for tracking the version of the SLIMBUS
-@@ -1235,6 +1249,78 @@ int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
+@@ -1019,6 +1051,7 @@ static int q6afe_callback(struct apr_device *adev, struct apr_resp_pkt *data)
+ 		}
+ 		switch (res->opcode) {
+ 		case AFE_PORT_CMD_SET_PARAM_V2:
++		case AFE_PORT_CMD_SET_PARAM_V3:
+ 		case AFE_PORT_CMD_DEVICE_STOP:
+ 		case AFE_PORT_CMD_DEVICE_START:
+ 		case AFE_PSEUDOPORT_CMD_START:
+@@ -1235,6 +1268,80 @@ int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
  }
  EXPORT_SYMBOL_GPL(q6afe_port_set_vendor_param);
  
@@ -69,8 +114,8 @@ index 9707cd891ddbe..63d32950cf95d 100644
 +		.minor_version = AFE_API_VERSION_HDMI_DISPLAY_CFG,
 +		.ctl_idx = ctl_idx,
 +	};
-+	struct afe_port_cmd_set_param_v2 *param;
-+	struct afe_port_param_data_v2 *pdata;
++	struct afe_port_cmd_set_param_v3 *param;
++	struct afe_port_param_data_v3 *pdata;
 +	struct q6afe *afe = port->afe;
 +	struct apr_pkt *pkt;
 +	size_t payload_size;
@@ -86,17 +131,19 @@ index 9707cd891ddbe..63d32950cf95d 100644
 +		return -ENOMEM;
 +
 +	pkt = (struct apr_pkt *)p;
-+	param = (struct afe_port_cmd_set_param_v2 *)(p + APR_HDR_SIZE);
-+	pdata = (struct afe_port_param_data_v2 *)(param + 1);
++	param = (struct afe_port_cmd_set_param_v3 *)(p + APR_HDR_SIZE);
++	pdata = (struct afe_port_param_data_v3 *)(param + 1);
 +
 +	pdata->module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
++	pdata->instance_id = 0;
 +	pdata->param_id = AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG;
 +	pdata->param_size = sizeof(stream);
 +	memcpy(pdata + 1, &stream, sizeof(stream));
 +
-+	pdata = (struct afe_port_param_data_v2 *)
++	pdata = (struct afe_port_param_data_v3 *)
 +		((u8 *)(pdata + 1) + sizeof(stream));
 +	pdata->module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
++	pdata->instance_id = 0;
 +	pdata->param_id = AFE_PARAM_ID_HDMI_DPTX_IDX_CFG;
 +	pdata->param_size = sizeof(controller);
 +	memcpy(pdata + 1, &controller, sizeof(controller));
@@ -106,12 +153,12 @@ index 9707cd891ddbe..63d32950cf95d 100644
 +					   APR_PKT_VER);
 +	pkt->hdr.pkt_size = pkt_size;
 +	pkt->hdr.token = port->token;
-+	pkt->hdr.opcode = AFE_PORT_CMD_SET_PARAM_V2;
++	pkt->hdr.opcode = AFE_PORT_CMD_SET_PARAM_V3;
 +
 +	param->port_id = port->id;
 +	param->payload_size = payload_size;
 +
-+	ret = afe_apr_send_pkt(afe, pkt, port, AFE_PORT_CMD_SET_PARAM_V2);
++	ret = afe_apr_send_pkt(afe, pkt, port, AFE_PORT_CMD_SET_PARAM_V3);
 +	if (ret)
 +		dev_err(afe->dev,
 +			"AFE display stream config failed for port 0x%x: %d\n",

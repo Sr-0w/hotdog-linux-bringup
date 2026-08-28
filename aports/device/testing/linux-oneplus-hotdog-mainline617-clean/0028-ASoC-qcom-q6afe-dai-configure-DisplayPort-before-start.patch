@@ -1,20 +1,15 @@
-From daa4a292e9cf9fead8549c9f3d0c778838f431af Mon Sep 17 00:00:00 2001
+From 5116ebcb25de54a6987c5e3b0a958b9d8a471532 Mon Sep 17 00:00:00 2001
 From: Robin Snyders <robin@snyders.xyz>
-Date: Fri, 28 Aug 2026 18:34:05 +0200
+Date: Fri, 28 Aug 2026 18:57:05 +0200
 Subject: [PATCH 2/2] ASoC: qcom: q6afe-dai: configure DisplayPort before start
 
-Qualcomm's downstream DisplayPort DAI sends the MST stream and DPTX
-controller indices before opening the shared AFE port. Mainline omits that
-configuration entirely.
+Qualcomm downstream sends the MST stream and DPTX controller indices
+before opening the shared AFE port. Configure the only DisplayPort path
+exposed by q6afe as controller zero, stream zero.
 
-Configure the only DisplayPort path currently exposed by q6afe as
-controller zero, stream zero. Defer the HDMI/DisplayPort AFE start to
-trigger so the hdmi-codec prepare callback has enabled the controller
-audio engine first, then send the display indices, HDMI format and start
-command in that order.
-
-Also clear the local started flag after prepare stops an existing port. The
-trigger path otherwise cannot distinguish the stopped port from a live one.
+Defer the HDMI and DisplayPort AFE start to trigger so hdmi-codec has
+enabled the controller audio engine first. Clear the local started flag
+when prepare stops an existing port.
 
 Signed-off-by: Robin Snyders <robin@snyders.xyz>
 ---
