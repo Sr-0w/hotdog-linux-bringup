@@ -1,10 +1,11 @@
-# DisplayPort audio: the sink was started before it was listening
+# DisplayPort audio: trigger ordering was not the complete fix
 
 Date: 2026-08-27
 
-Audio now reaches a monitor over DisplayPort on this handset. It never had
-before, and the reason it did not is an ordering problem in ASoC rather than
-anything specific to the phone.
+This note originally concluded that moving the AFE start to the PCM trigger
+made DisplayPort audio work. Later testing from a fresh Plasma Mobile image
+invalidated that conclusion. The ordering issue is real, but the trigger-only
+change is incomplete and must not be promoted as a working driver.
 
 ## The ordering
 
@@ -34,7 +35,7 @@ qcom-q6afe: recovering already active AFE port 0x6020
 That recovery path only triggers on `-EALREADY`. A port that answers nothing
 gets `-ETIMEDOUT`, which it does not handle.
 
-## The change
+## The experimental change
 
 Keep the port configuration and the start together, and move both to a
 `trigger` callback, which runs after every prepare. HDMI takes the same path for
@@ -90,12 +91,46 @@ end `MultiMedia1` on PCM 0 and only the back end differs, so enabling one has to
 hand the front end over rather than adding a second sink. WirePlumber exposes
 whichever is active.
 
-## Still open
+## Fresh-image hardware result
 
-Two starts in six still log `-110`. Playback survives them, but the cause is not
-understood: the DSP keeps state for this port across a stream Linux believes it
-released, and an unconditional stop reduces that without eliminating it.
+The r36 integration image combines the GEM ownership fix, the SM8150 DP jack
+callback, the corrected upstream HPD status bits, the UCM jack binding and this
+trigger experiment. It recovered the monitor's complete 384-byte EDID,
+programmed 2560x1440@60 and produced a visually correct external image.
 
-The `qcom_snd_dp_jack_setup()` that sm8250 does for hotplug reporting is still
-missing here, so the DisplayPort device is offered whether or not a monitor is
-attached.
+Selecting the DisplayPort output in Plasma then produced no sound. The kernel
+logged repeated failures on AFE port `0x6020`:
+
+```text
+qcom-q6afe: AFE enable for port 0x6020 failed -110
+q6afe-dai: fail to start AFE port 68
+q6afe-dai: ASoC error (-110): at soc_dai_trigger() on DISPLAY_PORT_RX_0
+```
+
+PipeWire retried the disappearing ALSA device every few seconds and Plasma
+Settings closed after the selected output vanished. The user audio service was
+stopped immediately to end the retry loop. The handset remained reachable over
+USB NCM and SSH.
+
+The complete private runtime evidence is under
+`/tmp/hotdog-r36-dp-audio-failure-20260828.NMFuz1`; its SHA256 index is
+`1c217a45491d3999420e0ff3a20712671bcaa60c2d63bf399383f7c254c6011c`.
+
+## Missing Qualcomm display-stream setup
+
+Qualcomm's downstream `msm-dai-q6-hdmi-v2.c` does more than configure the HDMI
+sample format. Before opening the shared DisplayPort AFE port, it calls:
+
+```c
+afe_set_display_stream(DISPLAY_PORT_RX, stream_idx, ctl_idx);
+```
+
+That helper sends both `AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG` (`0x102b5`) and
+`AFE_PARAM_ID_HDMI_DPTX_IDX_CFG` (`0x102b6`) in one packed set-param command.
+The first controller and stream both use index zero. Mainline `q6afe` sends
+neither parameter, while the SM8150 ADSP implements and validates both.
+
+Status: **NOT WORKING**. Patch `0027` remains an experiment and its original
+hardware claim is superseded. The next candidate must implement Qualcomm's
+display-stream configuration and prove start, playback, stop and unplug without
+an AFE timeout before any clean-branch promotion.
