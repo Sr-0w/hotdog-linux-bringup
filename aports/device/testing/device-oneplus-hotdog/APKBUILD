@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=48
+pkgrel=49
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Robin Snyders <robin@snyders.xyz>"
@@ -157,6 +157,7 @@ kernel_mainline() {
 		$pkgname=$pkgver-r$pkgrel
 		linux-oneplus-hotdog-mainline617-clean
 		mesa-vulkan-freedreno
+		postmarketos-base-ui-audio-backend-pipewire
 	"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
