@@ -3,7 +3,7 @@
 pkgname=device-oneplus-hotdog
 pkgdesc="OnePlus 7T Pro"
 pkgver=3
-pkgrel=49
+pkgrel=50
 url="https://postmarketos.org"
 license="MIT"
 maintainer="Robin Snyders <robin@snyders.xyz>"
@@ -25,6 +25,7 @@ source="
 	hotdog.conf
 	kernel-cmdline.conf
 	30-initramfs-firmware.files
+	oneplus-hotdog-audio-modules.conf
 	51-qcom-sm8150.conf
 	90-hotdog-bringup-doas.conf
 	90-hotdog-camera.conf
@@ -159,6 +160,8 @@ kernel_mainline() {
 		mesa-vulkan-freedreno
 		postmarketos-base-ui-audio-backend-pipewire
 	"
+	install -Dm644 "$srcdir/oneplus-hotdog-audio-modules.conf" \
+		"$subpkgdir/etc/modules-load.d/oneplus-hotdog-audio.conf"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
 
@@ -279,11 +282,12 @@ wireplumber() {
 }
 
 sha512sums="
-d69e4f7adddb207f5e6b5e311288987f556d4b5f8d7aad2a44c0a6bcde439241067e2500041fda79f6e24c1c5a7e5e4a276cc2bb34e9956dcd98b3250bc97b7e  HiFi.conf
+be430e2d63af2a173d9daa2ac578710f046d228dbe8e721cc5247be1dff24028c5e07d0d678665a9bdb84243efd7cd95ae12b2e6a608d2f7a98492e849416935  HiFi.conf
 af7877321da99b5dd12184d0943863e70d254a9640af426bf9d4f183818e65a3b7bf65c56b21d33d026dc314a9676f51669bbdc32ff67d0ee418c15e5e1f3921  deviceinfo
 65281dddb922819d3dac7caed80887bec31a59dc1b351c1dac76e4f859612268c283abc6fe9498358a5b8aad1b58256d1da503045dae5c47923c6916a46fceee  hotdog.conf
 ff18992b1050030eca46a403846f93a3cf473c389a8b1eb68fa2e1f5ced6cf0b702e78aa8c1c77daacca3639cd512bc6a8635c6321dfff1c499c21b5d9134609  kernel-cmdline.conf
 01c44cd4fa3edc36e0500d35e5d47f45794241beff28b37bcdb3159acb94a38844c55c59d073c25c0ee7611c3a9e98b8f0a66336434ef8fa3aa73b75c156e1f4  30-initramfs-firmware.files
+ea3cb91327dc7f81c739365a8d288fb969d01d7fcae7df51aaeed564b8995f27af9330ed254c67f48e26cf13e788a0d18921440a5ce1a1d851bd8e3c6dec565c  oneplus-hotdog-audio-modules.conf
 34ec0c4c37345fdb8d5c12f57f4d43de9721336dc317cbcef14ba3b3f52bbc3ce3325c510730959fb023fb04a92013bacafbb1bc37d412d96ea7c5b663a46be5  51-qcom-sm8150.conf
 7743ff21c39fc4991cec30ba61edf5b261d44d33a0693cd6f3021da7374c430a8c6bf4bd3619bb5ff48fe5fa41fd01eb8c40ad2a162ddc4869ef8d37901779b5  90-hotdog-bringup-doas.conf
 7b1c01a079a372a6258652914d95b95ace6431271f8fa4fd8a9d975aff31ee12e28e5bb1b5bf61019b334863e64fc0928dfec328ba423795053c98da94e29051  90-hotdog-camera.conf
