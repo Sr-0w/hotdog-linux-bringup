@@ -197,8 +197,48 @@ attributing 900e to the new WirePlumber settings or declaring the persistent
 AFE experiment safe. The raw 8 GiB dump and its decoded outputs remain private
 under `logs/2026-08-28-r42-dp-audio-900e` and `r42-forensics`.
 
-Status: **PIPEWIRE PLAYBACK PASS, PROMOTION BLOCKED**. Two normal PipeWire
-streams separated by a 12-second idle interval were audible and clean. The
-userspace r48 change is committed and built, but was not installed. The
-persistent AFE kernel branch remains experimental until the independent 900e
-and dock-disconnect risk is resolved under a later authorized phone session.
+## Fresh-install backend selection
+
+After an EDL restore, a complete Plasma Mobile image containing kernel r42 and
+device package r48 booted from slot B in 26 seconds. It remained reachable over
+USB NCM and SSH for more than 15 minutes, with the ALSA card and all three
+remote processors present. This separated the earlier 900e incident from the
+normal no-dock boot path.
+
+The fresh image also exposed a packaging defect that an in-place development
+rootfs had hidden. Both PulseAudio and PipeWire/WirePlumber started. PulseAudio
+owned `alsa_card.platform-sound` and exposed the UCM profiles, while `wpctl`
+showed no ALSA device or sink. Plasma therefore spoke to the classic PulseAudio
+server instead of PipeWire. This is the same shape as the previously observed
+"Connection to the Sound Service Lost" failure.
+
+The device's audio subpackage already depended on
+`postmarketos-base-ui-audio-backend-pipewire`, but its `install_if` could only
+run after the UI meta-package had selected a provider. On a clean solve, the UI
+selected the higher-priority PulseAudio backend first and the device audio
+subpackage was never installed.
+
+Device package r49 fixes the ordering at the provider boundary: the mainline
+kernel subpackage now depends directly on
+`postmarketos-base-ui-audio-backend-pipewire`. A clean image solve consequently
+installs `pipewire-pulse`, `pipewire-pulse-openrc`, WirePlumber and the hotdog
+UCM/config packages, while the classic `pulseaudio` server is absent. This is
+limited to the mainline kernel choice; the downstream rescue package keeps its
+existing backend contract.
+
+The r49 image passed read-only ext2/ext4 checks and AVB verification. Its local
+test identities are:
+
+```text
+rootfs image  dbf79ee1b5704119314ae7e403404e7698305c642c91a474a4f3977f800cc69d
+boot image    218097934ea045792d6ca6e12f68ddd7513b26987d4c741b9ad16fde30459c7c
+pmOS_boot     871f16fa-13df-4432-b8de-976809f0b2ae
+pmOS_root     5522a208-c863-4cfa-ba0b-c5c61b399c32
+```
+
+Status: **PIPEWIRE PLAYBACK PASS, R49 HARDWARE BOOT PENDING**. Two normal
+PipeWire streams separated by a 12-second idle interval were audible and clean.
+The fresh-install audio-server conflict is fixed in the generated r49 image;
+its phone boot and normal Plasma DisplayPort path still need the next authorized
+hardware run. The persistent AFE kernel branch remains experimental until the
+independent 900e and dock-disconnect risk is resolved.
