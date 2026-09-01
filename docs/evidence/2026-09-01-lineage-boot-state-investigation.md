@@ -192,6 +192,70 @@ This capture contains the verified stock partition data, direct post-write GPT
 readbacks, a fresh live GPT inventory, and a complete SHA256 manifest. No
 Android or LineageOS boot occurred between the stock flash and this capture.
 
+## A1: first OxygenOS 10 boot
+
+OxygenOS reached userspace once on slot A. Before returning to EDL, ADB
+identified `HD1913`, Android 10 and `ro.boot.slot_suffix=_a`. The A0-to-A1
+comparison found exactly 16 changed capture objects:
+
+- primary and backup GPT images on LUN 0, LUN 1 and LUN 4;
+- `config`, `metadata`, `op2`, `param`, and `persist`;
+- `reserve1`, `reserve2`, and `reserve3`;
+- `modemst1` and `modemst2`.
+
+No partition name, type GUID, unique GUID, start LBA or end LBA changed. OOS
+changed only A/B attributes in the three GPTs. Slot-A entries gained these
+attribute bytes at GPT byte offset 6:
+
+- `0x04`: active;
+- `0x44`: active and boot-successful;
+- `boot_a=0x7f`: active, successful, priority/retry fields initialized.
+
+Fastboot confirmed the resulting state:
+
+```text
+current-slot: a
+slot-successful:a: yes
+slot-unbootable:a: no
+slot-retry-count:a: 7
+slot-successful:b: no
+slot-unbootable:b: no
+slot-retry-count:b: 0
+```
+
+The per-device `persist` filesystem and modem runtime stores changed during the
+normal Android boot, as expected. `fsg`, `fsc`, the three `mdm1m9kefs` images,
+and `mdm1m9kefsc` remained unchanged. Both reads of every critical A1 image
+matched.
+
+## A1 postmarketOS result
+
+The complete, hash-verified `v0.2.0-alpha.1` release set was installed exactly
+as documented: rootfs to `userdata` through fastbootd, then the matching
+filtered DTBO and boot image to slot B. Slot-B stock images were backed up and
+verified first.
+
+Result: **boot success**. USB NCM answered at `172.16.42.1` after nine seconds,
+SSH opened after another ten seconds, and runtime identity showed:
+
+```text
+Linux 6.17.0-sm8150-hotdog-clean
+androidboot.slot_suffix=_b
+pmos_boot_uuid=09349dcb-61c5-48d1-8cb9-4e6ec5343d2d
+pmos_root_uuid=375adfc5-dc0c-4d18-af98-21ff4ae204ee
+root=/dev/loop0p2 ext4 rw
+```
+
+The static PM8150/IMEM reboot helper returned the handset to bootloader
+fastboot. The original `dtbo_b` and `boot_b` were restored from A1 and slot A
+was selected without another Android boot.
+
+Therefore OxygenOS 10 first boot does **not** reproduce the reported failure.
+LineageOS B/C testing against this baseline would not isolate the original
+phenomenon. The next controlled baseline must use the relevant OxygenOS 12
+firmware/package; only if OOS12-to-pmOS fails should Lineage installer and
+first-boot bisection resume.
+
 ## Current status
 
 | Checkpoint | Status | Result |
@@ -204,7 +268,9 @@ Android or LineageOS boot occurred between the stock flash and this capture.
 | Authenticated stock data flash | complete | 44 ACKs; 43 readbacks plus `userdata` ACK |
 | Stock GPT primary/backup | complete | 12 writes and 12 byte-identical readbacks |
 | A0 capture | complete | Stock GPT, slot uninitialized, Android never booted |
-| A0 postmarketOS/mainline boot | pending | Requires direct handoff to fastboot without OOS boot |
-| A1 | pending | Not started |
+| A0 postmarketOS/mainline boot | skipped | Not a realistic user path |
+| A1 capture | complete | 16 changed objects; slot A initialized and successful |
+| A1 postmarketOS/mainline boot | complete | Success with `v0.2.0-alpha.1` |
+| OOS12 baseline | pending | Required to reproduce the reported failure |
 | B | pending | Not started |
 | C | pending | Not started |
