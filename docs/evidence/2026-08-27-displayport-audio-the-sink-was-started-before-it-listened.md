@@ -177,7 +177,20 @@ There is no panic, oops, SError, SMMU fault, UFS error or AFE error after the
 successful audio test. The final records are two TFA9874 unmute messages at
 187.7 seconds and two SLIM master-capability messages, ending abruptly at
 188.318 seconds. The task list is intact with 356 tasks; Xwayland is the only
-task marked `on_cpu`, while PipeWire and WirePlumber are sleeping.
+task marked `on_cpu`, while PipeWire and WirePlumber are sleeping. The `sleep`
+process from the host's three-second pause before SCP is also still present.
+The crash therefore happened after stopping the session but before any r48
+package was transferred or installed.
+
+Forensic hashes:
+
+```text
+segments.tsv          aa0a1c7f308d29b887bdc904a938d8d952956c0b2afb492099057072c4c02c06
+QDL run.log           7bac1b2c1e9f5f572314f92115abcec867ff127e9c292ded48bd850afc811b9b
+exact r42 vmlinux     140be2b008fc01777f3bc845dfc83ecfcfe5e208ca00b3781455b7b85b464309
+decoded printk ring   c073ba666ba36426e51bd3546340a1493cb5fba26fba5436d5f8e55abe5f1ee4
+decoded task list     d9d3e4c76585206cf85fe5d1c8e6bcedfd5a38dffa83fe112e7303c148633050
+```
 
 This proves an abrupt low-level transition, not its cause. It does not justify
 attributing 900e to the new WirePlumber settings or declaring the persistent
