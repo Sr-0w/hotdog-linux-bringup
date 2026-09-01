@@ -130,7 +130,62 @@ That helper sends both `AFE_PARAM_ID_HDMI_DP_MST_VID_IDX_CFG` (`0x102b5`) and
 The first controller and stream both use index zero. Mainline `q6afe` sends
 neither parameter, while the SM8150 ADSP implements and validates both.
 
-Status: **NOT WORKING**. Patch `0027` remains an experiment and its original
-hardware claim is superseded. The next candidate must implement Qualcomm's
-display-stream configuration and prove start, playback, stop and unplug without
-an AFE timeout before any clean-branch promotion.
+## PipeWire integration and the first normal-user pass
+
+The instance-aware Q6AFE display-stream command subsequently made one direct
+ALSA stream audible. Plasma still lost the sound service because the installed
+WirePlumber rule was a `main.lua.d` script. WirePlumber 0.5 no longer loads
+that configuration directory, so none of the SM8150 PCM properties applied.
+
+The replacement `wireplumber.conf.d` rule does four things:
+
+- disables ACP's `pro-audio` profile so it does not probe the Qualcomm
+  hostless PCMs;
+- selects S16_LE at 48 kHz for the validated HiFi nodes;
+- disables PipeWire's special `BATCH` scheduling for Q6ASM;
+- disables idle suspension, because closing and reopening this legacy Q6ASM
+  PCM leaves the next stream unusable.
+
+The HDMI UCM device also conflicts with `Mic`. The resulting dock profile is
+playback-only `HiFi (HDMI)`, while the normal handset profile remains
+`HiFi (Mic, Speaker)`. This avoids opening an unrelated capture frontend while
+the DP playback path is being prepared.
+
+On kernel r42 (`#43`) the packaged configuration was first tested as a
+temporary file. The HDMI sink reported `s16le 2ch 48000Hz`. The first
+`pw-play` returned zero, the sink remained `IDLE` rather than closing after
+12 seconds, and the second `pw-play` also returned zero. No AFE, Q6ASM, SMMU
+or DisplayPort error was added to the kernel log during those streams.
+
+The device package was then converted from the obsolete Lua file to the
+WirePlumber 0.5 configuration and built successfully as r48. The source commit
+is `bc6c041` on `bringup/hotdog-sm8150-dp-audio`. The r48 packages were not
+installed on the phone: it became unreachable before the transfer began.
+
+## The later 900e is not a logged Linux audio panic
+
+The phone entered Qualcomm `05c6:900e` later, while the desktop session was
+being stopped before the attempted r48 installation. QDL captured all 48
+offered regions without reset, including four complete 2 GiB DDR segments.
+The exact r42 `vmlinux` was rebuilt in the same pmbootstrap chroot; its first
+64 KiB of `_text` matches DDR at physical `0x80080000`, and its Build ID is
+`98e541e079d8f01117810d0309acd3807b5c7838`.
+
+The Linux printk ring was reconstructed directly from `prb`: 1,195 records
+were valid, one descriptor was in-flight, and no text block failed validation.
+There is no panic, oops, SError, SMMU fault, UFS error or AFE error after the
+successful audio test. The final records are two TFA9874 unmute messages at
+187.7 seconds and two SLIM master-capability messages, ending abruptly at
+188.318 seconds. The task list is intact with 356 tasks; Xwayland is the only
+task marked `on_cpu`, while PipeWire and WirePlumber are sleeping.
+
+This proves an abrupt low-level transition, not its cause. It does not justify
+attributing 900e to the new WirePlumber settings or declaring the persistent
+AFE experiment safe. The raw 8 GiB dump and its decoded outputs remain private
+under `logs/2026-08-28-r42-dp-audio-900e` and `r42-forensics`.
+
+Status: **PIPEWIRE PLAYBACK PASS, PROMOTION BLOCKED**. Two normal PipeWire
+streams separated by a 12-second idle interval were audible and clean. The
+userspace r48 change is committed and built, but was not installed. The
+persistent AFE kernel branch remains experimental until the independent 900e
+and dock-disconnect risk is resolved under a later authorized phone session.
