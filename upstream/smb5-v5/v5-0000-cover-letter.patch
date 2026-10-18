@@ -1,0 +1,171 @@
+From 45462bb7298a07c5c7ae582f8fc1552eab8e1102 Mon Sep 17 00:00:00 2001
+Message-ID: <20261018-qcom-smbx-smb5-v5-0@snyders.xyz>
+In-Reply-To: <20260820-submit-qcom-smbx-send-v1-v4-0-818dabb2771e@snyders.xyz>
+References: <20260820-submit-qcom-smbx-send-v1-v4-0-818dabb2771e@snyders.xyz>
+From: Robin Snyders <robin@snyders.xyz>
+Date: Sun, 18 Oct 2026 17:32:28 +0000
+Subject: [PATCH v5 0/2] power: supply: qcom_smbx: add SMB5 support
+To: Casey Connolly <casey.connolly@linaro.org>,
+    Sebastian Reichel <sre@kernel.org>,
+    Rob Herring <robh@kernel.org>,
+    Krzysztof Kozlowski <krzk+dt@kernel.org>,
+    Conor Dooley <conor+dt@kernel.org>
+Cc: Robin Snyders <robin@snyders.xyz>,
+    linux-arm-msm@vger.kernel.org,
+    linux-pm@vger.kernel.org,
+    devicetree@vger.kernel.org,
+    linux-kernel@vger.kernel.org,
+    Dmitry Baryshkov <dmitry.baryshkov@oss.qualcomm.com>,
+    Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>,
+    Krzysztof Kozlowski <krzysztof.kozlowski@oss.qualcomm.com>,
+    Joel Selvaraj <foss@joelselvaraj.com>,
+    David Heidelberg <david@ixit.cz>,
+    phone-devel@vger.kernel.org
+
+Add support for the SMB5 charger generation found in PM7250B and
+PM8150B to the existing qcom_smbx driver.
+
+The series extends the binding and selects register layouts, charger
+status encodings and electrical limits from per-PMIC match data. Encode
+PM7250B as PM8150B-compatible in the binding and let the compatible
+fallback select the shared charge-parameter block, including the +0x08
+effective input-current status register. Convert the SMB5 0.2 V/A USB
+current-sense voltage measurement to microamps while leaving the SMB2
+current reading unchanged.
+
+SMB5 setup suspends USB input and disables charging before configuration.
+The power-supply registration init callback programs battery limits and
+completes final input and charging setup before device_add publishes the
+properties, so public callbacks cannot observe partially initialized
+hardware. Managed rollback restores the charging state before the USB input
+state; if charging cannot be restored, USB input remains suspended. Managed
+teardown cancels status work before unregistering the power supply.
+
+Enable periodic hardware AICL with the downstream twelve-second rerun
+interval while leaving ADC-based AICL disabled by default. Clear the
+unsupported HVDCP modes so firmware state cannot raise VBUS, and do not
+override the firmware recharge policy without a binding input. The
+dedicated TCPM and VBUS regulator drivers retain ownership of Type-C
+power-role and VBUS control.
+
+On PM8150B, the SMB5 charger and VBUS regulator use the same DCDC
+peripheral but do not write the same registers. qcom_smbx only reads
+0x1108 and 0x110b there; qcom_usb_vbus-regulator writes 0x1140, 0x1152
+and 0x1153. The qcom_smbx write to 0x1153 belongs only to the SMB2
+initialization sequence and is not executed for SMB5. The TCPM port and PD
+PHY use the separate 0x15xx and 0x17xx peripherals. Patch 2 names the
+USBIN BC1.2 integration register and SMB2-only OTG definitions explicitly
+to document this boundary.
+
+Charger-status and health decoding are per-generation operations stored in
+the parameter block and called through it. PM660 reuses the PMI8998 block;
+only the power-supply name differs. The SMB2 init sequence writes
+CHARGING_ENABLE_CMD after CHGR_CFG2 has selected software control.
+
+The five-patch qcom_smbx fixes series is already in this base and is no
+longer a prerequisite. This series is based on linux-next next-20261016
+(2efb7a11f1aa).
+
+The v3 and v4 implementations were tested on a OnePlus 7T Pro (HD1913)
+with PM8150B. v4 register reads confirmed 4.40 V, 1.50 A and 500 mA
+limits. A 180-second trace and a 600-second, 121-sample guarded trace
+completed with the charger online, health Good and no guard failure. With
+a powered USB-C dock the phone remained the data host and PD power sink;
+with the dock unpowered it remained the data host and enabled the VBUS
+regulator as the power source. v5 was not re-run on that device. It was
+build-tested with an arm64 defconfig, CONFIG_CHARGER_QCOM_SMB2=y,
+drivers/power/supply/, and dt_binding_check on the binding. Both patches
+pass checkpatch --strict.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+Changes in v5:
+- Rebase onto linux-next next-20261016. The five prerequisite fixes are
+  in this base, so drop the prerequisite-patch-id records.
+  https://lore.kernel.org/all/138d527f-c19b-463a-b405-43fc0ec7c603@ixit.cz/
+- Split charger-status decoding into smb2_map_charge_status() and
+  smb5_map_charge_status() and call the match-data pointer.
+  https://lore.kernel.org/all/44d4db6f-6b84-4cec-9e85-cb7b437bb7f9@ixit.cz/
+- Drop smb_get_prop_health() and call data->get_prop_health() directly.
+  https://lore.kernel.org/all/44d4db6f-6b84-4cec-9e85-cb7b437bb7f9@ixit.cz/
+- Share one SMB2 parameter block between PMI8998 and PM660. The PM660
+  match entry only sets the power-supply name.
+  https://lore.kernel.org/all/44d4db6f-6b84-4cec-9e85-cb7b437bb7f9@ixit.cz/
+- Use C99 for (int i = ...) in smb_init_hw().
+  https://lore.kernel.org/all/44d4db6f-6b84-4cec-9e85-cb7b437bb7f9@ixit.cz/
+- Rename the parameter pointer to chip->data and read chip->data->gen
+  and the limits from it instead of copying them onto the chip.
+  https://lore.kernel.org/all/b5f87468-20f1-437f-8610-518df679ee99@ixit.cz/
+- Cc David Heidelberg <david@ixit.cz> and phone-devel@vger.kernel.org.
+  https://lore.kernel.org/all/acdcc316-231c-4683-9624-8141f1a302ef@ixit.cz/
+- Write the SMB2 CHARGING_ENABLE_CMD after CHGR_CFG2 selects software
+  control, so this series does not undo Fabricio Akio's ordering fix
+  (power-supply for-next 1fba78714201, not yet in next-20261016).
+- Carry David Heidelberg's SMB2 Tested-by from v4. SMB2 status, health
+  and limit behavior is unchanged aside from the charge-enable order
+  above. Drop the tag if a retest should come first.
+- Link to v4: https://lore.kernel.org/r/20260820-submit-qcom-smbx-send-v1-v4-0-818dabb2771e@snyders.xyz
+
+Changes in v4:
+- Make the PM8150B charger, VBUS regulator and TCPM register ownership
+  explicit, including the shared DCDC peripheral's disjoint accesses.
+- Rename the USBIN BC1.2 integration register and SMB2-only OTG definitions
+  to prevent them from being mistaken for SMB5 TCPM/VBUS controls.
+- Test powered sink/host and unpowered source/host USB-C dock operation in
+  both connector orientations, including storage I/O and gadget recovery.
+- Link to v3: https://lore.kernel.org/r/20260813-submit-qcom-smbx-send-v1-v3-0-27be0091d7c7@snyders.xyz
+
+Changes in v3:
+- Complete SMB5 input and charging setup in the pre-device_add power-supply
+  registration init callback instead of gating setters on a driver-specific
+  probe flag.
+- Register the power supply and initialize managed status work before
+  requesting IRQs so handlers cannot observe an unassigned power supply.
+- Let PM7250B match the required PM8150B compatible fallback and remove its
+  duplicate match-data entry.
+- Collect the binding Reviewed-by tag.
+- Link to v2: https://lore.kernel.org/r/20260812-submit-qcom-smbx-send-v1-v2-0-f504b8f9bfad@snyders.xyz
+
+Changes in v2:
+- Rebase onto power-supply for-next 99b38cda3f4c.
+- Encode PM7250B with the required PM8150B compatible fallback.
+- Leave SMB5 Type-C power-role and VBUS control to the TCPM and regulator
+  drivers.
+- Preserve the SMB2 3-second AICL interval and use the SMB5 downstream
+  12-second interval; leave ADC-based AICL disabled by default.
+- Disable unsupported HVDCP negotiation deterministically.
+- Do not override the firmware recharge policy without a binding input.
+- Model PM7250B with PM8150B electrical limits and the +0x08 AICL ICL
+  status register.
+- Convert the SMB5 0.2 V/A USB current-sense reading to microamps while
+  leaving the SMB2 current reading unscaled.
+- Program battery limits in the pre-device_add registration init callback
+  and gate setters until probe completes.
+- Order managed teardown so status work is cancelled before the power
+  supply is unregistered.
+- Restore charging before USB input on probe failure, and leave input
+  suspended if charging restoration fails.
+- Correct the SMB5 overvoltage register and charger-state decoding.
+- Avoid repeated error logs when polling a persistent overvoltage state.
+- Use battery-info property presence when selecting charge targets.
+- Remove duplicate scaling from the already-prescaled USB voltage reading
+  and clarify the binding IIO channel descriptions.
+- Update the binding title, Kconfig prompt and module description for both
+  charger generations.
+- Move the five pre-existing SMB2 fixes to a prerequisite Fixes series.
+- Link to v1: https://lore.kernel.org/r/20260811-submit-qcom-smbx-send-v1-v1-0-feec6cfa123a@snyders.xyz
+
+Casey Connolly (2):
+  dt-bindings: power: supply: qcom,pmi8998-charger: add SMB5 PMICs
+  power: supply: qcom_smbx: add SMB5 support
+
+ .../power/supply/qcom,pmi8998-charger.yaml    |  17 +-
+ drivers/power/supply/Kconfig                  |   8 +-
+ drivers/power/supply/qcom_smbx.c              | 775 ++++++++++++++----
+ 3 files changed, 621 insertions(+), 179 deletions(-)
+
+
+base-commit: 2efb7a11f1aa4d2dc285fe2680cca22cb9f72f64
+-- 
+2.43.0
+
