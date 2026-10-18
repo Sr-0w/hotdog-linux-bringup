@@ -5,20 +5,21 @@ The immutable submission artifacts live under
 [`upstream/2026-08-12`](../upstream/2026-08-12). They use the DCO identity
 `Robin Snyders <robin@snyders.xyz>`.
 
-Q6AFE v1, SM8150 download-mode v1/v2, the Qualcomm SMB5 v1/v2/v3 series and its
+Q6AFE v1, SM8150 download-mode v1/v2, the Qualcomm SMB5 v1/v2/v3/v4 series and its
 five-patch SMB2 prerequisite series have been mailed. Their files are
 immutable submission artifacts: revise the source branch and regenerate a
 complete versioned series instead of editing a mailed patch in place. The
-OnePlus 7T Pro device-tree series has not been mailed.
+OnePlus 7T Pro device-tree series has not been mailed. SMB5 v5 is prepared
+under [`upstream/smb5-v5`](../upstream/smb5-v5) and has not been sent.
 
 ## Queue
 
 | Series | Patches | State | Remaining gate |
 | --- | ---: | --- | --- |
 | Q6AFE DisplayPort playback widget | 1 | [v1 withdrawn](https://lore.kernel.org/r/178648858640.3471590.18184750436169014545.q6afe-withdrawal-resend@snyders.xyz) | Do not send the unsupported runtime claim as v2 |
-| SM8150 download-mode register | 1 | [Submitted v2](https://lore.kernel.org/r/20260811-submit-sm8150-dload-v2-1-fb688ac4896b@snyders.xyz) | Awaiting review; no unresolved finding |
-| Qualcomm SMB2 fixes | 5 | [Submitted v1](https://lore.kernel.org/r/20260812-qcom-smbx-fixes-v1-0-eb48246be599@snyders.xyz) | Awaiting review |
-| Qualcomm SMB5 charger support | 2 | [Submitted v3](https://lore.kernel.org/r/20260813-submit-qcom-smbx-send-v1-v3-0-27be0091d7c7@snyders.xyz) | Awaiting review; exact tree passed charge and physical VBUS gates; depends on the five SMB2 fixes |
+| SM8150 download-mode register | 1 | Applied by Bjorn Andersson, 29 Sep 2026, [`ab6a07a8de6f`](https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git/commit/?id=ab6a07a8de6f) ([v2](https://lore.kernel.org/r/20260811-submit-sm8150-dload-v2-1-fb688ac4896b@snyders.xyz)) | In linux-next `next-20261016` |
+| Qualcomm SMB2 fixes | 5 | Applied by Sebastian Reichel, 9 Sep 2026 ([v1](https://lore.kernel.org/r/20260812-qcom-smbx-fixes-v1-0-eb48246be599@snyders.xyz)) | In power-supply for-next and linux-next `next-20261016` |
+| Qualcomm SMB5 charger support | 2 | v5 prepared, not sent. [v4](https://lore.kernel.org/r/20260820-submit-qcom-smbx-send-v1-v4-0-818dabb2771e@snyders.xyz); files in [`upstream/smb5-v5`](../upstream/smb5-v5) | Robin reviews and sends. Rebased onto linux-next `next-20261016`; the five SMB2 fixes are already applied |
 | OnePlus 7T Pro initial device tree | 2 | Preflight | Boot the exact rebased DTB once and verify the initial hardware subset |
 | S6SY761 resume sensing | 1 | Local, `checkpatch --strict` clean | Confirm on a second suspend cycle after the next flash, then send standalone; it is an upstream driver bug, not device-specific |
 | DSI raw FIFO/timeout reporting | 1 | Local, `checkpatch --strict` clean | Diagnostic-only improvement; decide whether to send alone or with the eventual DSI transport fix |
@@ -135,11 +136,15 @@ the session, and therefore KWin's single claim, starts afterwards.
 ## Automated review follow-up
 
 The bot findings and an independent source audit are fully dispositioned. The
-download-mode ordering correction is public as v2. Q6AFE v1 was withdrawn
+download-mode ordering correction is public as v2 and was applied by Bjorn
+Andersson on 29 Sep 2026 (`ab6a07a8de6f`). Q6AFE v1 was withdrawn
 because the claimed runtime effect could not be proven. Five pre-existing
-SMB2 defects were sent as a separate `Fixes:` prerequisite series, and SMB5 v2
-was rebuilt after resolving Type-C/VBUS ownership, generation-specific AICL,
-status decoding, IIO scaling, probe publication and cleanup ordering.
+SMB2 defects were sent as a separate `Fixes:` prerequisite series and were
+applied by Sebastian Reichel on 9 Sep 2026. SMB5 v2 was rebuilt after
+resolving Type-C/VBUS ownership, generation-specific AICL, status decoding,
+IIO scaling, probe publication and cleanup ordering. SMB5 v4 was mailed on
+20 Aug 2026. v5 is prepared locally against linux-next `next-20261016` and
+has not been sent; see [`upstream/smb5-v5`](../upstream/smb5-v5).
 
 The claimed SMB5 watchdog-offset mismatch remains a false positive: the
 relative offsets plus the charger base resolve to Qualcomm's downstream
