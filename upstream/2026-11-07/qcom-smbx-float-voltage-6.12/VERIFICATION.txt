@@ -1,0 +1,195 @@
+6.12.y backport verification
+power: supply: qcom_smbx: validate battery float voltage
+
+Status: prepared and checked offline. Not mailed. Not hardware-tested.
+Robin's hardware was not available. No device was flashed.
+
+Upstream
+  Full SHA: a2d7dc538da2cb4a7426f0742197e762cb635f38
+  Subject:  power: supply: qcom_smbx: validate battery float voltage
+  Author:   Robin Snyders <robin@snyders.xyz>
+  Author date: Wed, 12 Aug 2026 01:30:01 +0200
+  Maintainer: Sebastian Reichel <sebastian.reichel@collabora.com>
+  Parent: 2a26d260e72a95e9f13b9e475f63aa404600fcb2
+          power: supply: qcom_smbx: fix float voltage selector
+  Link: https://patch.msgid.link/20260812-qcom-smbx-fixes-v1-4-eb48246be599@snyders.xyz
+  Fixes: 8648aeb5d7b7 ("power: supply: add Qualcomm PMI8998 SMB2 Charger driver")
+  Original sign-offs kept:
+    Signed-off-by: Robin Snyders <robin@snyders.xyz>
+    Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+  The upstream commit has no Reviewed-by and no Tested-by. None were added.
+  No new sender Signed-off-by was added. Add one only if this patch is mailed.
+
+Failure notice
+  Message-Id: 20261107051650-failed-6.12-a2d7dc538da2@kernel.org
+  From: Sasha Levin <sashal@kernel.org>
+  Date: Sat, 7 Nov 2026 05:16:50 -0500
+  Archive copy used: https://www.spinics.net/lists/stable/msg1078240.html
+  lore.kernel.org returned an anti-bot page to this workspace, so the
+  notice text was taken from that archive. It is the standard stable
+  failure: the patch does not apply to linux-6.12.y, and the suggested
+  reproduction is:
+
+    git fetch https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/ linux-6.12.y
+    git checkout FETCH_HEAD
+    git cherry-pick -x a2d7dc538da2cb4a7426f0742197e762cb635f38
+
+  The archived body stops after "original commit in Linus's tree" and
+  does not include a reject hunk. The conflict below was reproduced
+  from the upstream commit and v6.12.116, not assumed from the notice.
+
+Exact base
+  Repository: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+  Branch: linux-6.12.y
+  SHA: 5c40a1750f44dd6c7292d8c8d0b4ffff1734576e
+  Tag: v6.12.116
+  Commit subject: Linux 6.12.116
+
+  This backport does not apply to that commit by itself.
+  Required queued prerequisite, already in queue-6.12 and not in v6.12.116:
+    upstream 2a26d260e72a95e9f13b9e475f63aa404600fcb2
+    queue file: power-supply-qcom_smbx-fix-float-voltage-selector.patch
+    queue blob: 794453cddfdff4656c610716d2bc526c97170f2b
+  stable-queue inspected at master 77ecab77b25567c54df997dcb8030dea6bca03ed
+  queue-6.12 tree 9bfcda360f44b8cf7ec6d18e0dc698c6b56c9946
+  series positions of the whole set, lines 962-965:
+    962 power-supply-qcom_smbx-include-base-when-petting-wat.patch
+        upstream 2f0dec12007891398e6e3041aca0b8656918973d
+        blob 10a4fe4a0cdee96af15a264303d5342c102f1ab6
+    963 power-supply-qcom_smbx-test-battery-health-status-bi.patch
+        upstream 68f645192f64e1037685dbdb0dffb41a5a012056
+        blob f35265078655dc8763b727d36c6a591b37e8fb2e
+    964 power-supply-qcom_smbx-fix-float-voltage-selector.patch
+        upstream 2a26d260e72a95e9f13b9e475f63aa404600fcb2
+        blob 794453cddfdff4656c610716d2bc526c97170f2b
+    965 power-supply-qcom_smbx-notify-battery-overvoltage-re.patch
+        upstream 2548e4fa576a87a3b0d1b15a9c3f909bc54887b5
+        blob a88be7e8d36d50e7219e52691b93d41d7de1b08e
+  The validation patch is not in the queue. That is the failed commit.
+
+Why the cherry-pick fails
+  v6.12.116 builds drivers/power/supply/qcom_pmi8998_charger.c.
+  qcom_smbx.c is not in the branch (the rename landed later).
+  git apply --check of the upstream patch exits 1:
+    error: drivers/power/supply/qcom_smbx.c: No such file or directory
+  git am --3way exits 128:
+    sha1 information is lacking or useless (drivers/power/supply/qcom_smbx.c)
+  Rewriting only the path to qcom_pmi8998_charger.c still fails.
+  On v6.12.116 the first hunk fails at line 353: the queued selector
+  constants are absent and the old expression still has "+ 1".
+  After that queued selector patch, the MAX define hunk applies, but
+  later hunks fail because 6.12 still says smb2_probe, smb2_chip,
+  smb2_init_hw, smb2_init_irq and "smb2 registers". The upstream
+  patch's context says smb_probe, smb_chip and "smb registers".
+
+What the backport changes
+  It is the upstream delta, retargeted:
+    file qcom_pmi8998_charger.c
+    symbols smb2_*
+    dev_pm_set_wake_irq() left as the 6.12 call
+  It adds SMB2_FLOAT_VOLTAGE_MAX_UV (4920000) beside the queued
+  minimum and step. It does not repeat the off-by-one removal.
+  Float selection prefers constant_charge_voltage_max_uv, then
+  voltage_max_design_uv. If neither optional property is present,
+  the hardware setting is kept. A supplied target outside
+  3487500..4920000 uV fails probe with -EINVAL.
+  In-range values use integer division by 7500 and truncate toward
+  zero. That is the upstream behavior; unaligned targets are not
+  rejected.
+  smb2_init_hw() still sets CHARGING_ENABLE_CMD before battery data
+  is read. The backport saves that bit first and restores it with
+  devm_add_action_or_reset() if a later probe step fails. On success,
+  after dev_pm_set_wake_irq(), devm_remove_action() drops the
+  rollback so a successful probe does not undo charging.
+  v6.12.116 already has power_supply_battery_info_has_prop(),
+  initializes absent optional voltages to -EINVAL, and treats a
+  value >= 0 as present. Those helpers were not backported here.
+
+Apply results, all against a fresh checkout of v6.12.116
+  git am of this patch alone:
+    exit 128
+    patch failed: drivers/power/supply/qcom_pmi8998_charger.c:350
+  git am of the queued selector patch, then this patch:
+    exit 0
+  git am of all four queued patches, then this patch:
+    exit 0
+    resulting driver blob 1bafd5fa6b7f38260be2165b6ee833186448fc9d
+  git am in upstream order (watchdog, health, selector, this patch,
+  overvoltage):
+    exit 0
+    same driver blob 1bafd5fa6b7f38260be2165b6ee833186448fc9d
+  git apply --check and git apply --check --whitespace=error of this
+  patch succeed both on selector-only and after all four queued
+  patches. The watchdog, health and overvoltage patches are not
+  textual prerequisites. The selector patch is.
+
+checkpatch
+  Command: scripts/checkpatch.pl --strict
+  from linux-6.12.y scripts, on this patch file.
+  Result: 0 errors, 2 warnings, 0 checks, 113 lines checked.
+  Both warnings are UNKNOWN_COMMIT_ID for a2d7dc538da2cb4a7426f0742197e762cb635f38
+  and for Fixes: 8648aeb5d7b7. The shallow 6.12 tree does not contain
+  those upstream objects. The same two warnings are produced for the
+  already queued selector and overvoltage patches in that tree.
+  git diff --check: clean.
+
+Compilation, arm64 cross build, not a hardware boot
+  Tree: v6.12.116 plus the queued selector patch plus this backport.
+  Config: ARCH=arm64 defconfig, then COMPILE_TEST, IIO,
+  MFD_SPMI_PMIC and CHARGER_QCOM_SMB2=m. olddefconfig kept
+  CONFIG_CHARGER_QCOM_SMB2=m.
+  Command:
+    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- C=1 W=1 \
+      drivers/power/supply/qcom_pmi8998_charger.o
+  Result: exit 0. The log is the CC recipe plus
+    CHECK   drivers/power/supply/qcom_pmi8998_charger.c
+  No compiler warning and no sparse diagnostic.
+  The same W=1 object build also exits 0 on the pre-patch file
+  (v6.12.116 plus all four queued patches, without this backport).
+  Compiler: aarch64-linux-gnu-gcc 13. Sparse 0.6.4.
+
+Host range test, not the kernel driver and not hardware
+  Command:
+    gcc -std=c11 -Wall -Wextra -Werror -o float-voltage-range-test \
+      float-voltage-range-test.c
+    ./float-voltage-range-test qcom_pmi8998_charger.c
+  Result: "float-voltage range test: pass" against both the
+  selector-plus-backport driver and the four-queued-plus-backport
+  driver. The program executes the same comparisons and C integer
+  division, and checks that smb2_probe still contains them.
+  Cases that passed:
+    neither property, or any negative value: skip, hardware kept
+    0 uV and 3487499 uV: reject
+    3487500 uV: selector 0
+    3494999 uV: selector 0 (truncated, not rejected)
+    3495000 uV: selector 1
+    4350000 uV: selector 115
+      (the pre-selector formula with "+ 1" would produce 116)
+    constant-charge 4400000 with design 4350000: selector 121
+    constant-charge 3487500 with design 4920000: selector 0
+    4920000 uV: selector 191
+    4919999 uV and 4912500 uV: selector 190
+    4920001 uV and INT_MAX: reject
+  3487500 + 191 * 7500 is exactly 4920000, and 191 fits in
+  FLOAT_VOLTAGE_SETTING_MASK (bits 7:0).
+  The charging-enable rollback was checked by source order only:
+  the enable bit is read before smb2_init_hw(), and the action is
+  removed only after the wake IRQ is installed. It was not executed
+  inside the kernel.
+
+Patch checksum
+  SHA-256: f80f8ffd73c10272b45a6991cb95c61fa7ef01b7f00ec1b73b1526dcd7cd5f62
+  File: 0001-power-supply-qcom_smbx-validate-battery-float-voltage.patch
+
+Remaining risks
+  Bare v6.12.116 rejects this patch until the queued selector
+  backport is applied. If that queue patch is dropped or edited,
+  this backport has to be regenerated.
+  Unaligned in-range voltages are truncated down to a 7500 uV step.
+  That matches upstream and can program a lower float voltage than
+  the devicetree number.
+  Probe failure restores the pre-probe charging bit. Successful
+  probe leaves the bit set by smb2_init_hw(). Neither path was run
+  on SMB2 hardware.
+  No mail, lore reply, review tag, or stable-queue update was made.

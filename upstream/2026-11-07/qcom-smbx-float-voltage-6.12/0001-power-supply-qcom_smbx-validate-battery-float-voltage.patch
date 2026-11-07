@@ -1,0 +1,187 @@
+From 347d904cc96f5200de0b6bbe3aa8d5c2480cb2e5 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 01:30:01 +0200
+Subject: [PATCH 6.12.y] power: supply: qcom_smbx: validate battery float
+ voltage
+
+[ Upstream commit a2d7dc538da2cb4a7426f0742197e762cb635f38 ]
+
+power_supply_get_battery_info() leaves absent optional properties at
+-EINVAL. The driver uses voltage_max_design_uv without checking it, so a
+missing or out-of-range value can become an invalid float-voltage
+selector.
+
+Prefer the constant-charge voltage because it describes the charger's CV
+target, then fall back to the battery design voltage. Both properties are
+optional in the simple-battery binding, so preserve the hardware setting
+when neither is present. Reject a supplied target outside the SMB2 range.
+
+smb_init_hw() enables charging before battery data is parsed and before
+the remaining fallible probe steps. Save the initial charging-enable bit
+and install a managed rollback before initialization. Keep the rollback
+active across battery-info, voltage, IRQ and wake-IRQ setup, then remove it
+only after probe can no longer fail.
+
+[ 6.12.y: The released base is
+  commit 5c40a1750f44 ("Linux 6.12.116").
+  That tree still builds this driver as
+  drivers/power/supply/qcom_pmi8998_charger.c with smb2_* symbols.
+  qcom_smbx.c is absent, so cherry-pick -x of
+  a2d7dc538da2cb4a7426f0742197e762cb635f38 fails on the missing file
+  before any hunk applies. Renaming the path is not enough: the
+  symbols and kerneldoc still say smb2.
+
+  Apply this on top of queued 2a26d260e72a95e9f13b9e475f63aa404600fcb2
+  (power: supply: qcom_smbx: fix float voltage selector). Its
+  queue-6.12 file is
+  power-supply-qcom_smbx-fix-float-voltage-selector.patch.
+  That patch adds SMB2_FLOAT_VOLTAGE_MIN_UV and
+  SMB2_FLOAT_VOLTAGE_STEP_UV and drops the selector off-by-one. This
+  change only adds SMB2_FLOAT_VOLTAGE_MAX_UV and replaces that
+  corrected expression. It does not repeat the off-by-one fix.
+
+  Queued 2f0dec120078 (watchdog), 68f645192f64 (health bits) and
+  2548e4fa576a (overvoltage) do not overlap these hunks.
+  smb2_init_hw() still sets CHARGING_ENABLE_CMD before battery data
+  is read, so the probe-failure rollback is kept under smb2_ names.
+  The 6.12 wake IRQ remains dev_pm_set_wake_irq(). The battery-info
+  helper and the -EINVAL defaults for absent optional properties are
+  already in v6.12. ]
+
+Fixes: 8648aeb5d7b7 ("power: supply: add Qualcomm PMI8998 SMB2 Charger driver")
+Cc: stable@vger.kernel.org
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+Link: https://patch.msgid.link/20260812-qcom-smbx-fixes-v1-4-eb48246be599@snyders.xyz
+Signed-off-by: Sebastian Reichel <sebastian.reichel@collabora.com>
+---
+ drivers/power/supply/qcom_pmi8998_charger.c | 61 ++++++++++++++++++++-
+ 1 file changed, 58 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/power/supply/qcom_pmi8998_charger.c b/drivers/power/supply/qcom_pmi8998_charger.c
+index 2cc839848..03156d373 100644
+--- a/drivers/power/supply/qcom_pmi8998_charger.c
++++ b/drivers/power/supply/qcom_pmi8998_charger.c
+@@ -350,6 +350,7 @@
+ /* pmi8998 registers represent current in increments of 1/40th of an amp */
+ #define CURRENT_SCALE_FACTOR				25000
+ #define SMB2_FLOAT_VOLTAGE_MIN_UV			3487500
++#define SMB2_FLOAT_VOLTAGE_MAX_UV			4920000
+ #define SMB2_FLOAT_VOLTAGE_STEP_UV			7500
+ /* clang-format on */
+ 
+@@ -377,6 +378,7 @@ struct smb2_register {
+  * @base:		Base address for smb2 registers
+  * @regmap:		Register map
+  * @batt_info:		Battery data from DT
++ * @initial_charge_enable: Charging enable state before hardware setup
+  * @status_change_work: Worker to handle plug/unplug events
+  * @cable_irq:		USB plugin IRQ
+  * @wakeup_enabled:	If the cable IRQ will cause a wakeup
+@@ -390,6 +392,7 @@ struct smb2_chip {
+ 	unsigned int base;
+ 	struct regmap *regmap;
+ 	struct power_supply_battery_info *batt_info;
++	u8 initial_charge_enable;
+ 
+ 	struct delayed_work status_change_work;
+ 	int cable_irq;
+@@ -904,6 +907,19 @@ static int smb2_init_hw(struct smb2_chip *chip)
+ 	return 0;
+ }
+ 
++static void smb2_restore_charge_enable(void *data)
++{
++	struct smb2_chip *chip = data;
++	int rc;
++
++	rc = regmap_update_bits(chip->regmap,
++				chip->base + CHARGING_ENABLE_CMD,
++				CHARGING_ENABLE_CMD_BIT,
++				chip->initial_charge_enable);
++	if (rc < 0)
++		dev_err(chip->dev, "Couldn't restore charging state: %d\n", rc);
++}
++
+ static int smb2_init_irq(struct smb2_chip *chip, int *irq, const char *name,
+ 			 irqreturn_t (*handler)(int irq, void *data))
+ {
+@@ -931,6 +947,9 @@ static int smb2_probe(struct platform_device *pdev)
+ 	struct power_supply_config supply_config = {};
+ 	struct power_supply_desc *desc;
+ 	struct smb2_chip *chip;
++	unsigned int charge_enable;
++	unsigned int float_voltage_sel;
++	int float_voltage_uv;
+ 	int rc, irq;
+ 
+ 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
+@@ -961,6 +980,18 @@ static int smb2_probe(struct platform_device *pdev)
+ 				     "Couldn't get usbin_i IIO channel\n");
+ 	}
+ 
++	rc = regmap_read(chip->regmap, chip->base + CHARGING_ENABLE_CMD,
++			 &charge_enable);
++	if (rc < 0)
++		return dev_err_probe(chip->dev, rc,
++				     "Couldn't read charging state\n");
++
++	chip->initial_charge_enable = charge_enable & CHARGING_ENABLE_CMD_BIT;
++	rc = devm_add_action_or_reset(chip->dev, smb2_restore_charge_enable, chip);
++	if (rc)
++		return dev_err_probe(chip->dev, rc,
++				     "Couldn't register charging state rollback\n");
++
+ 	rc = smb2_init_hw(chip);
+ 	if (rc < 0)
+ 		return rc;
+@@ -995,13 +1026,35 @@ static int smb2_probe(struct platform_device *pdev)
+ 		return dev_err_probe(chip->dev, rc,
+ 				     "Failed to init status change work\n");
+ 
+-	rc = (chip->batt_info->voltage_max_design_uv -
+-	      SMB2_FLOAT_VOLTAGE_MIN_UV) / SMB2_FLOAT_VOLTAGE_STEP_UV;
++	if (power_supply_battery_info_has_prop(chip->batt_info,
++					       POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX)) {
++		float_voltage_uv =
++			chip->batt_info->constant_charge_voltage_max_uv;
++	} else if (power_supply_battery_info_has_prop(chip->batt_info,
++					      POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN)) {
++		float_voltage_uv = chip->batt_info->voltage_max_design_uv;
++	} else {
++		dev_warn(chip->dev, "No battery float voltage; preserving hardware setting\n");
++		goto skip_float_voltage;
++	}
++
++	if (float_voltage_uv < SMB2_FLOAT_VOLTAGE_MIN_UV ||
++	    float_voltage_uv > SMB2_FLOAT_VOLTAGE_MAX_UV)
++		return dev_err_probe(chip->dev, -EINVAL,
++				     "float voltage %d uV outside %d-%d uV\n",
++				     float_voltage_uv,
++				     SMB2_FLOAT_VOLTAGE_MIN_UV,
++				     SMB2_FLOAT_VOLTAGE_MAX_UV);
++
++	float_voltage_sel =
++		(float_voltage_uv - SMB2_FLOAT_VOLTAGE_MIN_UV) /
++		SMB2_FLOAT_VOLTAGE_STEP_UV;
+ 	rc = regmap_update_bits(chip->regmap, chip->base + FLOAT_VOLTAGE_CFG,
+-				FLOAT_VOLTAGE_SETTING_MASK, rc);
++				FLOAT_VOLTAGE_SETTING_MASK, float_voltage_sel);
+ 	if (rc < 0)
+ 		return dev_err_probe(chip->dev, rc, "Couldn't set vbat max\n");
+ 
++skip_float_voltage:
+ 	rc = smb2_init_irq(chip, &irq, "bat-ov", smb2_handle_batt_overvoltage);
+ 	if (rc < 0)
+ 		return rc;
+@@ -1023,6 +1076,8 @@ static int smb2_probe(struct platform_device *pdev)
+ 	if (rc < 0)
+ 		return dev_err_probe(chip->dev, rc, "Couldn't set wake irq\n");
+ 
++	devm_remove_action(chip->dev, smb2_restore_charge_enable, chip);
++
+ 	platform_set_drvdata(pdev, chip);
+ 
+ 	/* Initialise charger state */
+-- 
+2.43.0
+
