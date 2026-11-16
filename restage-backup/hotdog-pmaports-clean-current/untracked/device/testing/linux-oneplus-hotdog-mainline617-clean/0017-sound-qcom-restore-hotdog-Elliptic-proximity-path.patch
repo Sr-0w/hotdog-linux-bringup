@@ -1,0 +1,1533 @@
+From cbb657877fd2ef7ad7925f8857ee81964e897819 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 01:56:55 +0200
+Subject: [PATCH 17/17] sound: qcom: restore hotdog Elliptic proximity path
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../oneplus,hotdog-elliptic-ultrasound.yaml   |  33 +
+ .../devicetree/bindings/sound/qcom,q6afe.yaml |   4 +
+ .../sound/qcom,q6dsp-hostless-dais.yaml       |  30 +
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  28 +
+ include/dt-bindings/sound/qcom,q6hostless.h   |   8 +
+ sound/soc/qcom/Kconfig                        |  22 +
+ sound/soc/qcom/qdsp6/Makefile                 |   2 +
+ sound/soc/qcom/qdsp6/q6afe.c                  | 165 +++-
+ sound/soc/qcom/qdsp6/q6afe.h                  |  10 +
+ sound/soc/qcom/qdsp6/q6elliptic.c             | 818 ++++++++++++++++++
+ sound/soc/qcom/qdsp6/q6hostless.c             | 130 +++
+ sound/soc/qcom/qdsp6/q6routing.c              |  13 +-
+ 12 files changed, 1259 insertions(+), 4 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml
+ create mode 100644 Documentation/devicetree/bindings/sound/qcom,q6dsp-hostless-dais.yaml
+ create mode 100644 include/dt-bindings/sound/qcom,q6hostless.h
+ create mode 100644 sound/soc/qcom/qdsp6/q6elliptic.c
+ create mode 100644 sound/soc/qcom/qdsp6/q6hostless.c
+
+diff --git a/Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml b/Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml
+new file mode 100644
+index 000000000000..7762b03d2a65
+--- /dev/null
++++ b/Documentation/devicetree/bindings/sound/oneplus,hotdog-elliptic-ultrasound.yaml
+@@ -0,0 +1,33 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++# yamllint disable-line rule:line-length
++$id: http://devicetree.org/schemas/sound/oneplus,hotdog-elliptic-ultrasound.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: OnePlus hotdog Elliptic ultrasonic proximity engine
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++description:
++  The OnePlus 7T Pro uses an Elliptic Labs engine in the audio DSP for
++  proximity sensing. The AP driver is a child of the Qualcomm Q6 AFE service
++  because it sends vendor AFE parameters and consumes asynchronous AFE events.
++
++properties:
++  compatible:
++    const: oneplus,hotdog-elliptic-ultrasound
++
++required:
++  - compatible
++
++additionalProperties: false
++
++examples:
++  - |
++    apr-service {
++        elliptic-ultrasound {
++            compatible = "oneplus,hotdog-elliptic-ultrasound";
++        };
++    };
+diff --git a/Documentation/devicetree/bindings/sound/qcom,q6afe.yaml b/Documentation/devicetree/bindings/sound/qcom,q6afe.yaml
+index 268f7073d797..d617f95d29ba 100644
+--- a/Documentation/devicetree/bindings/sound/qcom,q6afe.yaml
++++ b/Documentation/devicetree/bindings/sound/qcom,q6afe.yaml
+@@ -29,6 +29,10 @@ properties:
+     unevaluatedProperties: false
+     description: Qualcomm DSP audio ports
+ 
++  elliptic-ultrasound:
++    $ref: /schemas/sound/oneplus,hotdog-elliptic-ultrasound.yaml#
++    description: OnePlus Elliptic ultrasonic proximity transport
++
+   usbd:
+     type: object
+     $ref: /schemas/sound/qcom,q6usb.yaml#
+diff --git a/Documentation/devicetree/bindings/sound/qcom,q6dsp-hostless-dais.yaml b/Documentation/devicetree/bindings/sound/qcom,q6dsp-hostless-dais.yaml
+new file mode 100644
+index 000000000000..5fbcaa0a669a
+--- /dev/null
++++ b/Documentation/devicetree/bindings/sound/qcom,q6dsp-hostless-dais.yaml
+@@ -0,0 +1,30 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/sound/qcom,q6dsp-hostless-dais.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Qualcomm QDSP6 hostless frontend DAIs
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++properties:
++  compatible:
++    const: qcom,q6dsp-hostless-dais
++
++  '#sound-dai-cells':
++    const: 1
++
++required:
++  - compatible
++  - '#sound-dai-cells'
++
++additionalProperties: false
++
++examples:
++  - |
++    hostless-dais {
++        compatible = "qcom,q6dsp-hostless-dais";
++        #sound-dai-cells = <1>;
++    };
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index d446a50b770c..dadf512a04c2 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -17,6 +17,7 @@
+ #include <dt-bindings/media/video-interfaces.h>
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
++#include <dt-bindings/sound/qcom,q6hostless.h>
+ #include <dt-bindings/sound/qcom,wcd934x.h>
+ #include <dt-bindings/usb/pd.h>
+ #include "sm8150-oneplus-common.dtsi"
+@@ -37,6 +38,11 @@ / {
+ 	oplus,dtsi_no = <19801>;
+ 	oplus,pcb_range = <0 55>;
+ 
++	q6hostless: q6hostless-dais {
++		compatible = "qcom,q6dsp-hostless-dais";
++		#sound-dai-cells = <1>;
++	};
++
+ 	memory@80000000 {
+ 		reg = <0 0x80000000 0 0x3bb00000>;
+ 	};
+@@ -739,6 +745,12 @@ dai@22 {
+ 	};
+ };
+ 
++&q6afe {
++	elliptic_ultrasound: elliptic-ultrasound {
++		compatible = "oneplus,hotdog-elliptic-ultrasound";
++	};
++};
++
+ &q6asmdai {
+ 	dai@0 {
+ 		reg = <MSM_FRONTEND_DAI_MULTIMEDIA1>;
+@@ -780,6 +792,22 @@ cpu {
+ 		};
+ 	};
+ 
++	ultrasound-input-hostless-dai-link {
++		link-name = "SLIMBUS2_HOSTLESS Capture";
++
++		cpu {
++			sound-dai = <&q6hostless Q6_HOSTLESS_SLIMBUS_2>;
++		};
++	};
++
++	ultrasound-output-hostless-dai-link {
++		link-name = "Quaternary MI2S_RX Hostless Playback";
++
++		cpu {
++			sound-dai = <&q6hostless Q6_HOSTLESS_QUATERNARY_MI2S_RX>;
++		};
++	};
++
+ 	dp-dai-link {
+ 		link-name = "DisplayPort Playback";
+ 
+diff --git a/include/dt-bindings/sound/qcom,q6hostless.h b/include/dt-bindings/sound/qcom,q6hostless.h
+new file mode 100644
+index 000000000000..d62f546ca48a
+--- /dev/null
++++ b/include/dt-bindings/sound/qcom,q6hostless.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
++#ifndef __DT_BINDINGS_Q6_HOSTLESS_H__
++#define __DT_BINDINGS_Q6_HOSTLESS_H__
++
++#define Q6_HOSTLESS_SLIMBUS_2		0
++#define Q6_HOSTLESS_QUATERNARY_MI2S_RX	1
++
++#endif
+diff --git a/sound/soc/qcom/Kconfig b/sound/soc/qcom/Kconfig
+index 41dbbdaa0f70..52717ca32109 100644
+--- a/sound/soc/qcom/Kconfig
++++ b/sound/soc/qcom/Kconfig
+@@ -80,6 +80,28 @@ config SND_SOC_QDSP6_CORE
+ config SND_SOC_QDSP6_AFE
+ 	tristate
+ 
++config SND_SOC_QDSP6_ELLIPTIC
++	tristate "OnePlus Elliptic ultrasonic proximity"
++	depends on SND_SOC_QDSP6_AFE
++	depends on INPUT
++	depends on IIO
++	help
++	  Provide the AP-side transport for the Elliptic Labs ultrasonic
++	  proximity engine found in the ADSP firmware on OnePlus SM8150 phones.
++	  The driver sends the vendor AFE parameters and reports near/far events
++	  through the input subsystem. Audio routing for the speaker and microphone
++	  must also be described by the machine driver.
++
++config SND_SOC_QDSP6_HOSTLESS
++	tristate "Qualcomm QDSP6 hostless audio frontends"
++	depends on SND_SOC
++	help
++	  Provide declarative no-host frontends used to power QDSP6 backend DAIs
++	  without transferring PCM samples to or from application memory. These
++	  frontends let an audio DSP engine drive a physical capture or playback
++	  backend while userspace only controls the lifetime of the route. Select
++	  this for DSP features which provide their own audio samples.
++
+ config SND_SOC_QDSP6_AFE_DAI
+ 	tristate
+ 
+diff --git a/sound/soc/qcom/qdsp6/Makefile b/sound/soc/qcom/qdsp6/Makefile
+index 67267304e7e9..fe9384578779 100644
+--- a/sound/soc/qcom/qdsp6/Makefile
++++ b/sound/soc/qcom/qdsp6/Makefile
+@@ -5,6 +5,8 @@ snd-q6apm-y := q6apm.o audioreach.o topology.o
+ obj-$(CONFIG_SND_SOC_QDSP6_COMMON) += snd-q6dsp-common.o
+ obj-$(CONFIG_SND_SOC_QDSP6_CORE) += q6core.o
+ obj-$(CONFIG_SND_SOC_QDSP6_AFE) += q6afe.o
++obj-$(CONFIG_SND_SOC_QDSP6_ELLIPTIC) += q6elliptic.o
++obj-$(CONFIG_SND_SOC_QDSP6_HOSTLESS) += q6hostless.o
+ obj-$(CONFIG_SND_SOC_QDSP6_AFE_DAI) += q6afe-dai.o
+ obj-$(CONFIG_SND_SOC_QDSP6_AFE_CLOCKS) += q6afe-clocks.o
+ obj-$(CONFIG_SND_SOC_QDSP6_ADM) += q6adm.o
+diff --git a/sound/soc/qcom/qdsp6/q6afe.c b/sound/soc/qcom/qdsp6/q6afe.c
+index 7b59d514b432..9707cd891ddb 100644
+--- a/sound/soc/qcom/qdsp6/q6afe.c
++++ b/sound/soc/qcom/qdsp6/q6afe.c
+@@ -28,6 +28,8 @@
+ #define AFE_PORT_CMD_DEVICE_START	0x000100E5
+ #define AFE_PORT_CMD_DEVICE_STOP	0x000100E6
+ #define AFE_PORT_CMD_SET_PARAM_V2	0x000100EF
++#define AFE_PSEUDOPORT_CMD_START	0x000100CF
++#define AFE_PSEUDOPORT_CMD_STOP		0x000100D0
+ #define AFE_SVC_CMD_SET_PARAM		0x000100f3
+ #define AFE_PORT_CMDRSP_GET_PARAM_V2	0x00010106
+ #define AFE_PARAM_ID_HDMI_CONFIG	0x00010210
+@@ -641,8 +643,25 @@ struct q6afe_port {
+ 	struct q6afe *afe;
+ 	struct kref refcount;
+ 	struct list_head node;
++	/* Serializes handler replacement against event delivery. */
++	struct mutex event_lock;
++	u32 event_opcode;
++	q6afe_event_cb_t event_callback;
++	void *event_priv;
+ };
+ 
++struct afe_pseudoport_start_command {
++	struct apr_hdr hdr;
++	u16 port_id;
++	u16 timing;
++} __packed;
++
++struct afe_pseudoport_stop_command {
++	struct apr_hdr hdr;
++	u16 port_id;
++	u16 reserved;
++} __packed;
++
+ struct afe_cmd_remote_lpass_core_hw_vote_request {
+ 	uint32_t  hw_block_id;
+ 	char client_name[8];
+@@ -960,12 +979,33 @@ static struct q6afe_port *q6afe_find_port(struct q6afe *afe, int token)
+ 	return ret;
+ }
+ 
++static struct q6afe_port *q6afe_find_event_port(struct q6afe *afe, u32 opcode)
++{
++	struct q6afe_port *port;
++	struct q6afe_port *found = NULL;
++	unsigned long flags;
++
++	spin_lock_irqsave(&afe->port_list_lock, flags);
++	list_for_each_entry(port, &afe->port_list, node) {
++		if (READ_ONCE(port->event_callback) &&
++		    READ_ONCE(port->event_opcode) == opcode) {
++			found = port;
++			kref_get(&found->refcount);
++			break;
++		}
++	}
++	spin_unlock_irqrestore(&afe->port_list_lock, flags);
++
++	return found;
++}
++
+ static int q6afe_callback(struct apr_device *adev, struct apr_resp_pkt *data)
+ {
+ 	struct q6afe *afe = dev_get_drvdata(&adev->dev);
+ 	struct aprv2_ibasic_rsp_result_t *res;
+ 	struct apr_hdr *hdr = &data->hdr;
+ 	struct q6afe_port *port;
++	q6afe_event_cb_t callback;
+ 
+ 	if (!data->payload_size)
+ 		return 0;
+@@ -981,6 +1021,8 @@ static int q6afe_callback(struct apr_device *adev, struct apr_resp_pkt *data)
+ 		case AFE_PORT_CMD_SET_PARAM_V2:
+ 		case AFE_PORT_CMD_DEVICE_STOP:
+ 		case AFE_PORT_CMD_DEVICE_START:
++		case AFE_PSEUDOPORT_CMD_START:
++		case AFE_PSEUDOPORT_CMD_STOP:
+ 		case AFE_SVC_CMD_SET_PARAM:
+ 			port = q6afe_find_port(afe, hdr->token);
+ 			if (port) {
+@@ -1004,6 +1046,16 @@ static int q6afe_callback(struct apr_device *adev, struct apr_resp_pkt *data)
+ 		wake_up(&afe->wait);
+ 		break;
+ 	default:
++		port = q6afe_find_event_port(afe, hdr->opcode);
++		if (port) {
++			mutex_lock(&port->event_lock);
++			callback = READ_ONCE(port->event_callback);
++			if (callback && READ_ONCE(port->event_opcode) == hdr->opcode)
++				callback(data->payload, data->payload_size,
++					 READ_ONCE(port->event_priv));
++			mutex_unlock(&port->event_lock);
++			kref_put(&port->refcount, q6afe_port_free);
++		}
+ 		break;
+ 	}
+ 
+@@ -1059,7 +1111,7 @@ static int afe_apr_send_pkt(struct q6afe *afe, struct apr_pkt *pkt,
+ 	} else if (result->status > 0) {
+ 		dev_err(afe->dev, "DSP returned error[%x]\n",
+ 			result->status);
+-		ret = -EINVAL;
++		ret = result->status == ADSP_EALREADY ? -EALREADY : -EINVAL;
+ 	} else {
+ 		ret = 0;
+ 	}
+@@ -1172,6 +1224,98 @@ static int q6afe_port_set_param_v2(struct q6afe_port *port, void *data,
+ 	return ret;
+ }
+ 
++int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
++				int param_id, int module_id, size_t size)
++{
++	if (!port || !data || !size || size > INT_MAX)
++		return -EINVAL;
++
++	return q6afe_port_set_param_v2(port, (void *)data, param_id,
++					 module_id, size);
++}
++EXPORT_SYMBOL_GPL(q6afe_port_set_vendor_param);
++
++int q6afe_port_set_event_handler(struct q6afe_port *port, u32 opcode,
++				 q6afe_event_cb_t callback, void *priv)
++{
++	int ret = 0;
++
++	if (!port || !opcode || !callback)
++		return -EINVAL;
++
++	mutex_lock(&port->event_lock);
++	if (port->event_callback) {
++		ret = -EBUSY;
++	} else {
++		WRITE_ONCE(port->event_opcode, opcode);
++		WRITE_ONCE(port->event_priv, priv);
++		WRITE_ONCE(port->event_callback, callback);
++	}
++	mutex_unlock(&port->event_lock);
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(q6afe_port_set_event_handler);
++
++void q6afe_port_clear_event_handler(struct q6afe_port *port)
++{
++	if (!port)
++		return;
++
++	mutex_lock(&port->event_lock);
++	WRITE_ONCE(port->event_callback, NULL);
++	WRITE_ONCE(port->event_priv, NULL);
++	WRITE_ONCE(port->event_opcode, 0);
++	mutex_unlock(&port->event_lock);
++}
++EXPORT_SYMBOL_GPL(q6afe_port_clear_event_handler);
++
++static int q6afe_pseudo_port_command(struct q6afe_port *port,
++				     u16 pseudo_port_id, bool start)
++{
++	struct afe_pseudoport_start_command start_cmd = { };
++	struct afe_pseudoport_stop_command stop_cmd = { };
++	struct apr_pkt *packet;
++	size_t packet_size;
++	u32 opcode;
++
++	if (!port || pseudo_port_id < 0x8001 || pseudo_port_id > 0x8005)
++		return -EINVAL;
++
++	if (start) {
++		start_cmd.port_id = pseudo_port_id;
++		start_cmd.timing = 1;
++		packet = (struct apr_pkt *)&start_cmd;
++		packet_size = sizeof(start_cmd);
++		opcode = AFE_PSEUDOPORT_CMD_START;
++	} else {
++		stop_cmd.port_id = pseudo_port_id;
++		packet = (struct apr_pkt *)&stop_cmd;
++		packet_size = sizeof(stop_cmd);
++		opcode = AFE_PSEUDOPORT_CMD_STOP;
++	}
++
++	packet->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
++					      APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
++	packet->hdr.pkt_size = packet_size;
++	packet->hdr.token = port->token;
++	packet->hdr.opcode = opcode;
++
++	return afe_apr_send_pkt(port->afe, packet, port, opcode);
++}
++
++int q6afe_pseudo_port_start(struct q6afe_port *port, u16 pseudo_port_id)
++{
++	return q6afe_pseudo_port_command(port, pseudo_port_id, true);
++}
++EXPORT_SYMBOL_GPL(q6afe_pseudo_port_start);
++
++int q6afe_pseudo_port_stop(struct q6afe_port *port, u16 pseudo_port_id)
++{
++	return q6afe_pseudo_port_command(port, pseudo_port_id, false);
++}
++EXPORT_SYMBOL_GPL(q6afe_pseudo_port_stop);
++
+ static int q6afe_port_set_lpass_clock(struct q6afe_port *port,
+ 				 struct afe_clk_cfg *cfg)
+ {
+@@ -1674,13 +1818,17 @@ int q6afe_port_start(struct q6afe_port *port)
+ 	struct q6afe *afe = port->afe;
+ 	int port_id = port->id;
+ 	int ret, param_id = port->cfg_type;
++	bool recovered = false;
+ 	struct apr_pkt *pkt;
+ 	int pkt_size;
+ 	void *p;
+ 
++retry:
+ 	ret  = q6afe_port_set_param_v2(port, &port->port_cfg, param_id,
+ 				       AFE_MODULE_AUDIO_DEV_INTERFACE,
+ 				       sizeof(port->port_cfg));
++	if (ret == -EALREADY && !recovered)
++		goto recover;
+ 	if (ret) {
+ 		dev_err(afe->dev, "AFE enable for port 0x%x failed %d\n",
+ 			port_id, ret);
+@@ -1718,12 +1866,26 @@ int q6afe_port_start(struct q6afe_port *port)
+ 	start->port_id = port_id;
+ 
+ 	ret = afe_apr_send_pkt(afe, pkt, port, AFE_PORT_CMD_DEVICE_START);
++	if (ret == -EALREADY && !recovered) {
++		kfree(pkt);
++		goto recover;
++	}
+ 	if (ret)
+ 		dev_err(afe->dev, "AFE enable for port 0x%x failed %d\n",
+ 			port_id, ret);
+ 
+ 	kfree(pkt);
+ 	return ret;
++
++recover:
++	/* Recover after a card unbind lost the local started state. */
++	dev_warn(afe->dev, "recovering already active AFE port 0x%x\n",
++		 port_id);
++	ret = q6afe_port_stop(port);
++	if (ret)
++		return ret;
++	recovered = true;
++	goto retry;
+ }
+ EXPORT_SYMBOL_GPL(q6afe_port_start);
+ 
+@@ -1811,6 +1973,7 @@ struct q6afe_port *q6afe_port_get_from_id(struct device *dev, int id)
+ 		return ERR_PTR(-ENOMEM);
+ 
+ 	init_waitqueue_head(&port->wait);
++	mutex_init(&port->event_lock);
+ 
+ 	port->token = id;
+ 	port->id = port_id;
+diff --git a/sound/soc/qcom/qdsp6/q6afe.h b/sound/soc/qcom/qdsp6/q6afe.h
+index a29abe4ce436..7308c2ac8b24 100644
+--- a/sound/soc/qcom/qdsp6/q6afe.h
++++ b/sound/soc/qcom/qdsp6/q6afe.h
+@@ -245,10 +245,20 @@ struct q6afe_port_config {
+ 
+ struct q6afe_port;
+ 
++typedef void (*q6afe_event_cb_t)(const void *payload, size_t payload_size,
++				 void *priv);
++
+ struct q6afe_port *q6afe_port_get_from_id(struct device *dev, int id);
+ int q6afe_port_start(struct q6afe_port *port);
+ int q6afe_port_stop(struct q6afe_port *port);
+ void q6afe_port_put(struct q6afe_port *port);
++int q6afe_port_set_vendor_param(struct q6afe_port *port, const void *data,
++				int param_id, int module_id, size_t size);
++int q6afe_port_set_event_handler(struct q6afe_port *port, u32 opcode,
++				 q6afe_event_cb_t callback, void *priv);
++void q6afe_port_clear_event_handler(struct q6afe_port *port);
++int q6afe_pseudo_port_start(struct q6afe_port *port, u16 pseudo_port_id);
++int q6afe_pseudo_port_stop(struct q6afe_port *port, u16 pseudo_port_id);
+ int q6afe_get_port_id(int index);
+ void q6afe_usb_port_prepare(struct q6afe_port *port,
+ 			    struct q6afe_usb_cfg *cfg);
+diff --git a/sound/soc/qcom/qdsp6/q6elliptic.c b/sound/soc/qcom/qdsp6/q6elliptic.c
+new file mode 100644
+index 000000000000..7f8dea7ad202
+--- /dev/null
++++ b/sound/soc/qcom/qdsp6/q6elliptic.c
+@@ -0,0 +1,818 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* OnePlus SM8150 Elliptic Labs ultrasonic proximity transport. */
++
++#include <dt-bindings/sound/qcom,q6dsp-lpass-ports.h>
++#include <linux/firmware.h>
++#include <linux/iio/events.h>
++#include <linux/iio/iio.h>
++#include <linux/input.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++
++#include "q6afe.h"
++
++#define ELLIPTIC_MODULE_TX		0x0f010201
++#define ELLIPTIC_EVENT_OPCODE		0x0ff10204
++#define ELLIPTIC_PARAM_SET		2
++#define ELLIPTIC_PARAM_SENSORHUB	16
++#define ELLIPTIC_PARAM_DIAGNOSTICS	17
++#define ELLIPTIC_DIAGNOSTICS_WORDS	112
++
++#define ELLIPTIC_PSEUDO_RX		0x8001
++
++#define ELLIPTIC_CONFIG_MICROPHONE_INDEX	4
++#define ELLIPTIC_CONFIG_OPERATION_MODE	5
++#define ELLIPTIC_CONFIG_LOG_LEVEL	12
++#define ELLIPTIC_CONFIG_SUSPEND		32
++#define ELLIPTIC_MICROPHONE_INDEX_MAX	7
++#define ELLIPTIC_PROXIMITY_NEAR_RAW	2
++/* How long after a read the sensor still counts as wanted. Consumers
++ * poll it; iio-sensor-proxy does so every 700 ms. */
++#define ELLIPTIC_DEMAND_TIMEOUT_MS	3000
++#define ELLIPTIC_TRIGGER_ENGINE_VERSION	9
++#define ELLIPTIC_TRIGGER_BUILD_BRANCH	13
++#define ELLIPTIC_TRIGGER_DIAGNOSTICS	15
++#define ELLIPTIC_TRIGGER_ENGINE_TAG	36
++#define ELLIPTIC_CONFIG_EXTERNAL_EVENT	35
++#define ELLIPTIC_PROXIMITY_MODE		699
++#define ELLIPTIC_CALIBRATION_V2_SIZE	448
++#define ELLIPTIC_CALIBRATION_V2_FIRMWARE \
++	"qcom/sm8150/hotdog/elliptic_calibration_v2.bin"
++
++struct q6elliptic_event {
++	__le32 module_id;
++	__le32 param_id;
++	__le32 payload_size;
++	u8 payload[];
++} __packed;
++
++struct q6elliptic {
++	struct device *dev;
++	struct q6afe_port *afe_port;
++	struct input_dev *input;
++	struct iio_dev *iio;
++	/* Which IIO threshold directions a consumer asked to be told about. */
++	bool event_rising;
++	bool event_falling;
++	/* Serializes sysfs enable/disable and remove rollback. */
++	struct mutex lock;
++	bool enabled;
++	bool engine_enabled;
++	bool pseudo_rx_started;
++	bool info_triggered;
++	bool external_event_sent;
++	/* Protects APR event counters and the diagnostics snapshot. */
++	spinlock_t event_stats_lock;
++	u32 event_count;
++	u32 last_event_param;
++	u32 last_event_size;
++	u32 diagnostics[ELLIPTIC_DIAGNOSTICS_WORDS];
++	u32 diagnostics_words;
++	s32 operation_mode;
++	s32 microphone_index;
++	/* When in_proximity_raw was last read, so userspace can tell that
++	 * somebody actually wants this sensor and bring the ultrasound
++	 * audio path up for them. */
++	unsigned long last_read;
++	int state;
++};
++
++static int q6elliptic_disable(struct q6elliptic *elliptic);
++
++static int q6elliptic_set_data(struct q6elliptic *elliptic,
++			       const void *data, size_t size)
++{
++	return q6afe_port_set_vendor_param(elliptic->afe_port, data,
++					   ELLIPTIC_PARAM_SET,
++					   ELLIPTIC_MODULE_TX, size);
++}
++
++static int q6elliptic_set_parameter(struct q6elliptic *elliptic,
++				    const s32 *values, size_t count)
++{
++	return q6elliptic_set_data(elliptic, values,
++				   count * sizeof(*values));
++}
++
++static int q6elliptic_set_engine(struct q6elliptic *elliptic, bool enable)
++{
++	const s32 command[4] = { enable, 0, 0, 0 };
++
++	return q6elliptic_set_parameter(elliptic, command,
++					ARRAY_SIZE(command));
++}
++
++static int q6elliptic_ramp_down(struct q6elliptic *elliptic)
++{
++	const s32 command[4] = { -1, 0, 0, 0 };
++
++	return q6elliptic_set_parameter(elliptic, command,
++					ARRAY_SIZE(command));
++}
++
++static int q6elliptic_set_config(struct q6elliptic *elliptic, s32 type,
++				 s32 value)
++{
++	const s32 command[3] = { type, value, 0 };
++
++	return q6elliptic_set_parameter(elliptic, command,
++					ARRAY_SIZE(command));
++}
++
++static int q6elliptic_trigger_engine_info(struct q6elliptic *elliptic)
++{
++	static const s32 triggers[] = {
++		ELLIPTIC_TRIGGER_ENGINE_VERSION,
++		ELLIPTIC_TRIGGER_BUILD_BRANCH,
++		ELLIPTIC_TRIGGER_ENGINE_TAG,
++	};
++	int ret;
++	size_t i;
++
++	for (i = 0; i < ARRAY_SIZE(triggers); i++) {
++		ret = q6elliptic_set_config(elliptic, triggers[i], 0);
++		if (ret)
++			return ret;
++	}
++	elliptic->info_triggered = true;
++	return 0;
++}
++
++static int q6elliptic_load_calibration(struct q6elliptic *elliptic)
++{
++	const struct firmware *firmware;
++	int ret;
++
++	ret = request_firmware_direct(&firmware,
++				      ELLIPTIC_CALIBRATION_V2_FIRMWARE,
++				      elliptic->dev);
++	if (ret)
++		return dev_err_probe(elliptic->dev, ret,
++				     "failed to load Elliptic calibration\n");
++	if (firmware->size != ELLIPTIC_CALIBRATION_V2_SIZE) {
++		dev_err(elliptic->dev,
++			"invalid Elliptic calibration size: %zu\n",
++			firmware->size);
++		ret = -EINVAL;
++		goto release;
++	}
++
++	ret = q6elliptic_set_data(elliptic, firmware->data, firmware->size);
++release:
++	release_firmware(firmware);
++	return ret;
++}
++
++static void q6elliptic_event(const void *data, size_t data_size, void *priv)
++{
++	const struct q6elliptic_event *event = data;
++	struct q6elliptic *elliptic = priv;
++	unsigned long flags;
++	u32 param_id;
++	u32 payload_size;
++	u32 diagnostics_size;
++	enum iio_event_direction dir;
++	bool near;
++
++	if (data_size < sizeof(*event))
++		return;
++	if (le32_to_cpu(event->module_id) != ELLIPTIC_MODULE_TX)
++		return;
++
++	payload_size = le32_to_cpu(event->payload_size) & 0xffff;
++	if (payload_size > data_size - sizeof(*event))
++		return;
++	param_id = le32_to_cpu(event->param_id);
++	spin_lock_irqsave(&elliptic->event_stats_lock, flags);
++	elliptic->last_event_param = param_id;
++	elliptic->last_event_size = payload_size;
++	elliptic->event_count++;
++	if (param_id == ELLIPTIC_PARAM_DIAGNOSTICS) {
++		diagnostics_size = min_t(u32, payload_size,
++					 sizeof(elliptic->diagnostics));
++		memcpy(elliptic->diagnostics, event->payload,
++		       diagnostics_size);
++		elliptic->diagnostics_words = diagnostics_size / sizeof(u32);
++	}
++	spin_unlock_irqrestore(&elliptic->event_stats_lock, flags);
++	if (param_id != ELLIPTIC_PARAM_SENSORHUB || !payload_size)
++		return;
++
++	/* OxygenOS uses zero for near and non-zero for far. */
++	near = event->payload[0] == 0;
++	WRITE_ONCE(elliptic->state, near ? 1 : 0);
++	input_event(elliptic->input, EV_MSC, MSC_RAW, near ? 1 : 0);
++	input_sync(elliptic->input);
++
++	/* IIO_UNMOD_EVENT_CODE does not parenthesise its parameters, so the
++	 * direction has to arrive as a single token or the ternary is torn
++	 * apart across the shift inside the macro. */
++	dir = near ? IIO_EV_DIR_RISING : IIO_EV_DIR_FALLING;
++	if (near ? READ_ONCE(elliptic->event_rising)
++		 : READ_ONCE(elliptic->event_falling))
++		iio_push_event(elliptic->iio,
++			       IIO_UNMOD_EVENT_CODE(IIO_PROXIMITY, 0,
++						    IIO_EV_TYPE_THRESH, dir),
++			       iio_get_time_ns(elliptic->iio));
++}
++
++static const struct iio_event_spec q6elliptic_event_spec[] = {
++	{
++		.type = IIO_EV_TYPE_THRESH,
++		.dir = IIO_EV_DIR_RISING,
++		.mask_separate = BIT(IIO_EV_INFO_ENABLE),
++	},
++	{
++		.type = IIO_EV_TYPE_THRESH,
++		.dir = IIO_EV_DIR_FALLING,
++		.mask_separate = BIT(IIO_EV_INFO_ENABLE),
++	},
++};
++
++static const struct iio_chan_spec q6elliptic_channels[] = {
++	{
++		.type = IIO_PROXIMITY,
++		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
++		.event_spec = q6elliptic_event_spec,
++		.num_event_specs = ARRAY_SIZE(q6elliptic_event_spec),
++	},
++};
++
++static struct q6elliptic *q6elliptic_from_iio(struct iio_dev *indio_dev)
++{
++	return *(struct q6elliptic **)iio_priv(indio_dev);
++}
++
++static int q6elliptic_read_raw(struct iio_dev *indio_dev,
++			       struct iio_chan_spec const *chan,
++			       int *val, int *val2, long mask)
++{
++	struct q6elliptic *elliptic = q6elliptic_from_iio(indio_dev);
++	int state;
++
++	if (mask != IIO_CHAN_INFO_RAW || chan->type != IIO_PROXIMITY)
++		return -EINVAL;
++
++	/* Record the read even when there is nothing to report: a consumer
++	 * polling an unarmed sensor is exactly the signal that the path
++	 * should be armed. */
++	WRITE_ONCE(elliptic->last_read, jiffies);
++
++	/* The engine only reports while the ultrasound audio path is armed.
++	 * Until it has said something, there is no state to report, and
++	 * answering "far" would be indistinguishable from a real reading. */
++	state = READ_ONCE(elliptic->state);
++	if (state < 0)
++		return -EAGAIN;
++	/* A proximity channel is a magnitude, not a boolean, and consumers
++	 * threshold it with hysteresis either side of a near level. Reporting
++	 * 1 for near leaves no headroom: iio-sensor-proxy scales the level by
++	 * 1.1 before comparing, so 1 > 1.1 is never true and the sensor reads
++	 * far forever. Two is the smallest value that clears the upper mark
++	 * while zero stays under the lower one. */
++	*val = state ? ELLIPTIC_PROXIMITY_NEAR_RAW : 0;
++	return IIO_VAL_INT;
++}
++
++static int q6elliptic_read_event_config(struct iio_dev *indio_dev,
++					const struct iio_chan_spec *chan,
++					enum iio_event_type type,
++					enum iio_event_direction dir)
++{
++	struct q6elliptic *elliptic = q6elliptic_from_iio(indio_dev);
++
++	if (chan->type != IIO_PROXIMITY || type != IIO_EV_TYPE_THRESH)
++		return -EINVAL;
++	if (dir == IIO_EV_DIR_RISING)
++		return READ_ONCE(elliptic->event_rising);
++	if (dir == IIO_EV_DIR_FALLING)
++		return READ_ONCE(elliptic->event_falling);
++	return -EINVAL;
++}
++
++static int q6elliptic_write_event_config(struct iio_dev *indio_dev,
++					 const struct iio_chan_spec *chan,
++					 enum iio_event_type type,
++					 enum iio_event_direction dir,
++					 bool enable)
++{
++	struct q6elliptic *elliptic = q6elliptic_from_iio(indio_dev);
++
++	if (chan->type != IIO_PROXIMITY || type != IIO_EV_TYPE_THRESH)
++		return -EINVAL;
++	if (dir == IIO_EV_DIR_RISING)
++		WRITE_ONCE(elliptic->event_rising, enable);
++	else if (dir == IIO_EV_DIR_FALLING)
++		WRITE_ONCE(elliptic->event_falling, enable);
++	else
++		return -EINVAL;
++	return 0;
++}
++
++static const struct iio_info q6elliptic_iio_info = {
++	.read_raw = q6elliptic_read_raw,
++	.read_event_config = q6elliptic_read_event_config,
++	.write_event_config = q6elliptic_write_event_config,
++};
++
++static int q6elliptic_enable(struct q6elliptic *elliptic)
++{
++	unsigned long flags;
++	int cleanup_ret;
++	int ret;
++
++	spin_lock_irqsave(&elliptic->event_stats_lock, flags);
++	elliptic->event_count = 0;
++	elliptic->last_event_param = 0;
++	elliptic->last_event_size = 0;
++	elliptic->diagnostics_words = 0;
++	spin_unlock_irqrestore(&elliptic->event_stats_lock, flags);
++
++	ret = q6elliptic_load_calibration(elliptic);
++	if (ret)
++		goto cleanup;
++
++	ret = q6elliptic_set_config(elliptic,
++				    ELLIPTIC_CONFIG_OPERATION_MODE,
++				    elliptic->operation_mode);
++	if (ret)
++		goto cleanup;
++
++	/* OxygenOS writes suspend and the microphone index on every boot,
++	 * before the engine is enabled. Its driver cache starts at zero and
++	 * only reaches the DSP when the control is written, so the engine is
++	 * always told explicitly which channel to listen on. Leaving them
++	 * unsent leaves the DSP on whatever its own defaults are, which is
++	 * consistent with an engine that processes and reports diagnostics
++	 * but never a proximity transition. */
++	ret = q6elliptic_set_config(elliptic, ELLIPTIC_CONFIG_SUSPEND, 0);
++	if (ret)
++		goto cleanup;
++
++	ret = q6elliptic_set_config(elliptic,
++				    ELLIPTIC_CONFIG_MICROPHONE_INDEX,
++				    elliptic->microphone_index);
++	if (ret)
++		goto cleanup;
++
++	ret = q6elliptic_set_config(elliptic, ELLIPTIC_CONFIG_LOG_LEVEL, 4);
++	if (ret)
++		goto cleanup;
++	if (!elliptic->info_triggered) {
++		ret = q6elliptic_trigger_engine_info(elliptic);
++		if (ret)
++			goto cleanup;
++	}
++
++	ret = q6elliptic_set_engine(elliptic, true);
++	if (ret)
++		goto cleanup;
++	elliptic->engine_enabled = true;
++
++	ret = q6elliptic_set_config(elliptic,
++				    ELLIPTIC_CONFIG_EXTERNAL_EVENT, 1);
++	if (ret)
++		goto cleanup;
++	elliptic->external_event_sent = true;
++
++	elliptic->enabled = true;
++	WRITE_ONCE(elliptic->state, -1);
++	return 0;
++
++cleanup:
++	cleanup_ret = q6elliptic_disable(elliptic);
++	if (cleanup_ret)
++		dev_err(elliptic->dev,
++			"activation failed: %d, rollback failed: %d\n",
++			ret, cleanup_ret);
++	return ret;
++}
++
++static int q6elliptic_disable(struct q6elliptic *elliptic)
++{
++	int ret = 0;
++	int cleanup_ret;
++
++	if (elliptic->external_event_sent) {
++		cleanup_ret = q6elliptic_set_config(elliptic,
++						    ELLIPTIC_CONFIG_EXTERNAL_EVENT, 0);
++		if (!cleanup_ret)
++			elliptic->external_event_sent = false;
++		else
++			ret = cleanup_ret;
++	}
++	if (elliptic->engine_enabled) {
++		cleanup_ret = q6elliptic_set_engine(elliptic, false);
++		if (!cleanup_ret)
++			elliptic->engine_enabled = false;
++		else
++			ret = cleanup_ret;
++	}
++	if (elliptic->pseudo_rx_started) {
++		cleanup_ret = q6afe_pseudo_port_stop(elliptic->afe_port,
++						     ELLIPTIC_PSEUDO_RX);
++		if (!cleanup_ret)
++			elliptic->pseudo_rx_started = false;
++		else if (!ret)
++			ret = cleanup_ret;
++	}
++
++	if (!elliptic->external_event_sent && !elliptic->engine_enabled &&
++	    !elliptic->pseudo_rx_started) {
++		elliptic->enabled = false;
++		WRITE_ONCE(elliptic->state, -1);
++	}
++	return ret;
++}
++
++static ssize_t enable_show(struct device *dev, struct device_attribute *attr,
++			   char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%d\n", READ_ONCE(elliptic->enabled));
++}
++
++static ssize_t enable_store(struct device *dev, struct device_attribute *attr,
++			    const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	bool enable;
++	int ret;
++
++	ret = kstrtobool(buf, &enable);
++	if (ret)
++		return ret;
++
++	mutex_lock(&elliptic->lock);
++	if (enable && elliptic->enabled) {
++		ret = 0;
++	} else if (enable) {
++		ret = q6elliptic_disable(elliptic);
++		if (!ret)
++			ret = q6elliptic_enable(elliptic);
++	} else if (elliptic->enabled || elliptic->engine_enabled ||
++		   elliptic->pseudo_rx_started) {
++		ret = q6elliptic_disable(elliptic);
++	} else {
++		ret = 0;
++	}
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_RW(enable);
++
++static ssize_t rx_port_show(struct device *dev,
++			    struct device_attribute *attr, char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%d\n", READ_ONCE(elliptic->pseudo_rx_started));
++}
++
++static ssize_t rx_port_store(struct device *dev,
++			     struct device_attribute *attr,
++			     const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	bool enable;
++	int ret;
++
++	ret = kstrtobool(buf, &enable);
++	if (ret)
++		return ret;
++
++	mutex_lock(&elliptic->lock);
++	if (enable == elliptic->pseudo_rx_started) {
++		ret = 0;
++	} else if (enable && !elliptic->enabled) {
++		ret = -EINVAL;
++	} else if (enable) {
++		ret = q6afe_pseudo_port_start(elliptic->afe_port,
++					      ELLIPTIC_PSEUDO_RX);
++		if (!ret)
++			elliptic->pseudo_rx_started = true;
++	} else {
++		ret = q6afe_pseudo_port_stop(elliptic->afe_port,
++					     ELLIPTIC_PSEUDO_RX);
++		if (!ret)
++			elliptic->pseudo_rx_started = false;
++	}
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_RW(rx_port);
++
++static ssize_t operation_mode_show(struct device *dev,
++				   struct device_attribute *attr, char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%d\n", READ_ONCE(elliptic->operation_mode));
++}
++
++static ssize_t operation_mode_store(struct device *dev,
++				    struct device_attribute *attr,
++				    const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	s32 mode;
++	int ret;
++
++	ret = kstrtos32(buf, 0, &mode);
++	if (ret)
++		return ret;
++	if (mode != 693 && mode != ELLIPTIC_PROXIMITY_MODE)
++		return -EINVAL;
++
++	mutex_lock(&elliptic->lock);
++	if (elliptic->enabled || elliptic->engine_enabled ||
++	    elliptic->pseudo_rx_started)
++		ret = -EBUSY;
++	else
++		elliptic->operation_mode = mode;
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_RW(operation_mode);
++
++static ssize_t microphone_index_show(struct device *dev,
++				     struct device_attribute *attr, char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%d\n", READ_ONCE(elliptic->microphone_index));
++}
++
++/* Stock uses channel 0. This stays writable so the channel can be swept from
++ * userspace without rebuilding, which is the point of the first test. */
++static ssize_t microphone_index_store(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	s32 index;
++	int ret;
++
++	ret = kstrtos32(buf, 0, &index);
++	if (ret)
++		return ret;
++	if (index < 0 || index > ELLIPTIC_MICROPHONE_INDEX_MAX)
++		return -EINVAL;
++
++	mutex_lock(&elliptic->lock);
++	if (elliptic->enabled || elliptic->engine_enabled ||
++	    elliptic->pseudo_rx_started)
++		ret = -EBUSY;
++	else
++		elliptic->microphone_index = index;
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_RW(microphone_index);
++
++/* Whether anyone is currently reading the proximity channel. The engine only
++ * speaks while the ultrasound audio path is up, and bringing that path up
++ * means opening two hostless PCMs, which is userspace work. This is how the
++ * service that does it knows to bother. */
++static ssize_t demand_show(struct device *dev, struct device_attribute *attr,
++			   char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	unsigned long last = READ_ONCE(elliptic->last_read);
++	bool wanted = last &&
++		time_before(jiffies,
++			    last + msecs_to_jiffies(ELLIPTIC_DEMAND_TIMEOUT_MS));
++
++	return sysfs_emit(buf, "%d\n", wanted);
++}
++static DEVICE_ATTR_RO(demand);
++
++static ssize_t state_show(struct device *dev, struct device_attribute *attr,
++			  char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	int state = READ_ONCE(elliptic->state);
++
++	if (state < 0)
++		return sysfs_emit(buf, "unknown\n");
++	return sysfs_emit(buf, "%s\n", state ? "near" : "far");
++}
++static DEVICE_ATTR_RO(state);
++
++static ssize_t event_stats_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	unsigned long flags;
++	u32 event_count;
++	u32 last_param;
++	u32 last_size;
++
++	spin_lock_irqsave(&elliptic->event_stats_lock, flags);
++	event_count = elliptic->event_count;
++	last_param = elliptic->last_event_param;
++	last_size = elliptic->last_event_size;
++	spin_unlock_irqrestore(&elliptic->event_stats_lock, flags);
++
++	return sysfs_emit(buf, "events=%u last_param=%u last_size=%u\n",
++			  event_count, last_param, last_size);
++}
++static DEVICE_ATTR_RO(event_stats);
++
++static ssize_t diagnostics_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	u32 diagnostics[ELLIPTIC_DIAGNOSTICS_WORDS];
++	unsigned long flags;
++	u32 count;
++	ssize_t length = 0;
++	u32 i;
++
++	spin_lock_irqsave(&elliptic->event_stats_lock, flags);
++	count = elliptic->diagnostics_words;
++	memcpy(diagnostics, elliptic->diagnostics,
++	       count * sizeof(*diagnostics));
++	spin_unlock_irqrestore(&elliptic->event_stats_lock, flags);
++
++	for (i = 0; i < count; i++)
++		length += sysfs_emit_at(buf, length, "%u%c", diagnostics[i],
++					(i + 1) % 4 ? ' ' : '\n');
++	return length;
++}
++static DEVICE_ATTR_RO(diagnostics);
++
++static ssize_t diagnostics_request_store(struct device *dev,
++					 struct device_attribute *attr,
++					 const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	bool request;
++	int ret;
++
++	ret = kstrtobool(buf, &request);
++	if (ret)
++		return ret;
++	if (!request)
++		return count;
++
++	mutex_lock(&elliptic->lock);
++	if (!elliptic->enabled)
++		ret = -EINVAL;
++	else
++		ret = q6elliptic_set_config(elliptic,
++					    ELLIPTIC_TRIGGER_DIAGNOSTICS, 0);
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_WO(diagnostics_request);
++
++static ssize_t ramp_down_store(struct device *dev,
++			       struct device_attribute *attr,
++			       const char *buf, size_t count)
++{
++	struct q6elliptic *elliptic = dev_get_drvdata(dev);
++	bool ramp_down;
++	int ret;
++
++	ret = kstrtobool(buf, &ramp_down);
++	if (ret)
++		return ret;
++	if (!ramp_down)
++		return count;
++
++	mutex_lock(&elliptic->lock);
++	if (!elliptic->enabled)
++		ret = -EINVAL;
++	else
++		ret = q6elliptic_ramp_down(elliptic);
++	mutex_unlock(&elliptic->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_WO(ramp_down);
++
++static struct attribute *q6elliptic_attrs[] = {
++	&dev_attr_enable.attr,
++	&dev_attr_rx_port.attr,
++	&dev_attr_operation_mode.attr,
++	&dev_attr_microphone_index.attr,
++	&dev_attr_demand.attr,
++	&dev_attr_state.attr,
++	&dev_attr_event_stats.attr,
++	&dev_attr_diagnostics.attr,
++	&dev_attr_diagnostics_request.attr,
++	&dev_attr_ramp_down.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(q6elliptic);
++
++static int q6elliptic_probe(struct platform_device *pdev)
++{
++	struct q6elliptic *elliptic;
++	int ret;
++
++	elliptic = devm_kzalloc(&pdev->dev, sizeof(*elliptic), GFP_KERNEL);
++	if (!elliptic)
++		return -ENOMEM;
++
++	elliptic->dev = &pdev->dev;
++	elliptic->state = -1;
++	elliptic->operation_mode = ELLIPTIC_PROXIMITY_MODE;
++	elliptic->microphone_index = 0;
++	mutex_init(&elliptic->lock);
++	spin_lock_init(&elliptic->event_stats_lock);
++	platform_set_drvdata(pdev, elliptic);
++
++	elliptic->afe_port = q6afe_port_get_from_id(&pdev->dev, SLIMBUS_2_TX);
++	if (IS_ERR(elliptic->afe_port))
++		return dev_err_probe(&pdev->dev, PTR_ERR(elliptic->afe_port),
++				     "failed to acquire SLIMBUS_2_TX\n");
++
++	elliptic->input = devm_input_allocate_device(&pdev->dev);
++	if (!elliptic->input) {
++		ret = -ENOMEM;
++		goto put_port;
++	}
++	elliptic->input->name = "Elliptic ultrasonic proximity";
++	elliptic->input->id.bustype = BUS_HOST;
++	input_set_capability(elliptic->input, EV_MSC, MSC_RAW);
++
++	ret = input_register_device(elliptic->input);
++	if (ret)
++		goto put_port;
++
++	/* The private area holds a pointer rather than the structure itself so
++	 * that the existing devm allocation and its drvdata stay as they are. */
++	elliptic->iio = devm_iio_device_alloc(&pdev->dev, sizeof(elliptic));
++	if (!elliptic->iio) {
++		ret = -ENOMEM;
++		goto put_port;
++	}
++	*(struct q6elliptic **)iio_priv(elliptic->iio) = elliptic;
++	elliptic->iio->name = "elliptic_proximity";
++	elliptic->iio->info = &q6elliptic_iio_info;
++	elliptic->iio->modes = INDIO_DIRECT_MODE;
++	elliptic->iio->channels = q6elliptic_channels;
++	elliptic->iio->num_channels = ARRAY_SIZE(q6elliptic_channels);
++
++	ret = devm_iio_device_register(&pdev->dev, elliptic->iio);
++	if (ret)
++		goto put_port;
++
++	ret = q6afe_port_set_event_handler(elliptic->afe_port,
++					   ELLIPTIC_EVENT_OPCODE,
++					   q6elliptic_event, elliptic);
++	if (ret)
++		goto put_port;
++
++	return 0;
++
++put_port:
++	q6afe_port_put(elliptic->afe_port);
++	return ret;
++}
++
++static void q6elliptic_remove(struct platform_device *pdev)
++{
++	struct q6elliptic *elliptic = platform_get_drvdata(pdev);
++
++	mutex_lock(&elliptic->lock);
++	if ((elliptic->enabled || elliptic->external_event_sent ||
++	     elliptic->engine_enabled || elliptic->pseudo_rx_started) &&
++	    q6elliptic_disable(elliptic))
++		dev_err(&pdev->dev, "failed to disable the remote engine\n");
++	mutex_unlock(&elliptic->lock);
++
++	q6afe_port_clear_event_handler(elliptic->afe_port);
++	q6afe_port_put(elliptic->afe_port);
++}
++
++static const struct of_device_id q6elliptic_of_match[] = {
++	{ .compatible = "oneplus,hotdog-elliptic-ultrasound" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, q6elliptic_of_match);
++
++static struct platform_driver q6elliptic_driver = {
++	.probe = q6elliptic_probe,
++	.remove = q6elliptic_remove,
++	.driver = {
++		.name = "q6-elliptic-ultrasound",
++		.of_match_table = q6elliptic_of_match,
++		.dev_groups = q6elliptic_groups,
++	},
++};
++module_platform_driver(q6elliptic_driver);
++
++MODULE_DESCRIPTION("OnePlus Elliptic ultrasonic proximity transport");
++MODULE_LICENSE("GPL");
++MODULE_FIRMWARE(ELLIPTIC_CALIBRATION_V2_FIRMWARE);
+diff --git a/sound/soc/qcom/qdsp6/q6hostless.c b/sound/soc/qcom/qdsp6/q6hostless.c
+new file mode 100644
+index 000000000000..001bcb69cf60
+--- /dev/null
++++ b/sound/soc/qcom/qdsp6/q6hostless.c
+@@ -0,0 +1,130 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Minimal Qualcomm QDSP6 hostless frontends. */
++
++#include <dt-bindings/sound/qcom,q6hostless.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/uio.h>
++#include <sound/pcm.h>
++#include <sound/soc.h>
++
++#define Q6_HOSTLESS_RATES	SNDRV_PCM_RATE_48000
++#define Q6_HOSTLESS_FORMATS	SNDRV_PCM_FMTBIT_S16_LE
++
++static const struct snd_pcm_hardware q6hostless_hardware = {
++	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BLOCK_TRANSFER,
++	.buffer_bytes_max = 128 * 1024,
++	.period_bytes_min = 4096,
++	.period_bytes_max = 8192,
++	.periods_min = 2,
++	.periods_max = 128,
++};
++
++static int q6hostless_open(struct snd_soc_component *component,
++			   struct snd_pcm_substream *substream)
++{
++	return snd_soc_set_runtime_hwparams(substream, &q6hostless_hardware);
++}
++
++static int q6hostless_prepare(struct snd_soc_component *component,
++			      struct snd_pcm_substream *substream)
++{
++	return 0;
++}
++
++static snd_pcm_uframes_t
++q6hostless_pointer(struct snd_soc_component *component,
++		   struct snd_pcm_substream *substream)
++{
++	struct snd_pcm_runtime *runtime = substream->runtime;
++
++	return runtime->control->appl_ptr % runtime->buffer_size;
++}
++
++static int q6hostless_copy(struct snd_soc_component *component,
++			   struct snd_pcm_substream *substream, int channel,
++			   unsigned long pos, struct iov_iter *iter,
++			   unsigned long bytes)
++{
++	if (iov_iter_count(iter) < bytes)
++		return -EFAULT;
++
++	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
++		return iov_iter_zero(bytes, iter) == bytes ? 0 : -EFAULT;
++
++	iov_iter_advance(iter, bytes);
++	return 0;
++}
++
++static const struct snd_soc_dapm_widget q6hostless_widgets[] = {
++	SND_SOC_DAPM_AIF_IN("QUAT_MI2S_DL_HL",
++			    "Quaternary MI2S_RX Hostless Playback", 0,
++			    SND_SOC_NOPM, 0, 0),
++	SND_SOC_DAPM_AIF_OUT("SLIM2_UL_HL", "SLIMBUS2_HOSTLESS Capture", 0,
++			     SND_SOC_NOPM, 0, 0),
++};
++
++static const struct snd_soc_component_driver q6hostless_component = {
++	.name = "q6-hostless",
++	.open = q6hostless_open,
++	.prepare = q6hostless_prepare,
++	.pointer = q6hostless_pointer,
++	.copy = q6hostless_copy,
++	.dapm_widgets = q6hostless_widgets,
++	.num_dapm_widgets = ARRAY_SIZE(q6hostless_widgets),
++};
++
++static struct snd_soc_dai_driver q6hostless_dais[] = {
++	{
++		.id = Q6_HOSTLESS_SLIMBUS_2,
++		.name = "SLIMBUS2_HOSTLESS",
++		.capture = {
++			.stream_name = "SLIMBUS2_HOSTLESS Capture",
++			.rates = Q6_HOSTLESS_RATES,
++			.rate_min = 48000,
++			.rate_max = 48000,
++			.formats = Q6_HOSTLESS_FORMATS,
++			.channels_min = 1,
++			.channels_max = 1,
++		},
++	},
++	{
++		.id = Q6_HOSTLESS_QUATERNARY_MI2S_RX,
++		.name = "QUAT_MI2S_RX_HOSTLESS",
++		.playback = {
++			.stream_name = "Quaternary MI2S_RX Hostless Playback",
++			.rates = Q6_HOSTLESS_RATES,
++			.rate_min = 48000,
++			.rate_max = 48000,
++			.formats = Q6_HOSTLESS_FORMATS,
++			.channels_min = 1,
++			.channels_max = 1,
++		},
++	},
++};
++
++static int q6hostless_probe(struct platform_device *pdev)
++{
++	return devm_snd_soc_register_component(&pdev->dev,
++					       &q6hostless_component,
++					       q6hostless_dais,
++					       ARRAY_SIZE(q6hostless_dais));
++}
++
++static const struct of_device_id q6hostless_of_match[] = {
++	{ .compatible = "qcom,q6dsp-hostless-dais" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, q6hostless_of_match);
++
++static struct platform_driver q6hostless_driver = {
++	.probe = q6hostless_probe,
++	.driver = {
++		.name = "q6-hostless",
++		.of_match_table = q6hostless_of_match,
++	},
++};
++module_platform_driver(q6hostless_driver);
++
++MODULE_DESCRIPTION("Qualcomm QDSP6 hostless audio frontends");
++MODULE_LICENSE("GPL");
+diff --git a/sound/soc/qcom/qdsp6/q6routing.c b/sound/soc/qcom/qdsp6/q6routing.c
+index f49243daa517..74939c73f85a 100644
+--- a/sound/soc/qcom/qdsp6/q6routing.c
++++ b/sound/soc/qcom/qdsp6/q6routing.c
+@@ -25,6 +25,7 @@
+ #include "q6routing.h"
+ 
+ #define DRV_NAME "q6routing-component"
++#define Q6ROUTING_ULTRASOUND_SESSION MAX_SESSIONS
+ 
+ #define Q6ROUTING_RX_MIXERS(id)						\
+ 	SOC_SINGLE_EXT("MultiMedia1", id,				\
+@@ -340,7 +341,7 @@ struct session_data {
+ };
+ 
+ struct msm_routing_data {
+-	struct session_data sessions[MAX_SESSIONS];
++	struct session_data sessions[MAX_SESSIONS + 1];
+ 	struct session_data port_data[AFE_MAX_PORTS];
+ 	struct device *dev;
+ 	struct mutex lock;
+@@ -532,7 +533,11 @@ static const struct snd_kcontrol_new secondary_mi2s_rx_mixer_controls[] = {
+ 	Q6ROUTING_RX_MIXERS(SECONDARY_MI2S_RX) };
+ 
+ static const struct snd_kcontrol_new quaternary_mi2s_rx_mixer_controls[] = {
+-	Q6ROUTING_RX_MIXERS(QUATERNARY_MI2S_RX) };
++	Q6ROUTING_RX_MIXERS(QUATERNARY_MI2S_RX)
++	SOC_SINGLE_EXT("Ultrasound", QUATERNARY_MI2S_RX,
++		       Q6ROUTING_ULTRASOUND_SESSION, 1, 0,
++		       msm_routing_get_audio_mixer,
++		       msm_routing_put_audio_mixer) };
+ 
+ static const struct snd_kcontrol_new quinary_mi2s_rx_mixer_controls[] = {
+ 	Q6ROUTING_RX_MIXERS(QUINARY_MI2S_RX) };
+@@ -959,6 +964,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
+ };
+ 
+ static const struct snd_soc_dapm_route intercon[] = {
++	{"QUAT_MI2S_RX Audio Mixer", "Ultrasound", "QUAT_MI2S_DL_HL"},
++	{"SLIM2_UL_HL", NULL, "SLIMBUS_2_TX"},
+ 	Q6ROUTING_RX_DAPM_ROUTE("HDMI Mixer", "HDMI_RX"),
+ 	Q6ROUTING_RX_DAPM_ROUTE("DISPLAY_PORT_RX Audio Mixer",
+ 				"DISPLAY_PORT_RX"),
+@@ -1097,7 +1104,7 @@ static int msm_routing_probe(struct snd_soc_component *c)
+ {
+ 	int i;
+ 
+-	for (i = 0; i < MAX_SESSIONS; i++) {
++	for (i = 0; i <= MAX_SESSIONS; i++) {
+ 		routing_data->sessions[i].port_id = -1;
+ 		routing_data->sessions[i].fedai_id = -1;
+ 	}

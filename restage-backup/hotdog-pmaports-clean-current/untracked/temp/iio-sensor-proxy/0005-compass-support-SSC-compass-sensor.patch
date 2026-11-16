@@ -1,0 +1,181 @@
+From 9f394846ebcd1cb0f052b239d16ceb9b9742c823 Mon Sep 17 00:00:00 2001
+From: Dylan Van Assche <me@dylanvanassche.be>
+Date: Mon, 24 Apr 2023 18:29:15 +0200
+Subject: [PATCH 5/8] compass: support SSC compass sensor
+
+Add driver for the compass sensor exposed by libssc.
+---
+ src/drivers.h          |   1 +
+ src/drv-ssc-compass.c  | 123 +++++++++++++++++++++++++++++++++++++++++
+ src/iio-sensor-proxy.c |   1 +
+ src/meson.build        |   1 +
+ 4 files changed, 126 insertions(+)
+ create mode 100644 src/drv-ssc-compass.c
+
+diff --git a/src/drivers.h b/src/drivers.h
+index 40707ec..5e0347c 100644
+--- a/src/drivers.h
++++ b/src/drivers.h
+@@ -165,6 +165,7 @@ extern SensorDriver input_proximity;
+ extern SensorDriver ssc_proximity;
+ extern SensorDriver ssc_light;
+ extern SensorDriver ssc_accel;
++extern SensorDriver ssc_compass;
+ #endif
+ 
+ gboolean drv_check_udev_sensor_type (GUdevDevice *device, const gchar *match, const char *name);
+diff --git a/src/drv-ssc-compass.c b/src/drv-ssc-compass.c
+new file mode 100644
+index 0000000..5e65c15
+--- /dev/null
++++ b/src/drv-ssc-compass.c
+@@ -0,0 +1,123 @@
++/*
++ * Copyright (c) 2023 Dylan Van Assche
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 3 as published by
++ * the Free Software Foundation.
++ */
++
++#include "drivers.h"
++
++#include <fcntl.h>
++#include <unistd.h>
++#include <string.h>
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <gio/gio.h>
++#include <libssc-sensor.h>
++#include <libssc-sensor-compass.h>
++
++typedef struct DrvData {
++	SSCSensorCompass *sensor;
++	guint measurement_id;
++} DrvData;
++
++static gboolean
++ssc_compass_discover (GUdevDevice *device)
++{
++	SSCSensorCompass *sensor = NULL;
++
++	/* Verify presence of FastRPC device */
++	if (!drv_check_udev_sensor_type (device, "ssc-compass", NULL))
++		return FALSE;
++
++	/* Open and close SSC compass for discovering */
++	sensor = ssc_sensor_compass_new_sync (NULL, NULL);
++	if (!sensor)
++		return FALSE;
++
++	if (!ssc_sensor_compass_close_sync (sensor, NULL, NULL))
++		return FALSE;
++
++	g_clear_object(&sensor);
++
++	g_debug ("Found SSC compass at %s", g_udev_device_get_sysfs_path (device));
++	return TRUE;
++}
++
++static void
++measurement_cb (SSCSensorCompass *sensor, gfloat azimuth, gpointer user_data)
++{
++	SensorDevice *sensor_device = user_data;
++	CompassReadings readings;
++
++	readings.heading = azimuth;
++
++	sensor_device->callback_func (sensor_device, (gpointer) &readings, sensor_device->user_data);
++}
++
++static SensorDevice *
++ssc_compass_open (GUdevDevice *device)
++{
++	SensorDevice *sensor_device;
++	DrvData *drv_data;
++	g_autoptr (GError) error = NULL;
++
++	sensor_device = g_new0 (SensorDevice, 1);
++	sensor_device->priv = g_new0 (DrvData, 1);
++	drv_data = (DrvData *) sensor_device->priv;
++
++	/* Create sensor */
++	drv_data->sensor = ssc_sensor_compass_new_sync (NULL, &error);
++	if (!drv_data->sensor) {
++		g_warning ("Creating SSC compass sensor failed: %s", error ? error->message : "UNKNOWN");
++		return NULL;
++	}
++	g_object_get (drv_data->sensor,
++                      SSC_SENSOR_NAME, &sensor_device->name,
++		      NULL);
++
++	/* Start listening for measurements */
++	drv_data->measurement_id = g_signal_connect (drv_data->sensor,
++			                             "measurement",
++						     G_CALLBACK (measurement_cb),
++						     sensor_device);
++
++	/* Enable sensor */
++	if (!ssc_sensor_compass_open_sync (drv_data->sensor, NULL, &error)) {
++		g_warning ("Opening SSC compass sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_object_unref (sensor_device);
++		return NULL;
++	}
++
++	return sensor_device;
++}
++
++static void
++ssc_compass_close (SensorDevice *sensor_device)
++{
++	g_autoptr (GError) error = NULL;
++	DrvData *drv_data = (DrvData *) sensor_device->priv;
++
++	/* Stop listening for measurements */
++	g_warn_if_fail (drv_data->measurement_id > 0);
++	g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++
++	/* Disable sensor */
++	if (!ssc_sensor_compass_close_sync (drv_data->sensor, NULL, &error))
++		g_warning ("Closing SSC compass sensor failed: %s", error ? error->message : "UNKNOWN");
++
++	g_clear_object (&drv_data->sensor);
++	g_clear_pointer (&sensor_device->priv, g_free);
++	g_free (sensor_device);
++}
++
++SensorDriver ssc_compass = {
++	.driver_name = "SSC compass sensor",
++	.type = DRIVER_TYPE_COMPASS,
++
++	.discover = ssc_compass_discover,
++	.open = ssc_compass_open,
++	.close = ssc_compass_close,
++};
+diff --git a/src/iio-sensor-proxy.c b/src/iio-sensor-proxy.c
+index 6c0e96f..17858da 100644
+--- a/src/iio-sensor-proxy.c
++++ b/src/iio-sensor-proxy.c
+@@ -79,6 +79,7 @@ static const SensorDriver * const drivers[] = {
+ 	&ssc_proximity,
+ 	&ssc_light,
+ 	&ssc_accel,
++	&ssc_compass,
+ #endif
+ };
+ 
+diff --git a/src/meson.build b/src/meson.build
+index d59cfdd..1e753cc 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -50,6 +50,7 @@ if get_option('ssc-support')
+     'drv-ssc-proximity.c',
+     'drv-ssc-light.c',
+     'drv-ssc-accel.c',
++    'drv-ssc-compass.c',
+   ]
+ endif
+ 
+-- 
+2.45.1

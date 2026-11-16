@@ -1,0 +1,128 @@
+# Clean migration baseline for the OnePlus 7T Pro mainline port.
+
+pkgname=linux-oneplus-hotdog-mainline617-clean
+pkgver=6.17.0
+pkgrel=10
+pkgdesc="Clean SM8150 6.17 migration kernel for OnePlus 7T Pro"
+maintainer="Robin Snyders <robin@snyders.xyz>"
+arch="aarch64"
+_carch="arm64"
+_flavor="oneplus-hotdog-mainline617-clean"
+url="https://gitlab.com/sm8150-mainline/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	dtc
+	findutils
+	flex
+	kmod
+	lld
+	llvm
+	openssl-dev
+	perl
+	python3
+	zstd
+"
+
+_commit="379d8fe35c7ca685a650bd82fd023af0ea3f0de0"
+export SOURCE_DATE_EPOCH=1761609785
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_commit.tar.gz::$url/-/archive/$_commit/linux-$_commit.tar.gz
+	$_config
+	0001-arm64-add-bounded-hotdog-direct-boot-contract.patch
+	0002-arm64-dts-qcom-add-hotdog-boot-foundation.patch
+	0003-Input-s6sy761-restore-hotdog-reset-and-resume.patch
+	0004-drm-restore-hotdog-DSC-panel-pipeline.patch
+	0005-ufs-qcom-retain-SM8150-32-bit-DMA-aperture.patch
+	0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
+	0007-dt-bindings-document-hotdog-display-and-touch.patch
+	0008-arm64-qcom-restore-hotdog-platform-controls.patch
+	0009-arm64-dts-preserve-hotdog-overlay-symbols.patch
+	0010-arm64-dts-enable-the-hotdog-haptics-bus.patch
+	0011-arm64-dts-normalize-hotdog-common-regulators.patch
+	0012-arm64-qcom-restore-hotdog-radio-and-audio-stack.patch
+	0013-media-qcom-add-SM8150-CAMSS-foundation.patch
+	0014-media-add-hotdog-rear-camera-stack.patch
+	0015-media-restore-hotdog-popup-camera-mechanism.patch
+	0016-soc-qcom-restore-hotdog-SLPI-infrastructure.patch
+	0017-sound-qcom-restore-hotdog-Elliptic-proximity-path.patch
+	0018-usb-dwc3-avoid-duplicate-request-giveback.patch
+	validate-mainline617-clean-build.sh
+"
+builddir="$srcdir/linux-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/$_config" .config
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 olddefconfig
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
+		SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
+		KBUILD_BUILD_TIMESTAMP="2025-10-28 00:03:05 UTC" \
+		KBUILD_BUILD_USER="postmarketOS" \
+		KBUILD_BUILD_HOST="pmaports" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
+		Image modules qcom/sm8150-oneplus-hotdog.dtb
+
+	sh "$srcdir/validate-mainline617-clean-build.sh" \
+		arch/$_carch/boot/Image .config \
+		arch/$_carch/boot/dts/qcom/sm8150-oneplus-hotdog.dtb
+}
+
+package() {
+	mkdir -p "$pkgdir/boot/dtbs/qcom"
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+	install -Dm644 \
+		"$builddir/arch/$_carch/boot/dts/qcom/sm8150-oneplus-hotdog.dtb" \
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb"
+
+	make modules_install \
+		ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
+		INSTALL_MOD_PATH="$pkgdir" INSTALL_MOD_STRIP=1
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir/include/config/kernel.release" \
+		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+
+	sh "$srcdir/validate-mainline617-clean-build.sh" \
+		"$pkgdir/boot/vmlinuz" "$builddir/.config" \
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" \
+		"$pkgdir/lib/modules/$(cat "$builddir/include/config/kernel.release")"
+}
+
+sha512sums="
+dba1bfc3e29ad9fd87c325818b3c265c6f2d2e0c95509e96e31d50b453412308753e99d855fadf291e6446cb2548a98cf19cd54de68870af44fbee577daf8f53  linux-oneplus-hotdog-mainline617-clean-379d8fe35c7ca685a650bd82fd023af0ea3f0de0.tar.gz
+ffc5921aa9e567b7e4eb133e1746efe670c0c95047f773a408f31bdef919fa0d670c41cdd583b465c477bdda22e0dda6bbb845a44fc3ef8fc1eca2d058da0858  config-oneplus-hotdog-mainline617-clean.aarch64
+14116d02cf7ea6e42189fa071a68c3df8c8f5ec59cadc767bd7b1f51d34778ea4d68735013f0cb7d72cafcd8c54fd0c9c32881575d7f0ece818a3c5caba94a5c  0001-arm64-add-bounded-hotdog-direct-boot-contract.patch
+183fdca41c8a50dec43ec7f9bb217d8d9d0d668904229fa8db4469ed65b244694b8e1efba558d6b36dd59d064defde560ff6b10fcb9217f2ccc220df260bd4d0  0002-arm64-dts-qcom-add-hotdog-boot-foundation.patch
+3afe00649d0980e3ce568a7c7f17e76aca67910f6bfb16d07b9c9cc4fab3e0677e25e1ed72a4d266aba163b5a61588fcf1527e2d9e5a35ef118d49402bc7fec3  0003-Input-s6sy761-restore-hotdog-reset-and-resume.patch
+659c844b8f2126fd0334d867b2e209cc25e23753c007920d6f7809d4423df2509817871abc725f539025d66bc54a5dfefc6e65863b5ac67556f7933335c7cbd7  0004-drm-restore-hotdog-DSC-panel-pipeline.patch
+51e8a18ee7a79cef9cf299862f310a0c4063bfe27645b3bb64c8b152640e367a53e52f48ff55ffcfdc181190135a6fa51c2e98aac2e9f1c9f41ad2d5970cacb1  0005-ufs-qcom-retain-SM8150-32-bit-DMA-aperture.patch
+544389f7b37fe4f84975db93089b3131662c0e67a1119602b7046c4ccaa7f66bd21002cbf1436fe006dbe9f16eab70316a58dbe9dd4d9a5d160036171cc322ee  0006-input-touchscreen-fts_touch-fix-compilation-with-LLV.patch
+e836c6c6806863493535fbf17ad896f5453d94b77d8983f3ef0143523b1ad0988fd39af7b6251ebaf855b980bf67c9f9a7b4c9391daab1d0a165b413b30e759e  0007-dt-bindings-document-hotdog-display-and-touch.patch
+aff8173f59ed517ff1b0a7563c1771f166cd04a0ac1cc68f7c6a891cf224d05b21dfd0cecdf97324fe6f1db749fe0c6b98d1c22bb546444700aeca2a1c8358ae  0008-arm64-qcom-restore-hotdog-platform-controls.patch
+96a6ea8ee9906be75a8009a7254cb12459ac643c297fc6c956bd87f979320affd4feb00d2c4e543a0966a01ef0fe5b6007abc3b98152dfb0e9534a823a4f056b  0009-arm64-dts-preserve-hotdog-overlay-symbols.patch
+b67eb5432b8ac73e7fcf1487b672e8ef606428614e7220a73dd9966e8c9fce5584995ec1d9e569c6e8d67cab51f221911e453a5c5c138d2850c41cec75a65e1a  0010-arm64-dts-enable-the-hotdog-haptics-bus.patch
+0e5a89da860f877ba42955f9181cc1ecd8435bcac770fe98215993e2d694ff5f8c1c99cc72c44adc8f8f57b496abb7f0bb0adfd49895c815515fdc3b21390b0d  0011-arm64-dts-normalize-hotdog-common-regulators.patch
+6c21374d9e6a2aa87143cbb00557bca4c8d6d8179f8b32b04c5166309a75b10a5158392b0aedb5ee242acf12efb30ca53374b3281778d3787ebe54bbafbefced  0012-arm64-qcom-restore-hotdog-radio-and-audio-stack.patch
+1f81c448011ad98151224340ebea00d2d7e5ac4b3e7b57b264124fd36434688f36d5ea220c67e6e51bd2f9dd2b51963e5a11b1502c67f215a32b5d951253531c  0013-media-qcom-add-SM8150-CAMSS-foundation.patch
+8cbe09b42e5b39da74472998676aafd20aef9c34c8190e79216d0a00942f330d4504904330687c8f78d84ae56a92fde52238859ec8acef0a7215853651706481  0014-media-add-hotdog-rear-camera-stack.patch
+4703ccf53cbb10ce5fe78aa1e42d2761c8790d68281d79f069c691eadd5add795d66b4d7227634775050d612a991f1d2810318b933e328d5ab0f639eecb64319  0015-media-restore-hotdog-popup-camera-mechanism.patch
+a5fc0ef2d2688967dfa3c4261806413e6b0cef6e326271994c49ae7c9fac1558938d77c8fd235ba18c7bf9bbc99b540488df217a818b1c8886d7f3d4c487a3f5  0016-soc-qcom-restore-hotdog-SLPI-infrastructure.patch
+39ab078b50d32c7d80e2c0cce38649795d7f6b133fb326466c161991adfb5b65bbf94f1e8f4407a7312aac38ad41602f477de34c3f8b5d667960aab40f30a07d  0017-sound-qcom-restore-hotdog-Elliptic-proximity-path.patch
+d3d5746c1d1455f31228d3f38a1c78770dd57c3eb8e82344aef3c094b84f27141cea22c44926f41d206ccfb2651c958d59f81166a8aaea10f286c02fe21297af  0018-usb-dwc3-avoid-duplicate-request-giveback.patch
+4c4b40f106800184213d19ffa177cca43c1258b0ea640b9e2105cb671cf34ade1e42485c8bb6f2787922d97f27a4efa5d8a41715c896532f9586c3614a322413  validate-mainline617-clean-build.sh
+"

@@ -1,0 +1,86 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Mon, 24 Aug 2026 21:20:00 +0200
+Subject: [PATCH] qmi: use the SIM slot for PIN operations
+
+QMI SIM objects retain their physical slot number, but all UIM PIN
+operations target card slot 1 unconditionally.  A PIN-protected SIM in slot
+2 therefore fails verification with QMI protocol error 3 (Internal), while
+the retry counter correctly remains unchanged.
+
+Select the card session from the SIM object's slot number for verify,
+unblock, change and protection operations.  Keep slot 1 as the fallback for
+legacy single-SIM objects, whose slot number is zero.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ src/mm-sim-qmi.c | 27 +++++++++++++++++++++++----
+ 1 file changed, 23 insertions(+), 4 deletions(-)
+
+diff --git a/src/mm-sim-qmi.c b/src/mm-sim-qmi.c
+index f06f480..321a52e 100644
+--- a/src/mm-sim-qmi.c
++++ b/src/mm-sim-qmi.c
+@@ -88,6 +88,25 @@ ensure_qmi_client (GTask       *task,
+     return TRUE;
+ }
+ 
++static QmiUimSessionType
++get_uim_card_session_type (MMSimQmi *self)
++{
++    switch (mm_base_sim_get_slot_number (MM_BASE_SIM (self))) {
++    case 2:
++        return QMI_UIM_SESSION_TYPE_CARD_SLOT_2;
++    case 3:
++        return QMI_UIM_SESSION_TYPE_CARD_SLOT_3;
++    case 4:
++        return QMI_UIM_SESSION_TYPE_CARD_SLOT_4;
++    case 5:
++        return QMI_UIM_SESSION_TYPE_CARD_SLOT_5;
++    case 0: /* Legacy single-SIM objects have no explicit slot number. */
++    case 1:
++    default:
++        return QMI_UIM_SESSION_TYPE_CARD_SLOT_1;
++    }
++}
++
+ /*****************************************************************************/
+ /* Wait for SIM ready */
+ 
+@@ -1187,7 +1206,7 @@ uim_verify_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_verify_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        get_uim_card_session_type (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1349,7 +1368,7 @@ uim_unblock_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_unblock_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        get_uim_card_session_type (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1519,7 +1538,7 @@ uim_change_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_change_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        get_uim_card_session_type (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1688,7 +1707,7 @@ uim_enable_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_set_pin_protection_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        get_uim_card_session_type (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+-- 
+2.51.0

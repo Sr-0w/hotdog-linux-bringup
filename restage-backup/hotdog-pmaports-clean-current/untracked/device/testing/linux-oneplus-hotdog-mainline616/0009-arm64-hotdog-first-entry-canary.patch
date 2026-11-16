@@ -1,0 +1,61 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -97,6 +97,33 @@
+ 	.endm
+ 
+ /*
++ * First-instruction canary for the direct-boot path. ABL is required to enter
++ * with the MMU and D-cache disabled. In that state, stop the inherited APSS
++ * watchdog, paint one webcam-visible block, and remain at the entry point.
++ * If the boot contract is not met, hold without touching physical MMIO.
++ */
++	.macro	hotdog_entry_canary
++	mov	x11, #0x9c000000
++	movz	x12, #0x21, lsl #16
++	add	x12, x12, #0xc, lsl #12	// row 384 at a 5760-byte stride
++	add	x11, x11, x12
++	add	x11, x11, #0x340		// column 208
++	movz	w12, #0xffff
++	movk	w12, #0x00ff, lsl #16	// a8r8g8b8 white
++	mov	x13, #512
++.Lhotdog_entry_row\@:
++	mov	x14, #1024
++.Lhotdog_entry_pixel\@:
++	str	w12, [x11], #4
++	subs	x14, x14, #1
++	b.ne	.Lhotdog_entry_pixel\@
++	add	x11, x11, #0x680		// stride - 1024 * 4
++	subs	x13, x13, #1
++	b.ne	.Lhotdog_entry_row\@
++	dsb	sy
++	.endm
++
++/*
+  * Kernel startup entry point.
+  * ---------------------------
+  *
+@@ -142,6 +169,23 @@
+ 	 *  x21        primary_entry() .. start_kernel()        FDT pointer passed at boot in x0
+ 	 */
+ SYM_CODE_START(primary_entry)
++	/* V9: prove or disprove execution of the first kernel entry point. */
++	mrs	x11, CurrentEL
++	cmp	x11, #CurrentEL_EL2
++	mrs	x12, sctlr_el1
++	b.ne	.Lhotdog_v9_state_ready
++	mrs	x12, sctlr_el2
++.Lhotdog_v9_state_ready:
++	tbnz	x12, #0, .Lhotdog_v9_hold	// SCTLR_ELx.M
++	tbnz	x12, #2, .Lhotdog_v9_hold	// SCTLR_ELx.C
++	movz	x9, #0x17c1, lsl #16		// APSS WDT: 0x17c10000
++	str	wzr, [x9, #0x08]		// WDT0_EN = 0
++	dsb	sy
++	hotdog_entry_canary
++.Lhotdog_v9_hold:
++	wfe
++	b	.Lhotdog_v9_hold
++
+ 	/* Record entry only when the bootloader honored the MMU/cache contract. */
+ 	mrs	x11, CurrentEL
+ 	cmp	x11, #CurrentEL_EL2

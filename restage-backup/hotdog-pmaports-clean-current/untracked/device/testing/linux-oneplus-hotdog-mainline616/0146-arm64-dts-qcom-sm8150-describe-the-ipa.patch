@@ -1,0 +1,112 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150: describe the IPA
+
+Describe the IPA and its modem SMP2P entries, and enable it on the handset.
+
+The register split follows the other supported generations rather than the
+downstream description: downstream states one ipa-base at 0x1e00000 with
+gsi-base inside it, while mainline wants ipa-reg, ipa-shared and gsi as
+separate ranges.
+
+The interrupts and stream identifiers come from the stock tree. IPA and GSI
+sit on SPI 311 and 432, the same numbers sdm845 and sc7180 use, and the AP and
+uC contexts are stream 0x520 and 0x522.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 505ccbb..90587d7 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -773,6 +773,19 @@
+ 	reg = <0x0 0x98100000 0x0 0x1400000>;
+ };
+ 
++&ipa {
++	status = "okay";
++
++	/*
++	 * The stock modem expects the AP to load the IPA firmware, the way
++	 * OxygenOS does, and never raises the setup-ready handshake on its
++	 * own. Load it here.
++	 */
++	qcom,gsi-loader = "self";
++	memory-region = <&ipa_fw_mem>;
++	firmware-name = "qcom/sm8150/oneplus/hotdog/ipa_fws.mbn";
++};
++
+ &ipa_fw_mem {
+ 	reg = <0x0 0x99500000 0x0 0x10000>;
+ };
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+index fbcc088..cb30559 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi
+@@ -873,6 +873,18 @@
+ 			interrupt-controller;
+ 			#interrupt-cells = <2>;
+ 		};
++
++		ipa_smp2p_out: ipa-ap-to-modem {
++			qcom,entry-name = "ipa";
++			#qcom,smem-state-cells = <1>;
++		};
++
++		ipa_smp2p_in: ipa-modem-to-ap {
++			qcom,entry-name = "ipa";
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++		};
+ 	};
+ 
+ 	smp2p-slpi {
+@@ -2078,6 +2090,47 @@
+ 			status = "disabled";
+ 		};
+ 
++		ipa: ipa@1e40000 {
++			compatible = "qcom,sm8150-ipa";
++
++			iommus = <&apps_smmu 0x520 0x0>,
++				 <&apps_smmu 0x522 0x0>;
++			reg = <0 0x01e40000 0 0x7000>,
++			      <0 0x01e47000 0 0x4000>,
++			      <0 0x01e04000 0 0x2c000>;
++			reg-names = "ipa-reg",
++				    "ipa-shared",
++				    "gsi";
++
++			interrupts-extended = <&intc GIC_SPI 311 IRQ_TYPE_EDGE_RISING>,
++					      <&intc GIC_SPI 432 IRQ_TYPE_LEVEL_HIGH>,
++					      <&ipa_smp2p_in 0 IRQ_TYPE_EDGE_RISING>,
++					      <&ipa_smp2p_in 1 IRQ_TYPE_EDGE_RISING>;
++			interrupt-names = "ipa",
++					  "gsi",
++					  "ipa-clock-query",
++					  "ipa-setup-ready";
++
++			clocks = <&rpmhcc RPMH_IPA_CLK>;
++			clock-names = "core";
++
++			interconnects = <&aggre2_noc MASTER_IPA 0 &mc_virt SLAVE_EBI_CH0 0>,
++					<&aggre2_noc MASTER_IPA 0 &system_noc SLAVE_OCIMEM 0>,
++					<&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_IPA_CFG 0>;
++			interconnect-names = "memory",
++					     "imem",
++					     "config";
++
++			qcom,qmp = <&aoss_qmp>;
++
++			qcom,smem-states = <&ipa_smp2p_out 0>,
++					   <&ipa_smp2p_out 1>;
++			qcom,smem-state-names = "ipa-clock-enabled-valid",
++						"ipa-clock-enabled";
++
++			status = "disabled";
++		};
++
+ 		ufs_mem_hc: ufshc@1d84000 {
+ 			compatible = "qcom,sm8150-ufshc", "qcom,ufshc",
+ 				     "jedec,ufs-2.0";

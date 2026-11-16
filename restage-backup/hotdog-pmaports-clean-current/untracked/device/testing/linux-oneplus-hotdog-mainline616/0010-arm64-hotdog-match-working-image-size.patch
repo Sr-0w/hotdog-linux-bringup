@@ -1,0 +1,11 @@
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -147,6 +147,6 @@
+ #endif
+ 	.quad	0x00080000			// Image load offset from start of RAM, little-endian
+-	le64sym	_kernel_size_le			// Effective size of kernel image, little-endian
++	.quad	0x01c00000			// V10: match the accepted 6.17 Image size field
+ 	le64sym	_kernel_flags_le		// Informative flags, little-endian
+ 	.quad	0				// reserved
+ 	.quad	0				// reserved

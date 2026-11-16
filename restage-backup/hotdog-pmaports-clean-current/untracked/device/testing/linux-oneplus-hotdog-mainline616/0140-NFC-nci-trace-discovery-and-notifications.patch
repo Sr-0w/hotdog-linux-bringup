@@ -1,0 +1,38 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] NFC: nci: trace discovery and notifications
+
+Temporary instrumentation to see whether RF discovery is accepted by the
+controller and whether any notification comes back.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/net/nfc/nci/core.c b/net/nfc/nci/core.c
+index fc921cd..5a10a48 100644
+--- a/net/nfc/nci/core.c
++++ b/net/nfc/nci/core.c
+@@ -862,6 +862,9 @@ static int nci_start_poll(struct nfc_dev *nfc_dev,
+ 	rc = nci_request(ndev, nci_rf_discover_req, &param,
+ 			 msecs_to_jiffies(NCI_RF_DISC_TIMEOUT));
+ 
++	pr_info("NCI discover: im=0x%x tm=0x%x rc=%d\n",
++		param.im_protocols, param.tm_protocols, rc);
++
+ 	if (!rc)
+ 		ndev->poll_prots = im_protocols;
+ 
+diff --git a/net/nfc/nci/ntf.c b/net/nfc/nci/ntf.c
+index a818eff..55b4492 100644
+--- a/net/nfc/nci/ntf.c
++++ b/net/nfc/nci/ntf.c
+@@ -789,6 +789,10 @@ void nci_ntf_packet(struct nci_dev *ndev, struct sk_buff *skb)
+ {
+ 	__u16 ntf_opcode = nci_opcode(skb->data);
+ 
++	pr_info("NCI ntf: GID=0x%x OID=0x%x plen=%d\n",
++		nci_opcode_gid(ntf_opcode), nci_opcode_oid(ntf_opcode),
++		nci_plen(skb->data));
++
+ 	pr_debug("NCI RX: MT=ntf, PBF=%d, GID=0x%x, OID=0x%x, plen=%d\n",
+ 		 nci_pbf(skb->data),
+ 		 nci_opcode_gid(ntf_opcode),

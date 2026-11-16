@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+
+description="Monitor per-subscription Hotdog IMSA state"
+command="/usr/libexec/hotdog-imsd"
+command_background=true
+pidfile="/run/hotdog-imsd.pid"
+
+depend() {
+	need rmtfs
+	use hotdog-radio-supervisor
+	after pd-mapper hotdog-radio-supervisor
+	before modemmanager
+}
+
+start_pre() {
+	checkpath --directory --mode 0755 /run/hotdog-radio
+	if [ ! -r /run/hotdog-radio/readiness ]; then
+		eerror "Verified radio readiness is absent"
+		return 1
+	fi
+	command_args="--node=${HOTDOG_QRTR_NODE:-0}"
+}
+
+stop_post() {
+	rm -f /run/hotdog-radio/ims-state
+}

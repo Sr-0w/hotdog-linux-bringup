@@ -1,0 +1,46 @@
+From cd0d6b7d9be8f256cef9acd502447619e751034c Mon Sep 17 00:00:00 2001
+From: Dylan Van Assche <me@dylanvanassche.be>
+Date: Fri, 24 May 2024 21:00:25 +0200
+Subject: [PATCH 7/8] CI: add libssc build
+
+libssc support is behind a meson build flag which is disabled by default,
+add a separate build to CI.
+---
+ .gitlab-ci.yml | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 8e691b6..5efeb7c 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -45,6 +45,28 @@ build_stable:
+       - "${CI_PROJECT_DIR}/_build/meson-dist"
+       - "${CI_PROJECT_DIR}/_build/docs/html/"
+ 
++build_libssc:
++  before_script:
++    # Undo delangification present in the Fedora Docker images
++    - rm -f /etc/rpm/macros.image-language-conf
++    - if [ -x /bin/dnf ]; then dnf update -y; else dnf5 update -y; fi
++    - if [ -x /bin/dnf ]; then dnf install -y $DEPENDENCIES; else dnf5 install -y $DEPENDENCIES; fi
++    - if [ -x /bin/dnf ]; then dnf install -y libqmi-devel protobuf-c-devel; else dnf5 install -y libqmi-devel protobuf-c-devel; fi
++    - if [ -x /bin/dnf ]; then dnf reinstall -y glib2; else dnf5 reinstall -y glib2; fi
++    - git clone "https://codeberg.org/DylanVanAssche/libssc.git"
++    - cd libssc
++    - mkdir _build
++    - meson _build
++    - meson compile -C _build
++    - meson install --no-rebuild -C _build
++    - cd ..
++  script:
++    - meson -Dssc-support=true _build
++    - ninja -v -C _build
++    - ninja -v -C _build install
++    - ninja -v -C _build uninstall
++    - ninja -v -C _build dist
++
+ pages:
+   needs:
+     - build_stable
+-- 
+2.45.1

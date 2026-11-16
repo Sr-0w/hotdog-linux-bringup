@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Alert slider feedback profile
+Comment=Apply the OnePlus alert slider to feedbackd
+Exec=/usr/libexec/fbd-alert-slider
+OnlyShowIn=KDE;
+X-KDE-autostart-after=panel
+X-GNOME-Autostart-enabled=true
+NoDisplay=true

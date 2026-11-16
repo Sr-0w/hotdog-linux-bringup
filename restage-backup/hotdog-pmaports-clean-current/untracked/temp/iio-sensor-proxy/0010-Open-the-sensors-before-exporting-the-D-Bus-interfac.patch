@@ -1,0 +1,113 @@
+From d0dcdd26d76df03400af3698d708fa185d14ff7e Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Tue, 25 Aug 2026 17:18:49 +0200
+Subject: [PATCH] Open the sensors before exporting the D-Bus interface
+
+A client that calls ClaimAccelerometer or ClaimProximity the instant the
+bus name appears is answered against state that does not exist yet.
+bus_acquired_handler registers both objects, making every method
+callable, while discovery and driver_open only run afterwards in
+name_acquired_handler. A claim landing in that window hits a NULL
+per-type client array and a NULL device:
+
+  g_ptr_array_add: assertion 'rarray' failed
+  driver_set_polling: assertion 'sensor_device' failed
+
+The claim is accepted, dropped and never retried, so the sensor stays
+silent for the lifetime of the process while HasAccelerometer or
+HasProximity still read true. Restarting the daemon does not help: the
+same client wins the same race again.
+
+The window is small but reliably lost on slow sensor stacks. On a
+Qualcomm SM8150 phone, where each SSC sensor costs a QMI round trip over
+QRTR, the proximity device is found and the claim arrives 15 ms later,
+before any device has been opened.
+
+Move discovery and opening into bus_acquired_handler, ahead of
+g_dbus_connection_register_object, so no method is callable until the
+devices behind it exist. The initial property notifications move with
+them, after the objects are registered. name_acquired_handler had
+nothing left to do and is dropped.
+---
+ src/iio-sensor-proxy.c | 30 ++++++++++++++++++++----------
+ 1 file changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/src/iio-sensor-proxy.c b/src/iio-sensor-proxy.c
+index 17858da..c0ed0a7 100644
+--- a/src/iio-sensor-proxy.c
++++ b/src/iio-sensor-proxy.c
+@@ -665,6 +665,8 @@ name_lost_handler (GDBusConnection *connection,
+ 	exit (0);
+ }
+ 
++static gboolean setup_sensors (SensorData *data);
++
+ static void
+ bus_acquired_handler (GDBusConnection *connection,
+ 		      const gchar     *name,
+@@ -672,6 +674,17 @@ bus_acquired_handler (GDBusConnection *connection,
+ {
+ 	SensorData *data = user_data;
+ 
++	data->connection = g_object_ref (connection);
++
++	/* Open every sensor before the interface is exported. A client that
++	 * calls ClaimAccelerometer or ClaimProximity the moment the name
++	 * appears would otherwise be answered against a device that does not
++	 * exist yet: the per-type client array is still NULL, so the claim is
++	 * accepted, dropped, and never retried. The sensor then stays silent
++	 * for the lifetime of the process. */
++	if (!setup_sensors (data))
++		return;
++
+ 	g_dbus_connection_register_object (connection,
+ 					   SENSOR_PROXY_DBUS_PATH,
+ 					   data->introspection_data->interfaces[0],
+@@ -688,15 +701,13 @@ bus_acquired_handler (GDBusConnection *connection,
+ 					   NULL,
+ 					   NULL);
+ 
+-	data->connection = g_object_ref (connection);
++	send_dbus_event (data, PROP_ALL);
++	send_dbus_event (data, PROP_ALL_COMPASS);
+ }
+ 
+-static void
+-name_acquired_handler (GDBusConnection *connection,
+-		       const gchar     *name,
+-		       gpointer         user_data)
++static gboolean
++setup_sensors (SensorData *data)
+ {
+-	SensorData *data = user_data;
+ 	const gchar * const subsystems[] = {
+         "iio",
+         "input",
+@@ -737,14 +748,13 @@ name_acquired_handler (GDBusConnection *connection,
+ 	if (!any_sensors_left (data))
+ 		goto bail;
+ 
+-	send_dbus_event (data, PROP_ALL);
+-	send_dbus_event (data, PROP_ALL_COMPASS);
+-	return;
++	return TRUE;
+ 
+ bail:
+ 	data->ret = 0;
+ 	g_debug ("No sensors or missing kernel drivers for the sensors");
+ 	g_main_loop_quit (data->loop);
++	return FALSE;
+ }
+ 
+ static gboolean
+@@ -769,7 +779,7 @@ setup_dbus (SensorData *data,
+ 					SENSOR_PROXY_DBUS_NAME,
+ 					flags,
+ 					bus_acquired_handler,
+-					name_acquired_handler,
++					NULL,
+ 					name_lost_handler,
+ 					data,
+ 					NULL);
+-- 
+2.54.0

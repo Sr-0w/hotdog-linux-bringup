@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -eu
+
+log() {
+	logger -t hotdog-usb-acm "$*" 2>/dev/null || true
+}
+
+while :; do
+	waited=0
+	while [ ! -c /dev/ttyGS0 ] && [ "$waited" -lt 30 ]; do
+		sleep 1
+		waited=$((waited + 1))
+	done
+	if [ -c /dev/ttyGS0 ]; then
+		log "starting root console on ttyGS0"
+		/sbin/getty -n -l /usr/libexec/hotdog-usb-acm-login \
+			ttyGS0 115200 vt100 || true
+	fi
+	sleep 2
+done

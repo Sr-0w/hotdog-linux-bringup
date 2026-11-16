@@ -1,0 +1,26 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+
+name="Hotdog A/B boot success"
+description="Mark the current Android A/B slot successful after storage is ready"
+
+depend() {
+	need localmount
+	after udev-settle
+}
+
+start() {
+	attempt=0
+
+	ebegin "Marking the current A/B slot successful"
+	while [ "$attempt" -lt 30 ]; do
+		if /usr/bin/qbootctl -m; then
+			eend 0
+			return 0
+		fi
+		attempt=$((attempt + 1))
+		sleep 1
+	done
+	eend 1
+	return 1
+}

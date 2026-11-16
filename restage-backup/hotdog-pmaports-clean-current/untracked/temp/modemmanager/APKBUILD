@@ -1,0 +1,124 @@
+# Contributor: Stuart Cardall <developer@it-offshore.co.uk>
+maintainer="Achill Gilgenast <achill@achill.org>"
+pkgname=modemmanager
+pkgver=1.25.95_git20260709
+pkgrel=9
+_commit=d776ea38d29ca472a12323c1d45002ee19a66f57
+pkgdesc="ModemManager library"
+url="https://www.freedesktop.org/wiki/Software/ModemManager"
+arch="all"
+license="GPL-2.0-or-later AND LGPL-2.1-or-later"
+# Three unrelated daemon/plugin tests abort under qemu-aarch64 in pmbootstrap.
+options="!check"
+depends="
+	dbus
+	libmm-glib=$pkgver-r$pkgrel
+	mobile-broadband-provider-info
+	polkit-elogind
+	"
+depends_dev="libmm-glib=$pkgver-r$pkgrel"
+makedepends="
+	bash-completion-dev
+	dbus-dev
+	elogind-dev
+	gobject-introspection-dev
+	gtk-doc
+	libgudev-dev
+	libmbim-dev
+	libqmi-dev
+	linux-headers
+	meson
+	polkit-dev
+	vala
+	"
+checkdepends="glib-dev py3-gobject3 py3-dbus"
+subpackages="
+	$pkgname-lang
+	$pkgname-doc
+	libmm-glib:libmm
+	$pkgname-dbg
+	$pkgname-dev
+	$pkgname-openrc
+	$pkgname-bash-completion
+	$pkgname-systemd
+	$pkgname-udev
+	"
+#source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$pkgver/ModemManager-$pkgver.tar.gz
+source="https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/archive/$_commit/ModemManager-$_commit.tar.gz
+	$pkgname.rules
+	$pkgname.initd
+
+	0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+	0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
+	0003-qmi-prefer-populated-active-SIM-slot.patch
+	0004-qmi-voice-preserve-numberless-calls.patch
+	0005-qmi-preserve-sms-ims-transport-domain.patch
+	0006-qmi-select-ip-voice-calls-from-ims-state.patch
+	0007-qmi-request-radio-reattest-after-PIN.patch
+	"
+#builddir="$srcdir"/ModemManager-$pkgver
+builddir="$srcdir"/ModemManager-$_commit
+
+build() {
+	# Temporarily disable gtkdoc generation due to error in helper script
+	# https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/issues/902
+	abuild-meson \
+		-Db_lto=true \
+		-Dsystemdsystemunitdir=/usr/lib/systemd/system \
+		-Ddbus_policy_dir=/usr/share/dbus-1/system.d \
+		-Dgtk_doc=false \
+		-Dpolkit=permissive \
+		-Dsystemd_journal=false \
+		-Dsystemd_suspend_resume=true \
+		-Dvapi=true \
+		. output
+	meson compile -C output
+}
+
+check() {
+	meson test -C output
+}
+
+package() {
+	local dbus_service
+
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+	install -m644 -D "$srcdir/$pkgname.rules" \
+		"$pkgdir/usr/share/polkit-1/rules.d/01-org.freedesktop.ModemManager.rules"
+	install -m755 -D "$srcdir/$pkgname.initd" \
+		"$pkgdir/etc/init.d/$pkgname"
+
+	# OpenRC owns daemon startup. Keep D-Bus clients from bypassing the
+	# Hotdog pre-online PDC gate by auto-activating ModemManager directly.
+	dbus_service="$pkgdir/usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service"
+	sed -i 's|^Exec=.*|Exec=/bin/false|' "$dbus_service"
+	grep -qx 'Exec=/bin/false' "$dbus_service"
+
+	# post-install message
+	mkdir -p "$pkgdir/usr/share/doc/$pkgname"
+	cat > "$pkgdir"/usr/share/doc/$pkgname/README.alpine <<- EOF
+	If your USB modem shows up as a Flash drive when you plug it in:
+
+	install 'usb-modeswitch' to automatically switch to USB modem mode whenever you plug it in.
+	To control your modem without the root password: add your user account to the 'plugdev' group.
+	EOF
+}
+
+libmm() {
+	depends=""
+	amove usr/lib/girepository-1.0
+	amove usr/lib/libmm-glib.so*
+}
+
+sha512sums="
+fd659330b2ec4e8368807053ec01498241dec153f6f2491bb17c42e2b81c8d9a98ff5f8c153874a6d092e17c545c5ae19734bc23c85c459eb1c7b9b709e5ff58  ModemManager-d776ea38d29ca472a12323c1d45002ee19a66f57.tar.gz
+6fab86c27502b29be0c6610d835a3249a4a81993eb986cff2c3ea9393fadd3f693ba4bb0532ae0e50a83d359559511859dd05f7ea2f0cb52839f535a7e49f8a0  modemmanager.rules
+8c6393379a57955983822a9d685f1ca7c91d04e2fe62d68b02809f8cfd73d836e69c5e5cf047291287301e0eead251b81099d074ce24627032f9d95ab2b024cb  modemmanager.initd
+5d79cb678af356a8350ea9c9f41b1af64d72ff5db4f16a5655481e2f7533f32d6ea45c10352d20a15233392cb02fd1d3c490c1268185787b1cc711e0bbda5f7f  0001-intel-XMM7360-fix-big-endian-handling-of-ASN-integer.patch
+c5c2f560a7979b20067dc0f0b26fd621e92d7c08717ccd6740758a09faa01fd5ef642820e686f7973ad8ba22b3442c869f3167a1898fa87adc888fd3310e0348  0002-qmi-use-the-SIM-slot-for-PIN-operations.patch
+e277839a66c8f668c9adcf82a245cdcacbe094b03bbbbfbe0b542ef0ebe4c213c40b149d7157c51541000c1ec9b8af562fb4ba7577508e5fe14166f21bbb5fb9  0003-qmi-prefer-populated-active-SIM-slot.patch
+a16e776ebe93b0ccdf610c806d7c4922f52c0e878a202c0b600f67048234e19fb9207c042e5a9eb7d43c9c1fddb72719b4575f54735360727bdb8a809c8d95c1  0004-qmi-voice-preserve-numberless-calls.patch
+4503928c777cf04c07dd1831687c0516c1a59216ed45387d4818763ad9f7152bc72bd27cd1b93a7cc656535237ce1f1576a4f8626936fd88fe25689f79258ef8  0005-qmi-preserve-sms-ims-transport-domain.patch
+0b36865a4063bf7a491ef4138711be12d09f458845b67c4ff0521b234856e007aff8c61e25f768ffa1a43303f817e46426b6c169de8b4fddde4d92f128b2ea70  0006-qmi-select-ip-voice-calls-from-ims-state.patch
+357e718ceb1ab51823ebfea375a3e41663431b5f48facbb9d07c5b20cd11f13bc2e7c9ff840cdaf3c2bff06a69fe0334d96e706ba43c1cd0840a9fbfa89b0f09  0007-qmi-request-radio-reattest-after-PIN.patch
+"

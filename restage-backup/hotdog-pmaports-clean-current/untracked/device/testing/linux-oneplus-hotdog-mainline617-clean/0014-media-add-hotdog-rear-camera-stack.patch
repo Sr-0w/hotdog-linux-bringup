@@ -1,0 +1,6661 @@
+From 33fcdc7b0ff2505e86ea108df4543f71b0c1d8ed Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 01:45:14 +0200
+Subject: [PATCH 14/17] media: add hotdog rear camera stack
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../media/i2c/asahi-kasei,ak7375.yaml         |    7 +-
+ .../bindings/media/i2c/onnn,lc898217xc.yaml   |   68 +
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   |  306 ++++
+ drivers/media/i2c/Kconfig                     |   62 +-
+ drivers/media/i2c/Makefile                    |    5 +
+ drivers/media/i2c/ak7375.c                    |   57 +-
+ drivers/media/i2c/imx471.c                    | 1299 +++++++++++++++
+ drivers/media/i2c/imx481.c                    | 1464 +++++++++++++++++
+ drivers/media/i2c/imx586.c                    | 1455 ++++++++++++++++
+ drivers/media/i2c/lc898217xc.c                |  335 ++++
+ drivers/media/i2c/s5k3m5.c                    | 1381 ++++++++++++++++
+ 11 files changed, 6429 insertions(+), 10 deletions(-)
+ create mode 100644 Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
+ create mode 100644 drivers/media/i2c/imx471.c
+ create mode 100644 drivers/media/i2c/imx481.c
+ create mode 100644 drivers/media/i2c/imx586.c
+ create mode 100644 drivers/media/i2c/lc898217xc.c
+ create mode 100644 drivers/media/i2c/s5k3m5.c
+
+diff --git a/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml b/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
+index fe312cc6a873..97afa3088b1d 100644
+--- a/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/asahi-kasei,ak7375.yaml
+@@ -4,19 +4,20 @@
+ $id: http://devicetree.org/schemas/media/i2c/asahi-kasei,ak7375.yaml#
+ $schema: http://devicetree.org/meta-schemas/core.yaml#
+ 
+-title: Asahi Kasei Microdevices AK7375 voice coil lens actuator
++title: Asahi Kasei Microdevices AK73xx voice coil lens actuators
+ 
+ maintainers:
+   - Tianshu Qiu <tian.shu.qiu@intel.com>
+ 
+ description:
+-  AK7375 is a voice coil motor (VCM) camera lens actuator that
+-  is controlled over I2C.
++  AK7345, AK7374 and AK7375 are voice coil motor (VCM) camera lens
++  actuators that are controlled over I2C.
+ 
+ properties:
+   compatible:
+     enum:
+       - asahi-kasei,ak7345
++      - asahi-kasei,ak7374
+       - asahi-kasei,ak7375
+ 
+   reg:
+diff --git a/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml b/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
+new file mode 100644
+index 000000000000..1b38fcfe79bc
+--- /dev/null
++++ b/Documentation/devicetree/bindings/media/i2c/onnn,lc898217xc.yaml
+@@ -0,0 +1,68 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/media/i2c/onnn,lc898217xc.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: ON Semiconductor LC898217XC voice coil lens actuator
++
++maintainers:
++  - Robin Snyders <robin@snyders.xyz>
++
++description:
++  The LC898217XC is a 10-bit voice coil motor camera lens actuator
++  controlled over I2C.
++
++properties:
++  compatible:
++    const: onnn,lc898217xc
++
++  reg:
++    maxItems: 1
++
++  vdd-supply:
++    description: VCM power supply
++
++  vio-supply:
++    description: I/O pull-up supply
++
++  onnn,max-focus-position:
++    description:
++      Maximum calibrated focus position for the lens module. The actuator's
++      full 10-bit range is used when this property is absent.
++    minimum: 1
++    maximum: 1023
++    default: 1023
++
++  onnn,default-focus-position:
++    description: Focus position selected when the actuator is powered up.
++    minimum: 0
++    maximum: 1023
++    default: 50
++
++required:
++  - compatible
++  - reg
++  - vdd-supply
++  - vio-supply
++
++additionalProperties: false
++
++examples:
++  - |
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        lens@74 {
++            compatible = "onnn,lc898217xc";
++            reg = <0x74>;
++
++            vdd-supply = <&vreg_l23a_3p3>;
++            vio-supply = <&vreg_l1c_1p8>;
++            onnn,max-focus-position = <400>;
++            onnn,default-focus-position = <50>;
++        };
++    };
++
++...
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 1d87d9366b64..17d60c7698fd 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -13,6 +13,8 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/leds/common.h>
++#include <dt-bindings/media/video-interfaces.h>
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
+ #include <dt-bindings/sound/qcom,wcd934x.h>
+@@ -279,6 +281,16 @@ volume_down_state: volume-down-state {
+ 	};
+ };
+ 
++&pm8150l_gpios {
++	cam0_custom2_default: cam0-custom2-default-state {
++		pins = "gpio1";
++		function = "normal";
++		power-source = <0>;
++		output-low;
++		input-disable;
++	};
++};
++
+ &qupv3_id_0 {
+ 	/delete-property/ iommus;
+ 	status = "okay";
+@@ -327,6 +339,76 @@ fsa_usbc_ana_en: fsa-usbc-ana-en-state {
+ 		output-low;
+ 	};
+ 
++	cam0_vana_default: cam0-vana-default-state {
++		pins = "gpio11";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam0_custom1_default: cam0-custom1-default-state {
++		pins = "gpio29";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam0_reset_default: cam0-reset-default-state {
++		pins = "gpio30";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam0_vaf_default: cam0-vaf-default-state {
++		pins = "gpio25";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam1_vaf_default: cam1-vaf-default-state {
++		pins = "gpio35";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam1_vana_default: cam1-vana-default-state {
++		pins = "gpio148";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_mclk0_default: cam-mclk0-default-state {
++		pins = "gpio13";
++		function = "cam_mclk";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_mclk1_default: cam-mclk1-default-state {
++		pins = "gpio14";
++		function = "cam_mclk";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_mclk2_default: cam-mclk2-default-state {
++		pins = "gpio15";
++		function = "cam_mclk";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_mclk3_default: cam-mclk3-default-state {
++		pins = "gpio16";
++		function = "cam_mclk";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	quat_mi2s_active: quat-mi2s-active-state {
+ 		pins = "gpio137", "gpio138";
+ 		function = "qua_mi2s";
+@@ -853,3 +935,227 @@ &pm8150b_fg {
+ 	/delete-property/ power-supplies;
+ 	status = "disabled";
+ };
++
++/ {
++	vreg_cam0_vaf: regulator-cam0-vaf {
++		compatible = "regulator-fixed";
++		regulator-name = "cam0_vaf";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&tlmm 25 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&vreg_bob>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam0_vaf_default>;
++	};
++
++	vreg_cam1_vana: regulator-cam1-vana {
++		compatible = "regulator-fixed";
++		regulator-name = "cam1_vana";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&tlmm 148 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&vreg_bob>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam1_vana_default>;
++	};
++
++	vreg_cam1_vaf: regulator-cam1-vaf {
++		compatible = "regulator-fixed";
++		regulator-name = "cam1_vaf";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&tlmm 35 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&vreg_bob>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam1_vaf_default>;
++	};
++};
++
++&cci0 {
++	status = "okay";
++};
++
++&cci0_i2c0 {
++	s5k3m5_vcm: lens@74 {
++		compatible = "onnn,lc898217xc";
++		reg = <0x74>;
++		vdd-supply = <&vreg_cam1_vaf>;
++		vio-supply = <&vreg_l1c_1p8>;
++		onnn,max-focus-position = <400>;
++		onnn,default-focus-position = <50>;
++	};
++
++	camera@10 {
++		compatible = "samsung,s5k3m5";
++		reg = <0x10>;
++		orientation = <1>;
++		rotation = <90>;
++		clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		assigned-clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		assigned-clock-rates = <24000000>;
++		afvdd-supply = <&vreg_bob>;
++		vdda-supply = <&vreg_cam1_vana>;
++		vddd-supply = <&vreg_l2f_1p2>;
++		vddio-supply = <&vreg_l1c_1p8>;
++		reset-gpios = <&tlmm 28 GPIO_ACTIVE_LOW>;
++		lens-focus = <&s5k3m5_vcm>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk0_default>;
++
++		port {
++			s5k3m5_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				link-frequencies = /bits/ 64 <602500000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
++	};
++};
++
++&cci0_i2c1 {
++	clock-frequency = <400000>;
++
++	imx586_vcm: lens@72 {
++		compatible = "onnn,lc898217xc";
++		reg = <0x72>;
++		vdd-supply = <&vreg_cam0_vaf>;
++		vio-supply = <&vreg_l1c_1p8>;
++		onnn,max-focus-position = <400>;
++		onnn,default-focus-position = <400>;
++	};
++
++	camera@1a {
++		compatible = "sony,imx586";
++		reg = <0x1a>;
++		orientation = <1>;
++		rotation = <90>;
++		clocks = <&camcc CAM_CC_MCLK1_CLK>;
++		assigned-clocks = <&camcc CAM_CC_MCLK1_CLK>;
++		assigned-clock-rates = <19200000>;
++		vio-supply = <&vreg_l1c_1p8>;
++		vana-supply = <&vreg_bob>;
++		vdig-supply = <&vreg_l1f_1p1>;
++		reset-gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
++		vana-enable-gpios = <&tlmm 11 GPIO_ACTIVE_HIGH>;
++		custom1-gpios = <&tlmm 29 GPIO_ACTIVE_HIGH>;
++		custom2-gpios = <&pm8150l_gpios 1 GPIO_ACTIVE_HIGH>;
++		lens-focus = <&imx586_vcm>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk1_default>, <&cam0_vana_default>,
++			    <&cam0_custom1_default>, <&cam0_custom2_default>,
++			    <&cam0_reset_default>;
++
++		port {
++			imx586_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
++				data-lanes = <0 1 2>;
++				link-frequencies = /bits/ 64 <698395833>;
++				remote-endpoint = <&csiphy1_ep>;
++			};
++		};
++	};
++};
++
++&cci1 {
++	status = "okay";
++};
++
++&vreg_l1f_1p1 {
++	regulator-allow-set-load;
++	regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
++				   RPMH_REGULATOR_MODE_HPM>;
++};
++
++&vreg_l4f_1p05 {
++	regulator-allow-set-load;
++	regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
++				   RPMH_REGULATOR_MODE_HPM>;
++};
++
++&cci1_i2c1 {
++	camera@1a {
++		compatible = "sony,imx481";
++		reg = <0x1a>;
++		orientation = <1>;
++		rotation = <90>;
++		clocks = <&camcc CAM_CC_MCLK3_CLK>;
++		assigned-clocks = <&camcc CAM_CC_MCLK3_CLK>;
++		assigned-clock-rates = <19200000>;
++		vio-supply = <&vreg_l1c_1p8>;
++		vana-supply = <&vreg_bob>;
++		vdig-supply = <&vreg_l4f_1p05>;
++		reset-gpios = <&tlmm 23 GPIO_ACTIVE_LOW>;
++		vana-enable-gpios = <&pm8150l_gpios 2 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&cam_mclk3_default>;
++
++		port {
++			imx481_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				data-lanes = <0 1 2 3>;
++				link-frequencies = /bits/ 64 <654075000>;
++				remote-endpoint = <&csiphy3_ep>;
++			};
++		};
++	};
++};
++
++&camss {
++	status = "okay";
++
++	ports {
++		port@0 {
++			reg = <0>;
++
++			csiphy0_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&s5k3m5_ep>;
++			};
++		};
++
++		port@1 {
++			reg = <1>;
++
++			csiphy1_ep: endpoint {
++				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
++				data-lanes = <0 1 2>;
++				remote-endpoint = <&imx586_ep>;
++			};
++		};
++
++		port@3 {
++			reg = <3>;
++
++			csiphy3_ep: endpoint {
++				data-lanes = <0 1 2 3>;
++				remote-endpoint = <&imx481_ep>;
++			};
++		};
++	};
++};
++
++&pm8150l_flash {
++	status = "okay";
++
++	led-0 {
++		function = LED_FUNCTION_TORCH;
++		color = <LED_COLOR_ID_WHITE>;
++		led-sources = <1>;
++		led-max-microamp = <300000>;
++		flash-max-microamp = <1000000>;
++		flash-max-timeout-us = <1280000>;
++	};
++
++	led-1 {
++		function = LED_FUNCTION_FLASH;
++		color = <LED_COLOR_ID_WHITE>;
++		led-sources = <2>;
++		led-max-microamp = <300000>;
++		flash-max-microamp = <1000000>;
++		flash-max-timeout-us = <1280000>;
++		function-enumerator = <1>;
++	};
++};
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 6237fe804a5c..6d2e321b422b 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -256,6 +256,39 @@ config VIDEO_IMX412
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called imx412.
+ 
++config VIDEO_IMX586
++	tristate "Sony IMX586 sensor support"
++	depends on OF_GPIO
++	help
++	  This is a Video4Linux2 sensor driver for the Sony IMX586
++	  48 megapixel camera sensor. It supports raw Bayer capture,
++	  exposure and analogue gain controls over a MIPI C-PHY link.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called imx586.
++
++config VIDEO_IMX481
++	tristate "Sony IMX481 sensor support"
++	depends on OF_GPIO
++	help
++	  This is a Video4Linux2 sensor driver for the Sony IMX481
++	  16 megapixel camera sensor. It supports raw Bayer capture,
++	  exposure and analogue gain controls over a MIPI D-PHY link.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called imx481.
++
++config VIDEO_IMX471
++	tristate "Sony IMX471 sensor support"
++	depends on OF_GPIO
++	help
++	  This is a Video4Linux2 sensor driver for the Sony IMX471
++	  front camera sensor. It supports raw Bayer capture, exposure
++	  and analogue gain controls over a four-lane MIPI D-PHY link.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called imx471.
++
+ config VIDEO_IMX415
+ 	tristate "Sony IMX415 sensor support"
+ 	depends on OF_GPIO
+@@ -701,6 +734,16 @@ config VIDEO_S5C73M3
+ 	  This is a V4L2 sensor driver for Samsung S5C73M3
+ 	  8 Mpixel camera.
+ 
++config VIDEO_S5K3M5
++	tristate "Samsung S5K3M5 sensor support"
++	select V4L2_CCI_I2C
++	help
++	  This is a V4L2 sensor driver for Samsung S5K3M5 13MP raw
++	  camera sensor.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called s5k3m5.
++
+ config VIDEO_S5K5BAF
+ 	tristate "Samsung S5K5BAF sensor support"
+ 	help
+@@ -784,12 +827,11 @@ config VIDEO_AD5820
+ 	  It is used for example in Nokia N900 (RX-51).
+ 
+ config VIDEO_AK7375
+-	tristate "AK7375 lens voice coil support"
++	tristate "AK73xx lens voice coil support"
+ 	help
+-	  This is a driver for the AK7375 camera lens voice coil.
+-	  AK7375 is a 12 bit DAC with 120mA output current sink
+-	  capability. This is designed for linear control of
+-	  voice coil motors, controlled via I2C serial interface.
++	  This is a driver for the AK7345, AK7374 and AK7375 camera lens
++	  voice coils. These devices are designed for linear control of
++	  voice coil motors over an I2C serial interface.
+ 
+ config VIDEO_DW9714
+ 	tristate "DW9714 lens voice coil support"
+@@ -824,6 +866,16 @@ config VIDEO_DW9807_VCM
+ 	  capability. This is designed for linear control of
+ 	  voice coil motors, controlled via I2C serial interface.
+ 
++config VIDEO_LC898217XC
++	tristate "LC898217XC lens voice coil support"
++	depends on I2C && VIDEO_DEV
++	select MEDIA_CONTROLLER
++	select VIDEO_V4L2_SUBDEV_API
++	select V4L2_ASYNC
++	help
++	  This is a driver for the ON Semiconductor LC898217XC 10-bit
++	  camera lens voice coil actuator controlled over I2C.
++
+ endif
+ 
+ menu "Flash devices"
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index 5873d29433ee..61c417fcb5b7 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -58,10 +58,14 @@ obj-$(CONFIG_VIDEO_IMX334) += imx334.o
+ obj-$(CONFIG_VIDEO_IMX335) += imx335.o
+ obj-$(CONFIG_VIDEO_IMX355) += imx355.o
+ obj-$(CONFIG_VIDEO_IMX412) += imx412.o
++obj-$(CONFIG_VIDEO_IMX471) += imx471.o
++obj-$(CONFIG_VIDEO_IMX481) += imx481.o
++obj-$(CONFIG_VIDEO_IMX586) += imx586.o
+ obj-$(CONFIG_VIDEO_IMX415) += imx415.o
+ obj-$(CONFIG_VIDEO_IR_I2C) += ir-kbd-i2c.o
+ obj-$(CONFIG_VIDEO_ISL7998X) += isl7998x.o
+ obj-$(CONFIG_VIDEO_KS0127) += ks0127.o
++obj-$(CONFIG_VIDEO_LC898217XC) += lc898217xc.o
+ obj-$(CONFIG_VIDEO_LM3560) += lm3560.o
+ obj-$(CONFIG_VIDEO_LM3646) += lm3646.o
+ obj-$(CONFIG_VIDEO_LT6911UXE) += lt6911uxe.o
+@@ -121,6 +125,7 @@ obj-$(CONFIG_VIDEO_RDACM20) += rdacm20.o
+ obj-$(CONFIG_VIDEO_RDACM21) += rdacm21.o
+ obj-$(CONFIG_VIDEO_RJ54N1) += rj54n1cb0c.o
+ obj-$(CONFIG_VIDEO_S5C73M3) += s5c73m3/
++obj-$(CONFIG_VIDEO_S5K3M5) += s5k3m5.o
+ obj-$(CONFIG_VIDEO_S5K5BAF) += s5k5baf.o
+ obj-$(CONFIG_VIDEO_S5K6A3) += s5k6a3.o
+ obj-$(CONFIG_VIDEO_SAA6588) += saa6588.o
+diff --git a/drivers/media/i2c/ak7375.c b/drivers/media/i2c/ak7375.c
+index 9a2432cea3ff..52371de8528c 100644
+--- a/drivers/media/i2c/ak7375.c
++++ b/drivers/media/i2c/ak7375.c
+@@ -10,6 +10,11 @@
+ #include <media/v4l2-ctrls.h>
+ #include <media/v4l2-device.h>
+ 
++struct ak73xx_reg8 {
++	u8 addr;
++	u8 value;
++};
++
+ struct ak73xx_chipdef {
+ 	u8 reg_position;
+ 	u8 reg_cont;
+@@ -36,6 +41,14 @@ struct ak73xx_chipdef {
+ 	 * I2C messages.
+ 	 */
+ 	u16 power_delay_us;
++	const struct ak73xx_reg8 *startup_regs;
++	u8 num_startup_regs;
++	u16 startup_reg_delay_us;
++};
++
++static const struct ak73xx_reg8 ak7374_startup_regs[] = {
++	{ 0x00, 0x3c },
++	{ 0x01, 0x00 },
+ };
+ 
+ static const struct ak73xx_chipdef ak7345_cdef = {
+@@ -51,6 +64,23 @@ static const struct ak73xx_chipdef ak7345_cdef = {
+ 	.power_delay_us	= 20000,
+ };
+ 
++static const struct ak73xx_chipdef ak7374_cdef = {
++	.reg_position	= 0x0,
++	.reg_cont	= 0x2,
++	.shift_pos	= 6,	/* 10 bits position values, need to << 6 */
++	.mode_active	= 0x0,
++	.mode_standby	= 0x20,
++	.has_standby	= true,
++	.focus_pos_max	= 1023,
++	.focus_steps	= 1,
++	.ctrl_steps	= 16,
++	.ctrl_delay_us	= 1000,
++	.power_delay_us	= 10000,
++	.startup_regs	= ak7374_startup_regs,
++	.num_startup_regs = ARRAY_SIZE(ak7374_startup_regs),
++	.startup_reg_delay_us = 100,
++};
++
+ static const struct ak73xx_chipdef ak7375_cdef = {
+ 	.reg_position	= 0x0,
+ 	.reg_cont	= 0x2,
+@@ -292,7 +322,7 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+ 	struct ak7375_device *ak7375_dev = sd_to_ak7375_vcm(sd);
+ 	const struct ak73xx_chipdef *cdef = ak7375_dev->cdef;
+-	int ret, val;
++	int ret, val, i;
+ 
+ 	if (ak7375_dev->active)
+ 		return 0;
+@@ -305,12 +335,29 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 	/* Wait for vcm to become ready */
+ 	usleep_range(cdef->power_delay_us, cdef->power_delay_us + 500);
+ 
++	for (i = 0; i < cdef->num_startup_regs; i++) {
++		ret = ak7375_i2c_write(ak7375_dev,
++				       cdef->startup_regs[i].addr,
++				       cdef->startup_regs[i].value, 1);
++		if (ret) {
++			dev_err(dev, "%s startup register 0x%02x I2C failure: %d\n",
++				__func__, cdef->startup_regs[i].addr, ret);
++			goto err_disable;
++		}
++
++		usleep_range(cdef->startup_reg_delay_us,
++			     cdef->startup_reg_delay_us + 50);
++	}
++
+ 	ret = ak7375_i2c_write(ak7375_dev, cdef->reg_cont,
+ 			       cdef->mode_active, 1);
+ 	if (ret) {
+ 		dev_err(dev, "%s I2C failure: %d\n", __func__, ret);
+-		return ret;
++		goto err_disable;
+ 	}
++	if (cdef->num_startup_regs)
++		usleep_range(cdef->startup_reg_delay_us,
++			     cdef->startup_reg_delay_us + 50);
+ 
+ 	for (val = ak7375_dev->focus->val % cdef->ctrl_steps;
+ 	     val <= ak7375_dev->focus->val;
+@@ -326,10 +373,16 @@ static int __maybe_unused ak7375_vcm_resume(struct device *dev)
+ 	ak7375_dev->active = true;
+ 
+ 	return 0;
++
++err_disable:
++	regulator_bulk_disable(ARRAY_SIZE(ak7375_supply_names),
++			       ak7375_dev->supplies);
++	return ret;
+ }
+ 
+ static const struct of_device_id ak7375_of_table[] = {
+ 	{ .compatible = "asahi-kasei,ak7345", .data = &ak7345_cdef, },
++	{ .compatible = "asahi-kasei,ak7374", .data = &ak7374_cdef, },
+ 	{ .compatible = "asahi-kasei,ak7375", .data = &ak7375_cdef, },
+ 	{ /* sentinel */ }
+ };
+diff --git a/drivers/media/i2c/imx471.c b/drivers/media/i2c/imx471.c
+new file mode 100644
+index 000000000000..c36cc2930cb5
+--- /dev/null
++++ b/drivers/media/i2c/imx471.c
+@@ -0,0 +1,1299 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Sony IMX471 camera sensor driver
++ *
++ * Copyright (C) 2021 Intel Corporation
++ * Copyright (C) 2026 OnePlus 7T Pro Linux contributors
++ */
++#include <linux/unaligned.h>
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-fwnode.h>
++#include <media/v4l2-subdev.h>
++
++/* Streaming Mode */
++#define IMX471_REG_MODE_SELECT	0x0100
++#define IMX471_MODE_STANDBY	0x00
++#define IMX471_MODE_STREAMING	0x01
++
++/* Lines per frame */
++#define IMX471_REG_LPFR		0x0340
++
++/* Chip ID */
++#define IMX471_REG_ID		0x0016
++#define IMX471_ID		0x0471
++
++/* Exposure control */
++#define IMX471_REG_EXPOSURE_CIT	0x0202
++#define IMX471_EXPOSURE_MIN	1
++#define IMX471_EXPOSURE_OFFSET	10
++#define IMX471_EXPOSURE_STEP	1
++#define IMX471_EXPOSURE_DEFAULT	0x06fa
++
++/* Analog gain control */
++#define IMX471_REG_AGAIN	0x0204
++#define IMX471_AGAIN_MIN	0
++#define IMX471_AGAIN_MAX	960
++#define IMX471_AGAIN_STEP	1
++#define IMX471_AGAIN_DEFAULT	0
++
++/* Group hold register */
++#define IMX471_REG_HOLD		0x0104
++
++/* Input clock rate */
++#define IMX471_INCLK_RATE	19200000
++
++#define IMX471_VANA_MIN_UV	3300000
++#define IMX471_VANA_MAX_UV	3320000
++#define IMX471_VDIG_LOAD_UA	1050000
++
++/* CSI2 HW configuration */
++#define IMX471_LINK_FREQ	525262500
++#define IMX471_NUM_DATA_LANES	4
++
++#define IMX471_REG_MIN		0x00
++#define IMX471_REG_MAX		0xffff
++
++/**
++ * struct imx471_reg - imx471 sensor register
++ * @address: Register address
++ * @val: Register value
++ */
++struct imx471_reg {
++	u16 address;
++	u8 val;
++};
++
++/**
++ * struct imx471_reg_list - imx471 sensor register list
++ * @num_of_regs: Number of registers in the list
++ * @regs: Pointer to register list
++ */
++struct imx471_reg_list {
++	u32 num_of_regs;
++	const struct imx471_reg *regs;
++};
++
++/**
++ * struct imx471_mode - imx471 sensor mode structure
++ * @width: Frame width
++ * @height: Frame height
++ * @code: Format code
++ * @hblank: Horizontal blanking in lines
++ * @vblank: Vertical blanking in lines
++ * @vblank_min: Minimum vertical blanking in lines
++ * @vblank_max: Maximum vertical blanking in lines
++ * @pclk: Sensor pixel clock
++ * @link_freq_idx: Link frequency index
++ * @reg_list: Register list for sensor mode
++ */
++struct imx471_mode {
++	u32 width;
++	u32 height;
++	u32 code;
++	u32 hblank;
++	u32 vblank;
++	u32 vblank_min;
++	u32 vblank_max;
++	u64 pclk;
++	u32 link_freq_idx;
++	struct imx471_reg_list reg_list;
++};
++
++/**
++ * struct imx471 - imx471 sensor device structure
++ * @dev: Pointer to generic device
++ * @client: Pointer to i2c client
++ * @sd: V4L2 sub-device
++ * @pad: Media pad. Only one pad supported
++ * @reset_gpio: Sensor reset gpio
++ * @vana_enable_gpio: Board analogue-rail gate gpio
++ * @inclk: Sensor input clock
++ * @vana: Analogue regulator
++ * @vdig: Digital regulator
++ * @vio: I/O regulator
++ * @ctrl_handler: V4L2 control handler
++ * @link_freq_ctrl: Pointer to link frequency control
++ * @pclk_ctrl: Pointer to pixel clock control
++ * @hblank_ctrl: Pointer to horizontal blanking control
++ * @vblank_ctrl: Pointer to vertical blanking control
++ * @exp_ctrl: Pointer to exposure control
++ * @again_ctrl: Pointer to analog gain control
++ * @vblank: Vertical blanking in lines
++ * @cur_mode: Pointer to current selected sensor mode
++ * @mutex: Mutex for serializing sensor controls
++ */
++struct imx471 {
++	struct device *dev;
++	struct i2c_client *client;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct gpio_desc *reset_gpio;
++	struct gpio_desc *vana_enable_gpio;
++	struct clk *inclk;
++	struct regulator *vana;
++	struct regulator *vdig;
++	struct regulator *vio;
++	struct v4l2_ctrl_handler ctrl_handler;
++	struct v4l2_ctrl *link_freq_ctrl;
++	struct v4l2_ctrl *pclk_ctrl;
++	struct v4l2_ctrl *hblank_ctrl;
++	struct v4l2_ctrl *vblank_ctrl;
++	struct {
++		struct v4l2_ctrl *exp_ctrl;
++		struct v4l2_ctrl *again_ctrl;
++	};
++	u32 vblank;
++	const struct imx471_mode *cur_mode;
++	/* Serializes controls and streaming state. */
++	struct mutex mutex;
++};
++
++static const s64 link_freq[] = {
++	IMX471_LINK_FREQ,
++};
++
++/* Sensor mode registers */
++static const struct imx471_reg imx471_init_regs[] = {
++	{ 0x0136, 0x13 },
++	{ 0x0137, 0x33 },
++	{ 0x3c7e, 0x01 },
++	{ 0x3c7f, 0x05 },
++	{ 0x3e35, 0x00 },
++	{ 0x3e36, 0x00 },
++	{ 0x3e37, 0x00 },
++	{ 0x3f7f, 0x01 },
++	{ 0x4431, 0x04 },
++	{ 0x531c, 0x01 },
++	{ 0x531d, 0x02 },
++	{ 0x531e, 0x04 },
++	{ 0x5928, 0x00 },
++	{ 0x5929, 0x2f },
++	{ 0x592a, 0x00 },
++	{ 0x592b, 0x85 },
++	{ 0x592c, 0x00 },
++	{ 0x592d, 0x32 },
++	{ 0x592e, 0x00 },
++	{ 0x592f, 0x88 },
++	{ 0x5930, 0x00 },
++	{ 0x5931, 0x3d },
++	{ 0x5932, 0x00 },
++	{ 0x5933, 0x93 },
++	{ 0x5938, 0x00 },
++	{ 0x5939, 0x24 },
++	{ 0x593a, 0x00 },
++	{ 0x593b, 0x7a },
++	{ 0x593c, 0x00 },
++	{ 0x593d, 0x24 },
++	{ 0x593e, 0x00 },
++	{ 0x593f, 0x7a },
++	{ 0x5940, 0x00 },
++	{ 0x5941, 0x2f },
++	{ 0x5942, 0x00 },
++	{ 0x5943, 0x85 },
++	{ 0x5f0e, 0x6e },
++	{ 0x5f11, 0xc6 },
++	{ 0x5f17, 0x5e },
++	{ 0x7990, 0x01 },
++	{ 0x7993, 0x5d },
++	{ 0x7994, 0x5d },
++	{ 0x7995, 0xa1 },
++	{ 0x799a, 0x01 },
++	{ 0x799d, 0x00 },
++	{ 0x8169, 0x01 },
++	{ 0x8359, 0x01 },
++	{ 0x9302, 0x1e },
++	{ 0x9306, 0x1f },
++	{ 0x930a, 0x26 },
++	{ 0x930e, 0x23 },
++	{ 0x9312, 0x23 },
++	{ 0x9316, 0x2c },
++	{ 0x9317, 0x19 },
++	{ 0xb046, 0x01 },
++	{ 0xb048, 0x01 },
++	{ 0xaa06, 0x3f },
++	{ 0xaa07, 0x05 },
++	{ 0xaa08, 0x04 },
++	{ 0xaa12, 0x3f },
++	{ 0xaa13, 0x04 },
++	{ 0xaa14, 0x03 },
++	{ 0xab55, 0x02 },
++	{ 0xab57, 0x01 },
++	{ 0xab59, 0x01 },
++	{ 0xabb4, 0x00 },
++	{ 0xabb5, 0x01 },
++	{ 0xabb6, 0x00 },
++	{ 0xabb7, 0x01 },
++	{ 0xabb8, 0x00 },
++	{ 0xabb9, 0x01 },
++};
++
++static const struct imx471_reg mode_1748x1748_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x03 },
++	{ 0x0342, 0x0a },
++	{ 0x0343, 0x00 },
++	{ 0x0340, 0x07 },
++	{ 0x0341, 0xe2 },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x00 },
++	{ 0x0347, 0x00 },
++	{ 0x0348, 0x12 },
++	{ 0x0349, 0x2f },
++	{ 0x034a, 0x0d },
++	{ 0x034b, 0xa7 },
++	{ 0x0381, 0x01 },
++	{ 0x0383, 0x01 },
++	{ 0x0385, 0x01 },
++	{ 0x0387, 0x01 },
++	{ 0x0900, 0x01 },
++	{ 0x0901, 0x22 },
++	{ 0x0902, 0x08 },
++	{ 0x3f4c, 0x81 },
++	{ 0x3f4d, 0x81 },
++	{ 0x0408, 0x01 },
++	{ 0x0409, 0x22 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x00 },
++	{ 0x040c, 0x06 },
++	{ 0x040d, 0xd4 },
++	{ 0x040e, 0x06 },
++	{ 0x040f, 0xd4 },
++	{ 0x034c, 0x06 },
++	{ 0x034d, 0xd4 },
++	{ 0x034e, 0x06 },
++	{ 0x034f, 0xd4 },
++	{ 0x0301, 0x06 },
++	{ 0x0303, 0x02 },
++	{ 0x0305, 0x03 },
++	{ 0x0306, 0x00 },
++	{ 0x0307, 0xda },
++	{ 0x030b, 0x01 },
++	{ 0x030d, 0x04 },
++	{ 0x030e, 0x01 },
++	{ 0x030f, 0x7f },
++	{ 0x0310, 0x01 },
++	{ 0x3f78, 0x01 },
++	{ 0x3f79, 0x31 },
++	{ 0x3ffe, 0x00 },
++	{ 0x3fff, 0x8a },
++	{ 0x5f0a, 0xb6 },
++	{ 0x0202, 0x06 },
++	{ 0x0203, 0xfa },
++	{ 0x0204, 0x00 },
++	{ 0x0205, 0x00 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++};
++
++/* Supported sensor mode configurations */
++static const struct imx471_mode supported_mode = {
++	.width = 1748,
++	.height = 1748,
++	.hblank = 812,
++	.vblank = 270,
++	.vblank_min = 270,
++	.vblank_max = 63787,
++	.pclk = 420210000,
++	.link_freq_idx = 0,
++	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
++	.reg_list = {
++		.num_of_regs = ARRAY_SIZE(mode_1748x1748_regs),
++		.regs = mode_1748x1748_regs,
++	},
++};
++
++/**
++ * to_imx471() - imx471 V4L2 sub-device to imx471 device.
++ * @subdev: pointer to imx471 V4L2 sub-device
++ *
++ * Return: pointer to imx471 device
++ */
++static inline struct imx471 *to_imx471(struct v4l2_subdev *subdev)
++{
++	return container_of(subdev, struct imx471, sd);
++}
++
++/**
++ * imx471_read_reg() - Read registers.
++ * @imx471: pointer to imx471 device
++ * @reg: register address
++ * @len: length of bytes to read. Max supported bytes is 4
++ * @val: pointer to register value to be filled.
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_read_reg(struct imx471 *imx471, u16 reg, u32 len, u32 *val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx471->sd);
++	struct i2c_msg msgs[2] = {0};
++	u8 addr_buf[2] = {0};
++	u8 data_buf[4] = {0};
++	int ret;
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, addr_buf);
++
++	/* Write register address */
++	msgs[0].addr = client->addr;
++	msgs[0].flags = 0;
++	msgs[0].len = ARRAY_SIZE(addr_buf);
++	msgs[0].buf = addr_buf;
++
++	/* Read data from register */
++	msgs[1].addr = client->addr;
++	msgs[1].flags = I2C_M_RD;
++	msgs[1].len = len;
++	msgs[1].buf = &data_buf[4 - len];
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	*val = get_unaligned_be32(data_buf);
++
++	return 0;
++}
++
++/**
++ * imx471_write_reg() - Write register
++ * @imx471: pointer to imx471 device
++ * @reg: register address
++ * @len: length of bytes. Max supported bytes is 4
++ * @val: register value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_write_reg(struct imx471 *imx471, u16 reg, u32 len, u32 val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx471->sd);
++	u8 buf[6] = {0};
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, buf);
++	put_unaligned_be32(val << (8 * (4 - len)), buf + 2);
++	if (i2c_master_send(client, buf, len + 2) != len + 2)
++		return -EIO;
++
++	return 0;
++}
++
++/**
++ * imx471_write_regs() - Write a list of registers
++ * @imx471: pointer to imx471 device
++ * @regs: list of registers to be written
++ * @len: length of registers array
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_write_regs(struct imx471 *imx471,
++			     const struct imx471_reg *regs, u32 len)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < len; i++) {
++		ret = imx471_write_reg(imx471, regs[i].address, 1, regs[i].val);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
++/**
++ * imx471_update_controls() - Update control ranges based on streaming mode
++ * @imx471: pointer to imx471 device
++ * @mode: pointer to imx471_mode sensor mode
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_update_controls(struct imx471 *imx471,
++				  const struct imx471_mode *mode)
++{
++	int ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx471->link_freq_ctrl, mode->link_freq_idx);
++	if (ret)
++		return ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx471->hblank_ctrl, mode->hblank);
++	if (ret)
++		return ret;
++
++	return __v4l2_ctrl_modify_range(imx471->vblank_ctrl, mode->vblank_min,
++					mode->vblank_max, 1, mode->vblank);
++}
++
++/**
++ * imx471_update_exp_gain() - Set updated exposure and gain
++ * @imx471: pointer to imx471 device
++ * @exposure: updated exposure value
++ * @gain: updated analog gain value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_update_exp_gain(struct imx471 *imx471, u32 exposure, u32 gain)
++{
++	u32 lpfr;
++	int ret;
++
++	lpfr = imx471->vblank + imx471->cur_mode->height;
++
++	dev_dbg(imx471->dev, "Set exp %u, analog gain %u, lpfr %u\n",
++		exposure, gain, lpfr);
++
++	ret = imx471_write_reg(imx471, IMX471_REG_HOLD, 1, 1);
++	if (ret)
++		return ret;
++
++	ret = imx471_write_reg(imx471, IMX471_REG_LPFR, 2, lpfr);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx471_write_reg(imx471, IMX471_REG_EXPOSURE_CIT, 2, exposure);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx471_write_reg(imx471, IMX471_REG_AGAIN, 2, gain);
++
++error_release_group_hold:
++	imx471_write_reg(imx471, IMX471_REG_HOLD, 1, 0);
++
++	return ret;
++}
++
++/**
++ * imx471_set_ctrl() - Set subdevice control
++ * @ctrl: pointer to v4l2_ctrl structure
++ *
++ * Supported controls:
++ * - V4L2_CID_VBLANK
++ * - cluster controls:
++ *   - V4L2_CID_ANALOGUE_GAIN
++ *   - V4L2_CID_EXPOSURE
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct imx471 *imx471 =
++		container_of(ctrl->handler, struct imx471, ctrl_handler);
++	u32 analog_gain;
++	u32 exposure;
++	int ret;
++
++	switch (ctrl->id) {
++	case V4L2_CID_VBLANK:
++		imx471->vblank = imx471->vblank_ctrl->val;
++
++		dev_dbg(imx471->dev, "Received vblank %u, new lpfr %u\n",
++			imx471->vblank,
++			imx471->vblank + imx471->cur_mode->height);
++
++		ret = __v4l2_ctrl_modify_range(imx471->exp_ctrl,
++					       IMX471_EXPOSURE_MIN,
++					       imx471->vblank +
++					       imx471->cur_mode->height -
++					       IMX471_EXPOSURE_OFFSET,
++					       1, IMX471_EXPOSURE_DEFAULT);
++		break;
++	case V4L2_CID_EXPOSURE:
++		/* Set controls only if sensor is in power on state */
++		if (!pm_runtime_get_if_in_use(imx471->dev))
++			return 0;
++
++		exposure = ctrl->val;
++		analog_gain = imx471->again_ctrl->val;
++
++		dev_dbg(imx471->dev, "Received exp %u, analog gain %u\n",
++			exposure, analog_gain);
++
++		ret = imx471_update_exp_gain(imx471, exposure, analog_gain);
++
++		pm_runtime_put(imx471->dev);
++
++		break;
++	default:
++		dev_err(imx471->dev, "Invalid control %d\n", ctrl->id);
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++/* V4l2 subdevice control ops*/
++static const struct v4l2_ctrl_ops imx471_ctrl_ops = {
++	.s_ctrl = imx471_set_ctrl,
++};
++
++/**
++ * imx471_enum_mbus_code() - Enumerate V4L2 sub-device mbus codes
++ * @sd: pointer to imx471 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @code: V4L2 sub-device code enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_enum_mbus_code(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_mbus_code_enum *code)
++{
++	if (code->index > 0)
++		return -EINVAL;
++
++	code->code = supported_mode.code;
++
++	return 0;
++}
++
++/**
++ * imx471_enum_frame_size() - Enumerate V4L2 sub-device frame sizes
++ * @sd: pointer to imx471 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fsize: V4L2 sub-device size enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_enum_frame_size(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *sd_state,
++				  struct v4l2_subdev_frame_size_enum *fsize)
++{
++	if (fsize->index > 0)
++		return -EINVAL;
++
++	if (fsize->code != supported_mode.code)
++		return -EINVAL;
++
++	fsize->min_width = supported_mode.width;
++	fsize->max_width = fsize->min_width;
++	fsize->min_height = supported_mode.height;
++	fsize->max_height = fsize->min_height;
++
++	return 0;
++}
++
++/**
++ * imx471_fill_pad_format() - Fill subdevice pad format
++ *                            from selected sensor mode
++ * @imx471: pointer to imx471 device
++ * @mode: pointer to imx471_mode sensor mode
++ * @fmt: V4L2 sub-device format need to be filled
++ */
++static void imx471_fill_pad_format(struct imx471 *imx471,
++				   const struct imx471_mode *mode,
++				   struct v4l2_subdev_format *fmt)
++{
++	fmt->format.width = mode->width;
++	fmt->format.height = mode->height;
++	fmt->format.code = mode->code;
++	fmt->format.field = V4L2_FIELD_NONE;
++	fmt->format.colorspace = V4L2_COLORSPACE_RAW;
++	fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
++	fmt->format.quantization = V4L2_QUANTIZATION_DEFAULT;
++	fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
++}
++
++/**
++ * imx471_get_pad_format() - Get subdevice pad format
++ * @sd: pointer to imx471 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_get_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx471 *imx471 = to_imx471(sd);
++
++	mutex_lock(&imx471->mutex);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		fmt->format = *framefmt;
++	} else {
++		imx471_fill_pad_format(imx471, imx471->cur_mode, fmt);
++	}
++
++	mutex_unlock(&imx471->mutex);
++
++	return 0;
++}
++
++/**
++ * imx471_set_pad_format() - Set subdevice pad format
++ * @sd: pointer to imx471 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_set_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx471 *imx471 = to_imx471(sd);
++	const struct imx471_mode *mode;
++	int ret = 0;
++
++	mutex_lock(&imx471->mutex);
++
++	mode = &supported_mode;
++	imx471_fill_pad_format(imx471, mode, fmt);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		*framefmt = fmt->format;
++	} else {
++		ret = imx471_update_controls(imx471, mode);
++		if (!ret)
++			imx471->cur_mode = mode;
++	}
++
++	mutex_unlock(&imx471->mutex);
++
++	return ret;
++}
++
++static int imx471_get_selection(struct v4l2_subdev *sd,
++				struct v4l2_subdev_state *sd_state,
++				struct v4l2_subdev_selection *sel)
++{
++	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
++		return -EINVAL;
++
++	switch (sel->target) {
++	case V4L2_SEL_TGT_NATIVE_SIZE:
++	case V4L2_SEL_TGT_CROP_BOUNDS:
++	case V4L2_SEL_TGT_CROP_DEFAULT:
++	case V4L2_SEL_TGT_CROP:
++		sel->r = (struct v4l2_rect) { 0, 0, 4656, 3496 };
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++/**
++ * imx471_init_state() - Initialize sub-device state
++ * @sd: pointer to imx471 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *sd_state)
++{
++	struct imx471 *imx471 = to_imx471(sd);
++	struct v4l2_subdev_format fmt = { 0 };
++
++	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
++	imx471_fill_pad_format(imx471, &supported_mode, &fmt);
++
++	return imx471_set_pad_format(sd, sd_state, &fmt);
++}
++
++/**
++ * imx471_start_streaming() - Start sensor stream
++ * @imx471: pointer to imx471 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_start_streaming(struct imx471 *imx471)
++{
++	const struct imx471_reg_list *reg_list;
++	int ret;
++
++	ret = imx471_write_regs(imx471, imx471_init_regs,
++				ARRAY_SIZE(imx471_init_regs));
++	if (ret) {
++		dev_err(imx471->dev, "failed to write global registers\n");
++		return ret;
++	}
++
++	/* Write sensor mode registers */
++	reg_list = &imx471->cur_mode->reg_list;
++	ret = imx471_write_regs(imx471, reg_list->regs,
++				reg_list->num_of_regs);
++	if (ret) {
++		dev_err(imx471->dev, "failed to write mode registers\n");
++		return ret;
++	}
++
++	/* Setup handler will write actual exposure and gain */
++	ret =  __v4l2_ctrl_handler_setup(imx471->sd.ctrl_handler);
++	if (ret) {
++		dev_err(imx471->dev, "fail to setup handler\n");
++		return ret;
++	}
++
++	/* Start streaming */
++	ret = imx471_write_reg(imx471, IMX471_REG_MODE_SELECT,
++			       1, IMX471_MODE_STREAMING);
++	if (ret) {
++		dev_err(imx471->dev, "failed to start streaming\n");
++		return ret;
++	}
++
++	dev_info(imx471->dev, "streaming 4656x3496 RAW10 over four-lane D-PHY\n");
++
++	return 0;
++}
++
++/**
++ * imx471_stop_streaming() - Stop sensor stream
++ * @imx471: pointer to imx471 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_stop_streaming(struct imx471 *imx471)
++{
++	return imx471_write_reg(imx471, IMX471_REG_MODE_SELECT,
++				1, IMX471_MODE_STANDBY);
++}
++
++/**
++ * imx471_set_stream() - Enable sensor streaming
++ * @sd: pointer to imx471 subdevice
++ * @enable: set to enable sensor streaming
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_set_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct imx471 *imx471 = to_imx471(sd);
++	int ret;
++
++	mutex_lock(&imx471->mutex);
++
++	if (enable) {
++		ret = pm_runtime_resume_and_get(imx471->dev);
++		if (ret)
++			goto error_unlock;
++
++		ret = imx471_start_streaming(imx471);
++		if (ret)
++			goto error_power_off;
++	} else {
++		imx471_stop_streaming(imx471);
++		pm_runtime_put(imx471->dev);
++	}
++
++	mutex_unlock(&imx471->mutex);
++
++	return 0;
++
++error_power_off:
++	pm_runtime_put(imx471->dev);
++error_unlock:
++	mutex_unlock(&imx471->mutex);
++
++	return ret;
++}
++
++/**
++ * imx471_detect() - Detect imx471 sensor
++ * @imx471: pointer to imx471 device
++ *
++ * Return: 0 if successful, -EIO if sensor id does not match
++ */
++static int imx471_detect(struct imx471 *imx471)
++{
++	int ret;
++	u32 val;
++
++	ret = imx471_read_reg(imx471, IMX471_REG_ID, 2, &val);
++	if (ret)
++		return ret;
++
++	if (val != IMX471_ID) {
++		dev_err(imx471->dev, "chip id mismatch: %x!=%x\n",
++			IMX471_ID, val);
++		return -ENXIO;
++	}
++
++	return 0;
++}
++
++/**
++ * imx471_parse_hw_config() - Parse HW configuration and check if supported
++ * @imx471: pointer to imx471 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_parse_hw_config(struct imx471 *imx471)
++{
++	struct fwnode_handle *fwnode = dev_fwnode(imx471->dev);
++	struct v4l2_fwnode_endpoint bus_cfg = {
++		.bus_type = V4L2_MBUS_CSI2_DPHY
++	};
++	struct fwnode_handle *ep;
++	unsigned long rate;
++	unsigned int i;
++	int ret;
++
++	if (!fwnode)
++		return -ENXIO;
++
++	/* The GPIO values are logical; reset is active low in the DT. */
++	imx471->reset_gpio = devm_gpiod_get(imx471->dev, "reset",
++					    GPIOD_OUT_HIGH);
++	if (IS_ERR(imx471->reset_gpio)) {
++		dev_err(imx471->dev, "failed to get reset gpio %ld\n",
++			PTR_ERR(imx471->reset_gpio));
++		return PTR_ERR(imx471->reset_gpio);
++	}
++
++	imx471->vana_enable_gpio = devm_gpiod_get(imx471->dev, "vana-enable",
++						  GPIOD_OUT_LOW);
++	if (IS_ERR(imx471->vana_enable_gpio))
++		return dev_err_probe(imx471->dev,
++				     PTR_ERR(imx471->vana_enable_gpio),
++				     "failed to get VANA enable GPIO\n");
++
++	/* Get sensor input clock */
++	imx471->inclk = devm_clk_get(imx471->dev, NULL);
++	if (IS_ERR(imx471->inclk)) {
++		dev_err(imx471->dev, "could not get inclk\n");
++		return PTR_ERR(imx471->inclk);
++	}
++
++	ret = clk_set_rate(imx471->inclk, IMX471_INCLK_RATE);
++	if (ret)
++		return dev_err_probe(imx471->dev, ret,
++				     "could not set 19.2 MHz input clock\n");
++
++	rate = clk_get_rate(imx471->inclk);
++	if (rate != IMX471_INCLK_RATE) {
++		dev_err(imx471->dev, "inclk frequency mismatch\n");
++		return -EINVAL;
++	}
++
++	imx471->vana = devm_regulator_get(imx471->dev, "vana");
++	if (IS_ERR(imx471->vana))
++		return dev_err_probe(imx471->dev, PTR_ERR(imx471->vana),
++				     "failed to get VANA\n");
++
++	imx471->vdig = devm_regulator_get(imx471->dev, "vdig");
++	if (IS_ERR(imx471->vdig))
++		return dev_err_probe(imx471->dev, PTR_ERR(imx471->vdig),
++				     "failed to get VDIG\n");
++
++	imx471->vio = devm_regulator_get(imx471->dev, "vio");
++	if (IS_ERR(imx471->vio))
++		return dev_err_probe(imx471->dev, PTR_ERR(imx471->vio),
++				     "failed to get VIO\n");
++
++	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
++	if (!ep)
++		return -ENXIO;
++
++	ret = v4l2_fwnode_endpoint_alloc_parse(ep, &bus_cfg);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++
++	if (bus_cfg.bus_type != V4L2_MBUS_CSI2_DPHY) {
++		dev_err(imx471->dev, "endpoint must use D-PHY\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX471_NUM_DATA_LANES) {
++		dev_err(imx471->dev,
++			"number of CSI2 data lanes %d is not supported\n",
++			bus_cfg.bus.mipi_csi2.num_data_lanes);
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (!bus_cfg.nr_of_link_frequencies) {
++		dev_err(imx471->dev, "no link frequencies defined\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	for (i = 0; i < bus_cfg.nr_of_link_frequencies; i++)
++		if (bus_cfg.link_frequencies[i] == IMX471_LINK_FREQ)
++			goto done_endpoint_free;
++
++	ret = -EINVAL;
++
++done_endpoint_free:
++	v4l2_fwnode_endpoint_free(&bus_cfg);
++
++	return ret;
++}
++
++/* V4l2 subdevice ops */
++static const struct v4l2_subdev_video_ops imx471_video_ops = {
++	.s_stream = imx471_set_stream,
++};
++
++static const struct v4l2_subdev_pad_ops imx471_pad_ops = {
++	.enum_mbus_code = imx471_enum_mbus_code,
++	.enum_frame_size = imx471_enum_frame_size,
++	.get_fmt = imx471_get_pad_format,
++	.set_fmt = imx471_set_pad_format,
++	.get_selection = imx471_get_selection,
++};
++
++static const struct v4l2_subdev_ops imx471_subdev_ops = {
++	.video = &imx471_video_ops,
++	.pad = &imx471_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops imx471_internal_ops = {
++	.init_state = imx471_init_state,
++};
++
++/**
++ * imx471_power_on() - Sensor power on sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_power_on(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx471 *imx471 = to_imx471(sd);
++	int ret;
++
++	ret = regulator_set_voltage(imx471->vana, IMX471_VANA_MIN_UV,
++				    IMX471_VANA_MAX_UV);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to set VANA voltage\n");
++
++	ret = regulator_set_load(imx471->vdig, IMX471_VDIG_LOAD_UA);
++	if (ret)
++		goto error_vana_voltage;
++
++	ret = regulator_enable(imx471->vio);
++	if (ret)
++		goto error_vdig_load;
++
++	ret = regulator_enable(imx471->vana);
++	if (ret)
++		goto error_vio;
++
++	gpiod_set_value_cansleep(imx471->vana_enable_gpio, 1);
++	usleep_range(5000, 6000);
++
++	ret = regulator_enable(imx471->vdig);
++	if (ret)
++		goto error_vana;
++	usleep_range(5000, 6000);
++
++	gpiod_set_value_cansleep(imx471->reset_gpio, 0);
++	usleep_range(10000, 11000);
++
++	ret = clk_prepare_enable(imx471->inclk);
++	if (ret) {
++		dev_err(imx471->dev, "failed to enable input clock\n");
++		goto error_reset;
++	}
++	usleep_range(10000, 11000);
++
++	return 0;
++
++error_reset:
++	gpiod_set_value_cansleep(imx471->reset_gpio, 1);
++	regulator_disable(imx471->vdig);
++error_vana:
++	gpiod_set_value_cansleep(imx471->vana_enable_gpio, 0);
++	regulator_disable(imx471->vana);
++error_vio:
++	regulator_disable(imx471->vio);
++error_vdig_load:
++	regulator_set_load(imx471->vdig, 0);
++error_vana_voltage:
++	regulator_set_voltage(imx471->vana, 0, IMX471_VANA_MAX_UV);
++
++	return ret;
++}
++
++/**
++ * imx471_power_off() - Sensor power off sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_power_off(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx471 *imx471 = to_imx471(sd);
++
++	clk_disable_unprepare(imx471->inclk);
++	gpiod_set_value_cansleep(imx471->reset_gpio, 1);
++	regulator_disable(imx471->vdig);
++	gpiod_set_value_cansleep(imx471->vana_enable_gpio, 0);
++	regulator_disable(imx471->vana);
++	regulator_disable(imx471->vio);
++	regulator_set_load(imx471->vdig, 0);
++	regulator_set_voltage(imx471->vana, 0, IMX471_VANA_MAX_UV);
++
++	return 0;
++}
++
++/**
++ * imx471_init_controls() - Initialize sensor subdevice controls
++ * @imx471: pointer to imx471 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_init_controls(struct imx471 *imx471)
++{
++	struct v4l2_ctrl_handler *ctrl_hdlr = &imx471->ctrl_handler;
++	const struct imx471_mode *mode = imx471->cur_mode;
++	struct v4l2_fwnode_device_properties props;
++	u32 lpfr;
++	int ret;
++
++	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
++	if (ret)
++		return ret;
++
++	/* Serialize controls with sensor device */
++	ctrl_hdlr->lock = &imx471->mutex;
++
++	/* Initialize exposure and gain */
++	lpfr = mode->vblank + mode->height;
++	imx471->exp_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					     &imx471_ctrl_ops,
++					     V4L2_CID_EXPOSURE,
++					     IMX471_EXPOSURE_MIN,
++					     lpfr - IMX471_EXPOSURE_OFFSET,
++					     IMX471_EXPOSURE_STEP,
++					     IMX471_EXPOSURE_DEFAULT);
++
++	imx471->again_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					       &imx471_ctrl_ops,
++					       V4L2_CID_ANALOGUE_GAIN,
++					       IMX471_AGAIN_MIN,
++					       IMX471_AGAIN_MAX,
++					       IMX471_AGAIN_STEP,
++					       IMX471_AGAIN_DEFAULT);
++
++	v4l2_ctrl_cluster(2, &imx471->exp_ctrl);
++
++	imx471->vblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx471_ctrl_ops,
++						V4L2_CID_VBLANK,
++						mode->vblank_min,
++						mode->vblank_max,
++						1, mode->vblank);
++
++	/* Read only controls */
++	imx471->pclk_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					      &imx471_ctrl_ops,
++					      V4L2_CID_PIXEL_RATE,
++					      mode->pclk, mode->pclk,
++					      1, mode->pclk);
++
++	imx471->link_freq_ctrl = v4l2_ctrl_new_int_menu(ctrl_hdlr,
++							&imx471_ctrl_ops,
++							V4L2_CID_LINK_FREQ,
++							ARRAY_SIZE(link_freq) -
++							1,
++							mode->link_freq_idx,
++							link_freq);
++	if (imx471->link_freq_ctrl)
++		imx471->link_freq_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	imx471->hblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx471_ctrl_ops,
++						V4L2_CID_HBLANK,
++						IMX471_REG_MIN,
++						IMX471_REG_MAX,
++						1, mode->hblank);
++	if (imx471->hblank_ctrl)
++		imx471->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	ret = v4l2_fwnode_device_parse(imx471->dev, &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &imx471_ctrl_ops,
++					      &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	if (ctrl_hdlr->error) {
++		ret = ctrl_hdlr->error;
++		dev_err(imx471->dev, "control init failed: %d\n",
++			ret);
++		goto error_free_hdlr;
++	}
++
++	imx471->sd.ctrl_handler = ctrl_hdlr;
++
++	return 0;
++
++error_free_hdlr:
++	v4l2_ctrl_handler_free(ctrl_hdlr);
++
++	return ret;
++}
++
++/**
++ * imx471_probe() - I2C client device binding
++ * @client: pointer to i2c client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx471_probe(struct i2c_client *client)
++{
++	struct imx471 *imx471;
++	const char *name;
++	int ret;
++
++	imx471 = devm_kzalloc(&client->dev, sizeof(*imx471), GFP_KERNEL);
++	if (!imx471)
++		return -ENOMEM;
++
++	imx471->dev = &client->dev;
++	name = device_get_match_data(&client->dev);
++	if (!name)
++		return -ENODEV;
++
++	/* Initialize subdev */
++	v4l2_i2c_subdev_init(&imx471->sd, client, &imx471_subdev_ops);
++	imx471->sd.internal_ops = &imx471_internal_ops;
++
++	ret = imx471_parse_hw_config(imx471);
++	if (ret) {
++		dev_err(imx471->dev, "HW configuration is not supported\n");
++		return ret;
++	}
++
++	mutex_init(&imx471->mutex);
++
++	ret = imx471_power_on(imx471->dev);
++	if (ret) {
++		dev_err(imx471->dev, "failed to power-on the sensor\n");
++		goto error_mutex_destroy;
++	}
++
++	/* Check module identity */
++	ret = imx471_detect(imx471);
++	if (ret) {
++		dev_err(imx471->dev, "failed to find sensor: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Set default mode to max resolution */
++	imx471->cur_mode = &supported_mode;
++	imx471->vblank = imx471->cur_mode->vblank;
++
++	ret = imx471_init_controls(imx471);
++	if (ret) {
++		dev_err(imx471->dev, "failed to init controls: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Initialize subdev */
++	imx471->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	imx471->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++
++	v4l2_i2c_subdev_set_name(&imx471->sd, client, name, NULL);
++
++	/* Initialize source pad */
++	imx471->pad.flags = MEDIA_PAD_FL_SOURCE;
++	ret = media_entity_pads_init(&imx471->sd.entity, 1, &imx471->pad);
++	if (ret) {
++		dev_err(imx471->dev, "failed to init entity pads: %d\n", ret);
++		goto error_handler_free;
++	}
++
++	ret = v4l2_async_register_subdev_sensor(&imx471->sd);
++	if (ret < 0) {
++		dev_err(imx471->dev,
++			"failed to register async subdev: %d\n", ret);
++		goto error_media_entity;
++	}
++
++	pm_runtime_set_active(imx471->dev);
++	pm_runtime_enable(imx471->dev);
++	pm_runtime_idle(imx471->dev);
++
++	return 0;
++
++error_media_entity:
++	media_entity_cleanup(&imx471->sd.entity);
++error_handler_free:
++	v4l2_ctrl_handler_free(imx471->sd.ctrl_handler);
++error_power_off:
++	imx471_power_off(imx471->dev);
++error_mutex_destroy:
++	mutex_destroy(&imx471->mutex);
++
++	return ret;
++}
++
++/**
++ * imx471_remove() - I2C client device unbinding
++ * @client: pointer to I2C client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static void imx471_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct imx471 *imx471 = to_imx471(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(sd->ctrl_handler);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		imx471_power_off(&client->dev);
++	pm_runtime_set_suspended(&client->dev);
++
++	mutex_destroy(&imx471->mutex);
++}
++
++static const struct dev_pm_ops imx471_pm_ops = {
++	SET_RUNTIME_PM_OPS(imx471_power_off, imx471_power_on, NULL)
++};
++
++static const struct of_device_id imx471_of_match[] = {
++	{ .compatible = "sony,imx471", .data = "imx471" },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(of, imx471_of_match);
++
++static struct i2c_driver imx471_driver = {
++	.probe = imx471_probe,
++	.remove = imx471_remove,
++	.driver = {
++		.name = "imx471",
++		.pm = &imx471_pm_ops,
++		.of_match_table = imx471_of_match,
++	},
++};
++
++module_i2c_driver(imx471_driver);
++
++MODULE_DESCRIPTION("Sony IMX471 sensor driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/imx481.c b/drivers/media/i2c/imx481.c
+new file mode 100644
+index 000000000000..31e7a97647f2
+--- /dev/null
++++ b/drivers/media/i2c/imx481.c
+@@ -0,0 +1,1464 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Sony IMX481 camera sensor driver
++ *
++ * Copyright (C) 2021 Intel Corporation
++ * Copyright (C) 2026 OnePlus 7T Pro Linux contributors
++ */
++#include <linux/unaligned.h>
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-fwnode.h>
++#include <media/v4l2-subdev.h>
++
++/* Streaming Mode */
++#define IMX481_REG_MODE_SELECT	0x0100
++#define IMX481_MODE_STANDBY	0x00
++#define IMX481_MODE_STREAMING	0x01
++
++/* Lines per frame */
++#define IMX481_REG_LPFR		0x0340
++
++/* Chip ID */
++#define IMX481_REG_ID		0x0016
++#define IMX481_ID		0x0481
++
++/* Exposure control */
++#define IMX481_REG_EXPOSURE_CIT	0x0202
++#define IMX481_EXPOSURE_MIN	1
++#define IMX481_EXPOSURE_OFFSET	18
++#define IMX481_EXPOSURE_STEP	1
++#define IMX481_EXPOSURE_DEFAULT	0x0dcc
++
++/* Analog gain control */
++#define IMX481_REG_AGAIN	0x0204
++#define IMX481_AGAIN_MIN	0
++#define IMX481_AGAIN_MAX	960
++#define IMX481_AGAIN_STEP	1
++#define IMX481_AGAIN_DEFAULT	0
++
++/* Group hold register */
++#define IMX481_REG_HOLD		0x0104
++
++/* Input clock rate */
++#define IMX481_INCLK_RATE	19200000
++
++#define IMX481_VANA_MIN_UV	3300000
++#define IMX481_VANA_MAX_UV	3320000
++#define IMX481_VDIG_LOAD_UA	1100000
++
++/* CSI2 HW configuration */
++#define IMX481_LINK_FREQ	654075000
++#define IMX481_NUM_DATA_LANES	4
++
++#define IMX481_REG_MIN		0x00
++#define IMX481_REG_MAX		0xffff
++
++/**
++ * struct imx481_reg - imx481 sensor register
++ * @address: Register address
++ * @val: Register value
++ */
++struct imx481_reg {
++	u16 address;
++	u8 val;
++};
++
++/**
++ * struct imx481_reg_list - imx481 sensor register list
++ * @num_of_regs: Number of registers in the list
++ * @regs: Pointer to register list
++ */
++struct imx481_reg_list {
++	u32 num_of_regs;
++	const struct imx481_reg *regs;
++};
++
++/**
++ * struct imx481_mode - imx481 sensor mode structure
++ * @width: Frame width
++ * @height: Frame height
++ * @code: Format code
++ * @hblank: Horizontal blanking in lines
++ * @vblank: Vertical blanking in lines
++ * @vblank_min: Minimum vertical blanking in lines
++ * @vblank_max: Maximum vertical blanking in lines
++ * @pclk: Sensor pixel clock
++ * @link_freq_idx: Link frequency index
++ * @reg_list: Register list for sensor mode
++ */
++struct imx481_mode {
++	u32 width;
++	u32 height;
++	u32 code;
++	u32 hblank;
++	u32 vblank;
++	u32 vblank_min;
++	u32 vblank_max;
++	u64 pclk;
++	u32 link_freq_idx;
++	struct imx481_reg_list reg_list;
++};
++
++/**
++ * struct imx481 - imx481 sensor device structure
++ * @dev: Pointer to generic device
++ * @client: Pointer to i2c client
++ * @sd: V4L2 sub-device
++ * @pad: Media pad. Only one pad supported
++ * @reset_gpio: Sensor reset gpio
++ * @vana_enable_gpio: Board analogue-rail gate gpio
++ * @inclk: Sensor input clock
++ * @vana: Analogue regulator
++ * @vdig: Digital regulator
++ * @vio: I/O regulator
++ * @ctrl_handler: V4L2 control handler
++ * @link_freq_ctrl: Pointer to link frequency control
++ * @pclk_ctrl: Pointer to pixel clock control
++ * @hblank_ctrl: Pointer to horizontal blanking control
++ * @vblank_ctrl: Pointer to vertical blanking control
++ * @exp_ctrl: Pointer to exposure control
++ * @again_ctrl: Pointer to analog gain control
++ * @vblank: Vertical blanking in lines
++ * @cur_mode: Pointer to current selected sensor mode
++ * @mutex: Mutex for serializing sensor controls
++ */
++struct imx481 {
++	struct device *dev;
++	struct i2c_client *client;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct gpio_desc *reset_gpio;
++	struct gpio_desc *vana_enable_gpio;
++	struct clk *inclk;
++	struct regulator *vana;
++	struct regulator *vdig;
++	struct regulator *vio;
++	struct v4l2_ctrl_handler ctrl_handler;
++	struct v4l2_ctrl *link_freq_ctrl;
++	struct v4l2_ctrl *pclk_ctrl;
++	struct v4l2_ctrl *hblank_ctrl;
++	struct v4l2_ctrl *vblank_ctrl;
++	struct {
++		struct v4l2_ctrl *exp_ctrl;
++		struct v4l2_ctrl *again_ctrl;
++	};
++	u32 vblank;
++	const struct imx481_mode *cur_mode;
++	/* Serializes controls and streaming state. */
++	struct mutex mutex;
++};
++
++static const s64 link_freq[] = {
++	IMX481_LINK_FREQ,
++};
++
++/* Sensor mode registers */
++static const struct imx481_reg imx481_init_regs[] = {
++	{ 0x0136, 0x13 },
++	{ 0x0137, 0x33 },
++	{ 0x3c7e, 0x01 },
++	{ 0x3c7f, 0x06 },
++	{ 0x3f7f, 0x01 },
++	{ 0x531c, 0x01 },
++	{ 0x531d, 0x02 },
++	{ 0x531e, 0x04 },
++	{ 0x5928, 0x00 },
++	{ 0x5929, 0x2f },
++	{ 0x592a, 0x00 },
++	{ 0x592b, 0x85 },
++	{ 0x592c, 0x00 },
++	{ 0x592d, 0x32 },
++	{ 0x592e, 0x00 },
++	{ 0x592f, 0x88 },
++	{ 0x5930, 0x00 },
++	{ 0x5931, 0x3d },
++	{ 0x5932, 0x00 },
++	{ 0x5933, 0x93 },
++	{ 0x5938, 0x00 },
++	{ 0x5939, 0x24 },
++	{ 0x593a, 0x00 },
++	{ 0x593b, 0x7a },
++	{ 0x593c, 0x00 },
++	{ 0x593d, 0x24 },
++	{ 0x593e, 0x00 },
++	{ 0x593f, 0x7a },
++	{ 0x5940, 0x00 },
++	{ 0x5941, 0x2f },
++	{ 0x5942, 0x00 },
++	{ 0x5943, 0x85 },
++	{ 0x5e12, 0x00 },
++	{ 0x5e13, 0x23 },
++	{ 0x5f06, 0x08 },
++	{ 0x5f07, 0x81 },
++	{ 0x5f0b, 0xeb },
++	{ 0x5f0c, 0xae },
++	{ 0x5f0d, 0x15 },
++	{ 0x5f0e, 0x6e },
++	{ 0x5f0f, 0x03 },
++	{ 0x5f10, 0xa5 },
++	{ 0x5f11, 0xc6 },
++	{ 0x5f12, 0x92 },
++	{ 0x5f13, 0xb9 },
++	{ 0x5f14, 0x5e },
++	{ 0x5f17, 0x5e },
++	{ 0x5f18, 0xdc },
++	{ 0x5f19, 0x23 },
++	{ 0x5f1a, 0xdb },
++	{ 0x5f1b, 0xc7 },
++	{ 0x5f1c, 0x5b },
++	{ 0x5f1d, 0x7e },
++	{ 0x5f1e, 0x20 },
++	{ 0x5f1f, 0x51 },
++	{ 0x5f20, 0xa2 },
++	{ 0x5f21, 0x46 },
++	{ 0x5f22, 0x87 },
++	{ 0x5f23, 0x2c },
++	{ 0x5f24, 0x1d },
++	{ 0x5f25, 0x10 },
++	{ 0x5f26, 0x76 },
++	{ 0x5f27, 0xa1 },
++	{ 0x5f28, 0xc6 },
++	{ 0x5f29, 0x07 },
++	{ 0x5f2a, 0x1a },
++	{ 0x5f2b, 0x1c },
++	{ 0x5f2c, 0xa8 },
++	{ 0x5f2d, 0x76 },
++	{ 0x5f2e, 0x61 },
++	{ 0x5f2f, 0xc6 },
++	{ 0x5f30, 0x87 },
++	{ 0x5f31, 0x2c },
++	{ 0x5f32, 0x1d },
++	{ 0x5f33, 0x10 },
++	{ 0x5f34, 0x76 },
++	{ 0x5f35, 0xa1 },
++	{ 0x5f36, 0xc6 },
++	{ 0x5f37, 0x07 },
++	{ 0x5f38, 0x1a },
++	{ 0x5f39, 0x1c },
++	{ 0x5f3a, 0xa8 },
++	{ 0x5f3b, 0x76 },
++	{ 0x5f3c, 0xa1 },
++	{ 0x5f3d, 0xc6 },
++	{ 0x5f3e, 0x87 },
++	{ 0x5f3f, 0x2c },
++	{ 0x5f40, 0x1d },
++	{ 0x5f41, 0x10 },
++	{ 0x5f42, 0x76 },
++	{ 0x5f43, 0xa1 },
++	{ 0x5f44, 0xc6 },
++	{ 0x5f45, 0x07 },
++	{ 0x5f46, 0x2a },
++	{ 0x5f47, 0x1d },
++	{ 0x5f48, 0x08 },
++	{ 0x5f49, 0x76 },
++	{ 0x5f4a, 0x81 },
++	{ 0x5f4b, 0xc0 },
++	{ 0x5f75, 0x27 },
++	{ 0x5f76, 0xee },
++	{ 0x5f77, 0xee },
++	{ 0x5f78, 0xee },
++	{ 0x5f79, 0xe5 },
++	{ 0x7990, 0x01 },
++	{ 0x7993, 0x5d },
++	{ 0x7994, 0x5d },
++	{ 0x7995, 0xa1 },
++	{ 0x799a, 0x01 },
++	{ 0x799d, 0x00 },
++	{ 0x8169, 0x01 },
++	{ 0x8359, 0x01 },
++	{ 0x88c7, 0x00 },
++	{ 0x88d4, 0x03 },
++	{ 0x9300, 0x2a },
++	{ 0x9301, 0x24 },
++	{ 0x9302, 0x1e },
++	{ 0x9304, 0x2c },
++	{ 0x9305, 0x23 },
++	{ 0x9306, 0x1f },
++	{ 0x9308, 0x2d },
++	{ 0x9309, 0x28 },
++	{ 0x930a, 0x26 },
++	{ 0x930c, 0x2e },
++	{ 0x930d, 0x2c },
++	{ 0x930e, 0x23 },
++	{ 0x9310, 0x2e },
++	{ 0x9311, 0x28 },
++	{ 0x9312, 0x23 },
++	{ 0x9314, 0x31 },
++	{ 0x9315, 0x31 },
++	{ 0x9316, 0x2c },
++	{ 0x9317, 0x19 },
++	{ 0x9960, 0x00 },
++	{ 0x9963, 0x64 },
++	{ 0x9964, 0x50 },
++	{ 0xa391, 0x04 },
++	{ 0xb046, 0x01 },
++	{ 0xb048, 0x01 },
++	{ 0x8145, 0x00 },
++	{ 0x8146, 0x04 },
++	{ 0x8341, 0x00 },
++	{ 0x8343, 0x08 },
++	{ 0xa801, 0x00 },
++	{ 0xa802, 0x00 },
++	{ 0xa903, 0x00 },
++	{ 0xa905, 0x00 },
++	{ 0xa909, 0x00 },
++	{ 0xa90b, 0x00 },
++	{ 0xa925, 0x02 },
++	{ 0xa927, 0x02 },
++	{ 0xa929, 0x02 },
++	{ 0xa92b, 0x00 },
++	{ 0xa92d, 0x00 },
++	{ 0xa92f, 0x00 },
++	{ 0xa933, 0x00 },
++	{ 0xa935, 0x00 },
++	{ 0xa939, 0x00 },
++	{ 0xa93b, 0x00 },
++	{ 0xa955, 0x02 },
++	{ 0xa957, 0x02 },
++	{ 0xa959, 0x02 },
++	{ 0xa95b, 0x00 },
++	{ 0xa95d, 0x00 },
++	{ 0xa95f, 0x00 },
++	{ 0xa963, 0x00 },
++	{ 0xa965, 0x00 },
++	{ 0xa969, 0x00 },
++	{ 0xa96b, 0x00 },
++	{ 0xa985, 0x02 },
++	{ 0xa987, 0x02 },
++	{ 0xa989, 0x02 },
++	{ 0xa98b, 0x00 },
++	{ 0xa98d, 0x00 },
++	{ 0xa98f, 0x00 },
++	{ 0xaa06, 0x3f },
++	{ 0xaa07, 0x05 },
++	{ 0xaa08, 0x04 },
++	{ 0xaa12, 0x3f },
++	{ 0xaa13, 0x04 },
++	{ 0xaa14, 0x03 },
++	{ 0xab55, 0x02 },
++	{ 0xab57, 0x01 },
++	{ 0xab59, 0x01 },
++	{ 0xabb4, 0x00 },
++	{ 0xabb5, 0x01 },
++	{ 0xabb6, 0x00 },
++	{ 0xabb7, 0x01 },
++	{ 0xabb8, 0x00 },
++	{ 0xabb9, 0x01 },
++	{ 0xae08, 0x00 },
++	{ 0xae0b, 0x00 },
++	{ 0xae0e, 0x00 },
++	{ 0xae11, 0x00 },
++	{ 0xae14, 0x00 },
++	{ 0xae1a, 0x00 },
++	{ 0xae2e, 0x00 },
++	{ 0xae31, 0x00 },
++	{ 0xae37, 0x00 },
++	{ 0xae40, 0x00 },
++	{ 0xae54, 0x00 },
++	{ 0xae57, 0x00 },
++	{ 0xae5d, 0x00 },
++	{ 0xae66, 0x00 },
++	{ 0x0b00, 0x00 },
++	{ 0x3ff9, 0x01 },
++	{ 0x0106, 0x01 },
++};
++
++static const struct imx481_reg mode_4656x3496_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x03 },
++	{ 0x0342, 0x14 },
++	{ 0x0343, 0x00 },
++	{ 0x0340, 0x0d },
++	{ 0x0341, 0xde },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x00 },
++	{ 0x0347, 0x00 },
++	{ 0x0348, 0x12 },
++	{ 0x0349, 0x2f },
++	{ 0x034a, 0x0d },
++	{ 0x034b, 0xa7 },
++	{ 0x0381, 0x01 },
++	{ 0x0383, 0x01 },
++	{ 0x0385, 0x01 },
++	{ 0x0387, 0x01 },
++	{ 0x0900, 0x00 },
++	{ 0x0901, 0x11 },
++	{ 0x0902, 0x0a },
++	{ 0x3f4c, 0x01 },
++	{ 0x3f4d, 0x01 },
++	{ 0x0408, 0x00 },
++	{ 0x0409, 0x00 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x00 },
++	{ 0x040c, 0x12 },
++	{ 0x040d, 0x30 },
++	{ 0x040e, 0x0d },
++	{ 0x040f, 0xa8 },
++	{ 0x034c, 0x12 },
++	{ 0x034d, 0x30 },
++	{ 0x034e, 0x0d },
++	{ 0x034f, 0xa8 },
++	{ 0x0301, 0x06 },
++	{ 0x0303, 0x02 },
++	{ 0x0305, 0x03 },
++	{ 0x0306, 0x01 },
++	{ 0x0307, 0x00 },
++	{ 0x030b, 0x01 },
++	{ 0x030d, 0x0f },
++	{ 0x030e, 0x03 },
++	{ 0x030f, 0xfe },
++	{ 0x0310, 0x01 },
++	{ 0x3e20, 0x01 },
++	{ 0x3e37, 0x01 },
++	{ 0x3e3b, 0x00 },
++	{ 0x3f78, 0x02 },
++	{ 0x3f79, 0x0a },
++	{ 0x3ffe, 0x00 },
++	{ 0x3fff, 0x18 },
++	{ 0x5f0a, 0xb2 },
++	{ 0xa828, 0x00 },
++	{ 0xa829, 0x00 },
++	{ 0xa84f, 0x00 },
++	{ 0xa850, 0x00 },
++	{ 0xb2df, 0x00 },
++	{ 0xb2e5, 0x00 },
++	{ 0x0202, 0x0d },
++	{ 0x0203, 0xd0 },
++	{ 0x0204, 0x00 },
++	{ 0x0205, 0x00 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++	{ 0x3e20, 0x01 },
++	{ 0x3e37, 0x01 },
++	{ 0x38a3, 0x02 },
++	{ 0x38ac, 0x01 },
++	{ 0x38a4, 0x00 },
++	{ 0x38a5, 0x58 },
++	{ 0x38a6, 0x00 },
++	{ 0x38a7, 0x50 },
++	{ 0x38a8, 0x02 },
++	{ 0x38a9, 0x30 },
++	{ 0x38aa, 0x02 },
++	{ 0x38ab, 0x2c },
++	{ 0x38b4, 0x06 },
++	{ 0x38b5, 0x5e },
++	{ 0x38b6, 0x04 },
++	{ 0x38b7, 0xc8 },
++	{ 0x38b8, 0x0b },
++	{ 0x38b9, 0xd2 },
++	{ 0x38ba, 0x08 },
++	{ 0x38bb, 0xdf },
++};
++
++/* Supported sensor mode configurations */
++static const struct imx481_mode supported_mode = {
++	.width = 4656,
++	.height = 3496,
++	.hblank = 464,
++	.vblank = 54,
++	.vblank_min = 39,
++	.vblank_max = 62039,
++	.pclk = 523260000,
++	.link_freq_idx = 0,
++	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
++	.reg_list = {
++		.num_of_regs = ARRAY_SIZE(mode_4656x3496_regs),
++		.regs = mode_4656x3496_regs,
++	},
++};
++
++/**
++ * to_imx481() - imx481 V4L2 sub-device to imx481 device.
++ * @subdev: pointer to imx481 V4L2 sub-device
++ *
++ * Return: pointer to imx481 device
++ */
++static inline struct imx481 *to_imx481(struct v4l2_subdev *subdev)
++{
++	return container_of(subdev, struct imx481, sd);
++}
++
++/**
++ * imx481_read_reg() - Read registers.
++ * @imx481: pointer to imx481 device
++ * @reg: register address
++ * @len: length of bytes to read. Max supported bytes is 4
++ * @val: pointer to register value to be filled.
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_read_reg(struct imx481 *imx481, u16 reg, u32 len, u32 *val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx481->sd);
++	struct i2c_msg msgs[2] = {0};
++	u8 addr_buf[2] = {0};
++	u8 data_buf[4] = {0};
++	int ret;
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, addr_buf);
++
++	/* Write register address */
++	msgs[0].addr = client->addr;
++	msgs[0].flags = 0;
++	msgs[0].len = ARRAY_SIZE(addr_buf);
++	msgs[0].buf = addr_buf;
++
++	/* Read data from register */
++	msgs[1].addr = client->addr;
++	msgs[1].flags = I2C_M_RD;
++	msgs[1].len = len;
++	msgs[1].buf = &data_buf[4 - len];
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	*val = get_unaligned_be32(data_buf);
++
++	return 0;
++}
++
++/**
++ * imx481_write_reg() - Write register
++ * @imx481: pointer to imx481 device
++ * @reg: register address
++ * @len: length of bytes. Max supported bytes is 4
++ * @val: register value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_write_reg(struct imx481 *imx481, u16 reg, u32 len, u32 val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx481->sd);
++	u8 buf[6] = {0};
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, buf);
++	put_unaligned_be32(val << (8 * (4 - len)), buf + 2);
++	if (i2c_master_send(client, buf, len + 2) != len + 2)
++		return -EIO;
++
++	return 0;
++}
++
++/**
++ * imx481_write_regs() - Write a list of registers
++ * @imx481: pointer to imx481 device
++ * @regs: list of registers to be written
++ * @len: length of registers array
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_write_regs(struct imx481 *imx481,
++			     const struct imx481_reg *regs, u32 len)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < len; i++) {
++		ret = imx481_write_reg(imx481, regs[i].address, 1, regs[i].val);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
++/**
++ * imx481_update_controls() - Update control ranges based on streaming mode
++ * @imx481: pointer to imx481 device
++ * @mode: pointer to imx481_mode sensor mode
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_update_controls(struct imx481 *imx481,
++				  const struct imx481_mode *mode)
++{
++	int ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx481->link_freq_ctrl, mode->link_freq_idx);
++	if (ret)
++		return ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx481->hblank_ctrl, mode->hblank);
++	if (ret)
++		return ret;
++
++	return __v4l2_ctrl_modify_range(imx481->vblank_ctrl, mode->vblank_min,
++					mode->vblank_max, 1, mode->vblank);
++}
++
++/**
++ * imx481_update_exp_gain() - Set updated exposure and gain
++ * @imx481: pointer to imx481 device
++ * @exposure: updated exposure value
++ * @gain: updated analog gain value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_update_exp_gain(struct imx481 *imx481, u32 exposure, u32 gain)
++{
++	u32 lpfr;
++	int ret;
++
++	lpfr = imx481->vblank + imx481->cur_mode->height;
++
++	dev_dbg(imx481->dev, "Set exp %u, analog gain %u, lpfr %u\n",
++		exposure, gain, lpfr);
++
++	ret = imx481_write_reg(imx481, IMX481_REG_HOLD, 1, 1);
++	if (ret)
++		return ret;
++
++	ret = imx481_write_reg(imx481, IMX481_REG_LPFR, 2, lpfr);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx481_write_reg(imx481, IMX481_REG_EXPOSURE_CIT, 2, exposure);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx481_write_reg(imx481, IMX481_REG_AGAIN, 2, gain);
++
++error_release_group_hold:
++	imx481_write_reg(imx481, IMX481_REG_HOLD, 1, 0);
++
++	return ret;
++}
++
++/**
++ * imx481_set_ctrl() - Set subdevice control
++ * @ctrl: pointer to v4l2_ctrl structure
++ *
++ * Supported controls:
++ * - V4L2_CID_VBLANK
++ * - cluster controls:
++ *   - V4L2_CID_ANALOGUE_GAIN
++ *   - V4L2_CID_EXPOSURE
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct imx481 *imx481 =
++		container_of(ctrl->handler, struct imx481, ctrl_handler);
++	u32 analog_gain;
++	u32 exposure;
++	int ret;
++
++	switch (ctrl->id) {
++	case V4L2_CID_VBLANK:
++		imx481->vblank = imx481->vblank_ctrl->val;
++
++		dev_dbg(imx481->dev, "Received vblank %u, new lpfr %u\n",
++			imx481->vblank,
++			imx481->vblank + imx481->cur_mode->height);
++
++		ret = __v4l2_ctrl_modify_range(imx481->exp_ctrl,
++					       IMX481_EXPOSURE_MIN,
++					       imx481->vblank +
++					       imx481->cur_mode->height -
++					       IMX481_EXPOSURE_OFFSET,
++					       1, IMX481_EXPOSURE_DEFAULT);
++		break;
++	case V4L2_CID_EXPOSURE:
++		/* Set controls only if sensor is in power on state */
++		if (!pm_runtime_get_if_in_use(imx481->dev))
++			return 0;
++
++		exposure = ctrl->val;
++		analog_gain = imx481->again_ctrl->val;
++
++		dev_dbg(imx481->dev, "Received exp %u, analog gain %u\n",
++			exposure, analog_gain);
++
++		ret = imx481_update_exp_gain(imx481, exposure, analog_gain);
++
++		pm_runtime_put(imx481->dev);
++
++		break;
++	default:
++		dev_err(imx481->dev, "Invalid control %d\n", ctrl->id);
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++/* V4l2 subdevice control ops*/
++static const struct v4l2_ctrl_ops imx481_ctrl_ops = {
++	.s_ctrl = imx481_set_ctrl,
++};
++
++/**
++ * imx481_enum_mbus_code() - Enumerate V4L2 sub-device mbus codes
++ * @sd: pointer to imx481 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @code: V4L2 sub-device code enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_enum_mbus_code(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_mbus_code_enum *code)
++{
++	if (code->index > 0)
++		return -EINVAL;
++
++	code->code = supported_mode.code;
++
++	return 0;
++}
++
++/**
++ * imx481_enum_frame_size() - Enumerate V4L2 sub-device frame sizes
++ * @sd: pointer to imx481 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fsize: V4L2 sub-device size enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_enum_frame_size(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *sd_state,
++				  struct v4l2_subdev_frame_size_enum *fsize)
++{
++	if (fsize->index > 0)
++		return -EINVAL;
++
++	if (fsize->code != supported_mode.code)
++		return -EINVAL;
++
++	fsize->min_width = supported_mode.width;
++	fsize->max_width = fsize->min_width;
++	fsize->min_height = supported_mode.height;
++	fsize->max_height = fsize->min_height;
++
++	return 0;
++}
++
++/**
++ * imx481_fill_pad_format() - Fill subdevice pad format
++ *                            from selected sensor mode
++ * @imx481: pointer to imx481 device
++ * @mode: pointer to imx481_mode sensor mode
++ * @fmt: V4L2 sub-device format need to be filled
++ */
++static void imx481_fill_pad_format(struct imx481 *imx481,
++				   const struct imx481_mode *mode,
++				   struct v4l2_subdev_format *fmt)
++{
++	fmt->format.width = mode->width;
++	fmt->format.height = mode->height;
++	fmt->format.code = mode->code;
++	fmt->format.field = V4L2_FIELD_NONE;
++	fmt->format.colorspace = V4L2_COLORSPACE_RAW;
++	fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
++	fmt->format.quantization = V4L2_QUANTIZATION_DEFAULT;
++	fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
++}
++
++/**
++ * imx481_get_pad_format() - Get subdevice pad format
++ * @sd: pointer to imx481 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_get_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx481 *imx481 = to_imx481(sd);
++
++	mutex_lock(&imx481->mutex);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		fmt->format = *framefmt;
++	} else {
++		imx481_fill_pad_format(imx481, imx481->cur_mode, fmt);
++	}
++
++	mutex_unlock(&imx481->mutex);
++
++	return 0;
++}
++
++/**
++ * imx481_set_pad_format() - Set subdevice pad format
++ * @sd: pointer to imx481 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_set_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx481 *imx481 = to_imx481(sd);
++	const struct imx481_mode *mode;
++	int ret = 0;
++
++	mutex_lock(&imx481->mutex);
++
++	mode = &supported_mode;
++	imx481_fill_pad_format(imx481, mode, fmt);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		*framefmt = fmt->format;
++	} else {
++		ret = imx481_update_controls(imx481, mode);
++		if (!ret)
++			imx481->cur_mode = mode;
++	}
++
++	mutex_unlock(&imx481->mutex);
++
++	return ret;
++}
++
++static int imx481_get_selection(struct v4l2_subdev *sd,
++				struct v4l2_subdev_state *sd_state,
++				struct v4l2_subdev_selection *sel)
++{
++	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
++		return -EINVAL;
++
++	switch (sel->target) {
++	case V4L2_SEL_TGT_NATIVE_SIZE:
++	case V4L2_SEL_TGT_CROP_BOUNDS:
++	case V4L2_SEL_TGT_CROP_DEFAULT:
++	case V4L2_SEL_TGT_CROP:
++		sel->r = (struct v4l2_rect) { 0, 0, 4656, 3496 };
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++/**
++ * imx481_init_state() - Initialize sub-device state
++ * @sd: pointer to imx481 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *sd_state)
++{
++	struct imx481 *imx481 = to_imx481(sd);
++	struct v4l2_subdev_format fmt = { 0 };
++
++	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
++	imx481_fill_pad_format(imx481, &supported_mode, &fmt);
++
++	return imx481_set_pad_format(sd, sd_state, &fmt);
++}
++
++/**
++ * imx481_start_streaming() - Start sensor stream
++ * @imx481: pointer to imx481 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_start_streaming(struct imx481 *imx481)
++{
++	const struct imx481_reg_list *reg_list;
++	int ret;
++
++	ret = imx481_write_regs(imx481, imx481_init_regs,
++				ARRAY_SIZE(imx481_init_regs));
++	if (ret) {
++		dev_err(imx481->dev, "failed to write global registers\n");
++		return ret;
++	}
++
++	/* Write sensor mode registers */
++	reg_list = &imx481->cur_mode->reg_list;
++	ret = imx481_write_regs(imx481, reg_list->regs,
++				reg_list->num_of_regs);
++	if (ret) {
++		dev_err(imx481->dev, "failed to write mode registers\n");
++		return ret;
++	}
++
++	/* Setup handler will write actual exposure and gain */
++	ret =  __v4l2_ctrl_handler_setup(imx481->sd.ctrl_handler);
++	if (ret) {
++		dev_err(imx481->dev, "fail to setup handler\n");
++		return ret;
++	}
++
++	/* Start streaming */
++	ret = imx481_write_reg(imx481, IMX481_REG_MODE_SELECT,
++			       1, IMX481_MODE_STREAMING);
++	if (ret) {
++		dev_err(imx481->dev, "failed to start streaming\n");
++		return ret;
++	}
++
++	dev_info(imx481->dev, "streaming 4656x3496 RAW10 over four-lane D-PHY\n");
++
++	return 0;
++}
++
++/**
++ * imx481_stop_streaming() - Stop sensor stream
++ * @imx481: pointer to imx481 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_stop_streaming(struct imx481 *imx481)
++{
++	return imx481_write_reg(imx481, IMX481_REG_MODE_SELECT,
++				1, IMX481_MODE_STANDBY);
++}
++
++/**
++ * imx481_set_stream() - Enable sensor streaming
++ * @sd: pointer to imx481 subdevice
++ * @enable: set to enable sensor streaming
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_set_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct imx481 *imx481 = to_imx481(sd);
++	int ret;
++
++	mutex_lock(&imx481->mutex);
++
++	if (enable) {
++		ret = pm_runtime_resume_and_get(imx481->dev);
++		if (ret)
++			goto error_unlock;
++
++		ret = imx481_start_streaming(imx481);
++		if (ret)
++			goto error_power_off;
++	} else {
++		imx481_stop_streaming(imx481);
++		pm_runtime_put(imx481->dev);
++	}
++
++	mutex_unlock(&imx481->mutex);
++
++	return 0;
++
++error_power_off:
++	pm_runtime_put(imx481->dev);
++error_unlock:
++	mutex_unlock(&imx481->mutex);
++
++	return ret;
++}
++
++/**
++ * imx481_detect() - Detect imx481 sensor
++ * @imx481: pointer to imx481 device
++ *
++ * Return: 0 if successful, -EIO if sensor id does not match
++ */
++static int imx481_detect(struct imx481 *imx481)
++{
++	int ret;
++	u32 val;
++
++	ret = imx481_read_reg(imx481, IMX481_REG_ID, 2, &val);
++	if (ret)
++		return ret;
++
++	if (val != IMX481_ID) {
++		dev_err(imx481->dev, "chip id mismatch: %x!=%x\n",
++			IMX481_ID, val);
++		return -ENXIO;
++	}
++
++	return 0;
++}
++
++/**
++ * imx481_parse_hw_config() - Parse HW configuration and check if supported
++ * @imx481: pointer to imx481 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_parse_hw_config(struct imx481 *imx481)
++{
++	struct fwnode_handle *fwnode = dev_fwnode(imx481->dev);
++	struct v4l2_fwnode_endpoint bus_cfg = {
++		.bus_type = V4L2_MBUS_CSI2_DPHY
++	};
++	struct fwnode_handle *ep;
++	unsigned long rate;
++	unsigned int i;
++	int ret;
++
++	if (!fwnode)
++		return -ENXIO;
++
++	/* The GPIO values are logical; reset is active low in the DT. */
++	imx481->reset_gpio = devm_gpiod_get(imx481->dev, "reset",
++					    GPIOD_OUT_HIGH);
++	if (IS_ERR(imx481->reset_gpio)) {
++		dev_err(imx481->dev, "failed to get reset gpio %ld\n",
++			PTR_ERR(imx481->reset_gpio));
++		return PTR_ERR(imx481->reset_gpio);
++	}
++
++	imx481->vana_enable_gpio = devm_gpiod_get(imx481->dev, "vana-enable",
++						  GPIOD_OUT_LOW);
++	if (IS_ERR(imx481->vana_enable_gpio))
++		return dev_err_probe(imx481->dev,
++				     PTR_ERR(imx481->vana_enable_gpio),
++				     "failed to get VANA enable GPIO\n");
++
++	/* Get sensor input clock */
++	imx481->inclk = devm_clk_get(imx481->dev, NULL);
++	if (IS_ERR(imx481->inclk)) {
++		dev_err(imx481->dev, "could not get inclk\n");
++		return PTR_ERR(imx481->inclk);
++	}
++
++	ret = clk_set_rate(imx481->inclk, IMX481_INCLK_RATE);
++	if (ret)
++		return dev_err_probe(imx481->dev, ret,
++				     "could not set 19.2 MHz input clock\n");
++
++	rate = clk_get_rate(imx481->inclk);
++	if (rate != IMX481_INCLK_RATE) {
++		dev_err(imx481->dev, "inclk frequency mismatch\n");
++		return -EINVAL;
++	}
++
++	imx481->vana = devm_regulator_get(imx481->dev, "vana");
++	if (IS_ERR(imx481->vana))
++		return dev_err_probe(imx481->dev, PTR_ERR(imx481->vana),
++				     "failed to get VANA\n");
++
++	imx481->vdig = devm_regulator_get(imx481->dev, "vdig");
++	if (IS_ERR(imx481->vdig))
++		return dev_err_probe(imx481->dev, PTR_ERR(imx481->vdig),
++				     "failed to get VDIG\n");
++
++	imx481->vio = devm_regulator_get(imx481->dev, "vio");
++	if (IS_ERR(imx481->vio))
++		return dev_err_probe(imx481->dev, PTR_ERR(imx481->vio),
++				     "failed to get VIO\n");
++
++	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
++	if (!ep)
++		return -ENXIO;
++
++	ret = v4l2_fwnode_endpoint_alloc_parse(ep, &bus_cfg);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++
++	if (bus_cfg.bus_type != V4L2_MBUS_CSI2_DPHY) {
++		dev_err(imx481->dev, "endpoint must use D-PHY\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX481_NUM_DATA_LANES) {
++		dev_err(imx481->dev,
++			"number of CSI2 data lanes %d is not supported\n",
++			bus_cfg.bus.mipi_csi2.num_data_lanes);
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (!bus_cfg.nr_of_link_frequencies) {
++		dev_err(imx481->dev, "no link frequencies defined\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	for (i = 0; i < bus_cfg.nr_of_link_frequencies; i++)
++		if (bus_cfg.link_frequencies[i] == IMX481_LINK_FREQ)
++			goto done_endpoint_free;
++
++	ret = -EINVAL;
++
++done_endpoint_free:
++	v4l2_fwnode_endpoint_free(&bus_cfg);
++
++	return ret;
++}
++
++/* V4l2 subdevice ops */
++static const struct v4l2_subdev_video_ops imx481_video_ops = {
++	.s_stream = imx481_set_stream,
++};
++
++static const struct v4l2_subdev_pad_ops imx481_pad_ops = {
++	.enum_mbus_code = imx481_enum_mbus_code,
++	.enum_frame_size = imx481_enum_frame_size,
++	.get_fmt = imx481_get_pad_format,
++	.set_fmt = imx481_set_pad_format,
++	.get_selection = imx481_get_selection,
++};
++
++static const struct v4l2_subdev_ops imx481_subdev_ops = {
++	.video = &imx481_video_ops,
++	.pad = &imx481_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops imx481_internal_ops = {
++	.init_state = imx481_init_state,
++};
++
++/**
++ * imx481_power_on() - Sensor power on sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_power_on(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx481 *imx481 = to_imx481(sd);
++	int ret;
++
++	ret = regulator_set_voltage(imx481->vana, IMX481_VANA_MIN_UV,
++				    IMX481_VANA_MAX_UV);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to set VANA voltage\n");
++
++	ret = regulator_enable(imx481->vana);
++	if (ret)
++		goto error_vana_voltage;
++
++	gpiod_set_value_cansleep(imx481->vana_enable_gpio, 1);
++	usleep_range(1000, 2000);
++
++	ret = regulator_set_load(imx481->vdig, IMX481_VDIG_LOAD_UA);
++	if (ret)
++		goto error_vana;
++
++	ret = regulator_enable(imx481->vdig);
++	if (ret)
++		goto error_vdig_load;
++	usleep_range(1000, 2000);
++
++	ret = regulator_enable(imx481->vio);
++	if (ret)
++		goto error_vdig;
++	usleep_range(1000, 2000);
++
++	ret = clk_prepare_enable(imx481->inclk);
++	if (ret) {
++		dev_err(imx481->dev, "failed to enable input clock\n");
++		goto error_vio;
++	}
++
++	usleep_range(1000, 1200);
++	gpiod_set_value_cansleep(imx481->reset_gpio, 0);
++	usleep_range(1000, 2000);
++
++	return 0;
++
++error_vio:
++	regulator_disable(imx481->vio);
++error_vdig:
++	regulator_disable(imx481->vdig);
++error_vdig_load:
++	regulator_set_load(imx481->vdig, 0);
++error_vana:
++	gpiod_set_value_cansleep(imx481->vana_enable_gpio, 0);
++	regulator_disable(imx481->vana);
++error_vana_voltage:
++	regulator_set_voltage(imx481->vana, 0, IMX481_VANA_MAX_UV);
++
++	return ret;
++}
++
++/**
++ * imx481_power_off() - Sensor power off sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_power_off(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx481 *imx481 = to_imx481(sd);
++
++	gpiod_set_value_cansleep(imx481->reset_gpio, 1);
++	clk_disable_unprepare(imx481->inclk);
++	regulator_disable(imx481->vio);
++	regulator_disable(imx481->vdig);
++	regulator_set_load(imx481->vdig, 0);
++	gpiod_set_value_cansleep(imx481->vana_enable_gpio, 0);
++	regulator_disable(imx481->vana);
++	regulator_set_voltage(imx481->vana, 0, IMX481_VANA_MAX_UV);
++
++	return 0;
++}
++
++/**
++ * imx481_init_controls() - Initialize sensor subdevice controls
++ * @imx481: pointer to imx481 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_init_controls(struct imx481 *imx481)
++{
++	struct v4l2_ctrl_handler *ctrl_hdlr = &imx481->ctrl_handler;
++	const struct imx481_mode *mode = imx481->cur_mode;
++	struct v4l2_fwnode_device_properties props;
++	u32 lpfr;
++	int ret;
++
++	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
++	if (ret)
++		return ret;
++
++	/* Serialize controls with sensor device */
++	ctrl_hdlr->lock = &imx481->mutex;
++
++	/* Initialize exposure and gain */
++	lpfr = mode->vblank + mode->height;
++	imx481->exp_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					     &imx481_ctrl_ops,
++					     V4L2_CID_EXPOSURE,
++					     IMX481_EXPOSURE_MIN,
++					     lpfr - IMX481_EXPOSURE_OFFSET,
++					     IMX481_EXPOSURE_STEP,
++					     IMX481_EXPOSURE_DEFAULT);
++
++	imx481->again_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					       &imx481_ctrl_ops,
++					       V4L2_CID_ANALOGUE_GAIN,
++					       IMX481_AGAIN_MIN,
++					       IMX481_AGAIN_MAX,
++					       IMX481_AGAIN_STEP,
++					       IMX481_AGAIN_DEFAULT);
++
++	v4l2_ctrl_cluster(2, &imx481->exp_ctrl);
++
++	imx481->vblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx481_ctrl_ops,
++						V4L2_CID_VBLANK,
++						mode->vblank_min,
++						mode->vblank_max,
++						1, mode->vblank);
++
++	/* Read only controls */
++	imx481->pclk_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					      &imx481_ctrl_ops,
++					      V4L2_CID_PIXEL_RATE,
++					      mode->pclk, mode->pclk,
++					      1, mode->pclk);
++
++	imx481->link_freq_ctrl = v4l2_ctrl_new_int_menu(ctrl_hdlr,
++							&imx481_ctrl_ops,
++							V4L2_CID_LINK_FREQ,
++							ARRAY_SIZE(link_freq) -
++							1,
++							mode->link_freq_idx,
++							link_freq);
++	if (imx481->link_freq_ctrl)
++		imx481->link_freq_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	imx481->hblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx481_ctrl_ops,
++						V4L2_CID_HBLANK,
++						IMX481_REG_MIN,
++						IMX481_REG_MAX,
++						1, mode->hblank);
++	if (imx481->hblank_ctrl)
++		imx481->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	ret = v4l2_fwnode_device_parse(imx481->dev, &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &imx481_ctrl_ops,
++					      &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	if (ctrl_hdlr->error) {
++		ret = ctrl_hdlr->error;
++		dev_err(imx481->dev, "control init failed: %d\n",
++			ret);
++		goto error_free_hdlr;
++	}
++
++	imx481->sd.ctrl_handler = ctrl_hdlr;
++
++	return 0;
++
++error_free_hdlr:
++	v4l2_ctrl_handler_free(ctrl_hdlr);
++
++	return ret;
++}
++
++/**
++ * imx481_probe() - I2C client device binding
++ * @client: pointer to i2c client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx481_probe(struct i2c_client *client)
++{
++	struct imx481 *imx481;
++	const char *name;
++	int ret;
++
++	imx481 = devm_kzalloc(&client->dev, sizeof(*imx481), GFP_KERNEL);
++	if (!imx481)
++		return -ENOMEM;
++
++	imx481->dev = &client->dev;
++	name = device_get_match_data(&client->dev);
++	if (!name)
++		return -ENODEV;
++
++	/* Initialize subdev */
++	v4l2_i2c_subdev_init(&imx481->sd, client, &imx481_subdev_ops);
++	imx481->sd.internal_ops = &imx481_internal_ops;
++
++	ret = imx481_parse_hw_config(imx481);
++	if (ret) {
++		dev_err(imx481->dev, "HW configuration is not supported\n");
++		return ret;
++	}
++
++	mutex_init(&imx481->mutex);
++
++	ret = imx481_power_on(imx481->dev);
++	if (ret) {
++		dev_err(imx481->dev, "failed to power-on the sensor\n");
++		goto error_mutex_destroy;
++	}
++
++	/* Check module identity */
++	ret = imx481_detect(imx481);
++	if (ret) {
++		dev_err(imx481->dev, "failed to find sensor: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Set default mode to max resolution */
++	imx481->cur_mode = &supported_mode;
++	imx481->vblank = imx481->cur_mode->vblank;
++
++	ret = imx481_init_controls(imx481);
++	if (ret) {
++		dev_err(imx481->dev, "failed to init controls: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Initialize subdev */
++	imx481->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	imx481->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++
++	v4l2_i2c_subdev_set_name(&imx481->sd, client, name, NULL);
++
++	/* Initialize source pad */
++	imx481->pad.flags = MEDIA_PAD_FL_SOURCE;
++	ret = media_entity_pads_init(&imx481->sd.entity, 1, &imx481->pad);
++	if (ret) {
++		dev_err(imx481->dev, "failed to init entity pads: %d\n", ret);
++		goto error_handler_free;
++	}
++
++	ret = v4l2_async_register_subdev_sensor(&imx481->sd);
++	if (ret < 0) {
++		dev_err(imx481->dev,
++			"failed to register async subdev: %d\n", ret);
++		goto error_media_entity;
++	}
++
++	pm_runtime_set_active(imx481->dev);
++	pm_runtime_enable(imx481->dev);
++	pm_runtime_idle(imx481->dev);
++
++	return 0;
++
++error_media_entity:
++	media_entity_cleanup(&imx481->sd.entity);
++error_handler_free:
++	v4l2_ctrl_handler_free(imx481->sd.ctrl_handler);
++error_power_off:
++	imx481_power_off(imx481->dev);
++error_mutex_destroy:
++	mutex_destroy(&imx481->mutex);
++
++	return ret;
++}
++
++/**
++ * imx481_remove() - I2C client device unbinding
++ * @client: pointer to I2C client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static void imx481_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct imx481 *imx481 = to_imx481(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(sd->ctrl_handler);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		imx481_power_off(&client->dev);
++	pm_runtime_set_suspended(&client->dev);
++
++	mutex_destroy(&imx481->mutex);
++}
++
++static const struct dev_pm_ops imx481_pm_ops = {
++	SET_RUNTIME_PM_OPS(imx481_power_off, imx481_power_on, NULL)
++};
++
++static const struct of_device_id imx481_of_match[] = {
++	{ .compatible = "sony,imx481", .data = "imx481" },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(of, imx481_of_match);
++
++static struct i2c_driver imx481_driver = {
++	.probe = imx481_probe,
++	.remove = imx481_remove,
++	.driver = {
++		.name = "imx481",
++		.pm = &imx481_pm_ops,
++		.of_match_table = imx481_of_match,
++	},
++};
++
++module_i2c_driver(imx481_driver);
++
++MODULE_DESCRIPTION("Sony IMX481 sensor driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/imx586.c b/drivers/media/i2c/imx586.c
+new file mode 100644
+index 000000000000..8ec9e17e7c20
+--- /dev/null
++++ b/drivers/media/i2c/imx586.c
+@@ -0,0 +1,1455 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Sony IMX586 camera sensor driver
++ *
++ * Copyright (C) 2021 Intel Corporation
++ * Copyright (C) 2026 OnePlus 7T Pro Linux contributors
++ */
++#include <linux/unaligned.h>
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-fwnode.h>
++#include <media/v4l2-subdev.h>
++
++/* Streaming Mode */
++#define IMX586_REG_MODE_SELECT	0x0100
++#define IMX586_MODE_STANDBY	0x00
++#define IMX586_MODE_STREAMING	0x01
++
++/* Lines per frame */
++#define IMX586_REG_LPFR		0x0340
++
++/* Chip ID */
++#define IMX586_REG_ID		0x0016
++#define IMX586_ID		0x0586
++
++/* Exposure control */
++#define IMX586_REG_EXPOSURE_CIT	0x0202
++#define IMX586_EXPOSURE_MIN	6
++#define IMX586_EXPOSURE_OFFSET	48
++#define IMX586_EXPOSURE_STEP	1
++#define IMX586_EXPOSURE_DEFAULT	0x0bca
++
++/* Analog gain control */
++#define IMX586_REG_AGAIN	0x0204
++#define IMX586_AGAIN_MIN	0
++#define IMX586_AGAIN_MAX	992
++#define IMX586_AGAIN_STEP	1
++#define IMX586_AGAIN_DEFAULT	0x70
++
++/* Group hold register */
++#define IMX586_REG_HOLD		0x0104
++
++/* Input clock rate */
++#define IMX586_INCLK_RATE	19200000
++
++#define IMX586_VANA_MIN_UV	3300000
++#define IMX586_VANA_MAX_UV	3320000
++#define IMX586_VDIG_LOAD_UA	1100000
++
++/* CSI2 HW configuration */
++#define IMX586_LINK_FREQ	698395833
++#define IMX586_NUM_DATA_LANES	3
++
++#define IMX586_REG_MIN		0x00
++#define IMX586_REG_MAX		0xffff
++
++/**
++ * struct imx586_reg - imx586 sensor register
++ * @address: Register address
++ * @val: Register value
++ */
++struct imx586_reg {
++	u16 address;
++	u8 val;
++};
++
++/**
++ * struct imx586_reg_list - imx586 sensor register list
++ * @num_of_regs: Number of registers in the list
++ * @regs: Pointer to register list
++ */
++struct imx586_reg_list {
++	u32 num_of_regs;
++	const struct imx586_reg *regs;
++};
++
++/**
++ * struct imx586_mode - imx586 sensor mode structure
++ * @width: Frame width
++ * @height: Frame height
++ * @code: Format code
++ * @hblank: Horizontal blanking in lines
++ * @vblank: Vertical blanking in lines
++ * @vblank_min: Minimum vertical blanking in lines
++ * @vblank_max: Maximum vertical blanking in lines
++ * @pclk: Sensor pixel clock
++ * @link_freq_idx: Link frequency index
++ * @reg_list: Register list for sensor mode
++ */
++struct imx586_mode {
++	u32 width;
++	u32 height;
++	u32 code;
++	u32 hblank;
++	u32 vblank;
++	u32 vblank_min;
++	u32 vblank_max;
++	u64 pclk;
++	u32 link_freq_idx;
++	struct imx586_reg_list reg_list;
++};
++
++/**
++ * struct imx586 - imx586 sensor device structure
++ * @dev: Pointer to generic device
++ * @client: Pointer to i2c client
++ * @sd: V4L2 sub-device
++ * @pad: Media pad. Only one pad supported
++ * @reset_gpio: Sensor reset gpio
++ * @inclk: Sensor input clock
++ * @supplies: Regulator supplies
++ * @ctrl_handler: V4L2 control handler
++ * @link_freq_ctrl: Pointer to link frequency control
++ * @pclk_ctrl: Pointer to pixel clock control
++ * @hblank_ctrl: Pointer to horizontal blanking control
++ * @vblank_ctrl: Pointer to vertical blanking control
++ * @exp_ctrl: Pointer to exposure control
++ * @again_ctrl: Pointer to analog gain control
++ * @vblank: Vertical blanking in lines
++ * @cur_mode: Pointer to current selected sensor mode
++ * @mutex: Mutex for serializing sensor controls
++ */
++struct imx586 {
++	struct device *dev;
++	struct i2c_client *client;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct gpio_desc *reset_gpio;
++	struct gpio_desc *vana_enable_gpio;
++	struct gpio_desc *custom1_gpio;
++	struct gpio_desc *custom2_gpio;
++	struct clk *inclk;
++	struct regulator *vana;
++	struct regulator *vdig;
++	struct regulator *vio;
++	struct v4l2_ctrl_handler ctrl_handler;
++	struct v4l2_ctrl *link_freq_ctrl;
++	struct v4l2_ctrl *pclk_ctrl;
++	struct v4l2_ctrl *hblank_ctrl;
++	struct v4l2_ctrl *vblank_ctrl;
++	struct {
++		struct v4l2_ctrl *exp_ctrl;
++		struct v4l2_ctrl *again_ctrl;
++	};
++	u32 vblank;
++	const struct imx586_mode *cur_mode;
++	struct mutex mutex;
++};
++
++static const s64 link_freq[] = {
++	IMX586_LINK_FREQ,
++};
++
++/* Sensor mode registers */
++static const struct imx586_reg imx586_init_regs[] = {
++	{ 0x0136, 0x13 },
++	{ 0x0137, 0x33 },
++	{ 0x3c7e, 0x03 },
++	{ 0x3c7f, 0x0a },
++	{ 0x0111, 0x03 },
++	{ 0x380c, 0x00 },
++	{ 0x3c00, 0x10 },
++	{ 0x3c01, 0x10 },
++	{ 0x3c02, 0x10 },
++	{ 0x3c03, 0x10 },
++	{ 0x3c04, 0x10 },
++	{ 0x3c05, 0x01 },
++	{ 0x3c06, 0x00 },
++	{ 0x3c07, 0x00 },
++	{ 0x3c08, 0x03 },
++	{ 0x3c09, 0xff },
++	{ 0x3c0a, 0x01 },
++	{ 0x3c0b, 0x00 },
++	{ 0x3c0c, 0x00 },
++	{ 0x3c0d, 0x03 },
++	{ 0x3c0e, 0xff },
++	{ 0x3c0f, 0x20 },
++	{ 0x3f88, 0x00 },
++	{ 0x3f8e, 0x00 },
++	{ 0x5282, 0x01 },
++	{ 0x9004, 0x14 },
++	{ 0x9200, 0xf4 },
++	{ 0x9201, 0xa7 },
++	{ 0x9202, 0xf4 },
++	{ 0x9203, 0xaa },
++	{ 0x9204, 0xf4 },
++	{ 0x9205, 0xad },
++	{ 0x9206, 0xf4 },
++	{ 0x9207, 0xb0 },
++	{ 0x9208, 0xf4 },
++	{ 0x9209, 0xb3 },
++	{ 0x920a, 0xb7 },
++	{ 0x920b, 0x34 },
++	{ 0x920c, 0xb7 },
++	{ 0x920d, 0x36 },
++	{ 0x920e, 0xb7 },
++	{ 0x920f, 0x37 },
++	{ 0x9210, 0xb7 },
++	{ 0x9211, 0x38 },
++	{ 0x9212, 0xb7 },
++	{ 0x9213, 0x39 },
++	{ 0x9214, 0xb7 },
++	{ 0x9215, 0x3a },
++	{ 0x9216, 0xb7 },
++	{ 0x9217, 0x3c },
++	{ 0x9218, 0xb7 },
++	{ 0x9219, 0x3d },
++	{ 0x921a, 0xb7 },
++	{ 0x921b, 0x3e },
++	{ 0x921c, 0xb7 },
++	{ 0x921d, 0x3f },
++	{ 0x921e, 0x77 },
++	{ 0x921f, 0x77 },
++	{ 0x9222, 0xc4 },
++	{ 0x9223, 0x4b },
++	{ 0x9224, 0xc4 },
++	{ 0x9225, 0x4c },
++	{ 0x9226, 0xc4 },
++	{ 0x9227, 0x4d },
++	{ 0x9810, 0x14 },
++	{ 0x9814, 0x14 },
++	{ 0x99b2, 0x20 },
++	{ 0x99b3, 0x0f },
++	{ 0x99b4, 0x0f },
++	{ 0x99b5, 0x0f },
++	{ 0x99b6, 0x0f },
++	{ 0x99e4, 0x0f },
++	{ 0x99e5, 0x0f },
++	{ 0x99e6, 0x0f },
++	{ 0x99e7, 0x0f },
++	{ 0x99e8, 0x0f },
++	{ 0x99e9, 0x0f },
++	{ 0x99ea, 0x0f },
++	{ 0x99eb, 0x0f },
++	{ 0x99ec, 0x0f },
++	{ 0xa569, 0x06 },
++	{ 0xa56a, 0x13 },
++	{ 0xa56b, 0x13 },
++	{ 0xa679, 0x20 },
++	{ 0xa830, 0x68 },
++	{ 0xa831, 0x56 },
++	{ 0xa832, 0x2b },
++	{ 0xa833, 0x55 },
++	{ 0xa834, 0x55 },
++	{ 0xa835, 0x16 },
++	{ 0xa837, 0x51 },
++	{ 0xa838, 0x34 },
++	{ 0xa854, 0x4f },
++	{ 0xa855, 0x48 },
++	{ 0xa856, 0x45 },
++	{ 0xa857, 0x02 },
++	{ 0xa85a, 0x23 },
++	{ 0xa85b, 0x16 },
++	{ 0xa85c, 0x12 },
++	{ 0xa85d, 0x02 },
++	{ 0xac72, 0x01 },
++	{ 0xac73, 0x26 },
++	{ 0xac74, 0x01 },
++	{ 0xac75, 0x26 },
++	{ 0xac76, 0x00 },
++	{ 0xac77, 0xc4 },
++	{ 0xb051, 0x02 },
++	{ 0xc020, 0x01 },
++	{ 0xc61d, 0x00 },
++	{ 0xc625, 0x00 },
++	{ 0xc638, 0x03 },
++	{ 0xc63b, 0x01 },
++	{ 0xe286, 0x31 },
++	{ 0xe2a6, 0x32 },
++	{ 0xe2c6, 0x33 },
++	{ 0xea4b, 0x00 },
++	{ 0xea4c, 0x00 },
++	{ 0xea4d, 0x00 },
++	{ 0xea4e, 0x00 },
++	{ 0xf000, 0x00 },
++	{ 0xf001, 0x10 },
++	{ 0xf00c, 0x00 },
++	{ 0xf00d, 0x40 },
++	{ 0xf030, 0x00 },
++	{ 0xf031, 0x10 },
++	{ 0xf03c, 0x00 },
++	{ 0xf03d, 0x40 },
++	{ 0xf44b, 0x80 },
++	{ 0xf44c, 0x10 },
++	{ 0xf44d, 0x06 },
++	{ 0xf44e, 0x80 },
++	{ 0xf44f, 0x10 },
++	{ 0xf450, 0x06 },
++	{ 0xf451, 0x80 },
++	{ 0xf452, 0x10 },
++	{ 0xf453, 0x06 },
++	{ 0xf454, 0x80 },
++	{ 0xf455, 0x10 },
++	{ 0xf456, 0x06 },
++	{ 0xf457, 0x80 },
++	{ 0xf458, 0x10 },
++	{ 0xf459, 0x06 },
++	{ 0xf478, 0x20 },
++	{ 0xf479, 0x80 },
++	{ 0xf47a, 0x80 },
++	{ 0xf47b, 0x20 },
++	{ 0xf47c, 0x80 },
++	{ 0xf47d, 0x80 },
++	{ 0xf47e, 0x20 },
++	{ 0xf47f, 0x80 },
++	{ 0xf480, 0x80 },
++	{ 0xf480, 0x80 },
++	{ 0xf481, 0x20 },
++	{ 0xf482, 0x60 },
++	{ 0xf483, 0x80 },
++	{ 0xf484, 0x20 },
++	{ 0xf485, 0x60 },
++	{ 0xf486, 0x80 },
++	{ 0x9852, 0x00 },
++	{ 0x9954, 0x0f },
++	{ 0xa7ad, 0x01 },
++	{ 0xa7cb, 0x01 },
++	{ 0xae09, 0xff },
++	{ 0xae0a, 0xff },
++	{ 0xae12, 0x58 },
++	{ 0xae13, 0x58 },
++	{ 0xae15, 0x10 },
++	{ 0xae16, 0x10 },
++	{ 0xaf05, 0x48 },
++	{ 0xb07c, 0x02 },
++	{ 0x0106, 0x01 },
++};
++
++static const struct imx586_reg mode_4000x3000_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x02 },
++	{ 0x0342, 0x1e },
++	{ 0x0343, 0xc0 },
++	{ 0x0340, 0x0b },
++	{ 0x0341, 0xfa },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x00 },
++	{ 0x0347, 0x00 },
++	{ 0x0348, 0x1f },
++	{ 0x0349, 0x3f },
++	{ 0x034a, 0x17 },
++	{ 0x034b, 0x6f },
++	{ 0x0220, 0x62 },
++	{ 0x0222, 0x01 },
++	{ 0x0900, 0x01 },
++	{ 0x0901, 0x22 },
++	{ 0x0902, 0x08 },
++	{ 0x3140, 0x00 },
++	{ 0x3246, 0x81 },
++	{ 0x3247, 0x81 },
++	{ 0x3f15, 0x00 },
++	{ 0x0401, 0x00 },
++	{ 0x0404, 0x00 },
++	{ 0x0405, 0x10 },
++	{ 0x0408, 0x00 },
++	{ 0x0409, 0x00 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x00 },
++	{ 0x040c, 0x0f },
++	{ 0x040d, 0xa0 },
++	{ 0x040e, 0x0b },
++	{ 0x040f, 0xb8 },
++	{ 0x034c, 0x0f },
++	{ 0x034d, 0xa0 },
++	{ 0x034e, 0x0b },
++	{ 0x034f, 0xb8 },
++	{ 0x0301, 0x05 },
++	{ 0x0303, 0x04 },
++	{ 0x0305, 0x03 },
++	{ 0x0306, 0x01 },
++	{ 0x0307, 0x1b },
++	{ 0x030b, 0x02 },
++	{ 0x030d, 0x08 },
++	{ 0x030e, 0x02 },
++	{ 0x030f, 0x46 },
++	{ 0x0310, 0x01 },
++	{ 0x3620, 0x00 },
++	{ 0x3621, 0x00 },
++	{ 0x3c11, 0x04 },
++	{ 0x3c12, 0x03 },
++	{ 0x3c13, 0x2d },
++	{ 0x3f0c, 0x01 },
++	{ 0x3f14, 0x00 },
++	{ 0x3f80, 0x01 },
++	{ 0x3f81, 0x90 },
++	{ 0x3f8c, 0x00 },
++	{ 0x3f8d, 0x14 },
++	{ 0x3ff8, 0x01 },
++	{ 0x3ff9, 0x2a },
++	{ 0x3ffe, 0x00 },
++	{ 0x3fff, 0x6c },
++	{ 0x0202, 0x0b },
++	{ 0x0203, 0xca },
++	{ 0x0224, 0x01 },
++	{ 0x0225, 0xf4 },
++	{ 0x3fe0, 0x01 },
++	{ 0x3fe1, 0xf4 },
++	{ 0x0204, 0x00 },
++	{ 0x0205, 0x70 },
++	{ 0x0216, 0x00 },
++	{ 0x0217, 0x70 },
++	{ 0x0218, 0x01 },
++	{ 0x0219, 0x00 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++	{ 0x0210, 0x01 },
++	{ 0x0211, 0x00 },
++	{ 0x0212, 0x01 },
++	{ 0x0213, 0x00 },
++	{ 0x0214, 0x01 },
++	{ 0x0215, 0x00 },
++	{ 0x3fe2, 0x00 },
++	{ 0x3fe3, 0x70 },
++	{ 0x3fe4, 0x01 },
++	{ 0x3fe5, 0x00 },
++	{ 0x3e20, 0x02 },
++	{ 0x3e37, 0x00 },
++	{ 0x3e20, 0x02 },
++	{ 0x3e3b, 0x01 },
++	{ 0x4434, 0x01 },
++	{ 0x4435, 0xf0 },
++};
++
++/* Supported sensor mode configurations */
++static const struct imx586_mode supported_mode = {
++	.width = 4000,
++	.height = 3000,
++	.hblank = 3872,
++	.vblank = 66,
++	.vblank_min = 57,
++	.vblank_max = 62535,
++	.pclk = 478900000,
++	.link_freq_idx = 0,
++	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
++	.reg_list = {
++		.num_of_regs = ARRAY_SIZE(mode_4000x3000_regs),
++		.regs = mode_4000x3000_regs,
++	},
++};
++
++/**
++ * to_imx586() - imx586 V4L2 sub-device to imx586 device.
++ * @subdev: pointer to imx586 V4L2 sub-device
++ *
++ * Return: pointer to imx586 device
++ */
++static inline struct imx586 *to_imx586(struct v4l2_subdev *subdev)
++{
++	return container_of(subdev, struct imx586, sd);
++}
++
++/**
++ * imx586_read_reg() - Read registers.
++ * @imx586: pointer to imx586 device
++ * @reg: register address
++ * @len: length of bytes to read. Max supported bytes is 4
++ * @val: pointer to register value to be filled.
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_read_reg(struct imx586 *imx586, u16 reg, u32 len, u32 *val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx586->sd);
++	struct i2c_msg msgs[2] = {0};
++	u8 addr_buf[2] = {0};
++	u8 data_buf[4] = {0};
++	int ret;
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, addr_buf);
++
++	/* Write register address */
++	msgs[0].addr = client->addr;
++	msgs[0].flags = 0;
++	msgs[0].len = ARRAY_SIZE(addr_buf);
++	msgs[0].buf = addr_buf;
++
++	/* Read data from register */
++	msgs[1].addr = client->addr;
++	msgs[1].flags = I2C_M_RD;
++	msgs[1].len = len;
++	msgs[1].buf = &data_buf[4 - len];
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++	if (ret != ARRAY_SIZE(msgs))
++		return -EIO;
++
++	*val = get_unaligned_be32(data_buf);
++
++	return 0;
++}
++
++/**
++ * imx586_write_reg() - Write register
++ * @imx586: pointer to imx586 device
++ * @reg: register address
++ * @len: length of bytes. Max supported bytes is 4
++ * @val: register value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_write_reg(struct imx586 *imx586, u16 reg, u32 len, u32 val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&imx586->sd);
++	u8 buf[6] = {0};
++
++	if (WARN_ON(len > 4))
++		return -EINVAL;
++
++	put_unaligned_be16(reg, buf);
++	put_unaligned_be32(val << (8 * (4 - len)), buf + 2);
++	if (i2c_master_send(client, buf, len + 2) != len + 2)
++		return -EIO;
++
++	return 0;
++}
++
++/**
++ * imx586_write_regs() - Write a list of registers
++ * @imx586: pointer to imx586 device
++ * @regs: list of registers to be written
++ * @len: length of registers array
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_write_regs(struct imx586 *imx586,
++			     const struct imx586_reg *regs, u32 len)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < len; i++) {
++		ret = imx586_write_reg(imx586, regs[i].address, 1, regs[i].val);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
++/**
++ * imx586_update_controls() - Update control ranges based on streaming mode
++ * @imx586: pointer to imx586 device
++ * @mode: pointer to imx586_mode sensor mode
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_update_controls(struct imx586 *imx586,
++				  const struct imx586_mode *mode)
++{
++	int ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx586->link_freq_ctrl, mode->link_freq_idx);
++	if (ret)
++		return ret;
++
++	ret = __v4l2_ctrl_s_ctrl(imx586->hblank_ctrl, mode->hblank);
++	if (ret)
++		return ret;
++
++	return __v4l2_ctrl_modify_range(imx586->vblank_ctrl, mode->vblank_min,
++					mode->vblank_max, 1, mode->vblank);
++}
++
++/**
++ * imx586_update_exp_gain() - Set updated exposure and gain
++ * @imx586: pointer to imx586 device
++ * @exposure: updated exposure value
++ * @gain: updated analog gain value
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_update_exp_gain(struct imx586 *imx586, u32 exposure, u32 gain)
++{
++	u32 lpfr;
++	int ret;
++
++	lpfr = imx586->vblank + imx586->cur_mode->height;
++
++	dev_dbg(imx586->dev, "Set exp %u, analog gain %u, lpfr %u\n",
++		exposure, gain, lpfr);
++
++	ret = imx586_write_reg(imx586, IMX586_REG_HOLD, 1, 1);
++	if (ret)
++		return ret;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_LPFR, 2, lpfr);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_EXPOSURE_CIT, 2, exposure);
++	if (ret)
++		goto error_release_group_hold;
++
++	ret = imx586_write_reg(imx586, IMX586_REG_AGAIN, 2, gain);
++
++error_release_group_hold:
++	imx586_write_reg(imx586, IMX586_REG_HOLD, 1, 0);
++
++	return ret;
++}
++
++/**
++ * imx586_set_ctrl() - Set subdevice control
++ * @ctrl: pointer to v4l2_ctrl structure
++ *
++ * Supported controls:
++ * - V4L2_CID_VBLANK
++ * - cluster controls:
++ *   - V4L2_CID_ANALOGUE_GAIN
++ *   - V4L2_CID_EXPOSURE
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct imx586 *imx586 =
++		container_of(ctrl->handler, struct imx586, ctrl_handler);
++	u32 analog_gain;
++	u32 exposure;
++	int ret;
++
++	switch (ctrl->id) {
++	case V4L2_CID_VBLANK:
++		imx586->vblank = imx586->vblank_ctrl->val;
++
++		dev_dbg(imx586->dev, "Received vblank %u, new lpfr %u\n",
++			imx586->vblank,
++			imx586->vblank + imx586->cur_mode->height);
++
++		ret = __v4l2_ctrl_modify_range(imx586->exp_ctrl,
++					       IMX586_EXPOSURE_MIN,
++					       imx586->vblank +
++					       imx586->cur_mode->height -
++					       IMX586_EXPOSURE_OFFSET,
++					       1, IMX586_EXPOSURE_DEFAULT);
++		break;
++	case V4L2_CID_EXPOSURE:
++		/* Set controls only if sensor is in power on state */
++		if (!pm_runtime_get_if_in_use(imx586->dev))
++			return 0;
++
++		exposure = ctrl->val;
++		analog_gain = imx586->again_ctrl->val;
++
++		dev_dbg(imx586->dev, "Received exp %u, analog gain %u\n",
++			exposure, analog_gain);
++
++		ret = imx586_update_exp_gain(imx586, exposure, analog_gain);
++
++		pm_runtime_put(imx586->dev);
++
++		break;
++	default:
++		dev_err(imx586->dev, "Invalid control %d\n", ctrl->id);
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++/* V4l2 subdevice control ops*/
++static const struct v4l2_ctrl_ops imx586_ctrl_ops = {
++	.s_ctrl = imx586_set_ctrl,
++};
++
++/**
++ * imx586_enum_mbus_code() - Enumerate V4L2 sub-device mbus codes
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @code: V4L2 sub-device code enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_enum_mbus_code(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_mbus_code_enum *code)
++{
++	if (code->index > 0)
++		return -EINVAL;
++
++	code->code = supported_mode.code;
++
++	return 0;
++}
++
++/**
++ * imx586_enum_frame_size() - Enumerate V4L2 sub-device frame sizes
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fsize: V4L2 sub-device size enumeration need to be filled
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_enum_frame_size(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *sd_state,
++				  struct v4l2_subdev_frame_size_enum *fsize)
++{
++	if (fsize->index > 0)
++		return -EINVAL;
++
++	if (fsize->code != supported_mode.code)
++		return -EINVAL;
++
++	fsize->min_width = supported_mode.width;
++	fsize->max_width = fsize->min_width;
++	fsize->min_height = supported_mode.height;
++	fsize->max_height = fsize->min_height;
++
++	return 0;
++}
++
++/**
++ * imx586_fill_pad_format() - Fill subdevice pad format
++ *                            from selected sensor mode
++ * @imx586: pointer to imx586 device
++ * @mode: pointer to imx586_mode sensor mode
++ * @fmt: V4L2 sub-device format need to be filled
++ */
++static void imx586_fill_pad_format(struct imx586 *imx586,
++				   const struct imx586_mode *mode,
++				   struct v4l2_subdev_format *fmt)
++{
++	fmt->format.width = mode->width;
++	fmt->format.height = mode->height;
++	fmt->format.code = mode->code;
++	fmt->format.field = V4L2_FIELD_NONE;
++	fmt->format.colorspace = V4L2_COLORSPACE_RAW;
++	fmt->format.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
++	fmt->format.quantization = V4L2_QUANTIZATION_DEFAULT;
++	fmt->format.xfer_func = V4L2_XFER_FUNC_NONE;
++}
++
++/**
++ * imx586_get_pad_format() - Get subdevice pad format
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_get_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++
++	mutex_lock(&imx586->mutex);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		fmt->format = *framefmt;
++	} else {
++		imx586_fill_pad_format(imx586, imx586->cur_mode, fmt);
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return 0;
++}
++
++/**
++ * imx586_set_pad_format() - Set subdevice pad format
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ * @fmt: V4L2 sub-device format need to be set
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	const struct imx586_mode *mode;
++	int ret = 0;
++
++	mutex_lock(&imx586->mutex);
++
++	mode = &supported_mode;
++	imx586_fill_pad_format(imx586, mode, fmt);
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
++		struct v4l2_mbus_framefmt *framefmt;
++
++		framefmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
++		*framefmt = fmt->format;
++	} else {
++		ret = imx586_update_controls(imx586, mode);
++		if (!ret)
++			imx586->cur_mode = mode;
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return ret;
++}
++
++static int imx586_get_selection(struct v4l2_subdev *sd,
++				struct v4l2_subdev_state *sd_state,
++				struct v4l2_subdev_selection *sel)
++{
++	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
++		return -EINVAL;
++
++	switch (sel->target) {
++	case V4L2_SEL_TGT_NATIVE_SIZE:
++	case V4L2_SEL_TGT_CROP_BOUNDS:
++	case V4L2_SEL_TGT_CROP_DEFAULT:
++	case V4L2_SEL_TGT_CROP:
++		/* The 4000x3000 mode bins the complete 8000x6000 array 2x2. */
++		sel->r = (struct v4l2_rect) { 0, 0, 8000, 6000 };
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++/**
++ * imx586_init_state() - Initialize sub-device state
++ * @sd: pointer to imx586 V4L2 sub-device structure
++ * @sd_state: V4L2 sub-device configuration
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *sd_state)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	struct v4l2_subdev_format fmt = { 0 };
++
++	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
++	imx586_fill_pad_format(imx586, &supported_mode, &fmt);
++
++	return imx586_set_pad_format(sd, sd_state, &fmt);
++}
++
++/**
++ * imx586_start_streaming() - Start sensor stream
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_start_streaming(struct imx586 *imx586)
++{
++	const struct imx586_reg_list *reg_list;
++	int ret;
++
++	ret = imx586_write_regs(imx586, imx586_init_regs,
++				ARRAY_SIZE(imx586_init_regs));
++	if (ret) {
++		dev_err(imx586->dev, "failed to write global registers\n");
++		return ret;
++	}
++
++	/* Write sensor mode registers */
++	reg_list = &imx586->cur_mode->reg_list;
++	ret = imx586_write_regs(imx586, reg_list->regs,
++				reg_list->num_of_regs);
++	if (ret) {
++		dev_err(imx586->dev, "failed to write mode registers\n");
++		return ret;
++	}
++
++	/* Setup handler will write actual exposure and gain */
++	ret =  __v4l2_ctrl_handler_setup(imx586->sd.ctrl_handler);
++	if (ret) {
++		dev_err(imx586->dev, "fail to setup handler\n");
++		return ret;
++	}
++
++	/* Start streaming */
++	ret = imx586_write_reg(imx586, IMX586_REG_MODE_SELECT,
++			       1, IMX586_MODE_STREAMING);
++	if (ret) {
++		dev_err(imx586->dev, "failed to start streaming\n");
++		return ret;
++	}
++
++	dev_info(imx586->dev, "streaming 4000x3000 RAW10 over three-trio C-PHY\n");
++
++	return 0;
++}
++
++/**
++ * imx586_stop_streaming() - Stop sensor stream
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_stop_streaming(struct imx586 *imx586)
++{
++	return imx586_write_reg(imx586, IMX586_REG_MODE_SELECT,
++				1, IMX586_MODE_STANDBY);
++}
++
++/**
++ * imx586_set_stream() - Enable sensor streaming
++ * @sd: pointer to imx586 subdevice
++ * @enable: set to enable sensor streaming
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_set_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct imx586 *imx586 = to_imx586(sd);
++	int ret;
++
++	mutex_lock(&imx586->mutex);
++
++	if (enable) {
++		ret = pm_runtime_resume_and_get(imx586->dev);
++		if (ret)
++			goto error_unlock;
++
++		ret = imx586_start_streaming(imx586);
++		if (ret)
++			goto error_power_off;
++	} else {
++		imx586_stop_streaming(imx586);
++		pm_runtime_put(imx586->dev);
++	}
++
++	mutex_unlock(&imx586->mutex);
++
++	return 0;
++
++error_power_off:
++	pm_runtime_put(imx586->dev);
++error_unlock:
++	mutex_unlock(&imx586->mutex);
++
++	return ret;
++}
++
++/**
++ * imx586_detect() - Detect imx586 sensor
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, -EIO if sensor id does not match
++ */
++static int imx586_detect(struct imx586 *imx586)
++{
++	int ret;
++	u32 val;
++
++	ret = imx586_read_reg(imx586, IMX586_REG_ID, 2, &val);
++	if (ret)
++		return ret;
++
++	if (val != IMX586_ID) {
++		dev_err(imx586->dev, "chip id mismatch: %x!=%x\n",
++			IMX586_ID, val);
++		return -ENXIO;
++	}
++
++	return 0;
++}
++
++/**
++ * imx586_parse_hw_config() - Parse HW configuration and check if supported
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_parse_hw_config(struct imx586 *imx586)
++{
++	struct fwnode_handle *fwnode = dev_fwnode(imx586->dev);
++	struct v4l2_fwnode_endpoint bus_cfg = {
++		.bus_type = V4L2_MBUS_CSI2_CPHY
++	};
++	struct fwnode_handle *ep;
++	unsigned long rate;
++	unsigned int i;
++	int ret;
++
++	if (!fwnode)
++		return -ENXIO;
++
++	/* The GPIO values are logical; reset is active low in the DT. */
++	imx586->reset_gpio = devm_gpiod_get(imx586->dev, "reset",
++					    GPIOD_OUT_HIGH);
++	if (IS_ERR(imx586->reset_gpio)) {
++		dev_err(imx586->dev, "failed to get reset gpio %ld\n",
++			PTR_ERR(imx586->reset_gpio));
++		return PTR_ERR(imx586->reset_gpio);
++	}
++
++	imx586->vana_enable_gpio = devm_gpiod_get(imx586->dev, "vana-enable",
++						  GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->vana_enable_gpio))
++		return dev_err_probe(imx586->dev,
++				     PTR_ERR(imx586->vana_enable_gpio),
++				     "failed to get VANA enable GPIO\n");
++
++	imx586->custom1_gpio = devm_gpiod_get(imx586->dev, "custom1",
++					      GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->custom1_gpio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->custom1_gpio),
++				     "failed to get CUSTOM_GPIO1\n");
++
++	imx586->custom2_gpio = devm_gpiod_get(imx586->dev, "custom2",
++					      GPIOD_OUT_LOW);
++	if (IS_ERR(imx586->custom2_gpio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->custom2_gpio),
++				     "failed to get CUSTOM_GPIO2\n");
++
++	/* Get sensor input clock */
++	imx586->inclk = devm_clk_get(imx586->dev, NULL);
++	if (IS_ERR(imx586->inclk)) {
++		dev_err(imx586->dev, "could not get inclk\n");
++		return PTR_ERR(imx586->inclk);
++	}
++
++	ret = clk_set_rate(imx586->inclk, IMX586_INCLK_RATE);
++	if (ret)
++		return dev_err_probe(imx586->dev, ret,
++				     "could not set 19.2 MHz input clock\n");
++
++	rate = clk_get_rate(imx586->inclk);
++	if (rate != IMX586_INCLK_RATE) {
++		dev_err(imx586->dev, "inclk frequency mismatch\n");
++		return -EINVAL;
++	}
++
++	imx586->vana = devm_regulator_get(imx586->dev, "vana");
++	if (IS_ERR(imx586->vana))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vana),
++				     "failed to get VANA\n");
++
++	imx586->vdig = devm_regulator_get(imx586->dev, "vdig");
++	if (IS_ERR(imx586->vdig))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vdig),
++				     "failed to get VDIG\n");
++
++	imx586->vio = devm_regulator_get(imx586->dev, "vio");
++	if (IS_ERR(imx586->vio))
++		return dev_err_probe(imx586->dev, PTR_ERR(imx586->vio),
++				     "failed to get VIO\n");
++
++	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
++	if (!ep)
++		return -ENXIO;
++
++	ret = v4l2_fwnode_endpoint_alloc_parse(ep, &bus_cfg);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++
++	if (bus_cfg.bus_type != V4L2_MBUS_CSI2_CPHY) {
++		dev_err(imx586->dev, "endpoint must use C-PHY\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX586_NUM_DATA_LANES) {
++		dev_err(imx586->dev,
++			"number of CSI2 data lanes %d is not supported\n",
++			bus_cfg.bus.mipi_csi2.num_data_lanes);
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	if (!bus_cfg.nr_of_link_frequencies) {
++		dev_err(imx586->dev, "no link frequencies defined\n");
++		ret = -EINVAL;
++		goto done_endpoint_free;
++	}
++
++	for (i = 0; i < bus_cfg.nr_of_link_frequencies; i++)
++		if (bus_cfg.link_frequencies[i] == IMX586_LINK_FREQ)
++			goto done_endpoint_free;
++
++	ret = -EINVAL;
++
++done_endpoint_free:
++	v4l2_fwnode_endpoint_free(&bus_cfg);
++
++	return ret;
++}
++
++/* V4l2 subdevice ops */
++static const struct v4l2_subdev_video_ops imx586_video_ops = {
++	.s_stream = imx586_set_stream,
++};
++
++static const struct v4l2_subdev_pad_ops imx586_pad_ops = {
++	.enum_mbus_code = imx586_enum_mbus_code,
++	.enum_frame_size = imx586_enum_frame_size,
++	.get_fmt = imx586_get_pad_format,
++	.set_fmt = imx586_set_pad_format,
++	.get_selection = imx586_get_selection,
++};
++
++static const struct v4l2_subdev_ops imx586_subdev_ops = {
++	.video = &imx586_video_ops,
++	.pad = &imx586_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops imx586_internal_ops = {
++	.init_state = imx586_init_state,
++};
++
++/**
++ * imx586_power_on() - Sensor power on sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_power_on(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx586 *imx586 = to_imx586(sd);
++	int ret;
++
++	ret = regulator_set_voltage(imx586->vana, IMX586_VANA_MIN_UV,
++				    IMX586_VANA_MAX_UV);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to set VANA voltage\n");
++
++	ret = regulator_enable(imx586->vana);
++	if (ret)
++		goto error_vana_voltage;
++
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 1);
++	usleep_range(1000, 2000);
++
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 1);
++
++	ret = regulator_set_load(imx586->vdig, IMX586_VDIG_LOAD_UA);
++	if (ret)
++		goto error_custom1;
++
++	ret = regulator_enable(imx586->vdig);
++	if (ret)
++		goto error_vdig_load;
++	usleep_range(1000, 2000);
++
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 1);
++
++	ret = regulator_enable(imx586->vio);
++	if (ret)
++		goto error_custom2;
++	usleep_range(1000, 2000);
++
++	ret = clk_prepare_enable(imx586->inclk);
++	if (ret) {
++		dev_err(imx586->dev, "failed to enable input clock\n");
++		goto error_vio;
++	}
++
++	usleep_range(1000, 1200);
++	gpiod_set_value_cansleep(imx586->reset_gpio, 0);
++	usleep_range(1000, 2000);
++
++	return 0;
++
++error_vio:
++	regulator_disable(imx586->vio);
++error_custom2:
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 0);
++	regulator_disable(imx586->vdig);
++error_vdig_load:
++	regulator_set_load(imx586->vdig, 0);
++error_custom1:
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 0);
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 0);
++	regulator_disable(imx586->vana);
++error_vana_voltage:
++	regulator_set_voltage(imx586->vana, 0, IMX586_VANA_MAX_UV);
++
++	return ret;
++}
++
++/**
++ * imx586_power_off() - Sensor power off sequence
++ * @dev: pointer to i2c device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_power_off(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx586 *imx586 = to_imx586(sd);
++
++	gpiod_set_value_cansleep(imx586->reset_gpio, 1);
++	clk_disable_unprepare(imx586->inclk);
++	regulator_disable(imx586->vio);
++	gpiod_set_value_cansleep(imx586->custom2_gpio, 0);
++	regulator_disable(imx586->vdig);
++	regulator_set_load(imx586->vdig, 0);
++	gpiod_set_value_cansleep(imx586->custom1_gpio, 0);
++	gpiod_set_value_cansleep(imx586->vana_enable_gpio, 0);
++	regulator_disable(imx586->vana);
++	regulator_set_voltage(imx586->vana, 0, IMX586_VANA_MAX_UV);
++
++	return 0;
++}
++
++/**
++ * imx586_init_controls() - Initialize sensor subdevice controls
++ * @imx586: pointer to imx586 device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_init_controls(struct imx586 *imx586)
++{
++	struct v4l2_ctrl_handler *ctrl_hdlr = &imx586->ctrl_handler;
++	const struct imx586_mode *mode = imx586->cur_mode;
++	struct v4l2_fwnode_device_properties props;
++	u32 lpfr;
++	int ret;
++
++	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
++	if (ret)
++		return ret;
++
++	/* Serialize controls with sensor device */
++	ctrl_hdlr->lock = &imx586->mutex;
++
++	/* Initialize exposure and gain */
++	lpfr = mode->vblank + mode->height;
++	imx586->exp_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					     &imx586_ctrl_ops,
++					     V4L2_CID_EXPOSURE,
++					     IMX586_EXPOSURE_MIN,
++					     lpfr - IMX586_EXPOSURE_OFFSET,
++					     IMX586_EXPOSURE_STEP,
++					     IMX586_EXPOSURE_DEFAULT);
++
++	imx586->again_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					       &imx586_ctrl_ops,
++					       V4L2_CID_ANALOGUE_GAIN,
++					       IMX586_AGAIN_MIN,
++					       IMX586_AGAIN_MAX,
++					       IMX586_AGAIN_STEP,
++					       IMX586_AGAIN_DEFAULT);
++
++	v4l2_ctrl_cluster(2, &imx586->exp_ctrl);
++
++	imx586->vblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx586_ctrl_ops,
++						V4L2_CID_VBLANK,
++						mode->vblank_min,
++						mode->vblank_max,
++						1, mode->vblank);
++
++	/* Read only controls */
++	imx586->pclk_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++					      &imx586_ctrl_ops,
++					      V4L2_CID_PIXEL_RATE,
++					      mode->pclk, mode->pclk,
++					      1, mode->pclk);
++
++	imx586->link_freq_ctrl = v4l2_ctrl_new_int_menu(ctrl_hdlr,
++							&imx586_ctrl_ops,
++							V4L2_CID_LINK_FREQ,
++							ARRAY_SIZE(link_freq) -
++							1,
++							mode->link_freq_idx,
++							link_freq);
++	if (imx586->link_freq_ctrl)
++		imx586->link_freq_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	imx586->hblank_ctrl = v4l2_ctrl_new_std(ctrl_hdlr,
++						&imx586_ctrl_ops,
++						V4L2_CID_HBLANK,
++						IMX586_REG_MIN,
++						IMX586_REG_MAX,
++						1, mode->hblank);
++	if (imx586->hblank_ctrl)
++		imx586->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	ret = v4l2_fwnode_device_parse(imx586->dev, &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &imx586_ctrl_ops,
++					      &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	if (ctrl_hdlr->error) {
++		ret = ctrl_hdlr->error;
++		dev_err(imx586->dev, "control init failed: %d\n",
++			ret);
++		goto error_free_hdlr;
++	}
++
++	imx586->sd.ctrl_handler = ctrl_hdlr;
++
++	return 0;
++
++error_free_hdlr:
++	v4l2_ctrl_handler_free(ctrl_hdlr);
++
++	return ret;
++}
++
++/**
++ * imx586_probe() - I2C client device binding
++ * @client: pointer to i2c client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static int imx586_probe(struct i2c_client *client)
++{
++	struct imx586 *imx586;
++	const char *name;
++	int ret;
++
++	imx586 = devm_kzalloc(&client->dev, sizeof(*imx586), GFP_KERNEL);
++	if (!imx586)
++		return -ENOMEM;
++
++	imx586->dev = &client->dev;
++	name = device_get_match_data(&client->dev);
++	if (!name)
++		return -ENODEV;
++
++	/* Initialize subdev */
++	v4l2_i2c_subdev_init(&imx586->sd, client, &imx586_subdev_ops);
++	imx586->sd.internal_ops = &imx586_internal_ops;
++
++	ret = imx586_parse_hw_config(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "HW configuration is not supported\n");
++		return ret;
++	}
++
++	mutex_init(&imx586->mutex);
++
++	ret = imx586_power_on(imx586->dev);
++	if (ret) {
++		dev_err(imx586->dev, "failed to power-on the sensor\n");
++		goto error_mutex_destroy;
++	}
++
++	/* Check module identity */
++	ret = imx586_detect(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "failed to find sensor: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Set default mode to max resolution */
++	imx586->cur_mode = &supported_mode;
++	imx586->vblank = imx586->cur_mode->vblank;
++
++	ret = imx586_init_controls(imx586);
++	if (ret) {
++		dev_err(imx586->dev, "failed to init controls: %d\n", ret);
++		goto error_power_off;
++	}
++
++	/* Initialize subdev */
++	imx586->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	imx586->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++
++	v4l2_i2c_subdev_set_name(&imx586->sd, client, name, NULL);
++
++	/* Initialize source pad */
++	imx586->pad.flags = MEDIA_PAD_FL_SOURCE;
++	ret = media_entity_pads_init(&imx586->sd.entity, 1, &imx586->pad);
++	if (ret) {
++		dev_err(imx586->dev, "failed to init entity pads: %d\n", ret);
++		goto error_handler_free;
++	}
++
++	ret = v4l2_async_register_subdev_sensor(&imx586->sd);
++	if (ret < 0) {
++		dev_err(imx586->dev,
++			"failed to register async subdev: %d\n", ret);
++		goto error_media_entity;
++	}
++
++	pm_runtime_set_active(imx586->dev);
++	pm_runtime_enable(imx586->dev);
++	pm_runtime_idle(imx586->dev);
++
++	return 0;
++
++error_media_entity:
++	media_entity_cleanup(&imx586->sd.entity);
++error_handler_free:
++	v4l2_ctrl_handler_free(imx586->sd.ctrl_handler);
++error_power_off:
++	imx586_power_off(imx586->dev);
++error_mutex_destroy:
++	mutex_destroy(&imx586->mutex);
++
++	return ret;
++}
++
++/**
++ * imx586_remove() - I2C client device unbinding
++ * @client: pointer to I2C client device
++ *
++ * Return: 0 if successful, error code otherwise.
++ */
++static void imx586_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct imx586 *imx586 = to_imx586(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(sd->ctrl_handler);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		imx586_power_off(&client->dev);
++	pm_runtime_set_suspended(&client->dev);
++
++	mutex_destroy(&imx586->mutex);
++}
++
++static const struct dev_pm_ops imx586_pm_ops = {
++	SET_RUNTIME_PM_OPS(imx586_power_off, imx586_power_on, NULL)
++};
++
++static const struct of_device_id imx586_of_match[] = {
++	{ .compatible = "sony,imx586", .data = "imx586" },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(of, imx586_of_match);
++
++static struct i2c_driver imx586_driver = {
++	.probe = imx586_probe,
++	.remove = imx586_remove,
++	.driver = {
++		.name = "imx586",
++		.pm = &imx586_pm_ops,
++		.of_match_table = imx586_of_match,
++	},
++};
++
++module_i2c_driver(imx586_driver);
++
++MODULE_DESCRIPTION("Sony IMX586 sensor driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/lc898217xc.c b/drivers/media/i2c/lc898217xc.c
+new file mode 100644
+index 000000000000..f65156257589
+--- /dev/null
++++ b/drivers/media/i2c/lc898217xc.c
+@@ -0,0 +1,335 @@
++// SPDX-License-Identifier: GPL-2.0
++// Copyright (C) 2026 Robin Snyders
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/property.h>
++#include <linux/regulator/consumer.h>
++
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-device.h>
++
++#define LC898217XC_REG_STATUS		0xb3
++#define LC898217XC_REG_POSITION		0x84
++#define LC898217XC_STATUS_READY		0x00
++#define LC898217XC_MAX_FOCUS_POS	1023
++#define LC898217XC_DEFAULT_FOCUS_POS	50
++#define LC898217XC_CTRL_STEPS		16
++#define LC898217XC_CTRL_DELAY_US		1000
++#define LC898217XC_POWER_DELAY_US	1000
++#define LC898217XC_READY_RETRIES		20
++#define LC898217XC_READY_DELAY_US	20000
++
++static const char * const lc898217xc_supply_names[] = {
++	"vdd",
++	"vio",
++};
++
++struct lc898217xc_device {
++	struct v4l2_ctrl_handler ctrls;
++	struct v4l2_subdev sd;
++	struct v4l2_ctrl *focus;
++	struct regulator_bulk_data supplies[ARRAY_SIZE(lc898217xc_supply_names)];
++	u16 focus_pos_max;
++	u16 focus_pos_default;
++};
++
++static inline struct lc898217xc_device *
++to_lc898217xc(struct v4l2_subdev *sd)
++{
++	return container_of(sd, struct lc898217xc_device, sd);
++}
++
++static int lc898217xc_read8(struct lc898217xc_device *vcm, u8 reg, u8 *val)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&vcm->sd);
++	int ret;
++
++	ret = i2c_smbus_read_byte_data(client, reg);
++	if (ret < 0)
++		return ret;
++
++	*val = ret;
++	return 0;
++}
++
++static int lc898217xc_set_position(struct lc898217xc_device *vcm, u16 position)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&vcm->sd);
++	u8 buf[] = {
++		LC898217XC_REG_POSITION,
++		position >> 8,
++		position & 0xff,
++	};
++	int ret;
++
++	ret = i2c_master_send(client, buf, sizeof(buf));
++	if (ret < 0)
++		return ret;
++
++	return ret == sizeof(buf) ? 0 : -EIO;
++}
++
++static int lc898217xc_wait_ready(struct lc898217xc_device *vcm)
++{
++	int ret;
++	int i;
++	u8 status = 0xff;
++
++	for (i = 0; i < LC898217XC_READY_RETRIES; i++) {
++		ret = lc898217xc_read8(vcm, LC898217XC_REG_STATUS, &status);
++		if (!ret && status == LC898217XC_STATUS_READY)
++			return 0;
++		if (ret && ret != -ENXIO && ret != -EREMOTEIO)
++			return ret;
++		usleep_range(LC898217XC_READY_DELAY_US,
++			     LC898217XC_READY_DELAY_US + 1000);
++	}
++
++	dev_err(vcm->sd.dev, "status 0x%02x did not become ready\n", status);
++	return ret ? ret : -EBUSY;
++}
++
++static int lc898217xc_power_up(struct lc898217xc_device *vcm)
++{
++	int ret;
++
++	ret = regulator_bulk_enable(ARRAY_SIZE(lc898217xc_supply_names),
++				    vcm->supplies);
++	if (ret)
++		return ret;
++
++	usleep_range(LC898217XC_POWER_DELAY_US,
++		     LC898217XC_POWER_DELAY_US + 500);
++
++	ret = lc898217xc_wait_ready(vcm);
++	if (ret)
++		goto err_disable;
++
++	ret = lc898217xc_set_position(vcm, vcm->focus->val);
++	if (ret)
++		goto err_disable;
++
++	return 0;
++
++err_disable:
++	regulator_bulk_disable(ARRAY_SIZE(lc898217xc_supply_names),
++			       vcm->supplies);
++	return ret;
++}
++
++static int lc898217xc_power_down(struct lc898217xc_device *vcm)
++{
++	int ret;
++	int val;
++
++	for (val = vcm->focus->val & ~(LC898217XC_CTRL_STEPS - 1);
++	     val >= 0; val -= LC898217XC_CTRL_STEPS) {
++		ret = lc898217xc_set_position(vcm, val);
++		if (ret) {
++			dev_warn_once(vcm->sd.dev,
++				      "failed to park lens: %d\n", ret);
++			break;
++		}
++		usleep_range(LC898217XC_CTRL_DELAY_US,
++			     LC898217XC_CTRL_DELAY_US + 100);
++	}
++
++	return regulator_bulk_disable(ARRAY_SIZE(lc898217xc_supply_names),
++				      vcm->supplies);
++}
++
++static int lc898217xc_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct lc898217xc_device *vcm = container_of(ctrl->handler,
++						    struct lc898217xc_device,
++						    ctrls);
++	int ret;
++
++	if (ctrl->id != V4L2_CID_FOCUS_ABSOLUTE)
++		return -EINVAL;
++
++	if (!pm_runtime_get_if_in_use(vcm->sd.dev))
++		return 0;
++
++	ret = lc898217xc_set_position(vcm, ctrl->val);
++	pm_runtime_put(vcm->sd.dev);
++
++	return ret;
++}
++
++static const struct v4l2_ctrl_ops lc898217xc_ctrl_ops = {
++	.s_ctrl = lc898217xc_set_ctrl,
++};
++
++static int lc898217xc_open(struct v4l2_subdev *sd,
++			   struct v4l2_subdev_fh *fh)
++{
++	return pm_runtime_resume_and_get(sd->dev);
++}
++
++static int lc898217xc_close(struct v4l2_subdev *sd,
++			    struct v4l2_subdev_fh *fh)
++{
++	pm_runtime_put_autosuspend(sd->dev);
++	return 0;
++}
++
++static const struct v4l2_subdev_internal_ops lc898217xc_internal_ops = {
++	.open = lc898217xc_open,
++	.close = lc898217xc_close,
++};
++
++static const struct v4l2_subdev_ops lc898217xc_subdev_ops = { };
++
++static int lc898217xc_runtime_suspend(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++
++	return lc898217xc_power_down(to_lc898217xc(sd));
++}
++
++static int lc898217xc_runtime_resume(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++
++	return lc898217xc_power_up(to_lc898217xc(sd));
++}
++
++static int lc898217xc_probe(struct i2c_client *client)
++{
++	struct lc898217xc_device *vcm;
++	u32 value;
++	unsigned int i;
++	int ret;
++
++	vcm = devm_kzalloc(&client->dev, sizeof(*vcm), GFP_KERNEL);
++	if (!vcm)
++		return -ENOMEM;
++
++	vcm->focus_pos_max = LC898217XC_MAX_FOCUS_POS;
++	if (!device_property_read_u32(&client->dev,
++				      "onnn,max-focus-position", &value)) {
++		if (!value || value > LC898217XC_MAX_FOCUS_POS)
++			return dev_err_probe(&client->dev, -EINVAL,
++					     "invalid maximum focus position\n");
++		vcm->focus_pos_max = value;
++	}
++
++	vcm->focus_pos_default = LC898217XC_DEFAULT_FOCUS_POS;
++	if (!device_property_read_u32(&client->dev,
++				      "onnn,default-focus-position", &value))
++		vcm->focus_pos_default = value;
++	if (vcm->focus_pos_default > vcm->focus_pos_max)
++		return dev_err_probe(&client->dev, -EINVAL,
++				     "default focus position exceeds maximum\n");
++
++	for (i = 0; i < ARRAY_SIZE(lc898217xc_supply_names); i++)
++		vcm->supplies[i].supply = lc898217xc_supply_names[i];
++
++	ret = devm_regulator_bulk_get(&client->dev,
++				      ARRAY_SIZE(lc898217xc_supply_names),
++				      vcm->supplies);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to get regulators\n");
++
++	v4l2_i2c_subdev_init(&vcm->sd, client, &lc898217xc_subdev_ops);
++	device_disable_async_suspend(&client->dev);
++	vcm->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	vcm->sd.internal_ops = &lc898217xc_internal_ops;
++	vcm->sd.entity.function = MEDIA_ENT_F_LENS;
++
++	v4l2_ctrl_handler_init(&vcm->ctrls, 1);
++	vcm->focus = v4l2_ctrl_new_std(&vcm->ctrls, &lc898217xc_ctrl_ops,
++				       V4L2_CID_FOCUS_ABSOLUTE, 0,
++				       vcm->focus_pos_max, 1,
++				       vcm->focus_pos_default);
++	if (vcm->ctrls.error) {
++		ret = vcm->ctrls.error;
++		goto err_free_ctrls;
++	}
++	vcm->sd.ctrl_handler = &vcm->ctrls;
++
++	ret = media_entity_pads_init(&vcm->sd.entity, 0, NULL);
++	if (ret)
++		goto err_free_ctrls;
++
++	ret = lc898217xc_power_up(vcm);
++	if (ret) {
++		dev_err_probe(&client->dev, ret,
++			      "failed to power or identify actuator\n");
++		goto err_cleanup_entity;
++	}
++
++	dev_info(&client->dev, "LC898217XC actuator ready\n");
++
++	pm_runtime_set_active(&client->dev);
++	pm_runtime_get_noresume(&client->dev);
++	pm_runtime_enable(&client->dev);
++
++	ret = v4l2_async_register_subdev(&vcm->sd);
++	if (ret) {
++		dev_err_probe(&client->dev, ret,
++			      "failed to register V4L2 subdevice\n");
++		goto err_pm;
++	}
++
++	pm_runtime_set_autosuspend_delay(&client->dev, 1000);
++	pm_runtime_use_autosuspend(&client->dev);
++	pm_runtime_put_autosuspend(&client->dev);
++
++	return 0;
++
++err_pm:
++	pm_runtime_disable(&client->dev);
++	pm_runtime_put_noidle(&client->dev);
++	lc898217xc_power_down(vcm);
++err_cleanup_entity:
++	media_entity_cleanup(&vcm->sd.entity);
++err_free_ctrls:
++	v4l2_ctrl_handler_free(&vcm->ctrls);
++	return ret;
++}
++
++static void lc898217xc_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct lc898217xc_device *vcm = to_lc898217xc(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	v4l2_ctrl_handler_free(&vcm->ctrls);
++	media_entity_cleanup(&sd->entity);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		lc898217xc_power_down(vcm);
++	pm_runtime_set_suspended(&client->dev);
++}
++
++static const struct of_device_id lc898217xc_of_match[] = {
++	{ .compatible = "onnn,lc898217xc" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, lc898217xc_of_match);
++
++static DEFINE_RUNTIME_DEV_PM_OPS(lc898217xc_pm_ops,
++				 lc898217xc_runtime_suspend,
++				 lc898217xc_runtime_resume, NULL);
++
++static struct i2c_driver lc898217xc_i2c_driver = {
++	.driver = {
++		.name = "lc898217xc",
++		.pm = pm_sleep_ptr(&lc898217xc_pm_ops),
++		.of_match_table = lc898217xc_of_match,
++	},
++	.probe = lc898217xc_probe,
++	.remove = lc898217xc_remove,
++};
++module_i2c_driver(lc898217xc_i2c_driver);
++
++MODULE_AUTHOR("Robin Snyders <robin@snyders.xyz>");
++MODULE_DESCRIPTION("ON Semiconductor LC898217XC VCM driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/s5k3m5.c b/drivers/media/i2c/s5k3m5.c
+new file mode 100644
+index 000000000000..ec4603702b7f
+--- /dev/null
++++ b/drivers/media/i2c/s5k3m5.c
+@@ -0,0 +1,1381 @@
++// SPDX-License-Identifier: GPL-2.0
++// Copyright (c) 2025 Linaro Ltd
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++#include <linux/units.h>
++#include <media/v4l2-cci.h>
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-device.h>
++#include <media/v4l2-fwnode.h>
++
++#define S5K3M5_LINK_FREQ_602P5MHZ	(602500ULL * HZ_PER_KHZ)
++#define S5K3M5_MCLK_FREQ_24MHZ		(24 * HZ_PER_MHZ)
++#define S5K3M5_DATA_LANES		4
++
++/* Register map is similar to MIPI CCS compliant camera sensors */
++#define S5K3M5_REG_CHIP_ID		CCI_REG16(0x0000)
++#define S5K3M5_CHIP_ID			0x30d5
++
++/* Both streaming and flipping settings are controlled at the same time */
++#define S5K3M5_REG_CTRL_MODE		CCI_REG16(0x0100)
++#define S5K3M5_MODE_STREAMING		BIT(8)
++#define S5K3M5_VFLIP			BIT(1)
++#define S5K3M5_HFLIP			BIT(0)
++
++#define S5K3M5_REG_EXPOSURE		CCI_REG16(0x0202)
++#define S5K3M5_EXPOSURE_MIN		8
++#define S5K3M5_EXPOSURE_STEP		1
++#define S5K3M5_EXPOSURE_MARGIN		4
++
++#define S5K3M5_REG_AGAIN		CCI_REG16(0x0204)
++#define S5K3M5_AGAIN_MIN		1
++#define S5K3M5_AGAIN_MAX		16
++#define S5K3M5_AGAIN_STEP		1
++#define S5K3M5_AGAIN_DEFAULT		1
++#define S5K3M5_AGAIN_SHIFT		5
++
++#define S5K3M5_REG_VTS			CCI_REG16(0x0340)
++#define S5K3M5_VTS_MAX			0xffff
++
++#define S5K3M5_REG_HTS			CCI_REG16(0x0342)
++#define S5K3M5_REG_X_ADDR_START		CCI_REG16(0x0344)
++#define S5K3M5_REG_Y_ADDR_START		CCI_REG16(0x0346)
++#define S5K3M5_REG_X_ADDR_END		CCI_REG16(0x0348)
++#define S5K3M5_REG_Y_ADDR_END		CCI_REG16(0x034a)
++#define S5K3M5_REG_X_OUTPUT_SIZE	CCI_REG16(0x034c)
++#define S5K3M5_REG_Y_OUTPUT_SIZE	CCI_REG16(0x034e)
++
++#define S5K3M5_REG_TEST_PATTERN		CCI_REG16(0x0600)
++
++#define to_s5k3m5(_sd)			container_of(_sd, struct s5k3m5, sd)
++
++static const s64 s5k3m5_link_freq_menu[] = {
++	S5K3M5_LINK_FREQ_602P5MHZ,
++};
++
++/* List of supported formats to cover horizontal and vertical flip controls */
++static const u32 s5k3m5_mbus_formats[] = {
++	MEDIA_BUS_FMT_SGRBG10_1X10,	MEDIA_BUS_FMT_SRGGB10_1X10,
++	MEDIA_BUS_FMT_SBGGR10_1X10,	MEDIA_BUS_FMT_SGBRG10_1X10,
++};
++
++struct s5k3m5_reg_list {
++	const struct cci_reg_sequence *regs;
++	unsigned int num_regs;
++};
++
++struct s5k3m5_mode {
++	u32 width;			/* Frame width in pixels */
++	u32 height;			/* Frame height in pixels */
++	struct v4l2_rect crop;		/* Analogue crop before binning */
++	u32 hts;			/* Horizontal timing size */
++	u32 vts;			/* Default vertical timing size */
++	u32 exposure;			/* Default exposure value */
++
++	const struct s5k3m5_reg_list reg_list;	/* Sensor register setting */
++};
++
++static const char * const s5k3m5_test_pattern_menu[] = {
++	"Disabled",
++	"Solid colour",
++	"Colour bars",
++	"Fade to grey colour bars",
++	"PN9",
++};
++
++static const char * const s5k3m5_supply_names[] = {
++	"afvdd",	/* Autofocus power */
++	"vdda",		/* Analog power */
++	"vddd",		/* Digital core power */
++	"vddio",	/* Digital I/O power */
++};
++
++#define S5K3M5_NUM_SUPPLIES	ARRAY_SIZE(s5k3m5_supply_names)
++
++struct s5k3m5 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct clk *mclk;
++	struct gpio_desc *reset_gpio;
++	struct regulator_bulk_data supplies[S5K3M5_NUM_SUPPLIES];
++
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++
++	struct v4l2_ctrl_handler ctrl_handler;
++	struct v4l2_ctrl *link_freq;
++	struct v4l2_ctrl *pixel_rate;
++	struct v4l2_ctrl *hblank;
++	struct v4l2_ctrl *vblank;
++	struct v4l2_ctrl *exposure;
++	struct v4l2_ctrl *vflip;
++	struct v4l2_ctrl *hflip;
++
++	const struct s5k3m5_mode *mode;
++};
++
++static const struct cci_reg_sequence burst_array_setting[] = {
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0549 },
++	{ CCI_REG16(0x6f12), 0x0448 },
++	{ CCI_REG16(0x6f12), 0x054a },
++	{ CCI_REG16(0x6f12), 0xc1f8 },
++	{ CCI_REG16(0x6f12), 0xc804 },
++	{ CCI_REG16(0x6f12), 0x101a },
++	{ CCI_REG16(0x6f12), 0xa1f8 },
++	{ CCI_REG16(0x6f12), 0xcc04 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x1bb9 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x4210 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x2e50 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x7000 },
++	{ CCI_REG16(0x6f12), 0x10b5 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x4ff9 },
++	{ CCI_REG16(0x6f12), 0x9949 },
++	{ CCI_REG16(0x6f12), 0x0120 },
++	{ CCI_REG16(0x6f12), 0x0880 },
++	{ CCI_REG16(0x6f12), 0x10bd },
++	{ CCI_REG16(0x6f12), 0x2de9 },
++	{ CCI_REG16(0x6f12), 0xf041 },
++	{ CCI_REG16(0x6f12), 0x974c },
++	{ CCI_REG16(0x6f12), 0x954f },
++	{ CCI_REG16(0x6f12), 0x0026 },
++	{ CCI_REG16(0x6f12), 0xb4f8 },
++	{ CCI_REG16(0x6f12), 0x6a52 },
++	{ CCI_REG16(0x6f12), 0x3888 },
++	{ CCI_REG16(0x6f12), 0x08b1 },
++	{ CCI_REG16(0x6f12), 0xa4f8 },
++	{ CCI_REG16(0x6f12), 0x6a62 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x43f9 },
++	{ CCI_REG16(0x6f12), 0x3e80 },
++	{ CCI_REG16(0x6f12), 0xa4f8 },
++	{ CCI_REG16(0x6f12), 0x6a52 },
++	{ CCI_REG16(0x6f12), 0xbde8 },
++	{ CCI_REG16(0x6f12), 0xf081 },
++	{ CCI_REG16(0x6f12), 0x2de9 },
++	{ CCI_REG16(0x6f12), 0xf041 },
++	{ CCI_REG16(0x6f12), 0x0746 },
++	{ CCI_REG16(0x6f12), 0x8c48 },
++	{ CCI_REG16(0x6f12), 0x0e46 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0x4068 },
++	{ CCI_REG16(0x6f12), 0x84b2 },
++	{ CCI_REG16(0x6f12), 0x050c },
++	{ CCI_REG16(0x6f12), 0x2146 },
++	{ CCI_REG16(0x6f12), 0x2846 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x36f9 },
++	{ CCI_REG16(0x6f12), 0x3146 },
++	{ CCI_REG16(0x6f12), 0x3846 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x37f9 },
++	{ CCI_REG16(0x6f12), 0x874f },
++	{ CCI_REG16(0x6f12), 0x4df2 },
++	{ CCI_REG16(0x6f12), 0x0c26 },
++	{ CCI_REG16(0x6f12), 0x4ff4 },
++	{ CCI_REG16(0x6f12), 0x8061 },
++	{ CCI_REG16(0x6f12), 0x3a78 },
++	{ CCI_REG16(0x6f12), 0x3046 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x29f9 },
++	{ CCI_REG16(0x6f12), 0x7878 },
++	{ CCI_REG16(0x6f12), 0xb8b3 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0x8021 },
++	{ CCI_REG16(0x6f12), 0x3046 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x22f9 },
++	{ CCI_REG16(0x6f12), 0x8048 },
++	{ CCI_REG16(0x6f12), 0x0088 },
++	{ CCI_REG16(0x6f12), 0x804b },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x5c02 },
++	{ CCI_REG16(0x6f12), 0x7e48 },
++	{ CCI_REG16(0x6f12), 0x001d },
++	{ CCI_REG16(0x6f12), 0x0088 },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x5e02 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0x5c02 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0x5e12 },
++	{ CCI_REG16(0x6f12), 0x4218 },
++	{ CCI_REG16(0x6f12), 0x02d0 },
++	{ CCI_REG16(0x6f12), 0x8002 },
++	{ CCI_REG16(0x6f12), 0xb0fb },
++	{ CCI_REG16(0x6f12), 0xf2f2 },
++	{ CCI_REG16(0x6f12), 0x91b2 },
++	{ CCI_REG16(0x6f12), 0x784a },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x6012 },
++	{ CCI_REG16(0x6f12), 0xb2f8 },
++	{ CCI_REG16(0x6f12), 0x1602 },
++	{ CCI_REG16(0x6f12), 0xb2f8 },
++	{ CCI_REG16(0x6f12), 0x1422 },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x9805 },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x9a25 },
++	{ CCI_REG16(0x6f12), 0x8018 },
++	{ CCI_REG16(0x6f12), 0x04d0 },
++	{ CCI_REG16(0x6f12), 0x9202 },
++	{ CCI_REG16(0x6f12), 0xb2fb },
++	{ CCI_REG16(0x6f12), 0xf0f0 },
++	{ CCI_REG16(0x6f12), 0xa3f8 },
++	{ CCI_REG16(0x6f12), 0x9c05 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0x9c05 },
++	{ CCI_REG16(0x6f12), 0x0a18 },
++	{ CCI_REG16(0x6f12), 0x01fb },
++	{ CCI_REG16(0x6f12), 0x1020 },
++	{ CCI_REG16(0x6f12), 0x40f3 },
++	{ CCI_REG16(0x6f12), 0x9510 },
++	{ CCI_REG16(0x6f12), 0x1028 },
++	{ CCI_REG16(0x6f12), 0x06dc },
++	{ CCI_REG16(0x6f12), 0x0028 },
++	{ CCI_REG16(0x6f12), 0x05da },
++	{ CCI_REG16(0x6f12), 0x0020 },
++	{ CCI_REG16(0x6f12), 0x03e0 },
++	{ CCI_REG16(0x6f12), 0xffe7 },
++	{ CCI_REG16(0x6f12), 0x0122 },
++	{ CCI_REG16(0x6f12), 0xc5e7 },
++	{ CCI_REG16(0x6f12), 0x1020 },
++	{ CCI_REG16(0x6f12), 0x6849 },
++	{ CCI_REG16(0x6f12), 0x0880 },
++	{ CCI_REG16(0x6f12), 0x2146 },
++	{ CCI_REG16(0x6f12), 0x2846 },
++	{ CCI_REG16(0x6f12), 0xbde8 },
++	{ CCI_REG16(0x6f12), 0xf041 },
++	{ CCI_REG16(0x6f12), 0x0122 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0xe2b8 },
++	{ CCI_REG16(0x6f12), 0xf0b5 },
++	{ CCI_REG16(0x6f12), 0x644c },
++	{ CCI_REG16(0x6f12), 0xdde9 },
++	{ CCI_REG16(0x6f12), 0x0565 },
++	{ CCI_REG16(0x6f12), 0x08b1 },
++	{ CCI_REG16(0x6f12), 0x2788 },
++	{ CCI_REG16(0x6f12), 0x0760 },
++	{ CCI_REG16(0x6f12), 0x09b1 },
++	{ CCI_REG16(0x6f12), 0x6088 },
++	{ CCI_REG16(0x6f12), 0x0860 },
++	{ CCI_REG16(0x6f12), 0x12b1 },
++	{ CCI_REG16(0x6f12), 0xa088 },
++	{ CCI_REG16(0x6f12), 0x401c },
++	{ CCI_REG16(0x6f12), 0x1060 },
++	{ CCI_REG16(0x6f12), 0x0bb1 },
++	{ CCI_REG16(0x6f12), 0xe088 },
++	{ CCI_REG16(0x6f12), 0x1860 },
++	{ CCI_REG16(0x6f12), 0x0eb1 },
++	{ CCI_REG16(0x6f12), 0xa07b },
++	{ CCI_REG16(0x6f12), 0x3060 },
++	{ CCI_REG16(0x6f12), 0x002d },
++	{ CCI_REG16(0x6f12), 0x01d0 },
++	{ CCI_REG16(0x6f12), 0xe07b },
++	{ CCI_REG16(0x6f12), 0x2860 },
++	{ CCI_REG16(0x6f12), 0xf0bd },
++	{ CCI_REG16(0x6f12), 0x70b5 },
++	{ CCI_REG16(0x6f12), 0x0646 },
++	{ CCI_REG16(0x6f12), 0x5048 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0x8068 },
++	{ CCI_REG16(0x6f12), 0x84b2 },
++	{ CCI_REG16(0x6f12), 0x050c },
++	{ CCI_REG16(0x6f12), 0x2146 },
++	{ CCI_REG16(0x6f12), 0x2846 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0xbef8 },
++	{ CCI_REG16(0x6f12), 0x3046 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0xc5f8 },
++	{ CCI_REG16(0x6f12), 0x5248 },
++	{ CCI_REG16(0x6f12), 0x0368 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0x7401 },
++	{ CCI_REG16(0x6f12), 0x010a },
++	{ CCI_REG16(0x6f12), 0x5048 },
++	{ CCI_REG16(0x6f12), 0x4268 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x5010 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x7511 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x5210 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0x7811 },
++	{ CCI_REG16(0x6f12), 0x090a },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x5810 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x7911 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x5a10 },
++	{ CCI_REG16(0x6f12), 0x33f8 },
++	{ CCI_REG16(0x6f12), 0xf01f },
++	{ CCI_REG16(0x6f12), 0x0068 },
++	{ CCI_REG16(0x6f12), 0x090a },
++	{ CCI_REG16(0x6f12), 0x00f8 },
++	{ CCI_REG16(0x6f12), 0xce1f },
++	{ CCI_REG16(0x6f12), 0x5978 },
++	{ CCI_REG16(0x6f12), 0x8170 },
++	{ CCI_REG16(0x6f12), 0x5988 },
++	{ CCI_REG16(0x6f12), 0x090a },
++	{ CCI_REG16(0x6f12), 0x0171 },
++	{ CCI_REG16(0x6f12), 0xd978 },
++	{ CCI_REG16(0x6f12), 0x8171 },
++	{ CCI_REG16(0x6f12), 0x988c },
++	{ CCI_REG16(0x6f12), 0x000a },
++	{ CCI_REG16(0x6f12), 0x9074 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x2500 },
++	{ CCI_REG16(0x6f12), 0x1075 },
++	{ CCI_REG16(0x6f12), 0xd88c },
++	{ CCI_REG16(0x6f12), 0x000a },
++	{ CCI_REG16(0x6f12), 0x9075 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x2700 },
++	{ CCI_REG16(0x6f12), 0x1076 },
++	{ CCI_REG16(0x6f12), 0xb3f8 },
++	{ CCI_REG16(0x6f12), 0xb000 },
++	{ CCI_REG16(0x6f12), 0x000a },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x7e00 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0xb100 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x8000 },
++	{ CCI_REG16(0x6f12), 0x2f48 },
++	{ CCI_REG16(0x6f12), 0x90f8 },
++	{ CCI_REG16(0x6f12), 0xb313 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x8210 },
++	{ CCI_REG16(0x6f12), 0x90f8 },
++	{ CCI_REG16(0x6f12), 0xb103 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x8400 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0xb400 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x8600 },
++	{ CCI_REG16(0x6f12), 0x0020 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x8800 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x6211 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x9610 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0112 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0x9e10 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0212 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xa010 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xa200 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xa400 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0512 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xa610 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0612 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xa810 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0712 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xaa10 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xac00 },
++	{ CCI_REG16(0x6f12), 0x5a20 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xad00 },
++	{ CCI_REG16(0x6f12), 0x93f8 },
++	{ CCI_REG16(0x6f12), 0x0902 },
++	{ CCI_REG16(0x6f12), 0x82f8 },
++	{ CCI_REG16(0x6f12), 0xae00 },
++	{ CCI_REG16(0x6f12), 0x2146 },
++	{ CCI_REG16(0x6f12), 0x2846 },
++	{ CCI_REG16(0x6f12), 0xbde8 },
++	{ CCI_REG16(0x6f12), 0x7040 },
++	{ CCI_REG16(0x6f12), 0x0122 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x47b8 },
++	{ CCI_REG16(0x6f12), 0x10b5 },
++	{ CCI_REG16(0x6f12), 0x0f4c },
++	{ CCI_REG16(0x6f12), 0x0020 },
++	{ CCI_REG16(0x6f12), 0x2080 },
++	{ CCI_REG16(0x6f12), 0xaff2 },
++	{ CCI_REG16(0x6f12), 0x3321 },
++	{ CCI_REG16(0x6f12), 0x1748 },
++	{ CCI_REG16(0x6f12), 0x0161 },
++	{ CCI_REG16(0x6f12), 0xaff2 },
++	{ CCI_REG16(0x6f12), 0x2d21 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0x8161 },
++	{ CCI_REG16(0x6f12), 0xaff2 },
++	{ CCI_REG16(0x6f12), 0x1121 },
++	{ CCI_REG16(0x6f12), 0x1448 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x45f8 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0xaff2 },
++	{ CCI_REG16(0x6f12), 0x2911 },
++	{ CCI_REG16(0x6f12), 0x6060 },
++	{ CCI_REG16(0x6f12), 0x1148 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x3ef8 },
++	{ CCI_REG16(0x6f12), 0x0022 },
++	{ CCI_REG16(0x6f12), 0xaff2 },
++	{ CCI_REG16(0x6f12), 0x6b11 },
++	{ CCI_REG16(0x6f12), 0xa060 },
++	{ CCI_REG16(0x6f12), 0x0f48 },
++	{ CCI_REG16(0x6f12), 0x00f0 },
++	{ CCI_REG16(0x6f12), 0x37f8 },
++	{ CCI_REG16(0x6f12), 0xe060 },
++	{ CCI_REG16(0x6f12), 0x10bd },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x4200 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x2e50 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x41d0 },
++	{ CCI_REG16(0x6f12), 0x4000 },
++	{ CCI_REG16(0x6f12), 0x9404 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x38e0 },
++	{ CCI_REG16(0x6f12), 0x4000 },
++	{ CCI_REG16(0x6f12), 0xd000 },
++	{ CCI_REG16(0x6f12), 0x4000 },
++	{ CCI_REG16(0x6f12), 0xa410 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x2c66 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x0890 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x3620 },
++	{ CCI_REG16(0x6f12), 0x2000 },
++	{ CCI_REG16(0x6f12), 0x0840 },
++	{ CCI_REG16(0x6f12), 0x0001 },
++	{ CCI_REG16(0x6f12), 0x020d },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x67cd },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x3ae1 },
++	{ CCI_REG16(0x6f12), 0x45f6 },
++	{ CCI_REG16(0x6f12), 0x250c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x45f6 },
++	{ CCI_REG16(0x6f12), 0xf31c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x4af2 },
++	{ CCI_REG16(0x6f12), 0xd74c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x40f2 },
++	{ CCI_REG16(0x6f12), 0x0d2c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x010c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x46f2 },
++	{ CCI_REG16(0x6f12), 0xcd7c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x4af6 },
++	{ CCI_REG16(0x6f12), 0xe75c },
++	{ CCI_REG16(0x6f12), 0xc0f2 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x6f12), 0x6047 },
++	{ CCI_REG16(0x6f12), 0x30d5 },
++	{ CCI_REG16(0x6f12), 0x00fc },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x000e },
++};
++
++static const struct cci_reg_sequence init_array_setting[] = {
++	{ CCI_REG16(0x602a), 0x41d0 },
++	{ CCI_REG16(0x6f12), 0x0100 },
++	{ CCI_REG16(0x602a), 0x1662 },
++	{ CCI_REG16(0x6f12), 0x1e00 },
++	{ CCI_REG16(0x602a), 0x1c9a },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x602a), 0x0ff2 },
++	{ CCI_REG16(0x6f12), 0x0020 },
++	{ CCI_REG16(0x602a), 0x0ef6 },
++	{ CCI_REG16(0x6f12), 0x0100 },
++	{ CCI_REG16(0x602a), 0x23b2 },
++	{ CCI_REG16(0x6f12), 0x0001 },
++	{ CCI_REG16(0x602a), 0x0fe4 },
++	{ CCI_REG16(0x6f12), 0x0107 },
++	{ CCI_REG16(0x6f12), 0x07d0 },
++	{ CCI_REG16(0x602a), 0x12f8 },
++	{ CCI_REG16(0x6f12), 0x3d09 },
++	{ CCI_REG16(0x602a), 0x0e18 },
++	{ CCI_REG16(0x6f12), 0x0040 },
++	{ CCI_REG16(0x602a), 0x1066 },
++	{ CCI_REG16(0x6f12), 0x000c },
++	{ CCI_REG16(0x602a), 0x13de },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x602a), 0x12f2 },
++	{ CCI_REG16(0x6f12), 0x0f0f },
++	{ CCI_REG16(0x602a), 0x13dc },
++	{ CCI_REG16(0x6f12), 0x806f },
++	{ CCI_REG16(0xf46e), 0x00c3 },
++	{ CCI_REG16(0xf46c), 0xbfa0 },
++	{ CCI_REG16(0xf44a), 0x0007 },
++	{ CCI_REG16(0xf456), 0x000a },
++	{ CCI_REG16(0x6028), 0x2000 },
++	{ CCI_REG16(0x602a), 0x12f6 },
++	{ CCI_REG16(0x6f12), 0x7008 },
++	{ CCI_REG16(0x0bc6), 0x0000 },
++	{ CCI_REG16(0x0b36), 0x0001 },
++};
++
++static const struct cci_reg_sequence s5k3m5_4208x3120_30fps_mode[] = {
++	{ CCI_REG16(0x6214), 0x7971 },
++	{ CCI_REG16(0x6218), 0x7150 },
++	{ S5K3M5_REG_X_ADDR_START,  0x0000 },
++	{ S5K3M5_REG_Y_ADDR_START,  0x0008 },
++	{ S5K3M5_REG_X_ADDR_END,    0x1077 },
++	{ S5K3M5_REG_Y_ADDR_END,    0x0c37 },
++	{ S5K3M5_REG_X_OUTPUT_SIZE, 0x1070 },
++	{ S5K3M5_REG_Y_OUTPUT_SIZE, 0x0c30 },
++	{ S5K3M5_REG_VTS, 0x0cf2 },
++	{ S5K3M5_REG_HTS, 0x12f0 },
++
++	{ CCI_REG16(0x0900), 0x0011 },
++	{ CCI_REG16(0x0380), 0x0001 },
++	{ CCI_REG16(0x0382), 0x0001 },
++	{ CCI_REG16(0x0384), 0x0001 },
++	{ CCI_REG16(0x0386), 0x0001 },
++	{ CCI_REG16(0x0402), 0x1010 },
++	{ CCI_REG16(0x0404), 0x1000 },
++	{ CCI_REG16(0x0350), 0x0008 },
++	{ CCI_REG16(0x0352), 0x0000 },
++
++	/* Clock settings */
++	{ CCI_REG16(0x0136), 0x1800 },
++	{ CCI_REG16(0x013e), 0x0000 },
++	{ CCI_REG16(0x0300), 0x0008 },
++	{ CCI_REG16(0x0302), 0x0001 },
++	{ CCI_REG16(0x0304), 0x0006 },
++	{ CCI_REG16(0x0306), 0x00f1 },
++	{ CCI_REG16(0x0308), 0x0008 },
++	{ CCI_REG16(0x030a), 0x0001 },
++	{ CCI_REG16(0x030c), 0x0000 },
++	{ CCI_REG16(0x030e), 0x0003 },
++	{ CCI_REG16(0x0310), 0x005a },
++	{ CCI_REG16(0x0312), 0x0000 },
++
++	{ CCI_REG16(0x0b06), 0x0101 },
++	{ CCI_REG16(0x6028), 0x2000 },
++	{ CCI_REG16(0x602a), 0x1ff6 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x021e), 0x0000 },
++	{ CCI_REG16(0x0202), 0x0100 },
++	{ CCI_REG16(0x0204), 0x0020 },
++	{ CCI_REG16(0x0d00), 0x0100 },
++	{ CCI_REG16(0x0d02), 0x0001 },
++	{ CCI_REG16(0x0114), 0x0301 },
++	{ CCI_REG16(0x0d06), 0x0208 },
++	{ CCI_REG16(0x0d08), 0x0300 },
++	{ CCI_REG16(0x6028), 0x2000 },
++	{ CCI_REG16(0x602a), 0x0f10 },
++	{ CCI_REG16(0x6f12), 0x0003 },
++	{ CCI_REG16(0x602a), 0x0f12 },
++	{ CCI_REG16(0x6f12), 0x0200 },
++	{ CCI_REG16(0x602a), 0x2bc0 },
++	{ CCI_REG16(0x6f12), 0x0001 },
++	{ CCI_REG16(0x0b30), 0x0000 },
++	{ CCI_REG16(0x0b32), 0x0000 },
++	{ CCI_REG16(0x0b34), 0x0001 },
++	{ CCI_REG16(0x0804), 0x0200 },
++	{ CCI_REG16(0x0810), 0x0020 },
++};
++
++static const struct cci_reg_sequence s5k3m5_2104x1184_60fps_mode[] = {
++	{ CCI_REG16(0x6214), 0x7971 },
++	{ CCI_REG16(0x6218), 0x7150 },
++	{ S5K3M5_REG_X_ADDR_START,  0x0000 },
++	{ S5K3M5_REG_Y_ADDR_START,  0x0180 },
++	{ S5K3M5_REG_X_ADDR_END,    0x1077 },
++	{ S5K3M5_REG_Y_ADDR_END,    0x0abf },
++	{ S5K3M5_REG_X_OUTPUT_SIZE, 0x0838 },
++	{ S5K3M5_REG_Y_OUTPUT_SIZE, 0x04a0 },
++	{ S5K3M5_REG_VTS, 0x0658 },
++	{ S5K3M5_REG_HTS, 0x1340 },
++
++	{ CCI_REG16(0x0900), 0x0112 },
++	{ CCI_REG16(0x0380), 0x0001 },
++	{ CCI_REG16(0x0382), 0x0001 },
++	{ CCI_REG16(0x0384), 0x0001 },
++	{ CCI_REG16(0x0386), 0x0003 },
++	{ CCI_REG16(0x0402), 0x1010 },
++	{ CCI_REG16(0x0404), 0x2000 },
++	{ CCI_REG16(0x0350), 0x0004 },
++	{ CCI_REG16(0x0352), 0x0000 },
++
++	/* Clock settings */
++	{ CCI_REG16(0x0136), 0x1800 },
++	{ CCI_REG16(0x013e), 0x0000 },
++	{ CCI_REG16(0x0300), 0x0008 },
++	{ CCI_REG16(0x0302), 0x0001 },
++	{ CCI_REG16(0x0304), 0x0006 },
++	{ CCI_REG16(0x0306), 0x00f1 },
++	{ CCI_REG16(0x0308), 0x0008 },
++	{ CCI_REG16(0x030a), 0x0001 },
++	{ CCI_REG16(0x030c), 0x0000 },
++	{ CCI_REG16(0x030e), 0x0003 },
++	{ CCI_REG16(0x0310), 0x0063 },
++	{ CCI_REG16(0x0312), 0x0001 },
++
++	{ CCI_REG16(0x0b06), 0x0101 },
++	{ CCI_REG16(0x6028), 0x2000 },
++	{ CCI_REG16(0x602a), 0x1ff6 },
++	{ CCI_REG16(0x6f12), 0x0000 },
++	{ CCI_REG16(0x021e), 0x0000 },
++	{ CCI_REG16(0x0202), 0x0100 },
++	{ CCI_REG16(0x0204), 0x0020 },
++	{ CCI_REG16(0x0d00), 0x0101 },
++	{ CCI_REG16(0x0d02), 0x0101 },
++	{ CCI_REG16(0x0114), 0x0301 },
++	{ CCI_REG16(0x0d06), 0x0208 },
++	{ CCI_REG16(0x0d08), 0x0300 },
++	{ CCI_REG16(0x6028), 0x2000 },
++	{ CCI_REG16(0x602a), 0x0f10 },
++	{ CCI_REG16(0x6f12), 0x0003 },
++	{ CCI_REG16(0x602a), 0x0f12 },
++	{ CCI_REG16(0x6f12), 0x0200 },
++	{ CCI_REG16(0x602a), 0x2bc0 },
++	{ CCI_REG16(0x6f12), 0x0001 },
++	{ CCI_REG16(0x0b30), 0x0000 },
++	{ CCI_REG16(0x0b32), 0x0000 },
++	{ CCI_REG16(0x0b34), 0x0001 },
++	{ CCI_REG16(0x0804), 0x0200 },
++	{ CCI_REG16(0x0810), 0x0020 },
++};
++
++static const struct s5k3m5_mode s5k3m5_supported_modes[] = {
++	{
++		.width = 4208,
++		.height = 3120,
++		.crop = { 0, 0, 4208, 3120 },
++		.hts = 4848,
++		.vts = 3314,
++		.exposure = 256,
++		.reg_list = {
++			.regs = s5k3m5_4208x3120_30fps_mode,
++			.num_regs = ARRAY_SIZE(s5k3m5_4208x3120_30fps_mode),
++		},
++	},
++	{
++		.width = 2104,
++		.height = 1184,
++		.crop = { 0, 376, 4208, 2368 },
++		.hts = 4928,
++		.vts = 1624,
++		.exposure = 256,
++		.reg_list = {
++			.regs = s5k3m5_2104x1184_60fps_mode,
++			.num_regs = ARRAY_SIZE(s5k3m5_2104x1184_60fps_mode),
++		},
++	},
++};
++
++static int s5k3m5_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct s5k3m5 *s5k3m5 = container_of(ctrl->handler, struct s5k3m5,
++					     ctrl_handler);
++	const struct s5k3m5_mode *mode = s5k3m5->mode;
++	s64 exposure_max;
++	int ret;
++
++	/* Propagate change of current control to all related controls */
++	switch (ctrl->id) {
++	case V4L2_CID_HFLIP:
++	case V4L2_CID_VFLIP:
++		/* The orientation settings are applied along with streaming */
++		return 0;
++	case V4L2_CID_VBLANK:
++		/* Update max exposure while meeting expected vblanking */
++		exposure_max = mode->height + ctrl->val - S5K3M5_EXPOSURE_MARGIN;
++		__v4l2_ctrl_modify_range(s5k3m5->exposure,
++					 s5k3m5->exposure->minimum,
++					 exposure_max,
++					 s5k3m5->exposure->step,
++					 s5k3m5->exposure->default_value);
++		break;
++	}
++
++	/* V4L2 controls are applied, when sensor is powered up for streaming */
++	if (!pm_runtime_get_if_active(s5k3m5->dev))
++		return 0;
++
++	switch (ctrl->id) {
++	case V4L2_CID_ANALOGUE_GAIN:
++		ret = cci_write(s5k3m5->regmap, S5K3M5_REG_AGAIN,
++				ctrl->val << S5K3M5_AGAIN_SHIFT, NULL);
++		break;
++	case V4L2_CID_EXPOSURE:
++		ret = cci_write(s5k3m5->regmap, S5K3M5_REG_EXPOSURE,
++				ctrl->val, NULL);
++		break;
++	case V4L2_CID_VBLANK:
++		ret = cci_write(s5k3m5->regmap, S5K3M5_REG_VTS,
++				ctrl->val + mode->height, NULL);
++		break;
++	case V4L2_CID_TEST_PATTERN:
++		ret = cci_write(s5k3m5->regmap, S5K3M5_REG_TEST_PATTERN,
++				ctrl->val, NULL);
++		break;
++	default:
++		ret = -EINVAL;
++		break;
++	}
++
++	pm_runtime_put(s5k3m5->dev);
++
++	return ret;
++}
++
++static const struct v4l2_ctrl_ops s5k3m5_ctrl_ops = {
++	.s_ctrl = s5k3m5_set_ctrl,
++};
++
++static inline u64 s5k3m5_freq_to_pixel_rate(const u64 freq)
++{
++	return div_u64(freq * 2 * S5K3M5_DATA_LANES, 10);
++}
++
++static int s5k3m5_init_controls(struct s5k3m5 *s5k3m5)
++{
++	struct v4l2_ctrl_handler *ctrl_hdlr = &s5k3m5->ctrl_handler;
++	const struct s5k3m5_mode *mode = s5k3m5->mode;
++	s64 pixel_rate, hblank, vblank, exposure_max;
++	struct v4l2_fwnode_device_properties props;
++	int ret;
++
++	v4l2_ctrl_handler_init(ctrl_hdlr, 9);
++
++	s5k3m5->link_freq = v4l2_ctrl_new_int_menu(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					V4L2_CID_LINK_FREQ,
++					ARRAY_SIZE(s5k3m5_link_freq_menu) - 1,
++					0, s5k3m5_link_freq_menu);
++	if (s5k3m5->link_freq)
++		s5k3m5->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	pixel_rate = s5k3m5_freq_to_pixel_rate(s5k3m5_link_freq_menu[0]);
++	s5k3m5->pixel_rate = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					       V4L2_CID_PIXEL_RATE,
++					       0, pixel_rate, 1, pixel_rate);
++
++	hblank = mode->hts - mode->width;
++	s5k3m5->hblank = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					   V4L2_CID_HBLANK, hblank,
++					   hblank, 1, hblank);
++	if (s5k3m5->hblank)
++		s5k3m5->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++
++	vblank = mode->vts - mode->height;
++	s5k3m5->vblank = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					   V4L2_CID_VBLANK, vblank,
++					   S5K3M5_VTS_MAX - mode->height, 1,
++					   vblank);
++
++	v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
++			  S5K3M5_AGAIN_MIN, S5K3M5_AGAIN_MAX,
++			  S5K3M5_AGAIN_STEP, S5K3M5_AGAIN_DEFAULT);
++
++	exposure_max = mode->vts - S5K3M5_EXPOSURE_MARGIN;
++	s5k3m5->exposure = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					     V4L2_CID_EXPOSURE,
++					     S5K3M5_EXPOSURE_MIN,
++					     exposure_max,
++					     S5K3M5_EXPOSURE_STEP,
++					     mode->exposure);
++
++	v4l2_ctrl_new_std_menu_items(ctrl_hdlr, &s5k3m5_ctrl_ops,
++				     V4L2_CID_TEST_PATTERN,
++				     ARRAY_SIZE(s5k3m5_test_pattern_menu) - 1,
++				     0, 0, s5k3m5_test_pattern_menu);
++
++	s5k3m5->hflip = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					  V4L2_CID_HFLIP, 0, 1, 1, 0);
++	if (s5k3m5->hflip)
++		s5k3m5->hflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
++
++	s5k3m5->vflip = v4l2_ctrl_new_std(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					  V4L2_CID_VFLIP, 0, 1, 1, 0);
++	if (s5k3m5->vflip)
++		s5k3m5->vflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
++
++	ret = v4l2_fwnode_device_parse(s5k3m5->dev, &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &s5k3m5_ctrl_ops,
++					      &props);
++	if (ret)
++		goto error_free_hdlr;
++
++	s5k3m5->sd.ctrl_handler = ctrl_hdlr;
++
++	return 0;
++
++error_free_hdlr:
++	v4l2_ctrl_handler_free(ctrl_hdlr);
++
++	return ret;
++}
++
++static int s5k3m5_enable_streams(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *state, u32 pad,
++				 u64 streams_mask)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++	const struct s5k3m5_reg_list *reg_list = &s5k3m5->mode->reg_list;
++	int ret;
++
++	ret = pm_runtime_resume_and_get(s5k3m5->dev);
++	if (ret)
++		return ret;
++
++	/* Page pointer */
++	cci_write(s5k3m5->regmap, CCI_REG16(0x6028), 0x4000, &ret);
++
++	/* Set version */
++	cci_write(s5k3m5->regmap, CCI_REG16(0x0000), 0x0006, &ret);
++	cci_write(s5k3m5->regmap, CCI_REG16(0x0000), S5K3M5_CHIP_ID, &ret);
++	cci_write(s5k3m5->regmap, CCI_REG16(0x6214), 0x7971, &ret);
++	cci_write(s5k3m5->regmap, CCI_REG16(0x6218), 0x7150, &ret);
++	if (ret)
++		goto error;
++
++	usleep_range(4 * USEC_PER_MSEC, 5 * USEC_PER_MSEC);
++
++	cci_write(s5k3m5->regmap, CCI_REG16(0x0a02), 0x7800, &ret);
++	cci_write(s5k3m5->regmap, CCI_REG16(0x6028), 0x2000, &ret);
++	cci_write(s5k3m5->regmap, CCI_REG16(0x602a), 0x3eac, &ret);
++
++	/* Sensor init settings */
++	cci_multi_reg_write(s5k3m5->regmap, burst_array_setting,
++			    ARRAY_SIZE(burst_array_setting), &ret);
++	cci_multi_reg_write(s5k3m5->regmap, init_array_setting,
++			    ARRAY_SIZE(init_array_setting), &ret);
++	cci_multi_reg_write(s5k3m5->regmap, reg_list->regs,
++			    reg_list->num_regs, &ret);
++	if (ret)
++		goto error;
++
++	ret = __v4l2_ctrl_handler_setup(s5k3m5->sd.ctrl_handler);
++
++	cci_write(s5k3m5->regmap, S5K3M5_REG_CTRL_MODE,
++		  S5K3M5_MODE_STREAMING |
++		  (s5k3m5->vflip->val ? S5K3M5_VFLIP : 0) |
++		  (s5k3m5->hflip->val ? S5K3M5_HFLIP : 0), &ret);
++	if (ret)
++		goto error;
++
++	return 0;
++
++error:
++	dev_err(s5k3m5->dev, "failed to start streaming: %d\n", ret);
++	pm_runtime_put_autosuspend(s5k3m5->dev);
++
++	return ret;
++}
++
++static int s5k3m5_disable_streams(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *state, u32 pad,
++				  u64 streams_mask)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++	int ret;
++
++	ret = cci_write(s5k3m5->regmap, S5K3M5_REG_CTRL_MODE, 0, NULL);
++	if (ret)
++		dev_err(s5k3m5->dev, "failed to stop streaming: %d\n", ret);
++
++	pm_runtime_put_autosuspend(s5k3m5->dev);
++
++	return ret;
++}
++
++static u32 s5k3m5_get_format_code(struct s5k3m5 *s5k3m5)
++{
++	unsigned int i;
++
++	i = (s5k3m5->vflip->val ? 2 : 0) | (s5k3m5->hflip->val ? 1 : 0);
++
++	return s5k3m5_mbus_formats[i];
++}
++
++static void s5k3m5_update_pad_format(struct s5k3m5 *s5k3m5,
++				     const struct s5k3m5_mode *mode,
++				     struct v4l2_mbus_framefmt *fmt)
++{
++	fmt->code = s5k3m5_get_format_code(s5k3m5);
++	fmt->width = mode->width;
++	fmt->height = mode->height;
++	fmt->field = V4L2_FIELD_NONE;
++	fmt->colorspace = V4L2_COLORSPACE_SRGB;
++	fmt->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
++	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
++	fmt->xfer_func = V4L2_XFER_FUNC_NONE;
++}
++
++static int s5k3m5_set_pad_format(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *state,
++				 struct v4l2_subdev_format *fmt)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++	s64 hblank, vblank, exposure_max;
++	const struct s5k3m5_mode *mode;
++
++	mode = v4l2_find_nearest_size(s5k3m5_supported_modes,
++				      ARRAY_SIZE(s5k3m5_supported_modes),
++				      width, height,
++				      fmt->format.width, fmt->format.height);
++
++	s5k3m5_update_pad_format(s5k3m5, mode, &fmt->format);
++
++	/* Format code could be updated with respect to flip controls */
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY || s5k3m5->mode == mode)
++		goto set_format;
++
++	/* Update limits and set FPS and exposure to default values */
++	hblank = mode->hts - mode->width;
++	__v4l2_ctrl_modify_range(s5k3m5->hblank, hblank, hblank, 1, hblank);
++
++	vblank = mode->vts - mode->height;
++	__v4l2_ctrl_modify_range(s5k3m5->vblank, vblank,
++				 S5K3M5_VTS_MAX - mode->height, 1, vblank);
++	__v4l2_ctrl_s_ctrl(s5k3m5->vblank, vblank);
++
++	exposure_max = mode->vts - S5K3M5_EXPOSURE_MARGIN;
++	__v4l2_ctrl_modify_range(s5k3m5->exposure, S5K3M5_EXPOSURE_MIN,
++				 exposure_max, S5K3M5_EXPOSURE_STEP,
++				 mode->exposure);
++	__v4l2_ctrl_s_ctrl(s5k3m5->exposure, mode->exposure);
++
++	if (s5k3m5->sd.ctrl_handler->error)
++		return s5k3m5->sd.ctrl_handler->error;
++
++	s5k3m5->mode = mode;
++
++set_format:
++	*v4l2_subdev_state_get_format(state, 0) = fmt->format;
++
++	return 0;
++}
++
++static int s5k3m5_enum_mbus_code(struct v4l2_subdev *sd,
++				 struct v4l2_subdev_state *sd_state,
++				 struct v4l2_subdev_mbus_code_enum *code)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++
++	/* Media bus code index is constant, but code formats are not */
++	if (code->index > 0)
++		return -EINVAL;
++
++	code->code = s5k3m5_get_format_code(s5k3m5);
++
++	return 0;
++}
++
++static int s5k3m5_enum_frame_size(struct v4l2_subdev *sd,
++				  struct v4l2_subdev_state *sd_state,
++				  struct v4l2_subdev_frame_size_enum *fse)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++
++	if (fse->index >= ARRAY_SIZE(s5k3m5_supported_modes))
++		return -EINVAL;
++
++	if (fse->code != s5k3m5_get_format_code(s5k3m5))
++		return -EINVAL;
++
++	fse->min_width = s5k3m5_supported_modes[fse->index].width;
++	fse->max_width = fse->min_width;
++	fse->min_height = s5k3m5_supported_modes[fse->index].height;
++	fse->max_height = fse->min_height;
++
++	return 0;
++}
++
++static int s5k3m5_get_selection(struct v4l2_subdev *sd,
++				struct v4l2_subdev_state *sd_state,
++				struct v4l2_subdev_selection *sel)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++
++	if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
++		return -EINVAL;
++
++	switch (sel->target) {
++	case V4L2_SEL_TGT_NATIVE_SIZE:
++	case V4L2_SEL_TGT_CROP_BOUNDS:
++	case V4L2_SEL_TGT_CROP_DEFAULT:
++		sel->r = (struct v4l2_rect) { 0, 0, 4208, 3120 };
++		return 0;
++	case V4L2_SEL_TGT_CROP:
++		sel->r = s5k3m5->mode->crop;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static int s5k3m5_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *state)
++{
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++	struct v4l2_subdev_format fmt = {
++		.which = V4L2_SUBDEV_FORMAT_TRY,
++		.pad = 0,
++		.format = {
++			/* Media bus code depends on current flip controls */
++			.width = s5k3m5->mode->width,
++			.height = s5k3m5->mode->height,
++		},
++	};
++
++	s5k3m5_set_pad_format(sd, state, &fmt);
++
++	return 0;
++}
++
++static const struct v4l2_subdev_video_ops s5k3m5_video_ops = {
++	.s_stream = v4l2_subdev_s_stream_helper,
++};
++
++static const struct v4l2_subdev_pad_ops s5k3m5_pad_ops = {
++	.set_fmt = s5k3m5_set_pad_format,
++	.get_fmt = v4l2_subdev_get_fmt,
++	.get_selection = s5k3m5_get_selection,
++	.enum_mbus_code = s5k3m5_enum_mbus_code,
++	.enum_frame_size = s5k3m5_enum_frame_size,
++	.enable_streams = s5k3m5_enable_streams,
++	.disable_streams = s5k3m5_disable_streams,
++};
++
++static const struct v4l2_subdev_ops s5k3m5_subdev_ops = {
++	.video = &s5k3m5_video_ops,
++	.pad = &s5k3m5_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops s5k3m5_internal_ops = {
++	.init_state = s5k3m5_init_state,
++};
++
++static const struct media_entity_operations s5k3m5_subdev_entity_ops = {
++	.link_validate = v4l2_subdev_link_validate,
++};
++
++static int s5k3m5_identify_sensor(struct s5k3m5 *s5k3m5)
++{
++	u64 val;
++	int ret;
++
++	ret = cci_read(s5k3m5->regmap, S5K3M5_REG_CHIP_ID, &val, NULL);
++	if (ret) {
++		dev_err(s5k3m5->dev, "failed to read chip id: %d\n", ret);
++		return ret;
++	}
++
++	if (val != S5K3M5_CHIP_ID) {
++		dev_err(s5k3m5->dev, "chip id mismatch: %x!=%llx\n",
++			S5K3M5_CHIP_ID, val);
++		return -ENODEV;
++	}
++
++	return 0;
++}
++
++static int s5k3m5_check_hwcfg(struct s5k3m5 *s5k3m5)
++{
++	struct fwnode_handle *fwnode = dev_fwnode(s5k3m5->dev), *ep;
++	struct v4l2_fwnode_endpoint bus_cfg = {
++		.bus = {
++			.mipi_csi2 = {
++				.num_data_lanes = S5K3M5_DATA_LANES,
++			},
++		},
++		.bus_type = V4L2_MBUS_CSI2_DPHY,
++	};
++	unsigned long freq_bitmap;
++	int ret;
++
++	if (!fwnode)
++		return -ENODEV;
++
++	ep = fwnode_graph_get_next_endpoint(fwnode, NULL);
++	if (!ep)
++		return -EINVAL;
++
++	ret = v4l2_fwnode_endpoint_alloc_parse(ep, &bus_cfg);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++
++	if (bus_cfg.bus.mipi_csi2.num_data_lanes != S5K3M5_DATA_LANES) {
++		dev_err(s5k3m5->dev, "Invalid number of data lanes: %u\n",
++			bus_cfg.bus.mipi_csi2.num_data_lanes);
++		ret = -EINVAL;
++		goto endpoint_free;
++	}
++
++	ret = v4l2_link_freq_to_bitmap(s5k3m5->dev, bus_cfg.link_frequencies,
++				       bus_cfg.nr_of_link_frequencies,
++				       s5k3m5_link_freq_menu,
++				       ARRAY_SIZE(s5k3m5_link_freq_menu),
++				       &freq_bitmap);
++
++endpoint_free:
++	v4l2_fwnode_endpoint_free(&bus_cfg);
++
++	return ret;
++}
++
++static int s5k3m5_power_on(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++	int ret;
++
++	ret = regulator_bulk_enable(S5K3M5_NUM_SUPPLIES, s5k3m5->supplies);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(s5k3m5->mclk);
++	if (ret)
++		goto disable_regulators;
++
++	gpiod_set_value_cansleep(s5k3m5->reset_gpio, 0);
++	usleep_range(10 * USEC_PER_MSEC, 15 * USEC_PER_MSEC);
++
++	return 0;
++
++disable_regulators:
++	regulator_bulk_disable(S5K3M5_NUM_SUPPLIES, s5k3m5->supplies);
++
++	return ret;
++}
++
++static int s5k3m5_power_off(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++
++	gpiod_set_value_cansleep(s5k3m5->reset_gpio, 1);
++
++	clk_disable_unprepare(s5k3m5->mclk);
++
++	regulator_bulk_disable(S5K3M5_NUM_SUPPLIES, s5k3m5->supplies);
++
++	return 0;
++}
++
++static int s5k3m5_probe(struct i2c_client *client)
++{
++	struct s5k3m5 *s5k3m5;
++	unsigned long freq;
++	unsigned int i;
++	int ret;
++
++	s5k3m5 = devm_kzalloc(&client->dev, sizeof(*s5k3m5), GFP_KERNEL);
++	if (!s5k3m5)
++		return -ENOMEM;
++
++	s5k3m5->dev = &client->dev;
++	v4l2_i2c_subdev_init(&s5k3m5->sd, client, &s5k3m5_subdev_ops);
++
++	s5k3m5->regmap = devm_cci_regmap_init_i2c(client, 16);
++	if (IS_ERR(s5k3m5->regmap))
++		return dev_err_probe(s5k3m5->dev, PTR_ERR(s5k3m5->regmap),
++				     "failed to init CCI\n");
++
++	s5k3m5->mclk = devm_clk_get(s5k3m5->dev, NULL);
++	if (IS_ERR(s5k3m5->mclk))
++		return dev_err_probe(s5k3m5->dev, PTR_ERR(s5k3m5->mclk),
++				     "failed to get MCLK clock\n");
++
++	freq = clk_get_rate(s5k3m5->mclk);
++	if (freq != S5K3M5_MCLK_FREQ_24MHZ)
++		return dev_err_probe(s5k3m5->dev, -EINVAL,
++				     "MCLK clock frequency %lu is not supported\n",
++				     freq);
++
++	ret = s5k3m5_check_hwcfg(s5k3m5);
++	if (ret)
++		return dev_err_probe(s5k3m5->dev, ret,
++				     "failed to check HW configuration\n");
++
++	s5k3m5->reset_gpio = devm_gpiod_get_optional(s5k3m5->dev, "reset",
++						     GPIOD_OUT_HIGH);
++	if (IS_ERR(s5k3m5->reset_gpio))
++		return dev_err_probe(s5k3m5->dev, PTR_ERR(s5k3m5->reset_gpio),
++				     "cannot get reset GPIO\n");
++
++	for (i = 0; i < S5K3M5_NUM_SUPPLIES; i++)
++		s5k3m5->supplies[i].supply = s5k3m5_supply_names[i];
++
++	ret = devm_regulator_bulk_get(s5k3m5->dev, S5K3M5_NUM_SUPPLIES,
++				      s5k3m5->supplies);
++	if (ret)
++		return dev_err_probe(s5k3m5->dev, ret,
++				     "failed to get supply regulators\n");
++
++	/* The sensor must be powered on to read the CHIP_ID register */
++	ret = s5k3m5_power_on(s5k3m5->dev);
++	if (ret)
++		return ret;
++
++	ret = s5k3m5_identify_sensor(s5k3m5);
++	if (ret) {
++		dev_err_probe(s5k3m5->dev, ret, "failed to find sensor\n");
++		goto power_off;
++	}
++
++	s5k3m5->mode = &s5k3m5_supported_modes[0];
++	ret = s5k3m5_init_controls(s5k3m5);
++	if (ret) {
++		dev_err_probe(s5k3m5->dev, ret, "failed to init controls\n");
++		goto power_off;
++	}
++
++	s5k3m5->sd.state_lock = s5k3m5->ctrl_handler.lock;
++	s5k3m5->sd.internal_ops = &s5k3m5_internal_ops;
++	s5k3m5->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	s5k3m5->sd.entity.ops = &s5k3m5_subdev_entity_ops;
++	s5k3m5->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++	s5k3m5->pad.flags = MEDIA_PAD_FL_SOURCE;
++
++	ret = media_entity_pads_init(&s5k3m5->sd.entity, 1, &s5k3m5->pad);
++	if (ret) {
++		dev_err_probe(s5k3m5->dev, ret,
++			      "failed to init media entity pads\n");
++		goto v4l2_ctrl_handler_free;
++	}
++
++	ret = v4l2_subdev_init_finalize(&s5k3m5->sd);
++	if (ret < 0) {
++		dev_err_probe(s5k3m5->dev, ret,
++			      "failed to init media entity pads\n");
++		goto media_entity_cleanup;
++	}
++
++	pm_runtime_set_active(s5k3m5->dev);
++	pm_runtime_enable(s5k3m5->dev);
++
++	ret = v4l2_async_register_subdev_sensor(&s5k3m5->sd);
++	if (ret < 0) {
++		dev_err_probe(s5k3m5->dev, ret,
++			      "failed to register V4L2 subdev\n");
++		goto subdev_cleanup;
++	}
++
++	pm_runtime_set_autosuspend_delay(s5k3m5->dev, 1000);
++	pm_runtime_use_autosuspend(s5k3m5->dev);
++	pm_runtime_idle(s5k3m5->dev);
++
++	return 0;
++
++subdev_cleanup:
++	v4l2_subdev_cleanup(&s5k3m5->sd);
++	pm_runtime_disable(s5k3m5->dev);
++	pm_runtime_set_suspended(s5k3m5->dev);
++
++media_entity_cleanup:
++	media_entity_cleanup(&s5k3m5->sd.entity);
++
++v4l2_ctrl_handler_free:
++	v4l2_ctrl_handler_free(s5k3m5->sd.ctrl_handler);
++
++power_off:
++	s5k3m5_power_off(s5k3m5->dev);
++
++	return ret;
++}
++
++static void s5k3m5_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct s5k3m5 *s5k3m5 = to_s5k3m5(sd);
++
++	v4l2_async_unregister_subdev(sd);
++	v4l2_subdev_cleanup(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(sd->ctrl_handler);
++	pm_runtime_disable(s5k3m5->dev);
++
++	if (!pm_runtime_status_suspended(s5k3m5->dev)) {
++		s5k3m5_power_off(s5k3m5->dev);
++		pm_runtime_set_suspended(s5k3m5->dev);
++	}
++}
++
++static const struct dev_pm_ops s5k3m5_pm_ops = {
++	SET_RUNTIME_PM_OPS(s5k3m5_power_off, s5k3m5_power_on, NULL)
++};
++
++static const struct of_device_id s5k3m5_of_match[] = {
++	{ .compatible = "samsung,s5k3m5" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, s5k3m5_of_match);
++
++static struct i2c_driver s5k3m5_i2c_driver = {
++	.driver = {
++		.name = "s5k3m5",
++		.pm = &s5k3m5_pm_ops,
++		.of_match_table = s5k3m5_of_match,
++	},
++	.probe = s5k3m5_probe,
++	.remove = s5k3m5_remove,
++};
++
++module_i2c_driver(s5k3m5_i2c_driver);
++
++MODULE_AUTHOR("Vladimir Zapolskiy <vladimir.zapolskiy@linaro.org>");
++MODULE_DESCRIPTION("Samsung S5K3M5 image sensor driver");
++MODULE_LICENSE("GPL");

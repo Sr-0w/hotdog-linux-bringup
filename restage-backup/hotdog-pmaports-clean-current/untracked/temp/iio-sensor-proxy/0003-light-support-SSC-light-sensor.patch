@@ -1,0 +1,181 @@
+From cfd4f19473145c3adfba06e2e44c2e6e773f30cc Mon Sep 17 00:00:00 2001
+From: Dylan Van Assche <me@dylanvanassche.be>
+Date: Mon, 24 Apr 2023 16:56:20 +0200
+Subject: [PATCH 3/8] light: support SSC light sensor
+
+Add driver for the light sensor exposed by libssc.
+---
+ src/drivers.h          |   1 +
+ src/drv-ssc-light.c    | 123 +++++++++++++++++++++++++++++++++++++++++
+ src/iio-sensor-proxy.c |   1 +
+ src/meson.build        |   1 +
+ 4 files changed, 126 insertions(+)
+ create mode 100644 src/drv-ssc-light.c
+
+diff --git a/src/drivers.h b/src/drivers.h
+index 464e801..46df2fd 100644
+--- a/src/drivers.h
++++ b/src/drivers.h
+@@ -163,6 +163,7 @@ extern SensorDriver input_proximity;
+ 
+ #ifdef HAS_LIBSSC
+ extern SensorDriver ssc_proximity;
++extern SensorDriver ssc_light;
+ #endif
+ 
+ gboolean drv_check_udev_sensor_type (GUdevDevice *device, const gchar *match, const char *name);
+diff --git a/src/drv-ssc-light.c b/src/drv-ssc-light.c
+new file mode 100644
+index 0000000..e5ad8dd
+--- /dev/null
++++ b/src/drv-ssc-light.c
+@@ -0,0 +1,123 @@
++/*
++ * Copyright (c) 2023 Dylan Van Assche
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 3 as published by
++ * the Free Software Foundation.
++ */
++
++#include "drivers.h"
++
++#include <fcntl.h>
++#include <unistd.h>
++#include <string.h>
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <gio/gio.h>
++#include <libssc-sensor.h>
++#include <libssc-sensor-light.h>
++
++typedef struct DrvData {
++	SSCSensorLight *sensor;
++	guint measurement_id;
++} DrvData;
++
++static gboolean
++ssc_light_discover (GUdevDevice *device)
++{
++	SSCSensorLight *sensor;
++
++	/* Verify presence of FastRPC device */
++	if (!drv_check_udev_sensor_type (device, "ssc-light", NULL))
++		return FALSE;
++
++	/* Open and close SSC light sensor for discovering */
++	sensor = ssc_sensor_light_new_sync (NULL, NULL);
++	if (!sensor)
++		return FALSE;
++
++	if (!ssc_sensor_light_close_sync (sensor, NULL, NULL))
++		return FALSE;
++
++	g_clear_object (&sensor);
++
++	g_debug ("Found SSC light at %s", g_udev_device_get_sysfs_path (device));
++	return TRUE;
++}
++
++static void
++measurement_cb (SSCSensorLight *sensor, gfloat intensity, gpointer user_data)
++{
++	SensorDevice *sensor_device = user_data;
++	LightReadings readings;
++
++	readings.level = intensity;
++	readings.uses_lux = TRUE;
++	sensor_device->callback_func (sensor_device, (gpointer) &readings, sensor_device->user_data);
++}
++
++static SensorDevice *
++ssc_light_open (GUdevDevice *device)
++{
++	SensorDevice *sensor_device;
++	DrvData *drv_data;
++	g_autoptr (GError) error = NULL;
++
++	sensor_device = g_new0 (SensorDevice, 1);
++	sensor_device->priv = g_new0 (DrvData, 1);
++	drv_data = (DrvData *) sensor_device->priv;
++
++	/* Create sensor */
++	drv_data->sensor = ssc_sensor_light_new_sync (NULL, &error);
++	if (!drv_data->sensor) {
++		g_warning ("Creating SSC light sensor failed: %s", error ? error->message : "UNKNOWN");
++		return NULL;
++	}
++	g_object_get (drv_data->sensor,
++                      SSC_SENSOR_NAME, &sensor_device->name,
++		      NULL);
++
++	/* Start listening for measurements */
++	drv_data->measurement_id = g_signal_connect (drv_data->sensor,
++			                             "measurement",
++						     G_CALLBACK (measurement_cb),
++						     sensor_device);
++
++	/* Enable sensor */
++	if (!ssc_sensor_light_open_sync (drv_data->sensor, NULL, &error)) {
++		g_warning ("Opening SSC light sensor failed: %s", error ? error->message : "UNKNOWN");
++		g_object_unref (sensor_device);
++		return NULL;
++	}
++
++	return sensor_device;
++}
++
++static void
++ssc_light_close (SensorDevice *sensor_device)
++{
++	g_autoptr (GError) error = NULL;
++	DrvData *drv_data = (DrvData *) sensor_device->priv;
++
++	/* Stop listening for measurements */
++	g_warn_if_fail (drv_data->measurement_id > 0);
++	g_signal_handler_disconnect (drv_data->sensor, drv_data->measurement_id);
++
++	/* Disable sensor */
++	if (!ssc_sensor_light_close_sync (drv_data->sensor, NULL, &error))
++		g_warning ("Closing SSC light sensor failed: %s", error ? error->message : "UNKNOWN");
++
++	g_clear_object (&drv_data->sensor);
++	g_clear_pointer (&sensor_device->priv, g_free);
++	g_free (sensor_device);
++}
++
++SensorDriver ssc_light = {
++	.driver_name = "SSC light sensor",
++	.type = DRIVER_TYPE_LIGHT,
++
++	.discover = ssc_light_discover,
++	.open = ssc_light_open,
++	.close = ssc_light_close,
++};
+diff --git a/src/iio-sensor-proxy.c b/src/iio-sensor-proxy.c
+index 257c822..77a75ab 100644
+--- a/src/iio-sensor-proxy.c
++++ b/src/iio-sensor-proxy.c
+@@ -77,6 +77,7 @@ static const SensorDriver * const drivers[] = {
+ 	&input_proximity,
+ #ifdef HAS_LIBSSC
+ 	&ssc_proximity,
++	&ssc_light,
+ #endif
+ };
+ 
+diff --git a/src/meson.build b/src/meson.build
+index 9a74481..2f3c1e6 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -48,6 +48,7 @@ sources = [
+ if get_option('ssc-support')
+   sources = sources + [
+     'drv-ssc-proximity.c',
++    'drv-ssc-light.c',
+   ]
+ endif
+ 
+-- 
+2.45.1

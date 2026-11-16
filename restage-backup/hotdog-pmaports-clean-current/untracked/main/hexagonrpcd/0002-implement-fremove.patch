@@ -1,0 +1,265 @@
+diff --git a/hexagonrpcd/apps_std.c b/hexagonrpcd/apps_std.c
+index 9a5fa54..1ff609e 100644
+--- a/hexagonrpcd/apps_std.c
++++ b/hexagonrpcd/apps_std.c
+@@ -286,6 +286,34 @@ static uint32_t apps_std_closedir(void *data,
+ 	return 0;
+ }
+ 
++static uint32_t apps_std_fremove(void *data,
++				 const struct fastrpc_io_buffer *inbufs,
++				 struct fastrpc_io_buffer *outbufs)
++{
++	struct apps_std_ctx *ctx = data;
++	const char *pathname = inbufs[1].p;
++	int ret;
++
++	(void) outbufs;
++
++	if (inbufs[1].s == 0 || pathname[inbufs[1].s - 1] != 0)
++		return AEE_EBADPARM;
++
++	ret = hexagonfs_remove(ctx->fds, ctx->rootfd,
++			       ctx->rootfd, pathname);
++	if (ret < 0) {
++		fprintf(stderr, "Could not remove %s: %s\n",
++			pathname, strerror(-ret));
++		return AEE_EFAILED;
++	}
++
++#ifdef HEXAGONRPC_VERBOSE
++	printf("remove(%s)\n", pathname);
++#endif
++
++	return 0;
++}
++
+ static uint32_t apps_std_readdir(void *data,
+ 				 const struct fastrpc_io_buffer *inbufs,
+ 				 struct fastrpc_io_buffer *outbufs)
+@@ -481,7 +509,10 @@ static const struct fastrpc_function_impl apps_std_procs[] = {
+ 	{ .def = NULL, .impl = NULL, },
+ 	{ .def = NULL, .impl = NULL, },
+ 	{ .def = NULL, .impl = NULL, },
+-	{ .def = NULL, .impl = NULL, },
++	{
++		.def = &apps_std_fremove_def,
++		.impl = apps_std_fremove,
++	},
+ 	{ .def = NULL, .impl = NULL, },
+ 	{
+ 		.def = &apps_std_opendir_def,
+diff --git a/hexagonrpcd/hexagonfs.c b/hexagonrpcd/hexagonfs.c
+index 91d4659..763e5f3 100644
+--- a/hexagonrpcd/hexagonfs.c
++++ b/hexagonrpcd/hexagonfs.c
+@@ -211,6 +211,70 @@ int hexagonfs_close(struct hexagonfs_fd **fds, int fileno)
+ 	return 0;
+ }
+ 
++int hexagonfs_remove(struct hexagonfs_fd **fds, int rootfd, int dirfd,
++		     const char *name)
++{
++	struct hexagonfs_fd *fd;
++	const char *curr = name;
++	char *segment;
++	bool expect_dir;
++	int selected = dirfd;
++	int ret = 0;
++
++	if (*curr == '/') {
++		selected = rootfd;
++
++		while (*curr == '/')
++			curr++;
++	}
++
++	if (*curr == '\0')
++		return -EINVAL;
++
++	fd = fds[selected];
++	if (fd == NULL)
++		return -EBADF;
++
++	while (*curr != '\0' && !ret) {
++		segment = copy_segment_and_advance(curr, &expect_dir, &curr);
++		if (segment == NULL) {
++			ret = -ENOMEM;
++			goto out;
++		}
++
++		if (*curr == '\0') {
++			if (!strcmp(segment, ".") || !strcmp(segment, "..")) {
++				ret = -EINVAL;
++			} else if (fd->ops->removeat == NULL) {
++				ret = -EROFS;
++			} else {
++				ret = fd->ops->removeat(fd, segment);
++			}
++
++			free(segment);
++			break;
++		}
++
++		if (!strcmp(segment, ".")) {
++			free(segment);
++			continue;
++		}
++
++		if (!strcmp(segment, "..")) {
++			fd = pop_dir(fd, fds[rootfd]);
++			free(segment);
++			continue;
++		}
++
++		ret = fd->ops->openat(fd, segment, true, false, &fd);
++		free(segment);
++	}
++
++out:
++	destroy_file_descriptor(fd);
++	return ret;
++}
++
+ int hexagonfs_lseek(struct hexagonfs_fd **fds, int fileno, off_t off, int whence)
+ {
+ 	struct hexagonfs_fd *fd;
+diff --git a/hexagonrpcd/hexagonfs.h b/hexagonrpcd/hexagonfs.h
+index 2539afe..305dc70 100644
+--- a/hexagonrpcd/hexagonfs.h
++++ b/hexagonrpcd/hexagonfs.h
+@@ -42,6 +42,7 @@ struct hexagonfs_file_ops {
+ 	int (*readdir)(struct hexagonfs_fd *fd, size_t size, char *out);
+ 	ssize_t (*read)(struct hexagonfs_fd *fd, size_t size, void *ptr);
+ 	ssize_t (*write)(struct hexagonfs_fd *fd, size_t size, const void *ptr);
++	int (*removeat)(struct hexagonfs_fd *dir, const char *segment);
+ 	int (*stat)(struct hexagonfs_fd *fd, struct stat *stats);
+ 	int (*seek)(struct hexagonfs_fd *fd, off_t off, int whence);
+ };
+@@ -77,6 +78,8 @@ int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd,
+ int hexagonfs_close(struct hexagonfs_fd **fds, int fileno);
+ ssize_t hexagonfs_write(struct hexagonfs_fd **fds, int fileno,
+ 			size_t size, const void *ptr);
++int hexagonfs_remove(struct hexagonfs_fd **fds, int rootfd, int dirfd,
++		     const char *name);
+ 
+ int hexagonfs_fstat(struct hexagonfs_fd **fds, int fileno, struct stat *stats);
+ int hexagonfs_lseek(struct hexagonfs_fd **fds, int fileno, off_t pos, int whence);
+diff --git a/hexagonrpcd/hexagonfs_mapped.c b/hexagonrpcd/hexagonfs_mapped.c
+index 83af835..0f9dcd9 100644
+--- a/hexagonrpcd/hexagonfs_mapped.c
++++ b/hexagonrpcd/hexagonfs_mapped.c
+@@ -176,6 +176,18 @@ static ssize_t mapped_write(struct hexagonfs_fd *fd, size_t size,
+ 	return ret;
+ }
+ 
++static int mapped_removeat(struct hexagonfs_fd *dir, const char *segment)
++{
++	struct mapped_ctx *ctx = dir->data;
++	int ret;
++
++	ret = unlinkat(ctx->fd, segment, 0);
++	if (ret < 0)
++		return -errno;
++
++	return 0;
++}
++
+ static int mapped_readdir(struct hexagonfs_fd *fd, size_t size, char *out)
+ {
+ 	struct mapped_ctx *ctx = fd->data;
+@@ -367,6 +379,7 @@ struct hexagonfs_file_ops hexagonfs_mapped_ops = {
+ 	.openat = mapped_openat,
+ 	.read = mapped_read,
+ 	.write = mapped_write,
++	.removeat = mapped_removeat,
+ 	.readdir = mapped_readdir,
+ 	.seek = mapped_seek,
+ 	.stat = mapped_stat,
+diff --git a/hexagonrpcd/interfaces/apps_std.def b/hexagonrpcd/interfaces/apps_std.def
+index 35441e1..b37e749 100644
+--- a/hexagonrpcd/interfaces/apps_std.def
++++ b/hexagonrpcd/interfaces/apps_std.def
+@@ -31,6 +31,7 @@ HEXAGONRPC_DEFINE_REMOTE_METHOD(4, apps_std_fread, 1, 0, 2, 1)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(5, apps_std_fwrite, 1, 1, 2, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(9, apps_std_fseek, 3, 0, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(19, apps_std_fopen_with_env, 0, 4, 1, 0)
++HEXAGONRPC_DEFINE_REMOTE_METHOD(24, apps_std_fremove, 0, 1, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(26, apps_std_opendir, 0, 1, 2, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(27, apps_std_closedir, 2, 0, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(28, apps_std_readdir, 2, 0, 66, 0)
+diff --git a/tests/test_hexagonfs.c b/tests/test_hexagonfs.c
+index ae9ee7a..928d351 100644
+--- a/tests/test_hexagonfs.c
++++ b/tests/test_hexagonfs.c
+@@ -22,7 +22,10 @@
+ #include <fcntl.h>
+ #include <libhexagonrpc/fastrpc.h>
+ #include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
+ #include <string.h>
++#include <sys/stat.h>
+ #include <unistd.h>
+ 
+ #include "../hexagonrpcd/hexagonfs.h"
+@@ -83,6 +86,49 @@ static int test_mapped_seq_read(const char *path)
+ 	return 0;
+ }
+ 
++static int test_mapped_remove(void)
++{
++	struct hexagonfs_fd *fds[HEXAGONFS_MAX_FD] = { 0 };
++	char tmpdir[] = "/tmp/hexagonfs-remove.XXXXXX";
++	char victim[sizeof(tmpdir) + 8];
++	struct hexagonfs_dirent root = {
++		.name = "/",
++		.ops = &hexagonfs_mapped_ops,
++	};
++	int rootfd;
++	int fd;
++	int ret = 1;
++
++	if (mkdtemp(tmpdir) == NULL)
++		return 1;
++
++	snprintf(victim, sizeof(victim), "%s/victim", tmpdir);
++	fd = open(victim, O_WRONLY | O_CREAT, 0600);
++	if (fd < 0)
++		goto out_dir;
++	close(fd);
++
++	root.u.phys = tmpdir;
++	rootfd = hexagonfs_open_root(fds, &root);
++	if (rootfd < 0)
++		goto out_file;
++
++	if (hexagonfs_remove(fds, rootfd, rootfd, "../victim"))
++		goto out_root;
++	if (access(victim, F_OK) == 0)
++		goto out_root;
++
++	ret = 0;
++
++out_root:
++	hexagonfs_close(fds, rootfd);
++out_file:
++	unlink(victim);
++out_dir:
++	rmdir(tmpdir);
++	return ret;
++}
++
+ int main(int argc, const char **argv)
+ {
+ 	int ret;
+@@ -94,5 +140,9 @@ int main(int argc, const char **argv)
+ 	if (ret)
+ 		return ret;
+ 
++	ret = test_mapped_remove();
++	if (ret)
++		return ret;
++
+ 	return 0;
+ }

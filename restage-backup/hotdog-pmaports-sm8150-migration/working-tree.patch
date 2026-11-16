@@ -1,0 +1,20 @@
+diff --git a/device/testing/linux-postmarketos-sm8150-staging/APKBUILD b/device/testing/linux-postmarketos-sm8150-staging/APKBUILD
+index 4588648bbc..66e100ed00 100644
+--- a/device/testing/linux-postmarketos-sm8150-staging/APKBUILD
++++ b/device/testing/linux-postmarketos-sm8150-staging/APKBUILD
+@@ -1,13 +1,13 @@
+ # Maintainer: Patriot-06 <mbmc172@gmail.com>
+ # Kernel config based on: arch/arm/configs/sm8150.config
+ 
+-pkgname=linux-postmarketos-sm8150-common
++pkgname=linux-postmarketos-sm8150-staging
+ pkgver=6.8.7
+ pkgrel=0
+ pkgdesc="Mainline Kernel fork for SM8150 devices (Staging fork)"
+ arch="aarch64"
+ _carch="arm64"
+-_flavor="postmarketos-sm8150-common"
++_flavor="postmarketos-sm8150-staging"
+ url="https://github.com/sm8150-linux-mainline/linux"
+ license="GPL-2.0-only"
+ options="!strip !check !tracedeps

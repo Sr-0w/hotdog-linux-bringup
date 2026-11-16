@@ -1,0 +1,46 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] misc: fastrpc: allocate sensors messages from the reserved pool
+
+The sensors protection domain does not reach the message buffer through its
+SMMU context bank. Given a mapped buffer it addressed memory that was not
+there: first faulting cleanly on the session identifier folded into the upper
+bits, then, once that was corrected, stalling the interconnect for several
+seconds until the watchdog reset the SoC. Neither run produced a translation
+fault at the corrected address, which is what a context-bank access would
+have produced.
+
+Allocate its messages from the reserved pool instead, the same way domains
+without a session already do.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index 3789235..31527f5 100644
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -954,7 +954,13 @@ static int fastrpc_get_args(u32 kernel, struct fastrpc_invoke_ctx *ctx)
+ 
+ 	ctx->msg_sz = pkt_size;
+ 
+-	if (ctx->fl->sctx->sid)
++	/*
++	 * The sensors domain reaches the message buffer directly rather than
++	 * through its context bank, so it needs one from the reserved pool.
++	 * A context-bank mapping leaves it addressing memory that is not
++	 * there, which stalls the interconnect rather than faulting.
++	 */
++	if (ctx->fl->sctx->sid && ctx->fl->pd != SENSORS_PD)
+ 		err = fastrpc_buf_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+ 	else
+ 		err = fastrpc_remote_heap_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+@@ -1126,6 +1132,9 @@ static int fastrpc_invoke_send(struct fastrpc_session_ctx *sctx,
+ 	msg->sc = ctx->sc;
+ 	msg->addr = ctx->buf ? ctx->buf->phys : 0;
+ 	msg->size = roundup(ctx->msg_sz, PAGE_SIZE);
++
++	dev_info(sctx->dev, "invoke handle %u pd %d sid %d addr 0x%llx\n",
++		 handle, fl->pd, sctx->sid, msg->addr);
+ 	fastrpc_context_get(ctx);
+ 
+ 	ret = rpmsg_send(cctx->rpdev->ept, (void *)msg, sizeof(*msg));

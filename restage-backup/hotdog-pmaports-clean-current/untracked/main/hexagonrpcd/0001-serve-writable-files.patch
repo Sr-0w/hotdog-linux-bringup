@@ -1,0 +1,438 @@
+diff --git a/hexagonrpcd/apps_std.c b/hexagonrpcd/apps_std.c
+index ff4d5a7..12991f2 100644
+--- a/hexagonrpcd/apps_std.c
++++ b/hexagonrpcd/apps_std.c
+@@ -120,6 +120,40 @@ static uint32_t apps_std_fread(void *data,
+ 	return 0;
+ }
+ 
++static uint32_t apps_std_fwrite(void *data,
++				const struct fastrpc_io_buffer *inbufs,
++				struct fastrpc_io_buffer *outbufs)
++{
++	struct apps_std_ctx *ctx = data;
++	const struct {
++		uint32_t fd;
++		uint32_t buf_size;
++	} *first_in = inbufs[0].p;
++	struct {
++		uint32_t written;
++		uint32_t is_eof;
++	} *first_out = outbufs[0].p;
++	ssize_t ret;
++
++	ret = hexagonfs_write(ctx->fds, first_in->fd,
++			      first_in->buf_size, inbufs[1].p);
++	if (ret < 0) {
++		fprintf(stderr, "Could not write file: %s\n", strerror(-ret));
++		return AEE_EFAILED;
++	}
++
++#ifdef HEXAGONRPC_VERBOSE
++	printf("write(%u, %u) -> %ld\n", first_in->fd,
++					  first_in->buf_size,
++					  ret);
++#endif
++
++	first_out->written = ret;
++	first_out->is_eof = 0;
++
++	return 0;
++}
++
+ static uint32_t apps_std_fseek(void *data,
+ 			       const struct fastrpc_io_buffer *inbufs,
+ 			       struct fastrpc_io_buffer *outbufs)
+@@ -166,11 +200,6 @@ static uint32_t apps_std_fopen_with_env(void *data,
+ 		return AEE_EBADPARM;
+ 
+ 	rw_mode = ((const char *) inbufs[4].p)[0];
+-	if (rw_mode == 'w' || rw_mode == 'a') {
+-		fprintf(stderr, "Tried to open %s for writing\n",
+-				(const char *) inbufs[3].p);
+-		return AEE_EUNSUPPORTED;
+-	}
+ 
+ 	if (!strcmp(inbufs[1].p, "ADSP_LIBRARY_PATH")) {
+ 		dirfd = ctx->adsp_library_dirfd;
+@@ -188,7 +217,8 @@ static uint32_t apps_std_fopen_with_env(void *data,
+ 		return AEE_EFAILED;
+ 	}
+ 
+-	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, dirfd, inbufs[3].p);
++	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, dirfd, inbufs[3].p,
++			      rw_mode == 'w' || rw_mode == 'a');
+ 	if (fd < 0) {
+ 		fprintf(stderr, "Could not open %s: %s\n",
+ 				(const char *) inbufs[3].p,
+@@ -220,7 +250,8 @@ static uint32_t apps_std_opendir(void *data,
+ 	if (((const char *) inbufs[1].p)[inbufs[1].s - 1] != 0)
+ 		return AEE_EBADPARM;
+ 
+-	ret = hexagonfs_openat(ctx->fds, ctx->rootfd, ctx->rootfd, inbufs[1].p);
++	ret = hexagonfs_openat(ctx->fds, ctx->rootfd, ctx->rootfd, inbufs[1].p,
++			       false);
+ 	if (ret < 0) {
+ 		fprintf(stderr, "Could not open %s: %s\n",
+ 				(const char *) inbufs[1].p,
+@@ -313,7 +344,8 @@ static uint32_t apps_std_stat(void *data,
+ 	if (((const char *) inbufs[1].p)[inbufs[1].s - 1] != 0)
+ 		return AEE_EBADPARM;
+ 
+-	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, ctx->adsp_library_dirfd, pathname);
++	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, ctx->adsp_library_dirfd,
++			      pathname, false);
+ 	if (fd < 0) {
+ 		fprintf(stderr, "Could not open %s: %s\n",
+ 				pathname, strerror(-fd));
+@@ -373,11 +405,13 @@ struct fastrpc_interface *fastrpc_apps_std_init(struct hexagonfs_dirent *root)
+ 	ctx->adsp_avs_cfg_dirfd = hexagonfs_openat(ctx->fds,
+ 						   ctx->rootfd,
+ 						   ctx->rootfd,
+-						   "/vendor/etc/acdbdata/");
++						   "/vendor/etc/acdbdata/",
++						   false);
+ 	ctx->adsp_library_dirfd = hexagonfs_openat(ctx->fds,
+ 						   ctx->rootfd,
+ 						   ctx->rootfd,
+-						   "/usr/lib/qcom/adsp/");
++						   "/usr/lib/qcom/adsp/",
++						   false);
+ 
+ 	iface->data = ctx;
+ 
+@@ -420,7 +454,10 @@ static const struct fastrpc_function_impl apps_std_procs[] = {
+ 		.def = &apps_std_fread_def,
+ 		.impl = apps_std_fread,
+ 	},
+-	{ .def = NULL, .impl = NULL, },
++	{
++		.def = &apps_std_fwrite_def,
++		.impl = apps_std_fwrite,
++	},
+ 	{ .def = NULL, .impl = NULL, },
+ 	{ .def = NULL, .impl = NULL, },
+ 	{ .def = NULL, .impl = NULL, },
+diff --git a/hexagonrpcd/hexagonfs.c b/hexagonrpcd/hexagonfs.c
+index bd9f353..91d4659 100644
+--- a/hexagonrpcd/hexagonfs.c
++++ b/hexagonrpcd/hexagonfs.c
+@@ -139,7 +139,8 @@ err:
+ 	return ret;
+ }
+ 
+-int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd, const char *name)
++int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd,
++		     const char *name, bool create)
+ {
+ 	struct hexagonfs_fd *fd;
+ 	const char *curr = name;
+@@ -169,7 +170,7 @@ int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd, const cha
+ 		} else if (!strcmp(segment, "..")) {
+ 			fd = pop_dir(fd, fds[rootfd]);
+ 		} else {
+-			ret = fd->ops->openat(fd, segment, expect_dir, &fd);
++			ret = fd->ops->openat(fd, segment, expect_dir, create, &fd);
+ 		}
+ 
+ 	next:
+@@ -244,6 +245,24 @@ ssize_t hexagonfs_read(struct hexagonfs_fd **fds, int fileno, size_t size, void
+ 	return fd->ops->read(fd, size, ptr);
+ }
+ 
++ssize_t hexagonfs_write(struct hexagonfs_fd **fds, int fileno,
++			size_t size, const void *ptr)
++{
++	struct hexagonfs_fd *fd;
++
++	if (fileno < 0 || fileno >= HEXAGONFS_MAX_FD)
++		return -EBADF;
++
++	fd = fds[fileno];
++	if (fd == NULL)
++		return -EBADF;
++
++	if (fd->ops->write == NULL)
++		return -EROFS;
++
++	return fd->ops->write(fd, size, ptr);
++}
++
+ int hexagonfs_readdir(struct hexagonfs_fd **fds, int fileno, size_t ent_size, char *ent)
+ {
+ 	struct hexagonfs_fd *fd;
+diff --git a/hexagonrpcd/hexagonfs.h b/hexagonrpcd/hexagonfs.h
+index 7682604..2539afe 100644
+--- a/hexagonrpcd/hexagonfs.h
++++ b/hexagonrpcd/hexagonfs.h
+@@ -37,9 +37,11 @@ struct hexagonfs_file_ops {
+ 	int (*openat)(struct hexagonfs_fd *dir,
+ 		      const char *segment,
+ 		      bool expect_dir,
++		      bool create,
+ 		      struct hexagonfs_fd **out);
+ 	int (*readdir)(struct hexagonfs_fd *fd, size_t size, char *out);
+ 	ssize_t (*read)(struct hexagonfs_fd *fd, size_t size, void *ptr);
++	ssize_t (*write)(struct hexagonfs_fd *fd, size_t size, const void *ptr);
+ 	int (*stat)(struct hexagonfs_fd *fd, struct stat *stats);
+ 	int (*seek)(struct hexagonfs_fd *fd, off_t off, int whence);
+ };
+@@ -70,8 +72,11 @@ extern struct hexagonfs_file_ops hexagonfs_plat_subtype_name_ops;
+ extern struct hexagonfs_file_ops hexagonfs_virt_dir_ops;
+ 
+ int hexagonfs_open_root(struct hexagonfs_fd **fds, struct hexagonfs_dirent *root);
+-int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd, const char *name);
++int hexagonfs_openat(struct hexagonfs_fd **fds, int rootfd, int dirfd,
++		     const char *name, bool create);
+ int hexagonfs_close(struct hexagonfs_fd **fds, int fileno);
++ssize_t hexagonfs_write(struct hexagonfs_fd **fds, int fileno,
++			size_t size, const void *ptr);
+ 
+ int hexagonfs_fstat(struct hexagonfs_fd **fds, int fileno, struct stat *stats);
+ int hexagonfs_lseek(struct hexagonfs_fd **fds, int fileno, off_t pos, int whence);
+diff --git a/hexagonrpcd/hexagonfs_mapped.c b/hexagonrpcd/hexagonfs_mapped.c
+index fd28c8c..83af835 100644
+--- a/hexagonrpcd/hexagonfs_mapped.c
++++ b/hexagonrpcd/hexagonfs_mapped.c
+@@ -61,7 +61,14 @@ static int mapped_from_dirent(const void *dirent_data, bool dir, void **fd_data)
+ 	if (dir)
+ 		flags |= O_DIRECTORY;
+ 
+-	ctx->fd = open(name, flags);
++	/*
++	 * The DSP updates some of the files it is served, the sensor registry
++	 * version among them. Prefer read-write and fall back, so a read-only
++	 * mount or a file we may not write still opens.
++	 */
++	ctx->fd = dir ? -1 : open(name, (flags & ~O_ACCMODE) | O_RDWR);
++	if (ctx->fd == -1)
++		ctx->fd = open(name, flags);
+ 	if (ctx->fd == -1) {
+ 		ret = -errno;
+ 		goto err;
+@@ -81,6 +88,7 @@ err:
+ static int mapped_openat(struct hexagonfs_fd *dir,
+ 			 const char *segment,
+ 			 bool expect_dir,
++			 bool create,
+ 			 struct hexagonfs_fd **out)
+ {
+ 	struct mapped_ctx *dir_ctx = dir->data;
+@@ -102,7 +110,24 @@ static int mapped_openat(struct hexagonfs_fd *dir,
+ 	if (expect_dir)
+ 		flags |= O_DIRECTORY;
+ 
+-	ctx->fd = openat(dir_ctx->fd, segment, flags);
++	if (expect_dir) {
++		ctx->fd = -1;
++	} else {
++		int rw = (flags & ~O_ACCMODE) | O_RDWR;
++
++		/*
++		 * The DSP creates files under the directories it is served,
++		 * numbered registry entries among them, so honour a create
++		 * request rather than failing the open.
++		 */
++		if (create)
++			ctx->fd = openat(dir_ctx->fd, segment,
++					 rw | O_CREAT, 0644);
++		else
++			ctx->fd = openat(dir_ctx->fd, segment, rw);
++	}
++	if (ctx->fd == -1)
++		ctx->fd = openat(dir_ctx->fd, segment, flags);
+ 	if (ctx->fd == -1) {
+ 		ret = -errno;
+ 		goto err_free_fd;
+@@ -138,6 +163,19 @@ static ssize_t mapped_read(struct hexagonfs_fd *fd, size_t size, void *out)
+ 	return ret;
+ }
+ 
++static ssize_t mapped_write(struct hexagonfs_fd *fd, size_t size,
++			    const void *in)
++{
++	struct mapped_ctx *ctx = fd->data;
++	ssize_t ret;
++
++	ret = write(ctx->fd, in, size);
++	if (ret < 0)
++		return -errno;
++
++	return ret;
++}
++
+ static int mapped_readdir(struct hexagonfs_fd *fd, size_t size, char *out)
+ {
+ 	struct mapped_ctx *ctx = fd->data;
+@@ -236,10 +274,11 @@ static int mapped_or_empty_from_dirent(const void *dirent_data, bool dir, void *
+ static int mapped_or_empty_openat(struct hexagonfs_fd *dir,
+ 				  const char *segment,
+ 				  bool expect_dir,
++				  bool create,
+ 				  struct hexagonfs_fd **out)
+ {
+ 	if (dir->data)
+-		return mapped_openat(dir, segment, expect_dir, out);
++		return mapped_openat(dir, segment, expect_dir, create, out);
+ 	else
+ 		return -ENOENT;
+ }
+@@ -327,6 +366,7 @@ struct hexagonfs_file_ops hexagonfs_mapped_ops = {
+ 	.from_dirent = mapped_from_dirent,
+ 	.openat = mapped_openat,
+ 	.read = mapped_read,
++	.write = mapped_write,
+ 	.readdir = mapped_readdir,
+ 	.seek = mapped_seek,
+ 	.stat = mapped_stat,
+diff --git a/hexagonrpcd/hexagonfs_plat_subtype_name.c b/hexagonrpcd/hexagonfs_plat_subtype_name.c
+index d20916f..9716dd4 100644
+--- a/hexagonrpcd/hexagonfs_plat_subtype_name.c
++++ b/hexagonrpcd/hexagonfs_plat_subtype_name.c
+@@ -68,6 +68,7 @@ static int plat_subtype_name_from_dirent(const void *dirent_data,
+ static int plat_subtype_name_openat(struct hexagonfs_fd *dir,
+ 			const char *segment,
+ 			bool expect_dir,
++			bool create,
+ 			struct hexagonfs_fd **out)
+ {
+ 	return -ENOTDIR;
+diff --git a/hexagonrpcd/hexagonfs_virt_dir.c b/hexagonrpcd/hexagonfs_virt_dir.c
+index eaba520..23fe016 100644
+--- a/hexagonrpcd/hexagonfs_virt_dir.c
++++ b/hexagonrpcd/hexagonfs_virt_dir.c
+@@ -63,6 +63,7 @@ static int virt_dir_from_dirent(const void *dirent_data, bool dir, void **fd_dat
+ static int virt_dir_openat(struct hexagonfs_fd *dir,
+ 			   const char *segment,
+ 			   bool expect_dir,
++			   bool create,
+ 			   struct hexagonfs_fd **out)
+ {
+ 	const struct hexagonfs_dirent *const **dirlist = dir->data;
+diff --git a/hexagonrpcd/interfaces/apps_std.def b/hexagonrpcd/interfaces/apps_std.def
+index 2fbbdb1..35441e1 100644
+--- a/hexagonrpcd/interfaces/apps_std.def
++++ b/hexagonrpcd/interfaces/apps_std.def
+@@ -28,6 +28,7 @@ HEXAGONRPC_DEFINE_REMOTE_METHOD(1, apps_std_freopen, 1, 0, 1, 1)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(2, apps_std_fflush, 8, 0, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(3, apps_std_fclose, 1, 0, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(4, apps_std_fread, 1, 0, 2, 1)
++HEXAGONRPC_DEFINE_REMOTE_METHOD(5, apps_std_fwrite, 1, 1, 2, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(9, apps_std_fseek, 3, 0, 0, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(19, apps_std_fopen_with_env, 0, 4, 1, 0)
+ HEXAGONRPC_DEFINE_REMOTE_METHOD(26, apps_std_opendir, 0, 1, 2, 0)
+diff --git a/hexagonrpcd/listener.c b/hexagonrpcd/listener.c
+index e298688..b78a522 100644
+--- a/hexagonrpcd/listener.c
++++ b/hexagonrpcd/listener.c
+@@ -312,8 +312,24 @@ int run_fastrpc_listener(int fd,
+ 		ret = invoke_requested_procedure(n_ifaces, ifaces,
+ 						 handle, sc, &result,
+ 						 decoded, &returned);
+-		if (ret)
+-			break;
++		/*
++		 * A method we do not implement is the DSP's problem, not ours.
++		 * The error is already in `result` and goes back on the next
++		 * pass, so keep serving instead of tearing down the whole file
++		 * service over one unknown call.
++		 */
++		if (ret) {
++			ret = 0;
++			returned = NULL;
++			n_outbufs = 0;
++
++			if (decoded != NULL) {
++				iobuf_free(REMOTE_SCALARS_INBUFS(sc), decoded);
++				decoded = NULL;
++			}
++
++			continue;
++		}
+ 
+ 		if (decoded != NULL)
+ 			iobuf_free(REMOTE_SCALARS_INBUFS(sc), decoded);
+diff --git a/hexagonrpcd/rpcd_builder.c b/hexagonrpcd/rpcd_builder.c
+index d374958..b0d25a3 100644
+--- a/hexagonrpcd/rpcd_builder.c
++++ b/hexagonrpcd/rpcd_builder.c
+@@ -31,6 +31,9 @@
+ #define SENSORS_CONFIG		"/sensors/config/"
+ #define SENSORS_REGISTRY	"/sensors/registry/"
+ #define SNS_REG_CONFIG		"/sensors/sns_reg.conf"
++#define SENSORS_DIR		"/sensors/"
++#define PROJECT_INFO		"/project_info/"
++#define OPPO_VERSION		"/oppoVersion/"
+ #define SYSFS_SOCINFO		"/socinfo/"
+ 
+ static struct hexagonfs_dirent *hfs_mkdir(const char *name, size_t n_ents, ...)
+@@ -120,7 +123,11 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 	acdbdata = malloc(n_prefix + strlen(ACDBDATA) + 1);
+ 	sns_cfg = malloc(n_prefix + strlen(SENSORS_CONFIG) + 1);
+ 	sns_reg = malloc(n_prefix + strlen(SENSORS_REGISTRY) + 1);
++	char *sensors_dir, *project_info, *oppo_version;
+ 	sns_reg_config = malloc(n_prefix + strlen(SNS_REG_CONFIG) + 1);
++	sensors_dir = malloc(n_prefix + strlen(SENSORS_DIR) + 1);
++	project_info = malloc(n_prefix + strlen(PROJECT_INFO) + 1);
++	oppo_version = malloc(n_prefix + strlen(OPPO_VERSION) + 1);
+ 	socinfo = malloc(n_prefix + strlen(SYSFS_SOCINFO) + 1);
+ 
+ 	dsp_libs = malloc(n_prefix + strlen(DSP_LIBS) + strlen(dsp) + 1);
+@@ -145,6 +152,21 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 		strcat(sns_reg_config, SNS_REG_CONFIG);
+ 	}
+ 
++	if (sensors_dir != NULL) {
++		strcpy(sensors_dir, prefix);
++		strcat(sensors_dir, SENSORS_DIR);
++	}
++
++	if (project_info != NULL) {
++		strcpy(project_info, prefix);
++		strcat(project_info, PROJECT_INFO);
++	}
++
++	if (oppo_version != NULL) {
++		strcpy(oppo_version, prefix);
++		strcat(oppo_version, OPPO_VERSION);
++	}
++
+ 	if (socinfo != NULL) {
+ 		strcpy(socinfo, prefix);
+ 		strcat(socinfo, SYSFS_SOCINFO);
+@@ -162,9 +184,7 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 	 */
+ 	persist_dir = hfs_mkdir("persist", 1,
+ 				hfs_mkdir("sensors", 1,
+-					hfs_mkdir("registry", 1,
+-						hfs_map("registry", sns_reg)
+-					)
++					hfs_map("registry", sensors_dir)
+ 				)
+ 		      );
+ 
+@@ -182,17 +202,21 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
+ 				)
+ 			);
+ 
+-	return hfs_mkdir("/", 6,
++	return hfs_mkdir("/", 7,
++			hfs_mkdir("proc", 1,
++				hfs_map_or_empty("oppoVersion", oppo_version)
++			),
+ 			hfs_mkdir("mnt", 1,
+ 				hfs_mkdir("vendor", 1,
+ 					persist_dir
+ 				)
+ 			),
+ 			persist_dir,
+-			hfs_mkdir("sys", 1,
++			hfs_mkdir("sys", 2,
+ 				hfs_mkdir("devices", 1,
+ 					hfs_map_or_empty("soc0", socinfo)
+-				)
++				),
++				hfs_map_or_empty("project_info", project_info)
+ 			),
+ 			hfs_mkdir("system", 1,
+ 				vendor_dir

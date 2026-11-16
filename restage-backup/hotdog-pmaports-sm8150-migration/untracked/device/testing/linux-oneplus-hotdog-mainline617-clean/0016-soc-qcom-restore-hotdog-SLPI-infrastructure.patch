@@ -1,0 +1,76 @@
+From a006b23f262900d3f6c20548cf6ad3f4fae380b7 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 26 Aug 2026 01:53:58 +0200
+Subject: [PATCH 16/17] soc: qcom: restore hotdog SLPI infrastructure
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ .../boot/dts/qcom/sm8150-oneplus-hotdog.dts   | 19 +++++++++++++++++++
+ drivers/misc/fastrpc.c                        |  3 ++-
+ drivers/soc/qcom/qcom_pd_mapper.c             |  2 ++
+ 3 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index 26c32b97036a..d446a50b770c 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -130,6 +130,13 @@ camera_popup: camera-popup {
+ 	};
+ 
+ 	reserved-memory {
++		fastrpc_mem: fastrpc-shared-pool {
++			compatible = "shared-dma-pool";
++			alloc-ranges = <0 0x00000000 0 0xffffffff>;
++			size = <0 0x01000000>;
++			reusable;
++		};
++
+ 		/* Complete the stock-owned XBL/AOP interval. */
+ 		xbl_aop_gap: memory@85e40000 {
+ 			reg = <0 0x85e40000 0 0xc0000>;
+@@ -709,6 +716,18 @@ &remoteproc_mpss {
+ 	status = "okay";
+ };
+ 
++&remoteproc_slpi {
++	firmware-name = "qcom/sm8150/oneplus/hotdog/slpi.mbn";
++	status = "okay";
++
++	glink-edge {
++		fastrpc {
++			memory-region = <&fastrpc_mem>;
++			qcom,vmids = <0x3 0x5 0x6>;
++		};
++	};
++};
++
+ &q6afedai {
+ 	dai@7 {
+ 		reg = <SLIMBUS_2_TX>;
+diff --git a/drivers/misc/fastrpc.c b/drivers/misc/fastrpc.c
+index 53e88a1bc430..281f30fd5988 100644
+--- a/drivers/misc/fastrpc.c
++++ b/drivers/misc/fastrpc.c
+@@ -954,7 +954,8 @@ static int fastrpc_get_args(u32 kernel, struct fastrpc_invoke_ctx *ctx)
+ 
+ 	ctx->msg_sz = pkt_size;
+ 
+-	if (ctx->fl->sctx->sid)
++	/* The sensors PD addresses message buffers outside its context bank. */
++	if (ctx->fl->sctx->sid && ctx->fl->pd != SENSORS_PD)
+ 		err = fastrpc_buf_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+ 	else
+ 		err = fastrpc_remote_heap_alloc(ctx->fl, dev, pkt_size, &ctx->buf);
+diff --git a/drivers/soc/qcom/qcom_pd_mapper.c b/drivers/soc/qcom/qcom_pd_mapper.c
+index 3abea241b1c4..bf4218effaa1 100644
+--- a/drivers/soc/qcom/qcom_pd_mapper.c
++++ b/drivers/soc/qcom/qcom_pd_mapper.c
+@@ -504,6 +504,8 @@ static const struct qcom_pdm_domain_data *sm8150_domains[] = {
+ 	&cdsp_root_pd,
+ 	&mpss_root_pd_gps,
+ 	&mpss_wlan_pd,
++	&slpi_root_pd,
++	&slpi_sensor_pd,
+ 	NULL,
+ };
+ 

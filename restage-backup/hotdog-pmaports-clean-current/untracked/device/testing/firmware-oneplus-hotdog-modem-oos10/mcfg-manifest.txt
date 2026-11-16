@@ -1,0 +1,8 @@
+schema=1
+source-sha256=7920f87d8544d17efbe93ec9d7365190a43016eb9d286b1361de5fc96ca6a7b9
+mpss-build=MPSS.HE.1.0.c11.1-00007-SM8150_GEN_PACK-2.320290.2.328393.1
+modem-sha256=559a517c2d4ca5c22d25e0a9b3383bbf7591a632f688b629a19c3e51e3dba9e5
+mcfg-archive-sha256=a81d9d110cd2aa9ecc906ec69c1698aaf4518142f890fa6f6d8e656e498ff1fa
+profile-count=69
+signature-count=69
+catalog-file-count=143

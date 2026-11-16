@@ -1,0 +1,401 @@
+# Hardware-validated reference kernel for the OnePlus 7T Pro mainline port.
+
+pkgname=linux-oneplus-hotdog-mainline616
+pkgver=6.16.0
+pkgrel=181
+pkgdesc="Hardware-validated mainline 6.16 reference kernel for OnePlus 7T Pro"
+maintainer="Robin Snyders <robin@snyders.xyz>"
+arch="aarch64"
+_carch="arm64"
+_flavor="oneplus-hotdog-mainline616"
+url="https://github.com/ClearStaff/linux-sm8150-mainline-hotdog"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-nftables
+	"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	dtc
+	findutils
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	python3
+	zstd
+"
+
+_repo="linux-sm8150-mainline-hotdog"
+_commit="403b56c33e2ccdda25d90378970a5e5b928dee19"
+export SOURCE_DATE_EPOCH=1755883508
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/ClearStaff/$_repo/archive/$_commit.tar.gz
+	$_config
+	0001-input-fts-fix-llvm-prototypes.patch
+	0002-arm64-hotdog-direct-entry.patch
+	0003-arm64-hotdog-early-entry-diagnostics.patch
+	0004-arm64-hotdog-isolate-pre-cpu-entry.patch
+	0005-arm64-hotdog-post-el-entry-diagnostics.patch
+	0006-arm64-hotdog-persistent-entry-markers.patch
+	0007-arm64-hotdog-remove-visual-entry-delays.patch
+	0008-arm64-hotdog-native-pmsg-and-visual-stages.patch
+	0009-arm64-hotdog-first-entry-canary.patch
+	0010-arm64-hotdog-match-working-image-size.patch
+	0011-arm64-hotdog-continue-after-direct-entry-canary.patch
+	0012-drm-msm-enable-native-hotdog-dsc-panel.patch
+	0013-ufs-core-add-v33-ordering-diagnostics.patch
+	0014-ufs-qcom-force-dma32-without-smmu.patch
+	0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
+	0016-arm64-dts-hotdog-enable-s6sy761-touchscreen.patch
+	0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
+	0018-arm64-dts-hotdog-enable-volume-keys.patch
+	0019-arm64-dts-hotdog-enable-battery-charger.patch
+	0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
+	0021-arm64-dts-hotdog-enable-wcn3990-wifi.patch
+	0022-arm64-dts-hotdog-complete-wcn3990-mpss.patch
+	0023-arm64-dts-hotdog-isolate-mpss-rmtfs.patch
+	0024-arm64-dts-hotdog-enable-wifi-after-rmtfs.patch
+	0025-arm64-dts-hotdog-enable-wcn3990-bluetooth.patch
+	0026-arm64-dts-hotdog-select-wcn3990-firmware.patch
+	0027-drm-panel-oneplus-select-stock-90hz-mode.patch
+	0028-drm-panel-oneplus-dsc-expose-stock-60-and-90-Hz-mode.patch
+	0029-arm64-dts-hotdog-restore-ufs-smmu.patch
+	0030-ufs-core-restore-legacy-hardirq-completions.patch
+	0031-arm64-dts-hotdog-reserve-xbl-aop-gap.patch
+	0032-arm64-dts-hotdog-complete-stock-reservations.patch
+	0033-arm64-dts-hotdog-enable-adsp.patch
+	0034-arm64-dts-hotdog-enable-wcd9340.patch
+	0035-arm64-dts-hotdog-add-internal-audio-card.patch
+	0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
+	0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
+	0038-asoc-tfa9874-add-read-only-silicon-probe.patch
+	0039-asoc-hotdog-enable-bounded-tfa9874-speaker-output.patch
+	0040-asoc-sm8150-drive-hotdog-speaker-clocks.patch
+	0041-asoc-hotdog-match-oxygenos-speaker-sample-format.patch
+	0042-arm64-dts-hotdog-enable-stereo-speaker-pair.patch
+	0043-arm64-dts-hotdog-enable-microphone-routing.patch
+	0044-arm64-dts-hotdog-add-capture-front-end.patch
+	0045-asoc-sm8150-map-every-slimbus-link.patch
+	0046-input-s6sy761-add-optional-reset-gpio.patch
+	0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
+	0048-arm64-dts-hotdog-enable-usb-role-switching.patch
+	0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
+	0050-arm64-dts-hotdog-add-displayport-audio-link.patch
+	0051-asoc-sm8150-accept-the-displayport-backend.patch
+	0052-asoc-q6afe-dai-make-displayport-a-playback-widget.patch
+	0053-arm64-dts-hotdog-put-volume-down-on-its-real-pin.patch
+	0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
+	0055-media-camss-add-sm8150-support.patch
+	0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
+	0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
+	0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
+	0059-arm64-dts-hotdog-add-the-camera-pmic-digital-rails.patch
+	0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
+	0061-media-i2c-add-a-camera-slot-identification-aid.patch
+	0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
+	0063-arm64-dts-hotdog-describe-the-telephoto-camera.patch
+	0064-media-camss-give-sm8150-its-own-csiphy-generation.patch
+	0065-media-camss-report-vfe-interrupt-status.patch
+	0066-media-camss-keep-sm8150-dma-in-range.patch
+	0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
+	0068-media-i2c-read-the-sony-model-register.patch
+	0069-media-i2c-scan-one-camera-slot-at-a-time.patch
+	0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
+	0071-arm64-dts-hotdog-give-the-camera-rails-real-ranges.patch
+	0072-arm64-dts-hotdog-drop-invented-camera-rail-parents.patch
+	0073-media-i2c-stage-the-camera-slot-power-up.patch
+	0074-media-camss-program-the-sm8150-camnoc-qos.patch
+	0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
+	0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
+	0077-media-i2c-add-the-hotdog-telephoto-autofocus.patch
+	0078-media-i2c-add-LC898217XC-lens-actuator-support.patch
+	0079-media-lc898217xc-use-the-documented-ready-transactio.patch
+	0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
+	0081-media-s5k3m5-report-camera-geometry-and-orientation.patch
+	0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
+	0083-media-i2c-sequence-hotdog-camera-rails.patch
+	0084-media-i2c-follow-the-OnePlus-IMX586-power-sequence.patch
+	0085-media-i2c-instrument-the-OnePlus-IMX586-sequence.patch
+	0086-media-i2c-apply-the-IMX586-VDIG-load-vote.patch
+	0087-media-i2c-supply-the-IMX586-shared-VANA-rail.patch
+	0088-media-i2c-round-the-IMX586-VANA-vote.patch
+	0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
+	0090-media-i2c-add-Sony-IMX586-main-camera.patch
+	0091-media-i2c-complete-IMX586-userspace-metadata.patch
+	0092-arm64-dts-qcom-add-hotdog-main-camera-actuator.patch
+	0095-arm64-dts-qcom-request-stock-vaf-voltage.patch
+	0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
+	0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
+	0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
+	0099-arm64-dts-qcom-select-semco-imx586-lens.patch
+	0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
+	0101-media-imx481-keep-default-exposure-in-range.patch
+	0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
+	0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
+	0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
+	0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
+	0106-media-hotdog-popup-add-Hall-terminated-opening.patch
+	0107-media-hotdog-popup-follow-endpoint-Hall-geometry.patch
+	0108-media-hotdog-popup-gate-recovery-on-restore-command.patch
+	0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
+	0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
+	0111-media-hotdog-popup-follow-front-sensor-runtime-PM.patch
+	0112-dt-bindings-media-hotdog-popup-add-step-PWM.patch
+	0113-media-qcom-hotdog-popup-match-stock-motor-cadence.patch
+	0114-media-qcom-camss-unwind-failed-stream-starts.patch
+	0115-media-qcom-hotdog-popup-check-motion-after-slow-ramp.patch
+	0116-arm64-dts-qcom-route-hotdog-step-PWM-through-LPG-5.patch
+	0117-media-qcom-hotdog-popup-allow-Hall-midpoint-valley.patch
+	0118-media-qcom-hotdog-popup-use-realizable-LPG-periods.patch
+	0119-media-qcom-hotdog-popup-keep-motor-boost-enabled.patch
+	0120-arm64-dts-qcom-keep-hotdog-motor-boost-enabled.patch
+	0121-media-qcom-hotdog-popup-stage-LPG-period-changes.patch
+	0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
+	0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
+	0124-media-qcom-hotdog-popup-fully-seat-camera-after-close.patch
+	0125-arm64-dts-qcom-hotdog-start-the-sensor-dsp.patch
+	0126-arm64-dts-qcom-hotdog-give-fastrpc-an-addressable-heap.patch
+	0127-arm64-dts-qcom-hotdog-describe-the-nfc-controller.patch
+	0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
+	0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
+	0130-input-add-Awinic-AW8697-haptics-support.patch
+	0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
+	0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
+	0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
+	0134-NFC-nxp-nci-report-the-mode-behind-a-failed-read.patch
+	0135-NFC-nxp-nci-do-not-let-one-marginal-read-end-the-session.patch
+	0136-NFC-nxp-nci-handle-the-proprietary-set-mode-response.patch
+	0137-NFC-nxp-nci-report-the-negotiated-NCI-packet-limits.patch
+	0138-i2c-qcom-geni-keep-transfers-in-fifo-mode.patch
+	0139-arm64-dts-qcom-hotdog-describe-the-camera-flash.patch
+	0140-NFC-nci-trace-discovery-and-notifications.patch
+	0141-NFC-nxp-nci-take-an-optional-reference-clock.patch
+	0142-arm64-dts-qcom-hotdog-feed-the-nfc-reference-clock.patch
+	0144-net-ipa-add-IPA-v4.1-platform-data.patch
+	0145-net-ipa-add-IPA-v4.1-register-definitions.patch
+	0146-arm64-dts-qcom-sm8150-describe-the-ipa.patch
+	0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
+	0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
+	0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
+	0150-power-supply-qcom-smbx-rerun-AICL-after-ICL-changes.patch
+	0151-power-supply-qcom-smbx-select-USB3-SDP-current.patch
+	0152-power-supply-qcom-smbx-expose-input-current-limit.patch
+	0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
+	0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
+	0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
+	0156-hotdog-integrate-validated-runtime-fixes.patch
+	validate-mainline616-build.sh
+"
+builddir="$srcdir/$_repo-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/$_config" .config
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 olddefconfig
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 LLVM_IAS=1 \
+		SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
+		KBUILD_BUILD_TIMESTAMP="2025-08-22 17:25:08" \
+		KBUILD_BUILD_USER="postmarketOS" \
+		KBUILD_BUILD_HOST="pmaports" \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1))-$_flavor" \
+		Image modules dtbs
+
+	sh "$srcdir/validate-mainline616-build.sh" \
+		"arch/$_carch/boot/Image" \
+		.config \
+		"arch/$_carch/boot/dts/qcom/sm8150-oneplus-hotdog.dtb"
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image" \
+		"$pkgdir/boot/vmlinuz"
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 LLVM_IAS=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir/usr/share/kernel/$_flavor/kernel.release"
+
+	sh "$srcdir/validate-mainline616-build.sh" \
+		"$pkgdir/boot/vmlinuz" \
+		"$builddir/.config" \
+		"$pkgdir/boot/dtbs/qcom/sm8150-oneplus-hotdog.dtb" \
+		"$pkgdir/lib/modules/$(cat "$builddir/include/config/kernel.release")"
+}
+
+sha512sums="
+6b690c0523af992438b272bdd1db3fd0126bab8624bb266cd48e87031f1059dfd898ce3dbef293d57ecb35c8690bf8a3580491e0ae9730e76c190d673cf7a252  linux-oneplus-hotdog-mainline616-403b56c33e2ccdda25d90378970a5e5b928dee19.tar.gz
+5788702c48dfc68093e9c238e8621bc515728d08469657151c37c6e4935564c414b3a87b6039728bf180daf861a986607f7c007110f17e43e3637bd261f33bbb  config-oneplus-hotdog-mainline616.aarch64
+2d6a972e971860ed807e89dd061c73f0052dd677731df23b732078d9702036a3e52526516e54283739c08e09f0a856f7e9a2b9cb7cba1f808401cd94742ca240  0001-input-fts-fix-llvm-prototypes.patch
+36993e2d33d03039a51dd210252e91c36c41e6773bde64a45d502a497d60ef9de9642a7bc642a2b85545040dce1b6309ea88dbdc259ffb72e0159189c631865d  0002-arm64-hotdog-direct-entry.patch
+5b628249d9e060c461243742929f5e8106873ce8b88d3bc327c593c902d3ccbc8f73d6b357058ecc63ccaa27485aacfe731f927c70fe3356fb4df83710b57602  0003-arm64-hotdog-early-entry-diagnostics.patch
+190b83dd8c8a81609cab9894f008f61d2e5bb4c27dec171371c096d467347f0c0c2f9b6ff30442f941df1c7876266bd0bb6d54b633e76d908584e836c0f9c36f  0004-arm64-hotdog-isolate-pre-cpu-entry.patch
+28fd5212ffbd84104113aee9dc7facdab18fddd1c209889e67806f88fa24cedf0b90d66869d7d4d23a1a1248381fd4a605f010a0e754a5ee3de9459b486ec826  0005-arm64-hotdog-post-el-entry-diagnostics.patch
+c8d186c6e975ed6d2c7fb9da81719ac15af0ddb458cce90caadbbc660a17dab91195d8c3877bd1218e91cf815710ea4c4cbf6d551c097628e0f4f4ecb990c8c5  0006-arm64-hotdog-persistent-entry-markers.patch
+71bdcec3966c0a0a9bac9efc748109f556630a5a4a2c0d4e6df01e4b7de90bf8cb2b7b3d9be73ac92c7f8a8ed4ba3ba23b9c7fd012d50ab04566e6b59bdb7fb1  0007-arm64-hotdog-remove-visual-entry-delays.patch
+37b30263d307ce5bed225ff6417c2ff8a87507b99bae6e878ab2951992e4f0a9cce33810ce94cb64e87616acd66ea846a461a8b8307343b089057a6d02c7b156  0008-arm64-hotdog-native-pmsg-and-visual-stages.patch
+c3c3dc2afd1259b2fea0b636c71325d6eff565196427949d59ab71e5e3a43bfaf12669e0f17230703384432a23878f2d3a9121b030f069c7e52a8a60d13ad954  0009-arm64-hotdog-first-entry-canary.patch
+c8ac195e20945e54ece79e16aa1eea4dc1a7d1f242b9eaa8669f18b8f21b790c946cb1dd668c7ba0ef7ce3fb3b46ceaaac2f887cfc8cfb4ea4fe4bd9aaefb368  0010-arm64-hotdog-match-working-image-size.patch
+c0caf9cbb12f40be0055b7443c076d0502a8c1183a35cb7cfbe3b636086987e3ba5622ea5fd338db66f93b04683fb115841ee304e1a35b2fff5c10d44fd20489  0011-arm64-hotdog-continue-after-direct-entry-canary.patch
+a3f0e458ecc3da73dae2386cbaa0916ebf027118333575a630633cac39864671e1e8af5a0eb69ec6cfbe9f376ea916a7af57aec45f3bc7359a08733cb2fcd600  0012-drm-msm-enable-native-hotdog-dsc-panel.patch
+b1ebf626a81843ae912317d8c409c76e14175cee090a3796a548c46d418b330c75564d5f44e0efa7c4d128b0dc9ed037ed6b137787786138810533d80d2a7277  0013-ufs-core-add-v33-ordering-diagnostics.patch
+86439bba800b151551c09185b319266dc4d69cf6e1ef841a700bd8f32f6d4994b7c08bbb0780bc7fdc8353b61f0e83f7d7a17a6919989a1e1c721993c99b0628  0014-ufs-qcom-force-dma32-without-smmu.patch
+2ce75fcf65fd535f110bc70da1ecdf673639bb40ad1c42ac60419cea0627974b56ff0590aa71ef7a85e0e0800bf37a1c9dc5e67c86a9250b325a6eded7f342f1  0015-arm64-dts-hotdog-source-v43-hardware-contract.patch
+97ee2121e3d8901a13ac3131a60c4dc04a1b1741b45505199d9a85a580b8c19be7dc20e6b346b399c518a06c49550706350fbc0aa79f63d82e497ef806b1a667  0016-arm64-dts-hotdog-enable-s6sy761-touchscreen.patch
+2ad7f76dd379afc8df6bb609b7dfae3126388536e028741aaf80ccad084c7cca79ba09a90ad0a3ce25502a34de13947735251dfadd84c213f2ae9bc237562c59  0017-arm64-dts-hotdog-enable-adreno640-gpu.patch
+b1ffe913b90079f6e421ba1671fba49abc9629c37a02277e05387a8294b87fe3be6229c28d023337ebce39775673346b0a6c638f342daac20b9b7155408b59ae  0018-arm64-dts-hotdog-enable-volume-keys.patch
+439425ea46199b98451574b0902602e15e887ca44ea92159970b87b3803402999265b12b7cb867f74e25f9c32892814cf5d348bc8840097ed785e8752d93f067  0019-arm64-dts-hotdog-enable-battery-charger.patch
+ba2fdad8144b9c9cf7c448d9bf685b9a3339868c65d68435c2039a3d91bd699f233632f427ee0455ba7f53bccaab06b2296a265fcdf314ea9ffa8aac27d84e73  0020-power-supply-qcom-smbx-use-generation-specific-limits.patch
+bbe410a1acd7ec816cae42df1f561b035c44397a22ca93021bdc1eb40f7267dfb8a1913ee9dcdbf0d7b622ecb6dc6be0915027c578f5ef1e57e4d03bebcd5b0f  0021-arm64-dts-hotdog-enable-wcn3990-wifi.patch
+92c7d884c7752d69251f1fc90438d040d1bd97a452f68a394974ecf58a9dee8e5fd083d4e82a3269c7dcd5700bbab4243957082b65f612f927774e042d9251b1  0022-arm64-dts-hotdog-complete-wcn3990-mpss.patch
+fb063125e8fa89c5b88bfed7c98505b9db0c5a7eabddd98d7a4338bcb1055c0aed81df6f662d3f348d50ee0acc6f8d8f61faa4c95f7323254d85782fefa96519  0023-arm64-dts-hotdog-isolate-mpss-rmtfs.patch
+38c79855412a5c18dab0d5e0c16e0b65037e1e68d489fd68ac44d81250602a77fe2d120eea3a63f676b7729c93a991c0c019dac06002a52624f8ed22a1db2c42  0024-arm64-dts-hotdog-enable-wifi-after-rmtfs.patch
+f34b839c70daa8b53cf49c7b4745efa54cd31a01efbaa55463297b3fbbe3664771c75c90015fb1df7bbeaf1f03190fa9cec51887f29b2c6ff5429d286d0891c1  0025-arm64-dts-hotdog-enable-wcn3990-bluetooth.patch
+b23e7756f327dcb9ebda262edf6e037ca563fd32354c4ed13b1212a4b8103701af6c0723bc29a5a76c569f2e99c405da54b877b6bd70d568e7d0d7c23b0ed6f7  0026-arm64-dts-hotdog-select-wcn3990-firmware.patch
+2f30deadd596f29af71586afa3965d8612ac33eb33b34248271e69e5030926e6991addcfcbd3a007fa856f773724769beb3b83d38a2ec3bf7169e7d1ceb31f78  0027-drm-panel-oneplus-select-stock-90hz-mode.patch
+280626ce6e5360f788c7cfa3e5406ce41fe6cc0bf4ec208753d3a876bde6f907c6645417c5725bc9842072efa8a03f3615a1b6dfbd4a453a09f8afba7059d720  0028-drm-panel-oneplus-dsc-expose-stock-60-and-90-Hz-mode.patch
+c3d35886d6dd5d1e1543ce6a0895140fa613e77d80d5ce83a368e7f673fa81b6f92675eb32e5f7783cc70c6bbde6d6d9f4dc6f08a9d4050f8668ebe0cc343211  0029-arm64-dts-hotdog-restore-ufs-smmu.patch
+510a8b85608b40be871beba823bab7b3d5a3ec546ae31797a3be5281d0718ec0d438038a306f226e3cb991f9aa6e22b5dd159b7af0659f24a318db7a0797f1b4  0030-ufs-core-restore-legacy-hardirq-completions.patch
+450879da6fc5d281724d1b6053d86df99e6528a6574075cb114b8413b147e68fba3812fd4db72758fef74585d60c39facf2a0d571beeff2d37b696cdb8773e89  0031-arm64-dts-hotdog-reserve-xbl-aop-gap.patch
+66e906eb70faa8cb5fd5de85a82c1eb64b57e42c755ba20f9ce233a5d5f97eeedb25785aa900013adfa0358eba132036424466cd689ceb84f64747cf5958ef7a  0032-arm64-dts-hotdog-complete-stock-reservations.patch
+ce315d40e607efaf559356f6f45f6d1d5a6c0febf093c12b5a5835ee3a91493eca845ddbf5be4fdffb9e68d5d2d48ad6ee823b8126641e8f2817acf02162e711  0033-arm64-dts-hotdog-enable-adsp.patch
+984f659da1819d7b7ba6b7a9eb06551ddf35a9007366968668a4fcca5a85b5663200826fe52eb95e47340e5c29feffe4eb763d67f6bb39bcee4d0e52e733bdb9  0034-arm64-dts-hotdog-enable-wcd9340.patch
+bd1680964e2a252879117118414fd785ed6a0dad4b05ff4cc3857243a95a1132e0336f17c43df45db857445674cdca0934603d029c3392a244ca705d73a54819  0035-arm64-dts-hotdog-add-internal-audio-card.patch
+62e2d26a51d71da94d5c72311c6c04b76ae231fc61b2756451511b13996beda0bee6baf079159025fc188a902555fa53a1e4074c631e94591b7d5e70517f68d6  0036-arm64-dts-hotdog-use-headphone-slimbus-route.patch
+13f36f8a768720cf7df484d126cf9b0b5f1fcde79989fc770ebda8a5200ba6be7fe811df2ff51e91dc865ba55a87758bd40ae5a49f69e001420dcbf960e62be9  0037-arm64-dts-hotdog-enable-fsa4480-discovery.patch
+f342df2a64fe165544aa19cc853c6f7270fd67930330b4afb993a8e1a05edcc1827ec4decb2cd920f61c0fe2fbe0166f5642c55ae4501d4f95f888259983ad64  0038-asoc-tfa9874-add-read-only-silicon-probe.patch
+027c5f18c129368cb672b6cdd67a78e9d59a5a207bd1da1b47047fbf726e8037aa94fac61ee87dc5e980a955bba61413b503aa1f6721182bb7dffd9fbfee9f86  0039-asoc-hotdog-enable-bounded-tfa9874-speaker-output.patch
+4268dfeb0a14df7915732a008f841d9f2b625fbe5a8fce62af4d5ab6a91f20d98bdd19cc281ba0b64b587ad932a5254737ab13b6e5d479f5b1a39fbb9fc574cc  0040-asoc-sm8150-drive-hotdog-speaker-clocks.patch
+3b03a17a841cfb83d278e1ad7d9496b6b1c878154ad0adf8aa44f1b7fa263da79f00b1bbe1f6c66ff654584eace4b98a64fab60c8e0239023137ac5a8cbaad46  0041-asoc-hotdog-match-oxygenos-speaker-sample-format.patch
+5864cdb1947df70c2064391a8bedb94077a2c21b073650d2117b292d44ff5e313d843bab53d7d26dc86ef1f5aa77bf575dbf6e6ae46383c81b922f048aee4c59  0042-arm64-dts-hotdog-enable-stereo-speaker-pair.patch
+8ee968f4619459c000591cccc44b4d0cc1830d53bcab6ca3d797d078ba253296e3240376305a6e00c3af2b141cb44a4ea0a27c2026ac943ea38704e8bc206ba5  0043-arm64-dts-hotdog-enable-microphone-routing.patch
+e1b1d251c2a0cf27b9c8f004559ed1e92d96bf8c944f09721abd9d813a18abb946913d9a5e466475a5684cfd624299392e68d842d6bc2351bcd49ab3ef5c059f  0044-arm64-dts-hotdog-add-capture-front-end.patch
+6bdbb25ae2225ab2157514cdf948053e9d8c0db79742c4b8eaaa1aa74d2556a4c94c9c6d5a5295f1ad565cbcc758f56b0c9a107d80cac239bc771fa1fa2860f2  0045-asoc-sm8150-map-every-slimbus-link.patch
+d7177b77992d5b8d35fc1129422263195bc7a704ffef34d4dd100b1d70aa6b1657288a27640380bf53904cbad69ce1febd49f733694e92ae4d6dcf12a83fadd9  0046-input-s6sy761-add-optional-reset-gpio.patch
+5f581ec82dff8c4c0234591f0db38a3f90d7d784035d8f26dd88b87712cded988c96af1e7bb816242243a30b5dc14bbeb875a45d0ab5bfac07707fb3bb897e1f  0047-arm64-dts-hotdog-give-touchscreen-its-reset-line.patch
+0b9fd418771d80e3397af2f9d2aa670bc7e14d110266a8ff752d82a8d834921479159804dd27f82b25923ee947109c44b63abe0200d3b424fd81c8d95de19fe0  0048-arm64-dts-hotdog-enable-usb-role-switching.patch
+98275815c74eb68aebe44443fdba4ceabf7308240ce404b6a4a3963e1ffad29202facd2c8ef00b34bc430b3c2e0b987925e635e3633c55eaf63ebc1b276005aa  0049-arm64-dts-hotdog-enable-superspeed-and-displayport.patch
+969290501a11941a780d1851c6f55a000048ee64fbef233f3259aed8aafaf28d5c09b31922f79bb565124d5adf233fbde3cd58bd45820ed1f0a638ec10c5d21c  0050-arm64-dts-hotdog-add-displayport-audio-link.patch
+b6542d417f4b617ca1b3b6f821de89177502ee70e510fa38a55d2a83b3c7261df9e16f6437b1ba6162253a6d66f4dff3ece070dffe32ae309fcdb174a3df4300  0051-asoc-sm8150-accept-the-displayport-backend.patch
+1bd6d3c9abc09e1c95f43ddb9a392c2094687b5de43463e4e9b86cd044f3ff54406bd85d27411e1e3ff446085d92f94b6a975b2c53a243539a891271447173fa  0052-asoc-q6afe-dai-make-displayport-a-playback-widget.patch
+bdebdd972296202a879ce3fee89a070c7b16829bfec5f8a6b9e5c778e143f9d77c2d3efec68f2e7d2c7a52bc714d5f68a9101eb015a3a9c45eb8a4cdb0149da0  0053-arm64-dts-hotdog-put-volume-down-on-its-real-pin.patch
+4c5982a9130046fa164f15c4d311593a4d51b4f5551db51a47548b8e22b24abf539eb0a129880de33003e090e9592b6ed56b38d125c48a2ba5985b8bcfa587b7  0054-arm64-dts-hotdog-describe-the-fuel-gauge.patch
+4887a85e1649c889930c1385657cfd6d52f49f97819a0dff633e49052903a2c8ded680391cc89d8cf240f5c5d00bff15e17799b447d7e2e1fe6bf212b4116c41  0055-media-camss-add-sm8150-support.patch
+68d7773851a28a9f6f39146eb12d1c8b026a6fcdd35312991b4e06c6cb2d9da12d43819a96fedcf566489eefda63648d7af3797ee59cd61f9230f00a1dae41b4  0056-arm64-dts-sm8150-add-the-camera-subsystem.patch
+79d70b79e148dc40cfcdd289871a48128bcf44f12ff4186bd3cf7c2c4b5f27866ee5c3a308601c6980552d5f9ac197cc5fe1096d36bf1180b483903ff9752f67  0057-arm64-dts-sm8150-add-the-camera-control-interfaces.patch
+f00f259692ef9b8cf16bac44e02dbe41ab1d71f821b33e1685fde0629124f2908d5a15e2394c933a1e9e01443c182b7a9a790aa27a2b9a628dd79175ee03f326  0058-media-i2c-add-the-samsung-s5k3m5-sensor-driver.patch
+6b2e0f8af28f2c3d0fb0adc1ee4e798218b4157bc30ed9ad0d0f046c1279890bb63f8d8d4d09da2d7c93281fc7a148ef9b09daf444cf5f898ac93978e3921948  0059-arm64-dts-hotdog-add-the-camera-pmic-digital-rails.patch
+36315b52e34e24fd5bb7a203ef4d0ac3c6ceb2da85a80009430b477bc3b914ace404073fc1d8e05dfb813afad98674e989121c021549563ed88d2142f879db3e  0060-arm64-dts-hotdog-enable-the-camera-subsystem.patch
+7cb6e9685f8a694663568edd7ee2ea32c605801e8a8b4a4857a9680c8cb0e3dc0000ca761359d7620448f3bfa65da6feffc595f2aecf0f2454d9c17665346f02  0061-media-i2c-add-a-camera-slot-identification-aid.patch
+a6a0d3d3d26e3c889c2f368f83d6b06a1c6a0a9c9b4023ea504124bd538243e001b5a0568fa1c011666d1fb854f16bf44289fab49fe32515f758d650a6ab85d8  0062-arm64-dts-hotdog-describe-the-four-camera-slots.patch
+ac9efc2c3b4e37a85120f668f743e37034bb0de67739674a807d33235287adc9572649f13f537d89f872b00cafda14ad2a0a25a360ee18aa28eb67c7fad3a506  0063-arm64-dts-hotdog-describe-the-telephoto-camera.patch
+8256d9e5d033d02ef21bef09242daa34e385640beceff85ed0b5080c9860d1759f5bbfc75062524dbcb664c6d781b4f8e5f76fdfce76e47b10c77800d0f3aae1  0064-media-camss-give-sm8150-its-own-csiphy-generation.patch
+5bb8cc88a71ba3affea3910d779cadc2e25a40f0fbe196cf11c8fcbac975b6f1f8518164e168bb7b6359973e274f9023a0c5e30c5060d2677453a95234bd4743  0065-media-camss-report-vfe-interrupt-status.patch
+f432a92f28e1ff748a26a0a467a0d460c79b6439bc2afc72dea18b0f0edde3b35291c6ae2879fae322967007862d0b368f8192c6ccf60be230635963d96cdce6  0066-media-camss-keep-sm8150-dma-in-range.patch
+840ddc3b3c3dc2ddda1f1934285ca49a4b3678e185a4eba25695c22cf7d17e0f532515168916edce1d0506a363c9a409c9f60e721f8d2ac2b19f7e60b6cbe6cc  0067-media-camss-vote-camera-noc-bandwidth-on-sm8150.patch
+f2fc76bf3488f315bc5ede154cb7dbdb69eee42fc4ce2707e624da231b834a6848958a06d300e5ef47368704bd308f8e795eb02a4dd084ec62a2e5888f14fcc8  0068-media-i2c-read-the-sony-model-register.patch
+af2ec18ac02cd47bfc66f6abe82bb358356819e02a98a409a7f53d41b6dc47087aec1b44e96c22b1fd986d21611f6cbfeff050074cab91415e67944d26649afe  0069-media-i2c-scan-one-camera-slot-at-a-time.patch
+b93a845f6427d6782cff5cee235eda79d2851b5f41b21269eec9904df0c329329c0ac8a638a66aa74521c9aec6cb7dcb7e20cec578556382bf5fdab67ba47cd7  0070-arm64-dts-hotdog-fix-the-camera-pmic-enable-polarity.patch
+ccbda06206608f0a02c63f189c04e9a6861dc62e56cf1a763f5e966d2f1b3a20fbb7f7b130d0a41c80264fedf2fd69205bd1ec7b7456421eb9a1f40de4682c70  0071-arm64-dts-hotdog-give-the-camera-rails-real-ranges.patch
+b70afba50621e55b1aa5e021712906686efa72a1656687364200edf33cd87e2ed8233bce89fc6b6f9060a59506358626f116ae6ac38dd368b542c8d096a4f201  0072-arm64-dts-hotdog-drop-invented-camera-rail-parents.patch
+5c671b809284e274b51c40913ed3d9121828e7086aabc2da5373b70118fe6b3655bba7094fc9744b15d32b5250e5ee5c01b4dd5f3b086cc0305373bfdda36558  0073-media-i2c-stage-the-camera-slot-power-up.patch
+bb3c76cb69464b438fe99d433db6f9a9334fd44a34bd5c2271a6d29e69e6c89d7cafc2a5da525938ba3ca1d6d8ec52eb8cf127c9e889c5afafeb7d1f9ff40c4c  0074-media-camss-program-the-sm8150-camnoc-qos.patch
+7c6635a83d40dcdbae7ff2ec9d0a6773f46050821c927696e60da5542f8734d095203ba886a911af78113daeaa12f20934f077c29266d45b25cb25f8d5db4d52  0075-media-camss-vote-the-internal-sm8150-camnoc-path.patch
+a20d00fb6934135922176b1a370f85ba2148bc0d3f428cb9d379d848f68ad4df63056e91acf2e3589913fb4fd40dc300841d8b9fc0b956b5382d719140187de2  0076-media-camss-enable-the-sm8150-hf-axi-bridge.patch
+9a7665f6466ebc92f3d027cfcc29e813c498f9e09870fd8e3905358df12f0cbe35396d0e85b8a5009cb1f4f0517efd88d96b32586981bc493c0c93007e6bc20c  0077-media-i2c-add-the-hotdog-telephoto-autofocus.patch
+77576828e5109b6b5b2614be6035ae2077854db9dbe092e5dc7250a96ec59204667002b54f7fdff64bdf7535dceebefc6bd3fb72748e639530799cfd50f264dd  0078-media-i2c-add-LC898217XC-lens-actuator-support.patch
+e8609e0b7eb193aa565095913327deee451fc916a076ae8535d8396281e7499b0248c69298dfc58c733f8d56d541eb1342e469c116e3f5e0482d36f299655ad4  0079-media-lc898217xc-use-the-documented-ready-transactio.patch
+8ff60df98202f93276f4daefdc8c027992c598b6340a0ec7d097219f886da1bd4cd7975ed7b9aff31e28a73daff4cd3569a01dc82ba2038c1a44f9991e52022b  0080-arm64-dts-qcom-calibrate-the-hotdog-telephoto-lens.patch
+80c9bf4022acd11f1c81b5182d32b034e4fb49fd1c26d2680962a07e028dd3c8eb776565672f509e1940a68d36b37e6b5464edfa344d7a13839a89dec7209ab4  0081-media-s5k3m5-report-camera-geometry-and-orientation.patch
+d3b4c794f015879ba513ffd4651a11e6c6d38ff936bf924c54b3195e3cf3e99645eb8af4f03742b77bdc5032821587dcb05f582d5c7378fcfc350ce7de7d841b  0082-arm64-dts-hotdog-match-stock-camera-rail-votes.patch
+414651079a1b5ba0018b7d6cdbcd7ed3a3c0405ee35e91ceefacfd68d37eda77d62fea8347cc21d18988bbad2bf450040d4572cf3eb4ddefaf691017eeb32869  0083-media-i2c-sequence-hotdog-camera-rails.patch
+184a8f2ca282b748dca5e2f3c2a7e3c579166c4c96a11b741b349364f601621557f5c275aeb846f4214218d92d82ec819901ee80fb0f2ee58e770ca1c7d0151e  0084-media-i2c-follow-the-OnePlus-IMX586-power-sequence.patch
+e5827ea675ea7675e9712096641c4838bf1d60e48d0566d92b1e31df0e80c2f293a17386f4ceb9243660c9ebecb8de63aec1920a6e8709c97731da3d7824d67f  0085-media-i2c-instrument-the-OnePlus-IMX586-sequence.patch
+52a81a74255e535fd87410ba5c5115911a9dd161bf3cf04c852e45c604449621746c4260cf27b2066d34ce192fa63917d1ffd9a5cec4dec27619a1d04fd89284  0086-media-i2c-apply-the-IMX586-VDIG-load-vote.patch
+7bda4fbf117cf7c7913649d2e35de5fda875e12378579b065a0593a316b18bf2ac9cd2e8cb1b014389c3435d5f7e078b53a462b808454c2d3d05a828c465de15  0087-media-i2c-supply-the-IMX586-shared-VANA-rail.patch
+f477069d36a5bd5fc5bc2d6832a5ff6524928a35ff11b01a39d32303c97fdc54f3a6055d613ed07ba51ec3872cfba2ac73b38d8d55388e8db34d62e65def81a7  0088-media-i2c-round-the-IMX586-VANA-vote.patch
+d9260460b232e4afbef593ef8573bd96dbf3489cb5083fb6870dcd306baea3d1ee1e72c86611de77adc31a3d2856bc2ebeb057b93795bb5cd71620869f8ef0a3  0089-media-qcom-camss-add-SM8150-C-PHY-support.patch
+6f684e424da13ecf86513a425b6260a08cc8ce56214b3317fa22b6b21565ed5986c8a40a0898af6f888a944039219fe8e8833c7a46aa5a6424f35fa0359f94e8  0090-media-i2c-add-Sony-IMX586-main-camera.patch
+3410770f41696beef524946d42c8d63d176a0c9a7f7fdc7f3f5d0aed77bd6eb751be6b739b5c53bb202bd1dd46bcfb070bbb2351e1050265eaf90c492852e038  0091-media-i2c-complete-IMX586-userspace-metadata.patch
+31d2cd5dd086785c958479d32dd88fd460d0488fa09989d4efcae0d2730320f06ca4605145fbfae93ae636dd1f2b05c7a4e0286159abc56baa029a0684f81263  0092-arm64-dts-qcom-add-hotdog-main-camera-actuator.patch
+425943357d484ce7793d2b7b9d4f1f77dfcfcfae07f5b2351440fbbfd9f1e73909e83d7855e7f26403f8ad6658a4cf15b3337105f786b27c2527cc3165c2e731  0095-arm64-dts-qcom-request-stock-vaf-voltage.patch
+81471c1123602f4197f097b15c779cbd354e61188917206f6237365d241e274f9b32dfa076f7e0f72cf1b08af03afe01f804e3d1f1334274cbe2583fa7da9df7  0096-arm64-dts-qcom-run-hotdog-main-actuator-at-400-khz.patch
+a599c216a8897d678a2c65550d0ce4e02ed4ec71554514cf55ad36a323f76d2813d9a47df58340c2a3e8d68ddd550dc7d24dfad62caaa16c4094a36e1d9d04e4  0097-media-i2c-initialize-AK7374-from-firmware-sequence.patch
+c9740c00e8038d233be7f704033039d97720059f5e87d08a27c33452f96734b532ff4cea6dfb4154350a5287c1e5306d116a150de1fb16f4375c1af26deb40e9  0098-arm64-dts-qcom-sm8150-describe-download-mode-register.patch
+2179ef6eb80a7547a787a1f16a3dc41bf8f42919512cb73fc306724aaa89e4b07e523897106faff0348642d6a6f4600b2634738e6288e20fea1fbf26319498ae  0099-arm64-dts-qcom-select-semco-imx586-lens.patch
+fb4dad2544334b1065d03fe6d7765494a84d7628a841e58bdaa4a988871a3a44066f053e34a82ca336f55a163a2ccb262dccd5854d026d07b05fbbcf0aba57db  0100-media-add-OnePlus-hotdog-IMX481-ultra-wide-camera.patch
+40eae3f61a0d96d20cea36809ec439541e55c13d5150ebe9c72ee659e34cff4805d3f8f173587a4ee76879bed343b267d4e8acbc2ccb3347e8604c3c98c6aaa4  0101-media-imx481-keep-default-exposure-in-range.patch
+2e4796571fd316f7be65a5c0ba43f2c537189017cac6228290907cd45594c3ecb6982cda15b8ec73ed09acdf1b00ffcc33aabea9e70aba5099d6f6dd9a1a1943  0102-media-add-OnePlus-hotdog-IMX471-front-camera.patch
+33219afefcbc20a5cac166a271ed76868ca361b5587e2c5115a1d6c417fc4a6944984986a5101d33f28259de8963950930e136dccac2d6b24428b2c8f1272e7d  0103-iio-magnetometer-add-hotdog-MXM1120-Hall-sensors.patch
+d14f7b90a1ba9bc8f2f5eeef66639b92b4c8477d65a8903b282a6eb0c529cfc30e5241e8f26c94212a587ff8acc98f1ee5434886b6aef61e90ca9d008ada1e3f  0104-media-add-bounded-hotdog-pop-up-motor-preflight.patch
+bbf441eb211462975856e68bea20081352ad80ef2d88a296ef0caa7fb4967f4b998689f0e80d3fbe971a46003c3ba33b609aa9db2fb63e34a945c060913d95fb  0105-media-hotdog-popup-normalize-successful-IIO-reads.patch
+3104357a21fb7e25a1f5f84a2e2a21221d016b9cdd0f700bdf2cee95e119d570e896725f8f21ca162acb8f681a2dad241572413286768ca7d0980a34522f9773  0106-media-hotdog-popup-add-Hall-terminated-opening.patch
+6e59b36f570848888c253f246a5f7f22668f229a2cc7352199aa8783a4c52e701900623daff692ee63b3b54df85895179af09ebd323be006644e49cde23dcd06  0107-media-hotdog-popup-follow-endpoint-Hall-geometry.patch
+eaad53b7417d18e56333df667a67b8b9a6f94716a0b9897bbe5d6444687a05fa6cac98894bc71abb51ad2f17a538f7ddbeaee12f7f8daa4d9f41d15d0bc9fe70  0108-media-hotdog-popup-gate-recovery-on-restore-command.patch
+747c42d32e0a31ee7d0fee2155003bc271900063139049ac7c3de563a6043ba100c55c68c7489fc8ca19bb3a247d7daef70fd1d25a279dda14a00dd80445bbba  0109-media-hotdog-popup-complete-the-OxygenOS-opening-course.patch
+2ba4b1b9706bb617b35c8f10685e365bb7428cdca1ce1c3d36558eab78ab75ccb736ea2c3bd7035238c6a63868a7d484b07526ce96d471176a213567ae4e07eb  0110-media-hotdog-popup-add-Hall-terminated-closing-course.patch
+29ad8af6d89747232d9d4b8784453926ff428cd755559c80c66af3cb3d3f39cdaaaa8bdfebb877739e498544e42763875ac6484526e82415af11a5e25df85480  0111-media-hotdog-popup-follow-front-sensor-runtime-PM.patch
+9357da3efdf3bd0deec211b6d711c500c496ddb774e30b9dd2d903c4ebf0e1cc7d2ad502c24f8a00cdab7ff7d32c86cfe5cd30560a0a99206c40c694f13c93cf  0112-dt-bindings-media-hotdog-popup-add-step-PWM.patch
+f9ba5c56f5bb04cee35dc283dcc06980b8d3b5e22b31d9d74855ac542be4ddbe1ab99c4d1ae4340f05637f05de16e01dd3b910b1a733de3890f31fc421d8689d  0113-media-qcom-hotdog-popup-match-stock-motor-cadence.patch
+cdcc79fde2e21a2324d28b9371e22c7baa1c819cad0221d68f0212716be85776abc4256e52b7c3413ad1b83c2b589480315187b6601c6107b17f0ffa3e89a5d7  0114-media-qcom-camss-unwind-failed-stream-starts.patch
+1b3435a15c7ede63e44a69e0a1eb5161e156810940344c19fcf1442c8064f57a02d8ce25d2b4909a02416ea70f0ed0a0fffb167a3f699c9562f9b845c20b59ed  0115-media-qcom-hotdog-popup-check-motion-after-slow-ramp.patch
+d163996464763c2bbb15c8b4a1dfb0345748cc3f0017c91537015e8a158243b92d7130b1cebfe466107c7008cf4b06fb2a93c433b98ad13c1aa63169001a3cb0  0116-arm64-dts-qcom-route-hotdog-step-PWM-through-LPG-5.patch
+1c1276efe2ede57d58b6f69ddf92a93892cd85a3373e66a1a42f74e3cf3b4e49225d8d248a9ef061f12232f8b0d51643e6e04af50bffa6519e0a26b886002607  0117-media-qcom-hotdog-popup-allow-Hall-midpoint-valley.patch
+4a28d957086283922131b60dbb677d9cf4c8b4a7904292147c24593b9d92e218d9237ab86a27dd7514a14fb3cad31bbcac07a6749b2887f72a23d9bae6d1c0cc  0118-media-qcom-hotdog-popup-use-realizable-LPG-periods.patch
+9478dfc498968b94fdacc07398f7409c052df8b9ef586654be994f1128a8f42e3ac7cef21e32c3679ab108625270dd25d7bf4a973d2800461121b655b3f651c7  0119-media-qcom-hotdog-popup-keep-motor-boost-enabled.patch
+15db61eb0f18045410246e4359c4d0d8fd62b7af0c3bd0b3e17a815d67978173d594697750b15649b5ff31a12922533369444e14e1baf377c2790addce022322  0120-arm64-dts-qcom-keep-hotdog-motor-boost-enabled.patch
+0d9491c27d4ddae7a7b89534de8d4439b3580b48108c45a533ca29c2e2575eeeba52bdf700774ddc12e54970f50998fdff5a2aecc6dfdd5b51e26541e4fd89fc  0121-media-qcom-hotdog-popup-stage-LPG-period-changes.patch
+26cec4211c6cf6610bf5d836c73782188bce9cdde3ed63f50ba65b64c14569027debf9e9a46dd44b5123d6beed01b4b05618788590d43407bae64bcbe3bd61f9  0122-media-qcom-hotdog-popup-retry-a-stalled-close-ramp.patch
+e7bc6a78e31817c4c229123fb5e672ab4f25b69f9d54dc66494c3d127e8461e939205ac39cafd7a1d9e6fde5b0a0f07454e1b2b0305765fe11b78ac355d92aa1  0123-media-qcom-hotdog-popup-probe-past-Hall-endpoint-pla.patch
+d5eeb0176840036023afdbd598da0c6f534c215b57cc6376de3ddcec9fc5807bc4ed42c353b98ff6e443d49b19dd8be582307043a3deb2debf43665a3b3af46d  0124-media-qcom-hotdog-popup-fully-seat-camera-after-close.patch
+53789c455d718159b87258c62084e3dd879152d27e23dd0b4ee02ee17ae0ec70b0e13a5e48dca9c92bbc879eb431a234f176ea5c914a936197a587e1efdf0f1e  0125-arm64-dts-qcom-hotdog-start-the-sensor-dsp.patch
+5ea7bf7a7e09aa21bb29eb9278a83e79d703912e7e3f8ffa0771cfa979ac1ebcc84707dcd451230273cf7cb74c3c886e1ada9cdc43056bb1652a00f55b5f4e20  0126-arm64-dts-qcom-hotdog-give-fastrpc-an-addressable-heap.patch
+bfb4ded1236c8856f38b6ab9e248be2941e297ead0d372bba2d353f31d1e907eabcb97ff3d70da64d811d5ba2eba5e37ae565128cf58b72f9b8c279a3b48334a  0127-arm64-dts-qcom-hotdog-describe-the-nfc-controller.patch
+8abb08046b2c07936bd36d71862fb056b3d18e3083b468ee1004a83b890dfc2a19bbd8f97b6057b9a7adf9c02daf2551ac7dc87c9cb54824944219c184fc959e  0128-arm64-dts-qcom-hotdog-enable-the-haptics-bus.patch
+e56987dc38dbd202b4a51ae7f9f72a4d154a8c4aa6aeaec4825eb58ac8a6af60b4e8a9c35476d9e262e6362c6a0e4ff0ba60359cd384dcdfe3db9570e76eb035  0129-dt-bindings-input-add-Awinic-AW8697-haptics.patch
+2585a0b8011b1035b3496877d47d89933cf1917d81da099ea825f6eb00b4d61857a23ec805cac021f3c37f7c0e79e2874e7b171db9236f211cac56a4979a82fd  0130-input-add-Awinic-AW8697-haptics-support.patch
+56fccba21a1f8b0e97dbd3257152ebb18cde4826b5763f7b1ff45465c5a0e5e5531c0cb39086a7fc8d2dc85faf2b5cfa0dd57963b0997c36abdc0efc435731ce  0131-dt-bindings-net-nfc-nxp-nci-add-configuration-firmware.patch
+4fbe4ce1d8bf1b08c1adcf6a58e99dd4ba4dd1c3537c21c5db0a4d57e918abe1cebd78d5ddf6999b1a3befec94164a3f5f9f7297f0cfae7d3c949baab49e55e0  0132-NFC-nxp-nci-apply-platform-NCI-configuration.patch
+74cfe97dbaab58d6abd48e13085a7db1cfedf5e5b778bc1aa1fba16590a09161f7993114c98a47dd7f99d941f23c33a90562addef4335ef21f7cfe2e43b4c922  0133-arm64-dts-qcom-hotdog-load-NXP-NFC-configuration.patch
+f8622db04727cc78d07546efb3e491103c21fe072c0e29bb788859f8926bdaac9df29995afff3d90d8ba811774c957ca57df90bf81a9d0c16110fd40f8254cdb  0134-NFC-nxp-nci-report-the-mode-behind-a-failed-read.patch
+8a731da3ddaa01f903e31cc72b894dd96455c52440b3218aa02e786b12fc088679edad00ece40ba81e88b019bd84cd59db8cfa9b1204f307b2eb2540ba03ad98  0135-NFC-nxp-nci-do-not-let-one-marginal-read-end-the-session.patch
+fe417497858e5a67e34dd77841c0da9a20222e843e56644ab6e562f63d8cba3038eabd431b04ab8722dfa6e1d79181e2a38081a9fb22e814e28e5d54ecb294f2  0136-NFC-nxp-nci-handle-the-proprietary-set-mode-response.patch
+fc160c2704bb9e7eb4c1ef90d2421d318e825160d15349613ff2da11742bfbd05b31d789f90b16c335c08f641573b2cebead45bff20aa613d4ba99249e673915  0137-NFC-nxp-nci-report-the-negotiated-NCI-packet-limits.patch
+e5da312d8c0e798f869026bd9a21d385c5dc9d2fbfc1f83f969651a2179aacc69f50661ebf0d2ee5533911b08d54e669daad19c963b0308061f8ff68d616d2f3  0138-i2c-qcom-geni-keep-transfers-in-fifo-mode.patch
+ebb7366a7d4078cc7248ebc8599030b4c99139164be4e48bc9a0f492636399eda936941b40635091ef9589cd6892fd4b401301eeb205d3183918a606cbd8a524  0139-arm64-dts-qcom-hotdog-describe-the-camera-flash.patch
+50b7415bdd90bfbe6f48b7a045e8112a3d06164e911aa5d13d4bbb5bc698f9b50dcd87947fe5e13ab1a6b9bb3d9dc17e595070dce51f2f4db53caf292dbd4673  0140-NFC-nci-trace-discovery-and-notifications.patch
+7dcca0ec4e0514cbc6a431307a3fe4fb2b7e42e19b0c09128aabfd811d60411592622899500c580c59ae2180329fe83c8f65ea6fa5ae0adb2354e7be03ffa852  0141-NFC-nxp-nci-take-an-optional-reference-clock.patch
+9390dd52f513b6b70404da766c3d81dbaa4bb3952c2d49ad49f12b881d681e50370e169385655383b241d5eaa1cadc60111e0b7aa1dd99dce68d7f0c9f90e2cd  0142-arm64-dts-qcom-hotdog-feed-the-nfc-reference-clock.patch
+7bd5540b3bcf7f41582ca177edb27cdd7db01409c15fc3d536d2e303047b990c7d07fd1e8622717d98a18a32872323b600bcdfecf4637959ecedddf323391676  0144-net-ipa-add-IPA-v4.1-platform-data.patch
+cbba23a302209890f06884dce26c792dc71af8a8817b6ab85898a474b9aea0d736dfaf9a08411d41a08ccc72f2e4261f64372ab14903768fb7d3886989d8821d  0145-net-ipa-add-IPA-v4.1-register-definitions.patch
+a12b5913ea88c27c34baca3fc6b2acb48d300a00d8c0fea953bc44f52e1041d59ae4379ace06c4c0e36f03cd4e9bfb8f2c94513aa2913cd282ca729bc9bc1ed2  0146-arm64-dts-qcom-sm8150-describe-the-ipa.patch
+faa2c5e1aa584c1d62af04fe3eef33e9edecdcb12364473f99e3168a55fb62e167e4b241295e75ce6ba288d950b7508c95fcb69364431a19c69f86d87cafa1b6  0147-dt-bindings-net-qcom-ipa-add-sm8150.patch
+b9c5234565df4d3bcaa2527d9aa8bbe9dc03875d984fe45cbca4b785204eecf1a425fc4ee43211cd9704ba29905cf7875f6adf793c1fd0f8cbbe7fed1c29f6b7  0148-misc-fastrpc-trace-the-address-handed-to-the-dsp.patch
+a518a9ca2c05750d70642522bddc9e1f6e696bc1119f003d2693db2786183a9d3a5cbb3c4757e3c8de9e53563304485fc953b92e7fbea1c6c5661c508a06c0f0  0149-arm64-dts-qcom-hotdog-use-the-external-fuel-gauge.patch
+3b127f3305552d7732d29e31ddcaef425403d5e6f66fff46fea0ffcdf1d21ee6b59ffb1070fa02668bf8bb69c6859df4b0fdc4e86b8b28085c2daad8db9cd1c5  0150-power-supply-qcom-smbx-rerun-AICL-after-ICL-changes.patch
+6d0efe53aca4151fd9f9a6ebfbf4057f5a3a707c552dcd1749cad4a240fa7d4a88138518fe4c091265a5e542f832bc8706d961e35526dda023cbda56a2ca4591  0151-power-supply-qcom-smbx-select-USB3-SDP-current.patch
+32df8a22c04c97f98be7cf9c15f81788961f8cf79b599887cd99252db61ad39907d1c494c853acaa223b64ee0993b1235068fc91612ec45d082f2c844e47c724  0152-power-supply-qcom-smbx-expose-input-current-limit.patch
+ef627f849a19f47bd0adca0e80727a0e5f4370f94e3ed81634fd7380707e1069577c1b9fceb00870b9e04f83cf0c8fe7708bf812bd645fb75b5205ecc0d9a273  0153-arm64-dts-qcom-hotdog-link-DWC3-charger-supply.patch
+97f2d38ab45b699ec2de073ddf78f79bbdeefa9b6a06e2c84ebf14960f1107e3aabbd2067ce6d51de7c6a3085d191dd6db1cdee05f0a8161af9e80d8b8495ce8  0154-usb-gadget-allow-900-mA-SuperSpeed-VBUS-draw.patch
+6df0dddadc25c9f5af46f0d36c61710ed33d2b22ff730ba32973865f8a97cba8a314560b71380b8c1c72965636b6fd485e5d81340b78bbe3ba9d514455e9ea3d  0155-power-supply-qcom-smbx-define-SMB5-ICL-status-bits.patch
+c195cc7e57b944eca3105655f1e250c446df58b4d89ff15930ab981b8ec759a92f5580c4ba1816b72c927865073432abf5e1aeb46a3131353b54e1982c228448  0156-hotdog-integrate-validated-runtime-fixes.patch
+3735fb286f708c1375a0cea1fc8c91d27241f3f1747503bbe379bf154d1947d9313522d46dcb86950f2b93606d39e87d5509b54748ccb58674ef28f1ac162abc  validate-mainline616-build.sh
+"

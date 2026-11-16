@@ -1,0 +1,24 @@
+From: Robin Snyders <robin@snyders.xyz>
+Date: Wed, 12 Aug 2026 00:00:00 +0200
+Subject: [PATCH] NFC: nxp-nci: report the negotiated NCI packet limits
+
+Temporary instrumentation: print what the controller advertised in its
+CORE_INIT response before the platform configuration is applied.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+diff --git a/drivers/nfc/nxp-nci/core.c b/drivers/nfc/nxp-nci/core.c
+index bb15606..0127cd1 100644
+--- a/drivers/nfc/nxp-nci/core.c
++++ b/drivers/nfc/nxp-nci/core.c
+@@ -168,6 +168,10 @@ static int nxp_nci_apply_config(struct nci_dev *ndev)
+ 		goto release_config;
+ 	}
+ 
++	dev_info(info->pdev,
++		 "NCI limits: max ctrl packet payload %u\n",
++		 ndev->max_ctrl_pkt_payload_len);
++
+ 	frame = config->data;
+ 	remaining = config->size;
+ 	while (remaining) {

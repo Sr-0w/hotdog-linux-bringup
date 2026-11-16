@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=OnePlus hotdog no-sleep policy
+Exec=/usr/libexec/hotdog-plasma-no-sleep
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=1

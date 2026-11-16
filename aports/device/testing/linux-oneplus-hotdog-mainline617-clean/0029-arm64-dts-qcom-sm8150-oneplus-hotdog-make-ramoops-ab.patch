@@ -1,0 +1,48 @@
+From f9bb4bba9b02387673b12d9c17784e4da02ebbd9 Mon Sep 17 00:00:00 2001
+From: Robin Snyders <robin@snyders.xyz>
+Date: Thu, 27 Aug 2026 17:21:05 +0200
+Subject: [PATCH] arm64: dts: qcom: sm8150-oneplus-hotdog: make ramoops able to
+ record a failure
+
+console-size was 4 KiB, about thirty lines, which on a quiet kernel holds
+the tail of boot and nothing of what went wrong. Every freeze this device
+suffered left a buffer full of "Switching root".
+
+ecc-size was 0, so every trace that was recorded came back with
+single-bit corruption and call stacks had to be reconstructed character
+by character.
+
+The region is 4 MiB. Give the console 128 KiB and turn ECC on.
+
+Signed-off-by: Robin Snyders <robin@snyders.xyz>
+---
+ arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+index f4ed8ed75e6c1..bd62f421a467e 100644
+--- a/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
++++ b/arch/arm64/boot/dts/qcom/sm8150-oneplus-hotdog.dts
+@@ -180,10 +180,20 @@ ramoops: ramoops@a9800000 {
+ 			compatible = "ramoops";
+ 			reg = <0 0xa9800000 0 0x400000>;
+ 			record-size = <0x40000>;
+-			console-size = <0x1000>;
++			/*
++			 * 4 KiB of console held about thirty lines, which on a
++			 * quiet kernel is the tail of boot and nothing of the
++			 * failure. And with no ECC every trace read back came
++			 * out with single-bit corruption, so call stacks had to
++			 * be guessed at character by character.
++			 *
++			 * The region is 4 MiB; spending 128 KiB on the console
++			 * and enabling ECC costs nothing that matters.
++			 */
++			console-size = <0x20000>;
+ 			ftrace-size = <0x1000>;
+ 			pmsg-size = <0x1000>;
+-			ecc-size = <0>;
++			ecc-size = <16>;
+ 		};
+ 
+ 		param_mem: memory@ac200000 {

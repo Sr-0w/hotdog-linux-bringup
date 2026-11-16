@@ -1,0 +1,34 @@
+# Reference: <https://postmarketos.org/deviceinfo>
+# Please use double quotes only. You can source this file in shell
+# scripts.
+
+deviceinfo_format_version="0"
+deviceinfo_name="OnePlus 7T Pro"
+deviceinfo_manufacturer="OnePlus"
+deviceinfo_codename="oneplus-hotdog"
+deviceinfo_year="2019"
+deviceinfo_dtb="qcom/sm8150-oneplus-hotdog"
+deviceinfo_arch="aarch64"
+
+# Device related
+deviceinfo_chassis="handset"
+deviceinfo_drm="true"
+deviceinfo_screen_width="1440"
+deviceinfo_screen_height="3120"
+
+# Bootloader related
+deviceinfo_header_version="2"
+deviceinfo_flash_method="fastboot"
+deviceinfo_generate_bootimg="true"
+deviceinfo_flash_sparse="true"
+deviceinfo_flash_pagesize="4096"
+deviceinfo_flash_offset_base="0x00000000"
+deviceinfo_flash_offset_dtb="0x01f00000"
+deviceinfo_flash_offset_kernel="0x00008000"
+deviceinfo_flash_offset_ramdisk="0x01000000"
+deviceinfo_flash_offset_second="0x00000000"
+deviceinfo_flash_offset_tags="0x00000100"
+deviceinfo_mkinitfs_postprocess="/usr/share/mkinitfs/postprocess-oneplus-hotdog-boot-avb.sh"
+deviceinfo_flash_fastboot_partition_rootfs="userdata"
+deviceinfo_rootfs_image_sector_size="4096"
+deviceinfo_usb_acm="true"
